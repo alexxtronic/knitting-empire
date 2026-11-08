@@ -1,0 +1,51 @@
+{
+  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id; 'look.extra' is apron / glasses / hat.",
+  "villagers": [
+    {
+      "id": "rosa",
+      "name": "Rosa",
+      "role": "Market Stall",
+      "loves": "pumpkin",
+      "pos": [48.5, 0.0, -8.15],
+      "roam": [0.9, 0.0],
+      "talk_spot": [48.5, 0.0, -6.15],
+      "look": {
+        "skin": "#d9a885",
+        "hair": "#c7c4cc",
+        "top": "#944d73",
+        "bottom": "#59404d",
+        "extra": "apron"
+      }
+    },
+    {
+      "id": "theo",
+      "name": "Theo",
+      "role": "Woolly Goods",
+      "loves": "sweater",
+      "pos": [57.2, 0.0, -7.3],
+      "roam": [1.1, 0.35],
+      "look": {
+        "skin": "#996e4d",
+        "hair": "#1f1712",
+        "top": "#618c6b",
+        "bottom": "#474d6b",
+        "extra": "glasses"
+      }
+    },
+    {
+      "id": "mabel",
+      "name": "Mabel",
+      "role": "Land Office",
+      "loves": "turnip",
+      "pos": [64.2, 0.0, -7.2],
+      "roam": [1.0, 0.35],
+      "look": {
+        "skin": "#f2ccad",
+        "hair": "#9e4d24",
+        "top": "#52477a",
+        "bottom": "#333342",
+        "extra": "hat"
+      }
+    }
+  ]
+}

@@ -19,9 +19,7 @@ const COTTAGE := Rect2(58.0, 7.0, 7.0, 5.0) # wall lines: x 58..65, z 7..12
 const COTTAGE_DOOR := Vector2(60.8, 62.2) # gap in the north wall (x range)
 const TOWN_ARRIVE := Vector3(41.0, 0, 3.0)
 const FARM_ARRIVE := Vector3(23.5, 0, 3.0)
-const ROSA_POS := Vector3(48.5, 0, -8.15)
-const THEO_POS := Vector3(57.2, 0, -7.3)
-const MABEL_POS := Vector3(64.2, 0, -7.2)
+# Villager homes are in res://data/villagers.json.
 
 const PATH := Color(0.62, 0.50, 0.34)
 const COBBLE := Color(0.66, 0.62, 0.55)

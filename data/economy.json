@@ -1,0 +1,28 @@
+{
+  "_about": "Prices and limits. Market prices drift 80-130% of 'market_base' each morning.",
+  "start_coins": 250,
+  "start_inventory": {
+    "wool": 3,
+    "turnip": 2,
+    "pumpkin": 0,
+    "sweater": 0
+  },
+  "sell_prices": {
+    "wool": 8,
+    "turnip": 35,
+    "pumpkin": 95,
+    "sweater": 140
+  },
+  "market_base": {
+    "sweater": 150,
+    "pumpkin": 105,
+    "turnip": 38
+  },
+  "expand_costs": [800, 2000, 4500],
+  "wool_pack_price": 36,
+  "sheep_price": 400,
+  "start_sheep": 3,
+  "max_sheep": 6,
+  "cottage_price": 2500,
+  "max_hearts": 5
+}

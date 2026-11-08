@@ -36,12 +36,29 @@ Controls:
 
 | Path | What |
 |---|---|
+| `data/*.json` | game content: furniture, crops, prices, villagers, dialogue |
+| `scripts/data.gd` | loads and cross-checks the data files |
 | `scripts/main.gd` | world, input, camera, actions, building, autotest |
-| `scripts/game_state.gd` | autoloaded save data and economy |
+| `scripts/game_state.gd` | autoloaded save data, economy and story flags |
 | `scripts/hud.gd` | HUD, menus, camera pad, dialogue |
 | `scripts/town.gd`, `villager.gd`, `dialogue.gd` | Maplewood |
 | `scripts/player.gd` | the farmer and his animation states |
 | `tools/build_farmer.py` | Blender script that builds `assets/farmer.glb` |
+
+## Adding content without code
+
+Prices, furniture, crops, villagers and their lines all live in `data/`. Edit the JSON and run the game.
+
+- **A new price or limit:** change it in `economy.json`.
+- **A new villager:** add an entry to `villagers.json`, then give them an intro, three tiers of lines and a loved-gift line in `dialogue.json`.
+- **A new crop:** add it to `crops.json` and give it a sell price in `economy.json`.
+- **Furniture:** add it to `furniture.json`. A new kind of furniture still needs a builder in `catalog.gd`.
+
+The autotest checks the files against each other and names anything missing.
+
+Story progress is kept as named flags (`Game.set_flag("met_rowan")`, `Game.flag("met_rowan")`) and saved with the game. Save files carry a version number. When the format changes, add a step to `Game.migrate()` so older saves still load.
+
+When exporting, add `data/*.json` to the export preset's non-resource include filter.
 
 Rebuild the character:
 

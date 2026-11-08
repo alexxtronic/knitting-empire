@@ -1,26 +1,37 @@
 extends Node
-## Global game state (autoloaded as `Game`): money, inventory, needs, clock.
+## Global game state (autoloaded as `Game`): money, inventory, needs, clock, story flags.
+## Prices and limits come from res://data/economy.json (see scripts/data.gd).
+
+const Data = preload("res://scripts/data.gd")
 
 signal toast(text: String)
 signal day_started(day: int)
 
 const HOUR_SECONDS := 10.0 # real seconds per in-game hour
 const SEASONS := ["Spring", "Summer", "Autumn", "Winter"]
-const SELL_PRICES := {"wool": 8, "turnip": 35, "pumpkin": 95, "sweater": 140}
-const EXPAND_COSTS := [800, 2000, 4500]
 const MAX_HOUSE_LEVEL := 3
+## Save files carry a version; migrate() upgrades older ones step by step.
+## v1: first prototype (no version field). v2: adds story flags.
+const SAVE_VERSION := 2
+
+# --- tuning, loaded from data/economy.json --------------------------------------
+var SELL_PRICES := {}
+var EXPAND_COSTS: Array = []
 ## Maplewood market: base prices that drift up and down every morning.
-const MARKET_BASE := {"sweater": 150, "pumpkin": 105, "turnip": 38}
-const WOOL_PACK_PRICE := 36
-const SHEEP_PRICE := 400
-const MAX_SHEEP := 6
-const COTTAGE_PRICE := 2500
-const MAX_HEARTS := 5
+var MARKET_BASE := {}
+var WOOL_PACK_PRICE := 0
+var SHEEP_PRICE := 0
+var START_SHEEP := 3
+var MAX_SHEEP := 6
+var COTTAGE_PRICE := 0
+var MAX_HEARTS := 5
+var START_COINS := 250
+var START_INVENTORY := {}
 
 var save_path := "user://knitting_empire_save.json"
 
 var coins: int = 250
-var inv := {"wool": 3, "turnip": 2, "pumpkin": 0, "sweater": 0}
+var inv := {}
 var energy: float = 100.0
 var fullness: float = 80.0
 var day: int = 1
@@ -30,11 +41,35 @@ var time_running := true
 var friends := {} # villager id -> {"pts", "talk" (last day talked), "gift" (last day gifted), "n" (chats)}
 var owns_cottage := false
 var sheep_count: int = 3
+## Story progress: named flags set by scenes and choices ("met_rowan", "act1_done", ...).
+var flags := {}
+
+
+func _init() -> void:
+	load_tuning()
+	reset()
+
+
+func load_tuning() -> void:
+	var e := Data.economy()
+	SELL_PRICES = Data.int_dict(e.get("sell_prices", {}))
+	MARKET_BASE = Data.int_dict(e.get("market_base", {}))
+	EXPAND_COSTS = []
+	for c in e.get("expand_costs", []):
+		EXPAND_COSTS.append(int(c))
+	WOOL_PACK_PRICE = int(e.get("wool_pack_price", 36))
+	SHEEP_PRICE = int(e.get("sheep_price", 400))
+	START_SHEEP = int(e.get("start_sheep", 3))
+	MAX_SHEEP = int(e.get("max_sheep", 6))
+	COTTAGE_PRICE = int(e.get("cottage_price", 2500))
+	MAX_HEARTS = int(e.get("max_hearts", 5))
+	START_COINS = int(e.get("start_coins", 250))
+	START_INVENTORY = Data.int_dict(e.get("start_inventory", {}))
 
 
 func reset() -> void:
-	coins = 250
-	inv = {"wool": 3, "turnip": 2, "pumpkin": 0, "sweater": 0}
+	coins = START_COINS
+	inv = START_INVENTORY.duplicate()
 	energy = 100.0
 	fullness = 80.0
 	day = 1
@@ -43,7 +78,8 @@ func reset() -> void:
 	time_running = true
 	friends = {}
 	owns_cottage = false
-	sheep_count = 3
+	sheep_count = START_SHEEP
+	flags = {}
 
 
 func _process(delta: float) -> void:
@@ -157,21 +193,47 @@ func add_friendship(id: String, pts: int) -> void:
 	f["pts"] = mini(MAX_HEARTS * 20, int(f["pts"]) + pts)
 
 
+# --- story flags ---------------------------------------------------------------
+
+func set_flag(flag_name: String, value: Variant = true) -> void:
+	flags[flag_name] = value
+
+
+func flag(flag_name: String, default: Variant = false) -> Variant:
+	return flags.get(flag_name, default)
+
+
 # --- save data -----------------------------------------------------------------
 
 func to_dict() -> Dictionary:
 	return {
+		"version": SAVE_VERSION, "flags": flags,
 		"coins": coins, "inv": inv, "energy": energy, "fullness": fullness,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
 
 
+## Upgrades a save dictionary from any older version to SAVE_VERSION, one step at a time.
+## Add a new `if v < N` step whenever the save format changes; never edit old steps.
+static func migrate(d: Dictionary) -> Dictionary:
+	var v := int(d.get("version", 1))
+	if v < 2:
+		d["flags"] = {} # v1 saves predate the story system
+		v = 2
+	d["version"] = v
+	return d
+
+
 func from_dict(d: Dictionary) -> void:
-	coins = int(d.get("coins", 250))
-	var saved_inv: Dictionary = d.get("inv", {})
+	d = migrate(d)
+	coins = int(d.get("coins", START_COINS))
+	inv = START_INVENTORY.duplicate()
 	for k in inv.keys():
-		inv[k] = int(saved_inv.get(k, 0))
+		inv[k] = 0
+	var saved_inv: Dictionary = d.get("inv", {})
+	for k in saved_inv:
+		inv[str(k)] = int(saved_inv[k])
 	energy = float(d.get("energy", 100.0))
 	fullness = float(d.get("fullness", 80.0))
 	day = int(d.get("day", 1))
@@ -183,4 +245,5 @@ func from_dict(d: Dictionary) -> void:
 		var e: Dictionary = saved_friends[id]
 		friends[id] = {"pts": int(e.get("pts", 0)), "talk": int(e.get("talk", 0)), "gift": int(e.get("gift", 0)), "n": int(e.get("n", 0))}
 	owns_cottage = bool(d.get("owns_cottage", false))
-	sheep_count = clampi(int(d.get("sheep_count", 3)), 3, MAX_SHEEP)
+	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), START_SHEEP, MAX_SHEEP)
+	flags = (d.get("flags", {}) as Dictionary).duplicate(true)

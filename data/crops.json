@@ -1,0 +1,17 @@
+{
+  "_about": "Crops. 'seed' is the seed cost in coins; 'hours' is in-game hours of watered growth.",
+  "crops": [
+    {
+      "name": "Turnips",
+      "seed": 10,
+      "hours": 6.0,
+      "id": "turnip"
+    },
+    {
+      "name": "Pumpkins",
+      "seed": 30,
+      "hours": 14.0,
+      "id": "pumpkin"
+    }
+  ]
+}

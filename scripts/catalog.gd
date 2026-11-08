@@ -3,6 +3,8 @@ extends RefCounted
 ## Placeholder art: swap any builder for an imported Tripo/Blender .glb later.
 ## Every model faces +Z and sits centered on its footprint at floor level.
 
+const Data = preload("res://scripts/data.gd")
+
 const WOOD := Color(0.47, 0.30, 0.18)
 const WOOD_DARK := Color(0.30, 0.19, 0.11)
 const WOOD_LIGHT := Color(0.72, 0.54, 0.34)
@@ -16,36 +18,14 @@ const TERRACOTTA := Color(0.72, 0.40, 0.26)
 const BRASS := Color(0.85, 0.66, 0.30)
 const FIRE := Color(1.0, 0.48, 0.10)
 
-const ITEMS := {
-	"rocking_chair": {"name": "Rocking Chair", "price": 180, "size": Vector2(1, 1), "where": "in", "height": 1.2},
-	"armchair": {"name": "Plaid Armchair", "price": 220, "size": Vector2(1, 1), "where": "in", "height": 1.0},
-	"sofa": {"name": "Cozy Sofa", "price": 450, "size": Vector2(2, 1), "where": "in", "height": 1.0},
-	"bed": {"name": "Quilted Bed", "price": 400, "size": Vector2(1.5, 2), "where": "in", "height": 1.0},
-	"kitchen": {"name": "Kitchen Counter", "price": 350, "size": Vector2(2, 1), "where": "in", "height": 1.1},
-	"coffee_table": {"name": "Round Coffee Table", "price": 90, "size": Vector2(1, 1), "where": "in", "height": 0.6},
-	"dining_table": {"name": "Farmhouse Table", "price": 200, "size": Vector2(2, 1), "where": "in", "height": 0.9},
-	"bookshelf": {"name": "Bookshelf", "price": 260, "size": Vector2(1.5, 0.5), "where": "in", "height": 1.9},
-	"wardrobe": {"name": "Oak Wardrobe", "price": 280, "size": Vector2(1.5, 0.5), "where": "in", "height": 2.0},
-	"fireplace": {"name": "Stone Fireplace", "price": 600, "size": Vector2(2, 1), "where": "in", "height": 2.6},
-	"spinning_wheel": {"name": "Spinning Wheel", "price": 300, "size": Vector2(1, 1), "where": "in", "height": 1.3},
-	"lamp": {"name": "Floor Lamp", "price": 120, "size": Vector2(0.5, 0.5), "where": "in", "height": 1.6},
-	"yarn_basket": {"name": "Yarn Basket", "price": 70, "size": Vector2(0.5, 0.5), "where": "in", "height": 0.45},
-	"rug_red": {"name": "Wool Rug", "price": 140, "size": Vector2(3, 2), "where": "in", "flat": true, "height": 0.06},
-	"rug_round": {"name": "Round Braided Rug", "price": 100, "size": Vector2(2, 2), "where": "in", "flat": true, "height": 0.06},
-	"plant": {"name": "Potted Fern", "price": 60, "size": Vector2(0.5, 0.5), "where": "any", "height": 0.9},
-	"flower_pot": {"name": "Flower Pot", "price": 40, "size": Vector2(0.5, 0.5), "where": "any", "height": 0.6},
-	"sunflowers": {"name": "Sunflower Patch", "price": 50, "size": Vector2(1, 0.5), "where": "out", "height": 1.6},
-	"fence": {"name": "Picket Fence", "price": 20, "size": Vector2(1, 0.5), "where": "out", "height": 0.9},
-	"bench": {"name": "Garden Bench", "price": 160, "size": Vector2(1.5, 0.5), "where": "out", "height": 0.9},
-	"scarecrow": {"name": "Scarecrow", "price": 150, "size": Vector2(1, 1), "where": "out", "height": 1.9},
-	"lantern": {"name": "Lantern Post", "price": 110, "size": Vector2(0.5, 0.5), "where": "out", "height": 1.7},
-	"hay_bale": {"name": "Hay Bale", "price": 30, "size": Vector2(1, 0.5), "where": "out", "height": 0.5},
-}
-
-const INDOOR := ["rocking_chair", "armchair", "sofa", "bed", "kitchen", "coffee_table", "dining_table",
-	"bookshelf", "wardrobe", "fireplace", "spinning_wheel", "lamp", "yarn_basket", "rug_red",
-	"rug_round", "plant"]
-const OUTDOOR := ["flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale"]
+## The Build-mode catalog comes from res://data/furniture.json; the meshes are built below.
+static var ITEMS: Dictionary = Data.furniture()
+static var INDOOR: Array = Data.furniture_ids("indoors")
+static var OUTDOOR: Array = Data.furniture_ids("yard")
+## Ids that have a builder in build(). A furniture.json entry without one shows a magenta box.
+const BUILDERS := ["rocking_chair", "armchair", "sofa", "bed", "kitchen", "coffee_table", "dining_table",
+	"bookshelf", "wardrobe", "fireplace", "spinning_wheel", "lamp", "yarn_basket", "rug_red", "rug_round",
+	"plant", "flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale"]
 
 static var _mats := {}
 
@@ -131,6 +111,10 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 
 
 # --- model builders --------------------------------------------------------------
+
+static func has_builder(id: String) -> bool:
+	return id in BUILDERS
+
 
 static func build(id: String, r: Node3D) -> void:
 	match id:

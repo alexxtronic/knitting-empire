@@ -1,0 +1,214 @@
+{
+  "_about": "Furniture you can buy in Build mode. 'size' is width x depth in metres; 'where' is in / out / any; 'shop' picks the Build-menu section. Each id needs a matching builder in scripts/catalog.gd.",
+  "items": [
+    {
+      "name": "Rocking Chair",
+      "price": 180,
+      "size": [1.0, 1.0],
+      "where": "in",
+      "height": 1.2,
+      "id": "rocking_chair",
+      "shop": "indoors"
+    },
+    {
+      "name": "Plaid Armchair",
+      "price": 220,
+      "size": [1.0, 1.0],
+      "where": "in",
+      "height": 1.0,
+      "id": "armchair",
+      "shop": "indoors"
+    },
+    {
+      "name": "Cozy Sofa",
+      "price": 450,
+      "size": [2.0, 1.0],
+      "where": "in",
+      "height": 1.0,
+      "id": "sofa",
+      "shop": "indoors"
+    },
+    {
+      "name": "Quilted Bed",
+      "price": 400,
+      "size": [1.5, 2.0],
+      "where": "in",
+      "height": 1.0,
+      "id": "bed",
+      "shop": "indoors"
+    },
+    {
+      "name": "Kitchen Counter",
+      "price": 350,
+      "size": [2.0, 1.0],
+      "where": "in",
+      "height": 1.1,
+      "id": "kitchen",
+      "shop": "indoors"
+    },
+    {
+      "name": "Round Coffee Table",
+      "price": 90,
+      "size": [1.0, 1.0],
+      "where": "in",
+      "height": 0.6,
+      "id": "coffee_table",
+      "shop": "indoors"
+    },
+    {
+      "name": "Farmhouse Table",
+      "price": 200,
+      "size": [2.0, 1.0],
+      "where": "in",
+      "height": 0.9,
+      "id": "dining_table",
+      "shop": "indoors"
+    },
+    {
+      "name": "Bookshelf",
+      "price": 260,
+      "size": [1.5, 0.5],
+      "where": "in",
+      "height": 1.9,
+      "id": "bookshelf",
+      "shop": "indoors"
+    },
+    {
+      "name": "Oak Wardrobe",
+      "price": 280,
+      "size": [1.5, 0.5],
+      "where": "in",
+      "height": 2.0,
+      "id": "wardrobe",
+      "shop": "indoors"
+    },
+    {
+      "name": "Stone Fireplace",
+      "price": 600,
+      "size": [2.0, 1.0],
+      "where": "in",
+      "height": 2.6,
+      "id": "fireplace",
+      "shop": "indoors"
+    },
+    {
+      "name": "Spinning Wheel",
+      "price": 300,
+      "size": [1.0, 1.0],
+      "where": "in",
+      "height": 1.3,
+      "id": "spinning_wheel",
+      "shop": "indoors"
+    },
+    {
+      "name": "Floor Lamp",
+      "price": 120,
+      "size": [0.5, 0.5],
+      "where": "in",
+      "height": 1.6,
+      "id": "lamp",
+      "shop": "indoors"
+    },
+    {
+      "name": "Yarn Basket",
+      "price": 70,
+      "size": [0.5, 0.5],
+      "where": "in",
+      "height": 0.45,
+      "id": "yarn_basket",
+      "shop": "indoors"
+    },
+    {
+      "name": "Wool Rug",
+      "price": 140,
+      "size": [3.0, 2.0],
+      "where": "in",
+      "flat": true,
+      "height": 0.06,
+      "id": "rug_red",
+      "shop": "indoors"
+    },
+    {
+      "name": "Round Braided Rug",
+      "price": 100,
+      "size": [2.0, 2.0],
+      "where": "in",
+      "flat": true,
+      "height": 0.06,
+      "id": "rug_round",
+      "shop": "indoors"
+    },
+    {
+      "name": "Potted Fern",
+      "price": 60,
+      "size": [0.5, 0.5],
+      "where": "any",
+      "height": 0.9,
+      "id": "plant",
+      "shop": "indoors"
+    },
+    {
+      "name": "Flower Pot",
+      "price": 40,
+      "size": [0.5, 0.5],
+      "where": "any",
+      "height": 0.6,
+      "id": "flower_pot",
+      "shop": "yard"
+    },
+    {
+      "name": "Sunflower Patch",
+      "price": 50,
+      "size": [1.0, 0.5],
+      "where": "out",
+      "height": 1.6,
+      "id": "sunflowers",
+      "shop": "yard"
+    },
+    {
+      "name": "Picket Fence",
+      "price": 20,
+      "size": [1.0, 0.5],
+      "where": "out",
+      "height": 0.9,
+      "id": "fence",
+      "shop": "yard"
+    },
+    {
+      "name": "Garden Bench",
+      "price": 160,
+      "size": [1.5, 0.5],
+      "where": "out",
+      "height": 0.9,
+      "id": "bench",
+      "shop": "yard"
+    },
+    {
+      "name": "Scarecrow",
+      "price": 150,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 1.9,
+      "id": "scarecrow",
+      "shop": "yard"
+    },
+    {
+      "name": "Lantern Post",
+      "price": 110,
+      "size": [0.5, 0.5],
+      "where": "out",
+      "height": 1.7,
+      "id": "lantern",
+      "shop": "yard"
+    },
+    {
+      "name": "Hay Bale",
+      "price": 30,
+      "size": [1.0, 0.5],
+      "where": "out",
+      "height": 0.5,
+      "id": "hay_bale",
+      "shop": "yard"
+    }
+  ]
+}

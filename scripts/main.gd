@@ -8,6 +8,7 @@ const Furniture = preload("res://scripts/furniture.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
 const Player = preload("res://scripts/player.gd")
+const Data = preload("res://scripts/data.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Town = preload("res://scripts/town.gd")
 const Villager = preload("res://scripts/villager.gd")
@@ -121,7 +122,7 @@ func _ready() -> void:
 			p.position = Vector3(11.0 + i * 1.2, 0, -1.0 + j * 1.2)
 			add_child(p)
 			plots.append(p)
-	for i in 3:
+	for i in int(Game.START_SHEEP):
 		_add_sheep()
 	for v in _villager_defs():
 		var vg = Villager.new()
@@ -727,7 +728,7 @@ func _act(id: String, label: String, enabled := true) -> Dictionary:
 func _actions_for(t) -> Array:
 	if t == bin:
 		var sw := Game.count("sweater")
-		var crops := Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
+		var crops: int = Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
 		var wool := Game.count("wool")
 		return [
 			_act("ship_sweater", "Ship sweaters (%d × %dc)" % [sw, Game.SELL_PRICES["sweater"]], sw > 0),
@@ -1274,6 +1275,28 @@ func _shot(fname: String) -> void:
 	print("SHOT ", fname)
 
 
+## Content files and save format: everything the game reads from data/ is consistent,
+## story flags survive a save, and an old (v1) save still loads.
+func _data_checks() -> void:
+	var errs := Data.validate(Callable(Catalog, "has_builder"))
+	for e in errs:
+		print("      data: ", e)
+	_check("data files are consistent (%d furniture, %d crops, %d villagers)" % [Data.furniture().size(), Data.crops().size(), Data.villagers().size()], errs.is_empty())
+	_check("prices come from economy.json (sweater sells for %d)" % Game.SELL_PRICES.get("sweater", 0), Game.SELL_PRICES.get("sweater", 0) == int(Data.economy()["sell_prices"]["sweater"]))
+	Game.set_flag("met_rowan")
+	Game.set_flag("chapter", 2)
+	var d := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	Game.flags = {}
+	Game.from_dict(d)
+	_check("story flags survive a save (version %d, met_rowan=%s, chapter=%s)" % [int(d.get("version", 0)), Game.flag("met_rowan"), Game.flag("chapter")], int(d.get("version", 0)) == Game.SAVE_VERSION and Game.flag("met_rowan") == true and int(Game.flag("chapter")) == 2 and Game.flag("unset_flag") == false)
+	var old_save := d.duplicate(true)
+	old_save.erase("version")
+	old_save.erase("flags")
+	var coins := Game.coins
+	Game.from_dict(old_save)
+	_check("a v1 save without flags still loads (coins %d, flags %d)" % [Game.coins, Game.flags.size()], Game.coins == coins and Game.flags.is_empty())
+
+
 func _check(label: String, ok: bool) -> void:
 	print(("PASS  " if ok else "FAIL  ") + label)
 
@@ -1373,6 +1396,7 @@ func _autotest() -> void:
 	_save_game()
 	_check("save file written", FileAccess.file_exists(Game.save_path))
 	await _town_checks()
+	_data_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
 
@@ -1492,15 +1516,9 @@ func _add_sheep() -> void:
 	sheep_list.append(s)
 
 
+## Who lives in Maplewood: res://data/villagers.json.
 func _villager_defs() -> Array:
-	return [
-		{"id": "rosa", "name": "Rosa", "role": "Market Stall", "loves": "pumpkin", "pos": Town.ROSA_POS, "roam": Vector2(0.9, 0.0), "talk_spot": Vector3(48.5, 0, -6.15),
-			"look": {"skin": Color(0.85, 0.66, 0.52), "hair": Color(0.78, 0.77, 0.8), "top": Color(0.58, 0.3, 0.45), "bottom": Color(0.35, 0.25, 0.3), "extra": "apron"}},
-		{"id": "theo", "name": "Theo", "role": "Woolly Goods", "loves": "sweater", "pos": Town.THEO_POS, "roam": Vector2(1.1, 0.35),
-			"look": {"skin": Color(0.6, 0.43, 0.3), "hair": Color(0.12, 0.09, 0.07), "top": Color(0.38, 0.55, 0.42), "bottom": Color(0.28, 0.3, 0.42), "extra": "glasses"}},
-		{"id": "mabel", "name": "Mabel", "role": "Land Office", "loves": "turnip", "pos": Town.MABEL_POS, "roam": Vector2(1.0, 0.35),
-			"look": {"skin": Color(0.95, 0.8, 0.68), "hair": Color(0.62, 0.3, 0.14), "top": Color(0.32, 0.28, 0.48), "bottom": Color(0.2, 0.2, 0.26), "extra": "hat"}},
-	]
+	return Data.villagers()
 
 
 func _villager(id: String) -> Villager:
@@ -1609,7 +1627,7 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Three bundles of my finest. Enough for one sweater. Happy knitting!")
 		"buy_sheep":
 			if Game.sheep_count < Game.MAX_SHEEP and Game.spend(_theo_price(Game.SHEEP_PRICE)):
-				var sheep_name: String = Dialogue.NEW_SHEEP[(Game.sheep_count - 3) % Dialogue.NEW_SHEEP.size()]
+				var sheep_name: String = Dialogue.NEW_SHEEP[(Game.sheep_count - Game.START_SHEEP) % Dialogue.NEW_SHEEP.size()]
 				Game.sheep_count += 1
 				_add_sheep()
 				_say(v, "Her name is %s. I walked her over to your pen myself. Be nice to her!" % sheep_name)

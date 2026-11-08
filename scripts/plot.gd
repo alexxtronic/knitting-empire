@@ -3,10 +3,9 @@ extends Node3D
 
 const Catalog = preload("res://scripts/catalog.gd")
 
-const CROPS := {
-	"turnip": {"name": "Turnips", "seed": 10, "hours": 6.0},
-	"pumpkin": {"name": "Pumpkins", "seed": 30, "hours": 14.0},
-}
+const Data = preload("res://scripts/data.gd")
+## Crops come from res://data/crops.json.
+static var CROPS: Dictionary = Data.crops()
 const DRY := Color(0.52, 0.36, 0.22)
 const WET := Color(0.30, 0.20, 0.13)
 
