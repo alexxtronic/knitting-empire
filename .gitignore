@@ -1,0 +1,8 @@
+# Godot cache and imports (regenerated on open)
+.godot/
+*.import.tmp
+# Blender backups
+*.blend1
+*.blend2
+# macOS
+.DS_Store

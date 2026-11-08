@@ -1,0 +1,72 @@
+extends RefCounted
+## Everything Maplewood's villagers say. Edit freely: {sweater} becomes Rosa's sweater
+## price today, {cottage} the cottage price, {rent} the cottage's daily rent.
+## LINES[id] has three tiers: 0-1 hearts, 2-3 hearts, 4-5 hearts.
+
+const INTRO := {
+	"rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
+	"theo": "Welcome to Woolly Goods! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
+	"mabel": "Mabel Finch, Maplewood Land Office. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
+}
+
+const LINES := {
+	"rosa": [
+		[
+			"Sweaters are going for {sweater}c today. Prices change every morning, so check the board.",
+			"The tourists from the city go wild for anything hand-knit.",
+			"If you ever grow pumpkins, save one for me. I make a mean pie.",
+		],
+		[
+			"You're becoming my favorite supplier! I pay you a little extra now: {sweater}c a sweater today.",
+			"Theo says your wool is the softest in the valley. Don't tell him I agreed.",
+			"I put one of your sweaters on display. Three people asked who made it!",
+		],
+		[
+			"Between us, I tell customers your sweaters are 'Birchfield originals.' They pay more for the name!",
+			"My late husband would have loved your farm. He always said the best things are made slowly.",
+			"You've got a real knitting empire going, dear. {sweater}c a sweater, just for you.",
+		],
+	],
+	"theo": [
+		[
+			"Out of wool? I sell it in bundles of three. Just enough for one sweater.",
+			"A happy sheep grows better wool. Pet them every day. That's science. Probably.",
+			"I'm learning cable knits. My scarf currently looks like a pretzel.",
+		],
+		[
+			"I knock a little off my prices for friends. You count.",
+			"A single sheep grows enough wool for six sweaters a year. Wild, right?",
+			"Rosa pretends she doesn't like my jokes. She laughs on the inside.",
+		],
+		[
+			"You inspired me. I'm entering the Harvest Knit-Off this year!",
+			"If you ever open a shop in town, I'd put your sweaters in my window. Free of charge.",
+			"Best customer, best neighbor. Don't let it go to your head.",
+		],
+	],
+	"mabel": [
+		[
+			"Real estate is simple: make a place cozy, and people will pay to live there.",
+			"Every piece of furniture in a rental raises the rent. People pay for cozy.",
+			"Rosewood Cottage has the best garden light in Maplewood. I'd know.",
+		],
+		[
+			"You've got a good eye. I'll take a little off the price of any property for you.",
+			"Turnip stew reminds me of my grandmother's kitchen. Funny what sticks with you.",
+			"There's talk of new lots opening up north of town next season. Keep your coins handy.",
+		],
+		[
+			"You're my favorite client. Don't tell the mayor.",
+			"One day this whole valley will be wearing your sweaters and renting your houses.",
+			"Keep this up and they'll name a street after you.",
+		],
+	],
+}
+
+const GIFT_LOVED := {
+	"rosa": "A pumpkin! Oh, you remembered. I'm baking a pie tonight and you're getting the first slice.",
+	"theo": "Is this... one of YOUR sweaters? For me? I'm wearing it every day. Every single day.",
+	"mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy.",
+}
+
+const NEW_SHEEP := ["Clover", "Bramble", "Juniper"]

@@ -1,0 +1,132 @@
+extends Node3D
+## A Maplewood townsperson: idles near their post, turns to face you when you
+## come over, and wears a name tag. Friendship lives in Game.friends.
+
+const Catalog = preload("res://scripts/catalog.gd")
+
+var vid := ""
+var title := ""
+var role := ""
+var loves := "" # item id they love as a gift
+var home := Vector3.ZERO
+var roam := Vector2(0.8, 0.4) # how far they wander from home in x / z
+var hold_time := 0.0
+var talk_spot = null # where you stand to talk to them (e.g. in front of a counter); null = beside them
+var _look = null
+var _target := Vector3.ZERO
+var _wait := 0.0
+var _t := 0.0
+var _model: Node3D
+var _arms: Array[MeshInstance3D] = []
+
+
+## look: {"skin", "hair", "top", "bottom", "extra"} where extra is apron / glasses / hat.
+func setup(id: String, name_text: String, role_text: String, loved_item: String, pos: Vector3, look: Dictionary) -> void:
+	vid = id
+	title = name_text
+	role = role_text
+	loves = loved_item
+	home = pos
+	position = pos
+	_target = pos
+	_wait = randf_range(0.5, 3.0)
+	_build(look)
+
+
+func display_name() -> String:
+	return "%s · %s" % [title, role]
+
+
+func hold(seconds: float) -> void:
+	hold_time = seconds
+
+
+func face_point(p: Vector3, seconds := 8.0) -> void:
+	hold_time = seconds
+	_look = p
+	var d := p - position
+	if Vector2(d.x, d.z).length() > 0.01:
+		rotation.y = atan2(d.x, d.z)
+
+
+func _build(look: Dictionary) -> void:
+	_model = Node3D.new()
+	add_child(_model)
+	var skin: Color = look.get("skin", Color(0.93, 0.76, 0.62))
+	var hair: Color = look.get("hair", Color(0.3, 0.2, 0.12))
+	var top: Color = look.get("top", Catalog.CREAM)
+	var bottom: Color = look.get("bottom", Color(0.3, 0.3, 0.35))
+	var extra: String = look.get("extra", "")
+	for x in [-0.1, 0.1]:
+		Catalog.cyl(_model, 0.075, 0.07, 0.5, Vector3(x, 0.27, 0), bottom)
+		Catalog.box(_model, Vector3(0.13, 0.08, 0.22), Vector3(x, 0.04, 0.03), Color(0.25, 0.17, 0.1))
+	Catalog.cyl(_model, 0.19, 0.24, 0.58, Vector3(0, 0.79, 0), top)
+	for x in [-0.27, 0.27]:
+		_arms.append(Catalog.cyl(_model, 0.06, 0.065, 0.5, Vector3(x, 0.78, 0), top, Vector3(0, 0, -x * 25)))
+	Catalog.ball(_model, 0.17, Vector3(0, 1.23, 0), skin)
+	Catalog.ball(_model, 0.18, Vector3(0, 1.32, -0.03), hair, Vector3(1.0, 0.75, 1.0))
+	for x in [-0.06, 0.06]:
+		Catalog.ball(_model, 0.022, Vector3(x, 1.25, 0.155), Color(0.12, 0.09, 0.08))
+	match extra:
+		"apron":
+			Catalog.box(_model, Vector3(0.36, 0.5, 0.04), Vector3(0, 0.72, 0.22), Catalog.CREAM, Vector3(-6, 0, 0))
+			Catalog.ball(_model, 0.11, Vector3(0, 1.38, -0.16), hair) # bun
+		"glasses":
+			for x in [-0.065, 0.065]:
+				Catalog.ring(_model, 0.035, 0.05, Vector3(x, 1.25, 0.165), Color(0.15, 0.12, 0.1), Vector3(90, 0, 0))
+			Catalog.cyl(_model, 0.2, 0.2, 0.09, Vector3(0, 1.0, 0), Catalog.PLAID, Vector3.ZERO, 14) # scarf
+		"hat":
+			Catalog.cyl(_model, 0.3, 0.3, 0.03, Vector3(0, 1.42, 0), Color(0.25, 0.2, 0.32))
+			Catalog.cyl(_model, 0.15, 0.17, 0.2, Vector3(0, 1.52, 0), Color(0.25, 0.2, 0.32))
+			Catalog.cyl(_model, 0.172, 0.172, 0.05, Vector3(0, 1.46, 0), Catalog.BRASS)
+	var tag := Label3D.new()
+	tag.text = "%s\n%s" % [title, role]
+	tag.font_size = 56
+	tag.pixel_size = 0.0055
+	tag.outline_size = 14
+	tag.no_depth_test = true
+	tag.modulate = Color(1.0, 0.95, 0.82)
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.position = Vector3(0, 2.05, 0)
+	add_child(tag)
+	var body := StaticBody3D.new()
+	body.collision_layer = 2
+	body.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.7, 1.7, 0.7)
+	cs.shape = bs
+	cs.position.y = 0.85
+	body.add_child(cs)
+	body.set_meta("target", self)
+	add_child(body)
+
+
+func _process(delta: float) -> void:
+	_t += delta
+	if hold_time > 0.0:
+		hold_time -= delta
+		_model.position.y = lerpf(_model.position.y, 0.0, 0.2)
+		for i in _arms.size():
+			_arms[i].rotation_degrees.x = 6.0 * sin(_t * 2.0 + i)
+		return
+	if _wait > 0.0:
+		_wait -= delta
+		_model.position.y = lerpf(_model.position.y, 0.0, 0.2)
+		for a in _arms:
+			a.rotation_degrees.x = lerpf(a.rotation_degrees.x, 0.0, 0.2)
+		return
+	var to := _target - position
+	to.y = 0.0
+	var d := to.length()
+	var step := 1.0 * delta
+	if d <= step:
+		position = Vector3(_target.x, 0.0, _target.z)
+		_wait = randf_range(2.0, 6.0)
+		_target = home + Vector3(randf_range(-roam.x, roam.x), 0, randf_range(-roam.y, roam.y))
+		return
+	position += to / d * step
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.2)
+	_model.position.y = absf(sin(_t * 9.0)) * 0.04
+	for i in _arms.size():
+		_arms[i].rotation_degrees.x = 18.0 * sin(_t * 9.0 + i * PI)
