@@ -33,6 +33,7 @@ const PEN := Rect2(17, -4, 6, 6)
 const PEN_GATE := Vector2(-1.6, -0.4)
 const BIN_POS := Vector3(10.2, 0, 4.6)
 const CAM_PITCH := 48.0
+const CAM_PITCH_LOW := 20.0 # story close-ups ("@camera ... low")
 const CAM_BOUNDS := Rect2(-5, -19, 75, 33) # farm + town
 const PLASTER := Color(0.92, 0.86, 0.74)
 
@@ -44,6 +45,7 @@ var cam_target := Vector3(6, 0, 2.5)
 var cam_yaw := deg_to_rad(45.0)
 var cam_yaw_goal := deg_to_rad(45.0)
 var cam_dist := 23.0
+var cam_pitch := CAM_PITCH
 var cam_follow := true
 var cam_glide := {} # story camera cue: {"pos": Vector3, "dist": float}; the camera eases toward it
 var drag_pan := false
@@ -168,6 +170,8 @@ func _ready() -> void:
 		var vg = Villager.new()
 		vg.setup(v["id"], v["name"], v["role"], v["loves"], v["pos"], v["look"])
 		vg.roam = v["roam"]
+		vg.likes = v.get("likes", [])
+		vg.romance = bool(v.get("romance", false))
 		if v.has("talk_spot"):
 			vg.talk_spot = v["talk_spot"]
 		add_child(vg)
@@ -876,7 +880,8 @@ func _update_camera(delta: float) -> void:
 	elif cam_follow and mode == Mode.LIVE:
 		cam_target = cam_target.lerp(player.position, 1.0 - exp(-4.0 * delta))
 	cam_yaw = lerp_angle(cam_yaw, cam_yaw_goal, 1.0 - exp(-8.0 * delta))
-	var pitch := deg_to_rad(CAM_PITCH)
+	cam_pitch = lerpf(cam_pitch, float(cam_glide.get("pitch", CAM_PITCH)), 1.0 - exp(-2.6 * delta))
+	var pitch := deg_to_rad(cam_pitch)
 	var off := Vector3(sin(cam_yaw), 0, cos(cam_yaw)) * cos(pitch) * cam_dist
 	off.y = sin(pitch) * cam_dist
 	cam.position = cam_target + off
@@ -1920,6 +1925,100 @@ func _act1_checks() -> void:
 	story.auto_line = 0.08
 
 
+## Romance v1 with Rowan, after Act 1: one talk topic a day as he warms up (with memory thread #2),
+## gift reactions, the first-sweater scene, the invitation and the sunset date in the back field,
+## and what he tells her after. Stats are nudged directly so it doesn't take a week of play.
+func _romance_checks() -> void:
+	var rowan := _villager("rowan")
+	story.auto = true
+	story.auto_line = 0.25
+	story.auto_choices = [] # first option every time
+	var f := Game.friend("rowan")
+	player.walk([])
+	player.position = rowan.position + Vector3(1.3, 0, 0.6) # beside him, as she would be to talk
+	player.face_point(rowan.position)
+	var talk := func() -> String:
+		_villager_action(rowan, "talk")
+		var id := story.playing
+		await _act1_until_done(40.0)
+		return id
+	f["familiarity"] = 20
+	f["trust"] = 6
+	f["romance"] = 1
+	var first: String = await talk.call()
+	var second: String = await talk.call()
+	_check("talking to Rowan after Act 1: his town chat, then the first topic (%s, %s), then no more topics today ('%s')" % [first, second, Story.find_trigger("talk", "rowan")],
+		first == "rowan_town_chat" and second == "rowan_topic_flock" and Story.find_trigger("talk", "rowan") == "" and Game.flag("rowan_sheep_named") == true)
+	Game.day += 1
+	var j0: int = Game.journal().size()
+	_villager_action(rowan, "talk")
+	var gran := story.playing
+	await _act1_shot("on flavour", "34_rowan_gran_memory.png")
+	var mem := hud.memory_on()
+	await _act1_until_done(40.0)
+	_check("next day he talks about Gran, with memory thread #2 (%s, sepia %s, journal '%s')" % [gran, mem, Game.journal()[-1]["title"] if Game.journal().size() > j0 else ""],
+		gran == "rowan_topic_ellie" and mem and not hud.memory_on() and Game.journal().size() == j0 + 1 and Game.journal()[-1]["kind"] == "memory")
+	# gifts: a pumpkin he likes, then the first sweater, which has its own scene
+	f["familiarity"] = 40
+	var fam0 := Game.stat("rowan", "familiarity")
+	var tr0 := Game.stat("rowan", "trust")
+	var ro0 := Game.stat("rowan", "romance")
+	Game.add_item("pumpkin", 1)
+	_villager_action(rowan, "gift_pumpkin")
+	_check("a pumpkin is a gift he likes (familiarity +%d, trust +%d, romance +%d): '%s'" % [Game.stat("rowan", "familiarity") - fam0, Game.stat("rowan", "trust") - tr0, Game.stat("rowan", "romance") - ro0, hud.dlg_text.text],
+		Game.stat("rowan", "familiarity") == fam0 + 16 and Game.stat("rowan", "trust") == tr0 + 1 and Game.stat("rowan", "romance") == ro0 + 1 and hud.dlg_text.text.begins_with("Soup"))
+	hud.hide_dialogue()
+	Game.day += 1
+	ro0 = Game.stat("rowan", "romance")
+	Game.add_item("sweater", 1)
+	_villager_action(rowan, "gift_sweater")
+	var gift_scene := story.playing
+	await _act1_until_done(40.0)
+	_check("his first sweater plays its own scene (%s, romance +%d)" % [gift_scene, Game.stat("rowan", "romance") - ro0],
+		gift_scene == "rowan_first_sweater" and Game.stat("rowan", "romance") == ro0 + 3 and Game.flag("rowan_has_sweater") == true)
+	f["trust"] = maxi(int(f["trust"]), 9)
+	var evenings: String = await talk.call()
+	_check("one topic a day: the gift day still has room for one (%s)" % evenings, evenings == "rowan_topic_evenings" and Game.flag("rowan_tea_offer") == true)
+	# three hearts and some romance: he asks her up to the back field
+	Game.day += 1
+	f["familiarity"] = 60
+	var invite: String = await talk.call()
+	await _wait(0.5)
+	var home: Array = Game.flag("home_rowan", [])
+	_check("at three hearts he asks her to watch the sunset (%s): goal '%s', Rowan waits at the rock %s" % [invite, hud.goal_label.text, home],
+		invite == "rowan_date_invite" and Game.flag("date1_invited") == true and hud.goal_panel.visible and hud.goal_label.text.contains("back field")
+		and home.size() == 2 and Vector2(float(home[0]), float(home[1])).distance_to(Vector2(24.4, -16.0)) < 0.1)
+	Game.hour = 15.0
+	j0 = Game.journal().size()
+	ro0 = Game.stat("rowan", "romance")
+	player.walk(_find_path(player.position, Vector3(23.4, 0, -16.4)))
+	var t := 0.0
+	while story.playing != "rowan_date1" and t < 60.0:
+		await _wait(0.1)
+		t += 0.1
+	_check("walking into the back field starts the date (%s after %.1fs)" % [story.playing, t], story.playing == "rowan_date1")
+	await _act1_shot("Best rock", "35_rowan_date_rock.png")
+	var sunset := Game.hour
+	await _act1_shot("four minutes", "36_rowan_date_darning.png")
+	var knit := player.body.current() if player.body else ""
+	await _act1_until_done(60.0)
+	await _wait(0.5)
+	_check("the date: sunset (%.1fh), she darns his hat (%s), leans on his shoulder (romance +%d), journal '%s', rock gone, he heads home" % [sunset, knit, Game.stat("rowan", "romance") - ro0, Game.journal()[-1]["title"] if Game.journal().size() > j0 else ""],
+		sunset >= 17.5 and sunset < 19.0 and knit == "SitKnit" and Game.flag("date1_done") == true and Game.flag("rowan_close") == true
+		and Game.stat("rowan", "romance") >= ro0 + 4 and Game.journal().size() == j0 + 1 and not props.has("date_rock")
+		and not Game.flag("home_rowan", false) and not hud.goal_panel.visible and player.anim_override == "")
+	Game.day += 1
+	f["trust"] = maxi(int(f["trust"]), 14)
+	var anna: String = await talk.call()
+	_check("after the date, with enough trust, he tells her about Anna (%s)" % anna, anna == "rowan_topic_anna" and Game.journal()[-1]["title"] == "Anna")
+	var d := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	Game.flags = {}
+	Game.from_dict(d)
+	_check("the romance survives a save (date %s, romance %d)" % [Game.flag("date1_done"), Game.stat("rowan", "romance")], Game.flag("date1_done") == true and Game.stat("rowan", "romance") >= 9)
+	story.auto = false
+	story.auto_line = 0.08
+
+
 ## Plays Act 1 from a new game at reading pace, walking between scenes, then quits. Record it:
 ##   Godot --path . --resolution 1280x800 --write-movie opening.avi --fixed-fps 30 -- --capture
 func _capture_opening() -> void:
@@ -2251,6 +2350,7 @@ func _autotest() -> void:
 	await _chat_checks()
 	await _story_checks()
 	await _act1_checks()
+	await _romance_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
 
@@ -2634,7 +2734,7 @@ func shake(secs: float) -> void:
 	_shake_len = secs
 
 
-## Builds a story prop: "bus", "suitcase", "rail" (a broken fence board), "letter" or "lantern" (lit).
+## Builds a story prop: "bus", "suitcase", "rail" (a broken fence board), "letter", "lantern" (lit) or "rock" (big enough for two to sit on).
 func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> void:
 	remove_prop(prop_name)
 	var n := Node3D.new()
@@ -2675,6 +2775,11 @@ func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> 
 			Catalog.cyl(n, 0.04, 0.1, 0.06, Vector3(0, 0.26, 0), Color(0.24, 0.23, 0.22))
 			Catalog.ring(n, 0.05, 0.065, Vector3(0, 0.32, 0), Color(0.24, 0.23, 0.22))
 			Catalog.omni(n, Vector3(0, 0.2, 0), Color(1.0, 0.75, 0.45), 4.0, 0.2, 1.4)
+		"rock":
+			var stone := Color("57534c") # a shade under palette stone_dark: low sun washes it out
+			Catalog.ball(n, 0.85, Vector3(0, 0.12, 0), stone, Vector3(1.05, 0.45, 0.6))
+			Catalog.ball(n, 0.42, Vector3(0.75, 0.08, -0.3), Color("918c82"), Vector3(1.0, 0.7, 0.9))
+			Catalog.ball(n, 0.5, Vector3(-0.2, 0.42, -0.25), Color("46653f"), Vector3(1.1, 0.22, 0.6)) # moss on top
 		_:
 			Catalog.box(n, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.25, 0), Color(0.8, 0.3, 0.8))
 	add_child(n)
@@ -2866,8 +2971,22 @@ func _villager_action(v, id: String) -> void:
 				f["gift"] = Game.day
 				Game.add_need("love", 8.0)
 				var loved: bool = item == v.loves
-				Game.add_friendship(v.vid, 25 if loved else 12)
-				_say(v, Dialogue.GIFT_LOVED[v.vid] if loved else "Oh, a %s! That's very thoughtful of you. Thank you." % item)
+				var liked: bool = item in v.likes
+				Game.add_friendship(v.vid, 25 if loved else (16 if liked else 10))
+				if loved or liked:
+					Game.add_stat(v.vid, "trust", 2 if loved else 1)
+				if v.romance and Game.hearts(v.vid) >= 2 and (loved or liked):
+					Game.add_stat(v.vid, "romance", 2 if loved else 1)
+				# a first-time gift can have its own scene ("@trigger gift rowan sweater")
+				var gift_scene := Story.find_trigger("gift", v.vid, item)
+				if gift_scene != "":
+					v.face_point(player.position, 3.0)
+					player.face_point(v.position)
+					story.play(gift_scene)
+				elif loved:
+					_say(v, Dialogue.GIFT_LOVED[v.vid])
+				else:
+					_say(v, str(Dialogue.GIFT_LINES.get(v.vid, {}).get(item, "Oh, a %s! That's very thoughtful of you. Thank you." % item)))
 	_update_price_board()
 
 

@@ -135,6 +135,12 @@ static func validate(has_builder: Callable) -> Array:
 			errs.append("villager '%s' needs 3 tiers of lines" % id)
 		if not dlg.get("gift_loved", {}).has(id):
 			errs.append("villager '%s' has no loved-gift line" % id)
+		for it in v.get("likes", []):
+			if not items.has(str(it)):
+				errs.append("villager '%s' likes unknown item '%s'" % [id, it])
+		for it in dlg.get("gift_lines", {}).get(id, {}):
+			if not items.has(str(it)):
+				errs.append("villager '%s' has a gift line for unknown item '%s'" % [id, it])
 		var model := str(v.get("look", {}).get("model", ""))
 		if model != "" and character(model).is_empty():
 			errs.append("villager '%s' uses unknown character model '%s'" % [id, model])

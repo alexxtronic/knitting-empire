@@ -1,11 +1,12 @@
 {
-  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
+  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
       "name": "Rosa",
       "role": "Market Stall",
       "loves": "pumpkin",
+      "likes": ["turnip"],
       "pos": [48.5, 0.0, -8.15],
       "roam": [0.9, 0.0],
       "talk_spot": [48.5, 0.0, -6.15],
@@ -22,6 +23,7 @@
       "name": "Theo",
       "role": "Woolly Goods",
       "loves": "sweater",
+      "likes": ["pumpkin"],
       "pos": [57.2, 0.0, -7.3],
       "roam": [1.1, 0.35],
       "look": {
@@ -37,6 +39,7 @@
       "name": "Mabel",
       "role": "Land Office",
       "loves": "turnip",
+      "likes": ["pumpkin"],
       "pos": [64.2, 0.0, -7.2],
       "roam": [1.0, 0.35],
       "look": {
@@ -52,6 +55,8 @@
       "name": "Rowan",
       "role": "Shepherd",
       "loves": "sweater",
+      "likes": ["pumpkin"],
+      "romance": true,
       "pos": [44.2, 0.0, 2.4],
       "roam": [0.8, 0.4],
       "look": {

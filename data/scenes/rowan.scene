@@ -32,3 +32,247 @@ Rowan (wry): This is me at my friendliest. Ask Theo.
 Nora (happy): I might.
 @label done
 > He tips his head and goes back to watching the road, like he's waiting for something that never comes.
+
+# --- Romance v1: talk topics, one a day (@daily), as he warms up --------------------------------
+# Order matters: the first scene whose conditions hold plays. Canon is in data/personas.json:
+# Ellie first, then the long evenings, and Anna only once he trusts her.
+
+== rowan_topic_flock
+@trigger talk rowan
+@requires seen_rowan_town_chat
+@when hearts rowan >= 1
+@once
+@daily
+@camera rowan 6
+Rowan (wry): Bramble's been at your fence again. The one with the black ear.
+Nora (surprised): They have names?
+Rowan (neutral): Course they have names. Bramble, Sleet, Drizzle, Fog, Gale. And Margaret.
+Nora (wry): Weather, weather, weather... Margaret?
+Rowan (wry): She came with the name. You don't argue with a Margaret.
+? What do you say?
+- You should let me name the next one. -> name | familiarity rowan +4; set rowan_sheep_named
+- I'm going to say hello to Margaret properly. -> margaret | familiarity rowan +3; trust rowan +1
+@label name
+Rowan (neutral): Go on, then.
+Nora (happy): Purl. Because she'll be the one that does everything backwards.
+Rowan (happy): ...Purl. Fine. Don't tell the others it was you.
+@goto done
+@label margaret
+Rowan (happy): She'll ignore you. It's how she shows respect.
+@label done
+> He goes back to watching the hill, but the corner of his mouth stays up for a while.
+
+== rowan_topic_ellie
+@trigger talk rowan
+@requires seen_rowan_topic_flock
+@when trust rowan >= 5
+@once
+@daily
+@camera between rowan nora 6
+Rowan (neutral): Your gran taught me to darn socks. Sat me at her table and wouldn't let me leave till I'd done a heel.
+Nora (happy): That sounds like her.
+Rowan (wry): She fed me after. Bread, burnt black on the bottom. Every loaf. Twenty years and not one that wasn't.
+> Something about the way he says it, like it's the best bread he's ever had.
+@memory on 1.4
+> Gran's kitchen. Nora is nine, and the smoke alarm is going.
+Gran (happy): Don't just stand there, Norrie. Fan it. With the tea towel. No, the clean one.
+Nora (happy): Gran, it's on fire!
+Gran (wry): It's not on fire. It's on flavour. Cut the bottom off and nobody needs to know.
+@memory off 1.4
+@journal memory Gran's bread | Burnt on the bottom, every single loaf. "It's not on fire, it's on flavour." Rowan ate twenty years of it and never once complained.
+? What do you tell him?
+- She used to say the burnt bit was "flavour." -> share | trust rowan +3; familiarity rowan +3
+- I miss her. I didn't visit enough. -> guilt | trust rowan +4; familiarity rowan +2; set nora_gran_guilt
+@label share
+Rowan (happy): She told me that too. I believed her for about a year.
+@goto done
+@label guilt
+Rowan (neutral): She knew where you were. She talked about you like you'd only just gone out.
+Nora (sad): That's worse, somehow.
+Rowan (warm): It's not. Give it time and it's not.
+@label done
+
+== rowan_topic_evenings
+@trigger talk rowan
+@requires seen_rowan_topic_ellie
+@when hearts rowan >= 2
+@when trust rowan >= 9
+@once
+@daily
+@camera between rowan nora 6
+Rowan (neutral): Evenings get long up on the hill. Didn't used to notice.
+Rowan (neutral): Your lights have been on at Birchfield. Late, some nights.
+Nora (wry): Knitting. Or not sleeping. Usually both.
+Rowan (warm): It's good, seeing them. Like the place is awake again.
+? What do you say?
+- You could come down for tea. I've got a kettle and terrible biscuits. -> tea | romance rowan +2; familiarity rowan +3
+- It's nice, knowing someone's up there too. -> nice | romance rowan +1; trust rowan +2
+- I'll leave one on for the sheep. -> tease | romance rowan +1; familiarity rowan +2
+@label tea
+Rowan (surprised): ...Terrible biscuits. You're selling it hard.
+Rowan (warm): Alright. I'll bring the good ones.
+@set rowan_tea_offer
+@goto done
+@label nice
+Rowan (neutral): Yeah. It is.
+> Neither of them says anything else for a while. Neither of them minds.
+@goto done
+@label tease
+Rowan (wry): They'd like that. Margaret's afraid of the dark.
+@label done
+
+# --- The first gift that matters ------------------------------------------------------------------
+
+== rowan_first_sweater
+# plays the first time she gives him a sweater (after the usual gift stats)
+@trigger gift rowan sweater
+@requires met_rowan
+@once
+@camera between rowan nora 5
+> He holds it up. Then he holds it up again, like it might have changed.
+Rowan (surprised): You made this.
+Nora (wry): I make a lot of them. It's sort of my whole thing now.
+Rowan (neutral): Not for me, you don't.
+> He doesn't put it on. He folds it, carefully, the way you'd fold a flag.
+Rowan (warm): Ellie made me a hat once. I've still got it. It's got a hole you could put your fist through.
+Nora (happy): Bring it round. I'll fix it.
+Rowan (warm): ...I might.
+@romance rowan +1
+@set rowan_has_sweater
+
+# --- The first date: the back field at sunset ----------------------------------------------------
+
+== rowan_date_invite
+@trigger talk rowan
+@requires seen_rowan_topic_evenings !date1_invited !date1_not_yet
+@when hearts rowan >= 3
+@when romance rowan >= 3
+@once
+@daily
+@camera between rowan nora 5
+Rowan (neutral): There's a rock at the top of Ellie's back field. Best view of the valley at sunset.
+Rowan (neutral): Ellie used to sit up there with a flask. Said it was the only place nobody could find her.
+Nora (wry): And you're telling me where it is.
+Rowan (warm): I'm telling you I'll be on it. Tonight, if the weather holds. If you want the company.
+? Go up and watch the sunset with him?
+- I'd like that. -> yes | romance rowan +1; set date1_invited
+- Not yet. Ask me again? -> later | trust rowan +1; set date1_not_yet
+@label yes
+Rowan (happy): Bring a coat. It gets cold the second the sun goes.
+@goal Meet Rowan on the rock in the back field at sunset | 23.4 -16.4
+@home rowan 24.4 -16.0
+@end
+@label later
+Rowan (neutral): I will. The rock's not going anywhere.
+
+== rowan_date_invite_again
+@trigger talk rowan
+@requires date1_not_yet !date1_invited
+@when hearts rowan >= 4
+@once
+@daily
+@camera between rowan nora 5
+Rowan (neutral): Rock's still there. So am I.
+Nora (happy): Then so am I. Tonight?
+Rowan (warm): Tonight.
+@set date1_invited
+@goal Meet Rowan on the rock in the back field at sunset | 23.4 -16.4
+@home rowan 24.4 -16.0
+
+== rowan_date1
+@trigger area back_field
+@requires date1_invited !date1_done
+@once
+@goal
+@fade out 1.0
+@weather clear
+@if hour >= 17 -> placed
+@time 18.0
+@label placed
+@prop rock date_rock 23.6 -16.6 0
+@place nora 23.15 -16.35 10
+@place rowan 24.05 -16.35 350
+@anim nora SitIdle
+@anim rowan SitIdle
+@camera between rowan nora 4.5 low
+@fade in 1.6
+> The whole valley's gone gold. Down the hill the cottage is small enough to cover with a thumb.
+Rowan (neutral): Told you. Best rock.
+Nora (happy): Gran's rock.
+Rowan (wry): Gran's rock. I just borrow it.
+> Far off on the next hill, his flock drifts like dandelion seeds.
+Nora (neutral): Can I ask why you stay out here? You could be anywhere.
+Rowan (neutral): Could be. Nowhere else has my sheep in it.
+Rowan (neutral): And it's quiet. Took me a while to like the quiet. Now I'd miss it.
+Nora (neutral): Knitting's like that for me. It's just counting, with your hands. When everything else is too loud.
+Rowan (warm): Is it loud? Still?
+Nora (sad): Less. Today, less.
+@if !rowan_has_sweater -> hat
+Rowan (wry): I'm wearing your sweater, by the way. In case you hadn't noticed.
+Nora (happy): I noticed.
+@label hat
+> He digs in his coat and pulls out a woolly hat, old and soft, with a hole you could put your fist through.
+Rowan (neutral): Ellie made me this. Twelve winters ago.
+Nora (warm): Give it here.
+@anim nora SitKnit
+> She has a needle and a little yarn in her pocket. Of course she does. It takes her four minutes.
+> He watches the whole time, like she's doing a magic trick.
+Rowan (surprised): ...You can't even see where it was.
+Nora (warm): That's the idea. You go round the hole, not across it. Then it's part of the hat again.
+@anim nora SitIdle
+> The sun goes. It gets cold, exactly as promised.
+? He's close enough that their shoulders nearly touch.
+- Lean your head on his shoulder. -> lean | romance rowan +4; trust rowan +1; set rowan_close
+- "This was nice. Same time next week?" -> week | romance rowan +2; familiarity rowan +4; set rowan_next_week
+- "I'm not ready for this to be anything yet. Is that okay?" -> slow | trust rowan +4; set rowan_slow
+@label lean
+> She leans. He goes very still, then very carefully doesn't move at all.
+Rowan (warm): ...Alright, then.
+@goto end
+@label week
+Rowan (happy): Same rock. I'll bring a flask.
+@goto end
+@label slow
+Rowan (warm): Sheep don't rush. Neither do I.
+Nora (warm): Thank you.
+Rowan (wry): Don't thank me. It's just how I'm built. Slow.
+@label end
+@journal note The back field | Watched the sun go down from Gran's rock with Rowan. Fixed the hat Gran knit him, round the hole, not across it.
+@set date1_done
+@fade out 1.4
+@anim nora off
+@anim rowan off
+@prop_remove date_rock
+@home rowan off
+@time 20.0
+@place nora 22.6 -15.4 160
+@camera player
+@fade in 1.2
+@toast Rowan walks you to the edge of the field, and then home.
+
+# --- After the date ------------------------------------------------------------------------------
+
+== rowan_topic_anna
+# canon (personas.json): he lost his wife, Anna, five years ago, to illness.
+@trigger talk rowan
+@requires date1_done
+@when trust rowan >= 14
+@once
+@daily
+@camera between rowan nora 5
+Rowan (neutral): I told you I stopped setting the table for two. I never said why.
+Rowan (sad): Anna. My wife. Five years in March. She was ill a long time, and then she wasn't, and then she was gone.
+> He says it plainly, like a fact about weather, but his hands have stopped moving.
+Rowan (neutral): She'd have liked you. She'd have made you knit her something ridiculous.
+? What do you say?
+- What would she have asked for? -> ask | trust rowan +3; romance rowan +1
+- Thank you for telling me. -> thank | trust rowan +4
+@label ask
+Rowan (happy): Socks with sheep on. Each one a different sheep. She'd have wanted them named.
+Nora (warm): I could do a Margaret.
+Rowan (happy): ...You could do a Margaret.
+@goto done
+@label thank
+Rowan (warm): Didn't plan to. It's easier, up here. With you.
+@label done
+@journal note Anna | Rowan's wife. Five years ago. He wanted me to know.

@@ -78,6 +78,8 @@ func _run(id: String) -> void:
 				if jump is int:
 					pc = jump if jump >= 0 else ops.size()
 	Game.set_flag("seen_" + id)
+	if sc["daily"]:
+		Game.set_flag("daily_scene_day", Game.day)
 	for a in _held:
 		if is_instance_valid(a):
 			a.anim_override = ""
@@ -171,6 +173,9 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 		"camera":
 			var dist := float(main.cam_glide.get("dist", 9.0))
 			var pos = null
+			var low := not a.is_empty() and str(a[-1]) == "low"
+			if low:
+				a = a.slice(0, a.size() - 1)
 			if a.is_empty() or str(a[0]) in ["player", "off", "follow"]:
 				pos = main.player.position + Vector3(0, 0.9, 0)
 				if a.size() > 1:
@@ -195,9 +200,15 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			if pos != null:
 				main.cam_follow = false
 				main.cam_glide = {"pos": pos, "dist": dist}
+				if low:
+					# aim at seated head height, so they sit above the dialogue box rather than behind it
+					pos.y -= 0.7
+					main.cam_glide["pos"] = pos
+					main.cam_glide["pitch"] = main.CAM_PITCH_LOW
 				if auto and not cinematic:
 					main.cam_target = pos
 					main.cam_dist = dist
+					main.cam_pitch = float(main.cam_glide.get("pitch", main.CAM_PITCH))
 		"fade":
 			var secs := float(a[1]) if a.size() > 1 else 0.8
 			await main.hud.story_fade(1.0 if str(a[0]) == "out" else 0.0, 0.01 if auto and not cinematic else secs)

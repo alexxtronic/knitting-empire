@@ -4,9 +4,12 @@ extends RefCounted
 ##   == meet_rowan                  starts a scene (one file can hold many)
 ##   @trigger talk rowan            when it plays: "talk <villager>", "start" (a new game),
 ##                                   "area <name>" (walking into a place from data/areas.json;
-##                                   area scenes must be @once), "event knit_done" (finishing a knit)
+##                                   area scenes must be @once), "event knit_done" (finishing a knit),
+##                                   "gift rowan sweater" (giving someone a gift, after its usual effects)
 ##   @requires met_rowan            only if a flag is set; "!flag" = only if it isn't
+##   @when hearts rowan >= 2        only if a condition holds (anything @if takes); one per line, all must hold
 ##   @once                          play it only once per save
+##   @daily                         at most one @daily scene plays per day (spaces out talk topics)
 ##   # a comment
 ##   Rowan (wry): Your fence leans.  a line: speaker, optional mood (picks the portrait), text
 ##   > The rain doesn't let up.      narration (no speaker)
@@ -22,7 +25,8 @@ extends RefCounted
 ##   @trust rowan +2                 also @familiarity, @romance
 ##   @camera rowan [distance]        point the camera at someone (or "@camera x z [distance]",
 ##                                   "@camera between rowan nora [distance]" to frame two people,
-##                                   "@camera player" to follow the player again)
+##                                   "@camera player" to follow the player again; add "low" at the
+##                                   end for a low, close-to-eye-level angle)
 ##   @fade out [seconds] / @fade in [seconds]
 ##   @title Act 1: Cast On           a title card over the screen
 ##   @wait seconds
@@ -35,7 +39,7 @@ extends RefCounted
 ##   @goal Walk to the farm | 24 3   the goal shown at the top of the screen, with a marker at x, z
 ##                                   (the "| x z" part is optional; "@goal" alone clears it)
 ##   @weather rain / @weather clear
-##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter, lantern; name, x, z, yaw
+##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter, lantern, rock; name, x, z, yaw
 ##   @prop_move bus1 70 6 4          slide it to x, z over some seconds (doesn't wait)
 ##   @prop_remove bus1
 ##   @phone Daniel / @phone off      a phone ringing on screen
@@ -48,6 +52,7 @@ extends RefCounted
 ##   @sleep                          she sleeps: next morning, a new day (crops grow, prices change)
 ##   @give coins 60 / @take coins 5  coins work like items
 ##   @if has sweater -> label        jump if she has an item ("has wool 3" for at least 3)
+##   @if hearts rowan >= 3 -> label  friendship hearts (0-5); "@if hour < 17 -> label" checks the clock
 ## Text can use {player} for the heroine's name.
 
 const SCENE_DIR := "res://data/scenes"
@@ -55,6 +60,7 @@ const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "walk", "p
 	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
 	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home",
 	"memory", "journal", "time", "sleep"]
+const HEADERS := ["label", "trigger", "requires", "when", "once", "daily"]
 const STATS := ["familiarity", "trust", "romance"]
 
 static var _scenes := {}
@@ -99,7 +105,7 @@ static func parse_into(text: String, src := "text") -> void:
 			var id := line.substr(2).strip_edges()
 			if _scenes.has(id):
 				errors.append("%s: scene '%s' is defined twice" % [where, id])
-			cur = {"id": id, "ops": [], "labels": {}, "trigger": [], "requires": [], "once": false, "where": where}
+			cur = {"id": id, "ops": [], "labels": {}, "trigger": [], "requires": [], "when": [], "once": false, "daily": false, "where": where}
 			_scenes[id] = cur
 			continue
 		if cur == null:
@@ -130,8 +136,12 @@ static func parse_into(text: String, src := "text") -> void:
 					cur["trigger"] = c["args"]
 				"requires":
 					cur["requires"].append_array(c["args"])
+				"when":
+					cur["when"].append(c["args"])
 				"once":
 					cur["once"] = true
+				"daily":
+					cur["daily"] = true
 				_:
 					ops.append(c)
 			continue
@@ -155,7 +165,7 @@ static func parse_command(text: String, where := "") -> Dictionary:
 	var sp := t.find(" ")
 	var cmd := (t if sp < 0 else t.substr(0, sp)).to_lower()
 	var rest := "" if sp < 0 else t.substr(sp + 1).strip_edges()
-	if not (cmd in COMMANDS or cmd in ["label", "trigger", "requires", "once"]):
+	if not (cmd in COMMANDS or cmd in HEADERS):
 		errors.append("%s: unknown command '@%s'" % [where, cmd])
 	return {"op": "cmd", "cmd": cmd, "args": Array(rest.split(" ", false)), "rest": rest, "where": where}
 
@@ -200,21 +210,59 @@ static func condition(cond: Array) -> bool:
 		return requirements_met(cond)
 	if str(cond[0]) == "has" and cond.size() in [2, 3]:
 		return Game.has_item(str(cond[1]), int(cond[2]) if cond.size() == 3 else 1)
-	if cond.size() == 4 and str(cond[0]) in STATS:
-		var v := Game.stat(str(cond[1]), str(cond[0]))
-		var n := int(cond[3])
-		match str(cond[2]):
-			">=": return v >= n
-			">": return v > n
-			"<=": return v <= n
-			"<": return v < n
-			"==", "=": return v == n
-			"!=": return v != n
+	if cond.size() == 4 and (str(cond[0]) in STATS or str(cond[0]) == "hearts"):
+		var v := float(Game.hearts(str(cond[1])) if str(cond[0]) == "hearts" else Game.stat(str(cond[1]), str(cond[0])))
+		return _compare(v, str(cond[2]), float(cond[3]))
+	if cond.size() == 3 and str(cond[0]) == "hour":
+		var t := str(cond[2])
+		var h := float(t) if not ":" in t else float(t.get_slice(":", 0)) + float(t.get_slice(":", 1)) / 60.0
+		return _compare(Game.hour, str(cond[1]), h)
 	return false
 
 
-## The first scene whose @trigger matches (e.g. "talk", "rowan") and can play now.
-static func find_trigger(kind: String, target := "") -> String:
+static func _compare(v: float, op: String, n: float) -> bool:
+	match op:
+		">=": return v >= n
+		">": return v > n
+		"<=": return v <= n
+		"<": return v < n
+		"==", "=": return is_equal_approx(v, n)
+		"!=": return not is_equal_approx(v, n)
+	return false
+
+
+## A condition @if and @when can read: a flag, "has item [n]", "<stat|hearts> name op n", "hour op h".
+static func well_formed(c: Array) -> bool:
+	var ops := [">=", ">", "<=", "<", "==", "=", "!="]
+	if c.size() == 1:
+		return true
+	if str(c[0]) == "has":
+		return c.size() in [2, 3]
+	if c.size() == 4 and (str(c[0]) in STATS or str(c[0]) == "hearts"):
+		return str(c[2]) in ops
+	if c.size() == 3 and str(c[0]) == "hour":
+		return str(c[1]) in ops
+	return false
+
+
+## True if a scene's @requires and @when all hold, and @once/@daily don't rule it out today.
+static func can_play(id: String) -> bool:
+	var sc: Dictionary = scenes()[id]
+	if sc["once"] and Game.flag("seen_" + id):
+		return false
+	if sc["daily"] and int(Game.flag("daily_scene_day", -1)) == Game.day:
+		return false
+	if not requirements_met(sc["requires"]):
+		return false
+	for c in sc["when"]:
+		if not condition(c):
+			return false
+	return true
+
+
+## The first scene whose @trigger matches (e.g. "talk", "rowan") and can play now. `extra` is the
+## third word for triggers that have one ("gift rowan sweater"); a trigger without it matches any.
+static func find_trigger(kind: String, target := "", extra := "") -> String:
 	for id in scenes():
 		var sc: Dictionary = _scenes[id]
 		var trig: Array = sc["trigger"]
@@ -222,9 +270,9 @@ static func find_trigger(kind: String, target := "") -> String:
 			continue
 		if target != "" and (trig.size() < 2 or str(trig[1]) != target):
 			continue
-		if sc["once"] and Game.flag("seen_" + id):
+		if extra != "" and trig.size() >= 3 and str(trig[2]) != extra:
 			continue
-		if requirements_met(sc["requires"]):
+		if can_play(id):
 			return id
 	return ""
 
@@ -238,6 +286,9 @@ static func validate() -> Array:
 		var labels: Dictionary = sc["labels"]
 		if not sc["trigger"].is_empty() and str(sc["trigger"][0]) == "area" and not sc["once"]:
 			errs.append("%s: an area scene must be @once (it would replay while you stand there)" % sc["where"])
+		for c in sc["when"]:
+			if not well_formed(c):
+				errs.append("%s: can't read '@when %s' (see @if at the top of story.gd)" % [sc["where"], " ".join(c)])
 		for op in sc["ops"]:
 			if op["op"] == "choice":
 				if op["options"].is_empty():
@@ -250,9 +301,12 @@ static func validate() -> Array:
 				if op["cmd"] == "goto":
 					target = op["rest"]
 				elif op["cmd"] == "if":
-					target = split_if(op["rest"])[1]
+					var parts := split_if(op["rest"])
+					target = parts[1]
 					if target == "":
 						errs.append("%s: @if needs '-> label'" % op["where"])
+					elif not well_formed(parts[0]):
+						errs.append("%s: can't read the condition in '@if %s'" % [op["where"], op["rest"]])
 				if target != "" and not labels.has(target):
 					errs.append("%s: no '@label %s' in scene %s" % [op["where"], target, id])
 				var need := {"prop": 4, "prop_move": 4, "prop_remove": 1, "weather": 1, "phone": 1, "sheep": 1, "home": 2, "walk": 3, "place": 3}

@@ -1,5 +1,5 @@
 {
-  "_about": "Everything villagers say. {sweater} = Rosa's sweater price today, {cottage} = cottage price, {rent} = cottage rent. 'lines' has three tiers per villager: 0-1 hearts, 2-3 hearts, 4-5 hearts.",
+  "_about": "Everything villagers say. 'gift_lines' are what they say to a gift they don't love (by villager, then item); anything missing gets a polite thank-you. {sweater} = Rosa's sweater price today, {cottage} = cottage price, {rent} = cottage rent. 'lines' has three tiers per villager: 0-1 hearts, 2-3 hearts, 4-5 hearts.",
   "intro": {
     "rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
     "theo": "Welcome to Woolly Goods! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
@@ -75,6 +75,24 @@
         "You don't have to tell me what you left behind. But I'd listen, if you wanted."
       ]
     ]
+  },
+  "gift_lines": {
+    "rosa": {
+      "sweater": "For me? Oh, you'll make me cry on the stall and then nobody buys anything.",
+      "turnip": "A good firm turnip. You know the way to a market woman's heart: produce."
+    },
+    "theo": {
+      "pumpkin": "A pumpkin! I'll carve a sheep into it. It'll look like a potato. It'll be perfect.",
+      "turnip": "Turnip. Right. Thank you. I'm sure the sheep will love it."
+    },
+    "mabel": {
+      "sweater": "Hand-knit! I'll wear it to the next viewing and tell everyone it's local.",
+      "pumpkin": "Lovely. I'll put it on the office step. Makes the place look settled."
+    },
+    "rowan": {
+      "pumpkin": "Soup, then. I'll make it badly and eat it anyway. Thanks.",
+      "turnip": "A turnip. ... The ewes will think I've gone soft. Thank you."
+    }
   },
   "gift_loved": {
     "rosa": "A pumpkin! Oh, you remembered. I'm baking a pie tonight and you're getting the first slice.",
