@@ -342,8 +342,10 @@ func _update_lighting() -> void:
 	sky_mat.set_shader_parameter("cloud_shade", Color(0.62, 0.6, 0.7).lerp(Color(0.4, 0.42, 0.48), rain))
 	_cloud_drift += Vector2(0.82, 0.57) * get_process_delta_time() * (0.012 + 0.02 * rain)
 	sky_mat.set_shader_parameter("cloud_offset", _cloud_drift)
-	env.fog_density = 0.0035 + 0.0055 * rain
-	env.volumetric_fog_density = 0.0012 + 0.01 * rain + 0.004 * warm * dl
+	env.fog_density = 0.002 + 0.0065 * rain
+	# haze only when it earns its keep: rain, and low sun at dawn and dusk (sunbeams)
+	env.volumetric_fog_density = 0.01 * rain + 0.004 * warm * warm * dl
+	env.volumetric_fog_enabled = env.volumetric_fog_density > 0.0006
 	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.95).lerp(horizon, 0.3)
 	env.adjustment_saturation = 1.1 - 0.3 * rain
 	if World.foliage_mat:
