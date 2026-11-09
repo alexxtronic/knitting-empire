@@ -7,6 +7,7 @@ signal expand_pressed
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
+signal graphics_pressed
 signal item_chosen(id: String)
 signal rotate_pressed
 signal sell_pressed
@@ -184,6 +185,7 @@ var toast_meter: Meter
 var live_btn: Button
 var build_btn: Button
 var expand_btn: Button
+var graphics_btn: Button
 var catalog_panel: PanelContainer
 var item_buttons := {}
 var thumbs # thumbs.gd
@@ -416,6 +418,10 @@ func _label(text: String, size := 15, color := TEXT) -> Label:
 	return l
 
 
+func set_graphics_label(level: String) -> void:
+	graphics_btn.text = "Graphics: " + level
+
+
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -477,6 +483,9 @@ func _build_left() -> void:
 	vb.add_child(expand_btn)
 	vb.add_child(_button("Walls Up / Down", func(): walls_pressed.emit()))
 	vb.add_child(_button("Save Game", func(): save_pressed.emit()))
+	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
+	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
+	vb.add_child(graphics_btn)
 	vb.add_child(_button("How to Play", func(): help_panel.visible = true))
 	vb.add_child(_button("New Game", func(): new_game_pressed.emit()))
 	for c in vb.get_children():

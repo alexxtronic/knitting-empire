@@ -204,6 +204,7 @@ func _ready() -> void:
 	_update_price_board()
 	cam_target = player.position
 	_restore_story_state()
+	_load_graphics()
 	hud.render_thumbnails()
 	if not loaded and _autotest_dir == "":
 		_begin_new_story()
@@ -223,6 +224,7 @@ func _connect_hud() -> void:
 	hud.mode_selected.connect(func(b): set_mode(Mode.BUILD if b else Mode.LIVE))
 	hud.expand_pressed.connect(_expand_house)
 	hud.walls_pressed.connect(func(): walls_up = not walls_up)
+	hud.graphics_pressed.connect(_cycle_graphics)
 	hud.save_pressed.connect(func():
 		_save_game()
 		hud.show_toast("Game saved."))
@@ -324,8 +326,10 @@ func _setup_environment() -> void:
 	sun.directional_shadow_split_3 = 0.45
 	sun.directional_shadow_blend_splits = true
 	sun.directional_shadow_fade_start = 0.85
-	sun.shadow_bias = 0.03
-	sun.shadow_normal_bias = 1.0
+	# Godot's standard offsets: lower ones made flat tops (wall caps, sills) shade themselves in a
+	# pattern that jumped every frame as the camera followed Nora (measured 3-5x more flicker)
+	sun.shadow_bias = 0.1
+	sun.shadow_normal_bias = 2.0
 	sun.shadow_blur = 1.0
 	# the real sun is about half a degree across: crisp where a thing touches the ground,
 	# softer the further the shadow falls from it
@@ -340,14 +344,60 @@ func _setup_environment() -> void:
 ## The 3D scene is drawn at about 1.6 million pixels whatever the window size, then upscaled
 ## (MetalFX on Macs, FSR elsewhere); the menus stay at full resolution. A full-screen Retina
 ## window is 4 to 7 million pixels, which a laptop GPU can't fill at 60 fps with these effects.
-const TARGET_3D_PIXELS := 1.6e6
+## Per graphics level (Low, Medium, High): 3D pixels to aim for and the lowest scale allowed.
+const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.6e6]
+const MIN_3D_SCALE := [0.25, 0.3, 0.35]
+
+# --- graphics setting ----------------------------------------------------------------
+## Low / Medium / High, cycled from the left-hand menu and kept in user://settings.cfg (not the
+## save file: it belongs to the computer, not the farm). The autotest always runs on High.
+const GFX_NAMES := ["Low", "Medium", "High"]
+const SETTINGS_PATH := "user://settings.cfg"
+var gfx := 2
+
+
+func _load_graphics() -> void:
+	if _autotest_dir == "":
+		var cfg := ConfigFile.new()
+		if cfg.load(SETTINGS_PATH) == OK:
+			gfx = clampi(int(cfg.get_value("graphics", "quality", 2)), 0, 2)
+	apply_graphics()
+
+
+func _cycle_graphics() -> void:
+	gfx = (gfx + 2) % 3 # High → Medium → Low → High
+	apply_graphics()
+	if _autotest_dir == "":
+		var cfg := ConfigFile.new()
+		cfg.load(SETTINGS_PATH)
+		cfg.set_value("graphics", "quality", gfx)
+		cfg.save(SETTINGS_PATH)
+	hud.show_toast("Graphics: %s" % GFX_NAMES[gfx])
+
+
+func apply_graphics() -> void:
+	var med := gfx >= 1
+	var hi := gfx == 2
+	env.ssao_enabled = med # contact shading
+	env.ssil_enabled = hi # light bouncing off nearby surfaces
+	env.ssr_enabled = hi # reflections in the pond and wet ground
+	RenderingServer.directional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	Catalog.lamp_shadows = med
+	for l in find_children("*", "OmniLight3D", true, false):
+		(l as OmniLight3D).shadow_enabled = med
+	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
+	get_viewport().msaa_3d = Viewport.MSAA_2X if gfx == 0 else Viewport.MSAA_4X
+	_fit_3d_resolution()
+	hud.set_graphics_label(GFX_NAMES[gfx])
+
 
 func _fit_3d_resolution() -> void:
 	var vp := get_viewport()
 	var px := Vector2(get_window().size)
 	# a 2x-scaled 1440p monitor full screen is 5120x2880 = 14.7M pixels; below about a third of
 	# the width, fine detail and thin edges break up when upscaled, so stop there
-	var scale := clampf(sqrt(TARGET_3D_PIXELS / maxf(px.x * px.y, 1.0)), 0.35, 1.0)
+	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
 	if scale > 0.95:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		vp.scaling_3d_scale = 1.0
@@ -396,7 +446,7 @@ func _update_lighting() -> void:
 	env.fog_density = 0.0012 + 0.0068 * rain
 	# haze only when it earns its keep: rain, and low sun at dawn and dusk (sunbeams)
 	env.volumetric_fog_density = 0.01 * rain + 0.004 * warm * warm * dl
-	env.volumetric_fog_enabled = env.volumetric_fog_density > 0.0006
+	env.volumetric_fog_enabled = gfx >= 1 and env.volumetric_fog_density > 0.0006
 	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.95).lerp(horizon, 0.3)
 	env.adjustment_saturation = 1.1 - 0.3 * rain
 	if World.foliage_mat:
@@ -788,7 +838,7 @@ func _update_camera(delta: float) -> void:
 	var near := cam_dist < 9.0
 	cam_attr.dof_blur_far_enabled = near
 	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
-	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, 70.0)
+	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, [40.0, 55.0, 70.0][gfx])
 	if near:
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
@@ -1586,6 +1636,27 @@ func _wait(s: float) -> void:
 	await get_tree().create_timer(s).timeout
 
 
+## The graphics setting turns the expensive effects off and back on, and the autotest never
+## writes the player's settings file.
+func _graphics_checks() -> void:
+	var blades_hi: int = grass.drawn_blades()
+	var scale_hi := get_viewport().scaling_3d_scale
+	var had_cfg := FileAccess.file_exists(SETTINGS_PATH)
+	_cycle_graphics() # Medium
+	_cycle_graphics() # Low
+	await _wait(0.3)
+	var lamps: Array = find_children("*", "OmniLight3D", true, false)
+	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (High %d%%)" % [grass.drawn_blades(), blades_hi, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_hi * 100)],
+		gfx == 0 and not env.ssao_enabled and not env.ssil_enabled and not env.ssr_enabled and not env.volumetric_fog_enabled
+		and lamps.all(func(l): return not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
+		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
+	_cycle_graphics() # High
+	await _wait(0.3)
+	_check("back on High: every effect and all the grass return; settings file untouched",
+		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return l.shadow_enabled)
+		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
+
+
 func _shot(fname: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
@@ -1984,6 +2055,7 @@ func _autotest() -> void:
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
 	var happy0 := Game.happiness
 
+	await _graphics_checks()
 	await _character_checks()
 	_do_action(chair, "knit")
 	await _wait(3.6)

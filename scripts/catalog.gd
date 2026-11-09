@@ -5,6 +5,9 @@ extends RefCounted
 
 const Data = preload("res://scripts/data.gd")
 
+## Lamps, lanterns and the hearth cast shadows unless the graphics setting is Low (main.gd).
+static var lamp_shadows := true
+
 const WOOD := Color(0.47, 0.30, 0.18)
 const WOOD_DARK := Color(0.30, 0.19, 0.11)
 const WOOD_LIGHT := Color(0.72, 0.54, 0.34)
@@ -134,7 +137,7 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	l.light_energy = day_e
 	# real shadows from the fire and lamps (furniture, people), cheap two-sided maps that fade
 	# out with distance so a whole street of lamps doesn't cost much
-	l.shadow_enabled = true
+	l.shadow_enabled = lamp_shadows
 	l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	l.shadow_blur = 1.5
 	l.light_size = 0.12

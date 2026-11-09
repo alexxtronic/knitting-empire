@@ -18,6 +18,8 @@ var _ground: MeshInstance3D
 var _chunks: Array[MultiMeshInstance3D] = []
 var _blade_mesh: ArrayMesh
 var blade_count := 0
+var _frac := 1.0 # share of blades drawn (graphics setting)
+var _range := VIEW_RANGE
 
 
 func _ready() -> void:
@@ -129,7 +131,8 @@ func _plant() -> void:
 			mmi.multimesh = mm
 			mmi.material_override = blade_mat
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mmi.visibility_range_end = VIEW_RANGE
+			mm.visible_instance_count = _visible(n)
+			mmi.visibility_range_end = _range
 			mmi.visibility_range_end_margin = 6.0
 			add_child(mmi)
 			_chunks.append(mmi)
@@ -162,6 +165,27 @@ func _make_blade() -> ArrayMesh:
 
 
 ## Weather and season, from main.gd: rain (0..1), how dry the season is (0 spring .. 1 winter).
+## Graphics setting: draw this share of the blades (they're planted in random order, so the
+## first N are an even thinning) out to this distance from the camera.
+func set_quality(frac: float, view_range: float) -> void:
+	_frac = clampf(frac, 0.05, 1.0)
+	_range = view_range
+	for c in _chunks:
+		c.multimesh.visible_instance_count = _visible(c.multimesh.instance_count)
+		c.visibility_range_end = _range
+
+
+func drawn_blades() -> int:
+	var n := 0
+	for c in _chunks:
+		n += c.multimesh.visible_instance_count if c.multimesh.visible_instance_count >= 0 else c.multimesh.instance_count
+	return n
+
+
+func _visible(n: int) -> int:
+	return -1 if _frac >= 0.999 else maxi(1, int(n * _frac))
+
+
 func set_conditions(rain: float, season_dry: float) -> void:
 	for m in [ground_mat, blade_mat]:
 		m.set_shader_parameter("season_dry", season_dry)
