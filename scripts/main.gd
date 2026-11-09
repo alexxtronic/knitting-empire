@@ -389,9 +389,11 @@ func apply_graphics() -> void:
 	env.ssao_enabled = med # contact shading
 	env.ssil_enabled = hi # light bouncing off nearby surfaces
 	env.ssr_enabled = hi # reflections in the pond and wet ground
-	# the sun's soft shadows never drop to the lowest filter: it speckles every shadow with a dot
-	# pattern that crawls as the camera moves; one step up costs well under a millisecond
-	RenderingServer.directional_soft_shadow_filter_set_quality([2, 2, 3][gfx])
+	# the sun's soft shadows use the high filter at every setting: the shadow filter jitters its
+	# samples each frame for the upscaler to average out, and with fewer samples the soft edges
+	# (the long end of a shadow most of all) visibly vibrate. Rendering at a third of the screen
+	# keeps the extra samples cheap.
+	RenderingServer.directional_soft_shadow_filter_set_quality([4, 4, 5][gfx])
 	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
 	Catalog.lamp_shadows = med
 	for l in find_children("*", "OmniLight3D", true, false):
@@ -2134,7 +2136,7 @@ func _run_fps_probe() -> void:
 		"vol_fog": func(on): env.volumetric_fog_enabled = on,
 		"glow": func(on): env.glow_enabled = on,
 		"sun_shadow": func(on): sun.shadow_enabled = on,
-		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(3 if on else 1),
+		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 2),
 		"lamp_shadows": func(on):
 			for l in lamps:
 				l.shadow_enabled = on,
