@@ -287,6 +287,17 @@ func flag(flag_name: String, default: Variant = false) -> Variant:
 	return flags.get(flag_name, default)
 
 
+## Her journal: what the story has written down, oldest first. Kept in the flags, so it saves.
+func journal() -> Array:
+	return flags.get("journal", [])
+
+
+func add_journal(kind: String, title: String, text: String) -> void:
+	var j: Array = journal().duplicate()
+	j.append({"kind": kind, "title": title, "text": text, "day": day})
+	flags["journal"] = j
+
+
 # --- save data -----------------------------------------------------------------
 
 func to_dict() -> Dictionary:

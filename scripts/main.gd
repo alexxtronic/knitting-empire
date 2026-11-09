@@ -1768,8 +1768,9 @@ Rowan (happy): You're alright, {player}.
 		Game.stat("rosa", "familiarity") == 37 and Game.stat("rosa", "trust") == 0 and Game.hearts("rosa") == 1)
 
 
-## Act 1 from a fresh story: the rain bus, Mabel at the gate, Gran's basket, knitting, and
-## Rowan at the broken fence. The heroine walks between the triggers for real.
+## Act 1 from a fresh story: the rain bus, Mabel at the gate, Gran's basket, knitting and the
+## first memory thread, Rowan at the broken fence, market day in Maplewood, and the porch at
+## night. The heroine walks between the triggers for real.
 func _act1_checks() -> void:
 	Game.flags = {}
 	Game.hour = 9.0
@@ -1780,9 +1781,11 @@ func _act1_checks() -> void:
 	story.shown.clear()
 	story.auto = true
 	story.auto_line = 0.3
-	story.auto_choices = [0, 0, 0, 1, 0]
+	story.auto_choices = [0, 0, 0, 1, 0, 1, 0]
 	var wool0 := Game.count("wool")
 	var trust0 := Game.stat("rowan", "trust")
+	var journal0: int = Game.journal().size()
+	var day0 := Game.day
 	var walk_secs := 0.0
 	_check("a new game opens on Act 1 (%s)" % Story.find_trigger("start"), Story.find_trigger("start") == "act1_arrival")
 	var hour0 := Game.hour
@@ -1831,7 +1834,11 @@ func _act1_checks() -> void:
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("finishing a knit starts the fence scene (%s)" % story.playing, story.playing == "act1_fence")
+	await _act1_shot("Babe.", "27_act1_memory.png")
+	_check("the first knit opens memory thread #1 in the faded memory look", hud.memory_on())
 	await _act1_shot("pay rent", "")
+	_check("the memory ends before the sheep (look off: %s) and is in her journal (%s)" % [str(not hud.memory_on()), str(Game.journal().map(func(e): return e["title"]))],
+		not hud.memory_on() and Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory")
 	var loose := 0
 	for i in 3:
 		if not PEN.has_point(Vector2(sheep_list[i].position.x, sheep_list[i].position.z)):
@@ -1845,9 +1852,53 @@ func _act1_checks() -> void:
 		if PEN.has_point(Vector2(s.position.x, s.position.z)):
 			in_pen += 1
 	var rowan := _villager("rowan")
-	_check("Act 1 done: met Rowan, opened up (trust %d→%d), sheep home (%d/%d), Rowan back in town, sky clear" % [trust0, Game.stat("rowan", "trust"), in_pen, sheep_list.size(), ],
-		Game.flag("act1_done") == true and Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3
-		and in_pen == sheep_list.size() and rowan.position.distance_to(Vector3(44.2, 0, 2.4)) < 1.0 and str(Game.flag("weather")) == "clear" and not hud.goal_panel.visible)
+	_check("the fence: met Rowan, opened up (trust %d→%d), sheep home (%d/%d), Rowan back in town, sky clear, off to market ('%s')" % [trust0, Game.stat("rowan", "trust"), in_pen, sheep_list.size(), hud.goal_label.text],
+		Game.flag("act1_fence_done") == true and Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3
+		and in_pen == sheep_list.size() and rowan.position.distance_to(Vector3(44.2, 0, 2.4)) < 1.0 and str(Game.flag("weather")) == "clear"
+		and hud.goal_panel.visible and hud.goal_label.text.contains("market") and not Game.flag("act1_done"))
+	# market day: walk into Maplewood to Rosa's stall
+	var coins0 := Game.coins
+	var sweaters0 := Game.count("sweater")
+	var wool1 := Game.count("wool")
+	var theo0 := Game.stat("theo", "trust")
+	t0 = Time.get_ticks_msec()
+	player.walk(_find_path(player.position, Vector3(48.5, 0, -5.6)))
+	t = 0.0
+	while story.playing != "act1_market" and t < 45.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("walking to Rosa's stall starts market day (%s after %.1fs)" % [story.playing, t], story.playing == "act1_market")
+	await _act1_shot("Hold ON", "28_act1_market_rosa.png")
+	await _act1_shot("two heads", "29_act1_market_theo.png")
+	await _act1_until_done(60.0)
+	_check("Rosa bought the sweater (coins %d→%d, sweaters %d→%d), Theo's wool on credit (wool %d→%d, trust %d→%d), home by dusk ('%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), theo0, Game.stat("theo", "trust"), hud.goal_label.text],
+		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("theo_credit") == true
+		and Game.stat("theo", "trust") == theo0 + 2 and Game.flag("act1_market") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
+	# the porch at night
+	t0 = Time.get_ticks_msec()
+	player.walk(_find_path(player.position, Vector3(9.8, 0, 3.0)))
+	t = 0.0
+	while story.playing != "act1_porch" and t < 50.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("walking home to the porch starts the night scene (%s after %.1fs)" % [story.playing, t], story.playing == "act1_porch")
+	await _act1_shot("Hi Nora, it's Claire", "30_act1_voicemail.png")
+	_check("it's night on the porch and the lawyer's voicemail is on her phone (%.1fh, '%s')" % [Game.hour, hud.phone_label.text],
+		Game.hour > 21.0 and hud.phone_panel.visible and hud.phone_label.text.begins_with("Voicemail"))
+	await _act1_shot("You okay?", "31_act1_porch_rowan.png")
+	await _act1_shot("Morning.", "32_act1_morning.png")
+	await _act1_until_done(60.0)
+	_check("Act 1 done: she opened up on the porch (trust %d→%d, romance %d), three journal entries, the next morning (day %d→%d, %.1fh), no goal" % [trust0, Game.stat("rowan", "trust"), Game.stat("rowan", "romance"), day0, Game.day, Game.hour],
+		Game.flag("act1_done") == true and Game.flag("nora_opened_porch") == true and Game.stat("rowan", "trust") == trust0 + 6
+		and Game.stat("rowan", "romance") >= 1 and Game.journal().size() == journal0 + 3 and Game.day == day0 + 1 and absf(Game.hour - 7.5) < 0.3
+		and not hud.goal_panel.visible)
+	hud.open_journal()
+	await _wait(0.4)
+	await _shot("33_act1_journal.png")
+	_check("the journal lists all three, newest first (%d rows)" % hud.journal_list.get_child_count(), hud.journal_panel.visible and hud.journal_list.get_child_count() == journal0 + 3)
+	hud.journal_panel.visible = false
 	# how long it takes a person: reading time for every line shown, choices, walks and the knit
 	var read := 0.0
 	var choices := 0
@@ -1858,12 +1909,13 @@ func _act1_checks() -> void:
 		read += 0.7 + line.length() / 17.0
 	var titles := 3 * 2.6
 	var total := read + choices * 3.0 + walk_secs + titles
-	_check("Act 1 plays in about 4 minutes (%d lines, %d choices: %.0fs reading + %.0fs walking/knitting = %.1f min)" % [story.shown.size(), choices, read + choices * 3.0 + titles, walk_secs, total / 60.0],
-		total > 180.0 and total < 330.0)
+	_check("Act 1 plays in about 10 minutes (%d lines, %d choices: %.0fs reading + %.0fs walking/knitting = %.1f min)" % [story.shown.size(), choices, read + choices * 3.0 + titles, walk_secs, total / 60.0],
+		total > 480.0 and total < 840.0)
 	var d := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
 	Game.flags = {}
 	Game.from_dict(d)
-	_check("Act 1 progress survives a save", Game.flag("act1_done") == true and Game.flag("seen_act1_fence") == true)
+	_check("Act 1 progress survives a save (journal %d)" % Game.journal().size(),
+		Game.flag("act1_done") == true and Game.flag("seen_act1_porch") == true and Game.journal().size() == journal0 + 3)
 	story.auto = false
 	story.auto_line = 0.08
 
@@ -1874,7 +1926,7 @@ func _capture_opening() -> void:
 	story.auto = true
 	story.cinematic = true
 	story.auto_line = 0.6
-	story.auto_choices = [0, 0, 0, 1, 0]
+	story.auto_choices = [0, 0, 0, 1, 0, 1, 0]
 	await _wait(0.5)
 	_begin_new_story()
 	await _act1_until_done(300.0)
@@ -1894,7 +1946,16 @@ func _capture_opening() -> void:
 		await _wait(0.1)
 		t2 += 0.1
 	await _act1_until_done(400.0)
-	await _wait(3.0)
+	await _wait(1.5)
+	for step in [[Vector3(48.5, 0, -5.6), "act1_market"], [Vector3(9.8, 0, 3.0), "act1_porch"]]:
+		player.walk(_find_path(player.position, step[0]))
+		var t3 := 0.0
+		while story.playing != step[1] and t3 < 60.0:
+			await _wait(0.1)
+			t3 += 0.1
+		await _act1_until_done(400.0)
+		await _wait(1.5)
+	await _wait(1.5)
 	print("CAPTURE DONE")
 	get_tree().quit()
 
@@ -2573,7 +2634,7 @@ func shake(secs: float) -> void:
 	_shake_len = secs
 
 
-## Builds a story prop: "bus", "suitcase", "rail" (a broken fence board) or "letter".
+## Builds a story prop: "bus", "suitcase", "rail" (a broken fence board), "letter" or "lantern" (lit).
 func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> void:
 	remove_prop(prop_name)
 	var n := Node3D.new()
@@ -2605,6 +2666,15 @@ func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> 
 			Catalog.box(n, Vector3(2.0, 0.07, 0.05), Vector3(0, 0.2, 0), Color(0.62, 0.48, 0.32), Vector3(0, 0, 14))
 		"letter":
 			Catalog.box(n, Vector3(0.22, 0.01, 0.15), Vector3(0, 0.01, 0), Color(0.96, 0.93, 0.85))
+		"lantern":
+			Catalog.cyl(n, 0.1, 0.11, 0.03, Vector3(0, 0.015, 0), Color(0.24, 0.23, 0.22))
+			Catalog.glow(Catalog.cyl(n, 0.075, 0.075, 0.2, Vector3(0, 0.13, 0), Color(1.0, 0.86, 0.55)), Color(1.0, 0.8, 0.5), 2.2)
+			for a in 4:
+				var q := Vector3(cos(a * PI / 2) * 0.085, 0.13, sin(a * PI / 2) * 0.085)
+				Catalog.box(n, Vector3(0.02, 0.22, 0.02), q, Color(0.24, 0.23, 0.22))
+			Catalog.cyl(n, 0.04, 0.1, 0.06, Vector3(0, 0.26, 0), Color(0.24, 0.23, 0.22))
+			Catalog.ring(n, 0.05, 0.065, Vector3(0, 0.32, 0), Color(0.24, 0.23, 0.22))
+			Catalog.omni(n, Vector3(0, 0.2, 0), Color(1.0, 0.75, 0.45), 4.0, 0.2, 1.4)
 		_:
 			Catalog.box(n, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.25, 0), Color(0.8, 0.3, 0.8))
 	add_child(n)

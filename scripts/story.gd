@@ -35,19 +35,26 @@ extends RefCounted
 ##   @goal Walk to the farm | 24 3   the goal shown at the top of the screen, with a marker at x, z
 ##                                   (the "| x z" part is optional; "@goal" alone clears it)
 ##   @weather rain / @weather clear
-##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter; name, x, z, yaw
+##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter, lantern; name, x, z, yaw
 ##   @prop_move bus1 70 6 4          slide it to x, z over some seconds (doesn't wait)
 ##   @prop_remove bus1
 ##   @phone Daniel / @phone off      a phone ringing on screen
 ##   @shake 0.4                      shake the camera
 ##   @sheep out / @sheep home        three sheep get out by the south fence, or go back in
 ##   @home rowan 21 5                a villager stays at x, z (survives saves); "@home rowan off"
+##   @memory on [seconds]            a memory thread: the screen fades to warm sepia ("@memory off")
+##   @journal memory Title | text    write in her journal ("memory" or "note"); a toast says so
+##   @time 21.5                      set the clock (hours, or 21:30)
+##   @sleep                          she sleeps: next morning, a new day (crops grow, prices change)
+##   @give coins 60 / @take coins 5  coins work like items
+##   @if has sweater -> label        jump if she has an item ("has wool 3" for at least 3)
 ## Text can use {player} for the heroine's name.
 
 const SCENE_DIR := "res://data/scenes"
 const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "walk", "place", "set", "unset",
 	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
-	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home"]
+	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home",
+	"memory", "journal", "time", "sleep"]
 const STATS := ["familiarity", "trust", "romance"]
 
 static var _scenes := {}
@@ -191,6 +198,8 @@ static func requirements_met(reqs: Array) -> bool:
 static func condition(cond: Array) -> bool:
 	if cond.size() == 1:
 		return requirements_met(cond)
+	if str(cond[0]) == "has" and cond.size() in [2, 3]:
+		return Game.has_item(str(cond[1]), int(cond[2]) if cond.size() == 3 else 1)
 	if cond.size() == 4 and str(cond[0]) in STATS:
 		var v := Game.stat(str(cond[1]), str(cond[0]))
 		var n := int(cond[3])

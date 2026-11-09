@@ -24,7 +24,7 @@ Controls:
 
 ## What's in it
 
-- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. It takes about four to five minutes, with a few choices that set flags and relationship stats for later. Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
+- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. Fixing the fence with him brings back the first memory thread (a sepia flashback to the navy sweater her ex threw away). She sells her first sweater to Rosa at the market, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. It takes about ten minutes, with choices that set flags and relationship stats for later. Memories and notes go into the **Journal** (left menu). Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
 - **Home and farm:** a house you can expand, furniture to place, sheep to shear, crops to plant, water and harvest, and a shipping bin.
 - **Maplewood:**
   - three villagers (Rosa, Theo, Mabel) with friendship hearts, gifts and dialogue
@@ -36,7 +36,7 @@ Controls:
 - **Talking to villagers:** besides **Talk** (hand-written lines), **Chat...** lets you type to Rosa, Theo, Mabel and Rowan, who answer in character (see [Chatting with villagers](#chatting-with-villagers)).
 - **World:** real grass (tens of thousands of blades that sway in the wind and part round Nora, worn earth on paths), trees that move in the wind, a pond with ripples and rain rings, a sky with drifting clouds and stars, soft shadows, bounce light, a light haze for sunbeams and mist, and depth of field in close-ups.
 - **Graphics setting:** the **Graphics** button in the left menu cycles High, Medium and Low (saved per computer in `user://settings.cfg`). Medium drops the bounce light and reflections and thins the grass; Low also drops the haze, contact shading and lamp shadows and draws less grass, nearer. On every setting the 3D view is drawn at a fixed pixel budget and upscaled (MetalFX on Macs), so a bigger window looks sharper without getting slower.
-- **Characters:** Nora (the heroine you play, working name) and Rowan (the shepherd in Maplewood) come from one Blender script, `tools/build_character.py`. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
+- **Characters:** Nora (the heroine you play, working name) is sculpted from her turnaround pictures with image-to-sculpt and painted from them; Rowan (the shepherd in Maplewood) comes from the Blender script `tools/build_character.py`, which can also still build Nora. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
 
 ## Chatting with villagers
 
@@ -75,6 +75,10 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `shaders/ground`, `grass_blade`, `foliage`, `water`, `sky` | ground, grass, trees, pond and sky |
 | `docs/woolcore/` | style frames (ignored by Godot) |
 | `tools/build_character.py` | Blender character generator: builds `assets/<id>.glb` |
+| `tools/cutout_views.py`, `project_colors.py`, `rig_sculpt.py` | turnaround to sculpt to rigged character (see [Characters](#characters)) |
+| `tools/import_asset.py` | brings any generated model (Tripo, etc.) into the Woolcore look: `assets/props/<id>.glb` |
+| `data/palette.json` | the 31 Woolcore colours every surface uses |
+| `docs/STYLE_GUIDE.md` | the art rules: palette, materials, shapes, polygon budgets, UI, asset pipeline |
 
 ## Adding content without code
 
@@ -83,7 +87,7 @@ Prices, furniture, crops, villagers and their lines all live in `data/`. Edit th
 - **A new price or limit:** change it in `economy.json`.
 - **A new villager:** add an entry to `villagers.json`, then give them an intro, three tiers of lines and a loved-gift line in `dialogue.json`.
 - **A new crop:** add it to `crops.json` and give it a sell price in `economy.json`.
-- **Furniture:** add it to `furniture.json`. A new kind of furniture still needs a builder in `catalog.gd`.
+- **Furniture:** add it to `furniture.json`. Either give it a `"model"` (a glb made with `tools/import_asset.py`, see [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)) or write a builder in `catalog.gd`.
 
 The autotest checks the files against each other and names anything missing.
 
@@ -117,6 +121,8 @@ Rowan (neutral): Fair enough.
 - `> text` is narration.
 - `?` starts a choice, followed by `- option -> label | effects`.
 - Other commands move the camera, fade, show title cards, walk and animate characters, set flags, and change relationship stats.
+- `@memory on` / `@memory off` fade the sepia flashback look in and out. `@journal memory Title | text` (or `note`) writes to the Journal.
+- `@time 21:30` sets the clock, `@sleep` ends the day, `give`/`take` also work with `coins`, and `@if has sweater -> label` branches on what's in the bag.
 - Staging commands set the goal shown at the top of the screen (with a marker on the map), make it rain, put down props like a bus or a suitcase, ring the phone, shake the camera, let the sheep out, and park a villager somewhere until a later scene sends them home.
 - A scene plays when you talk to someone (`@trigger talk rowan`), on a new game (`@trigger start`), when you walk into a named place from `data/areas.json` (`@trigger area farm_gate`), or after an event such as finishing a knit (`@trigger event knit_done`).
 - Act 1 is in `data/scenes/act1.scene`, which is a good worked example.
@@ -126,6 +132,8 @@ Rowan (neutral): Fair enough.
 ## Woolcore style (v0)
 
 The world is meant to look handmade: felt and knitting.
+
+The full rules (palette, materials, shapes, polygon budgets, UI and how to bring in new models) are in [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md), a draft waiting for sign-off.
 
 ![The farm](docs/woolcore/style_01_farm.png)
 
@@ -154,7 +162,19 @@ To see what each graphics effect costs, the frame-cost probe times the town at n
 
 ## Characters
 
-`tools/build_character.py` holds a spec for each character: body proportions (height, shoulders, waist, hips, bust, limbs, head), face, hair style, palette and outfit. Every character gets the same skeleton and the same animations, so a loop added once works for everyone. To add a character, add a spec and rebuild, list it in `data/characters.json`, and give a villager `"look": {"model": "<id>"}` in `data/villagers.json`.
+**Sculpted characters (Nora).** The path from a turnaround to the game:
+1. Five views (front, ¾ front, side, ¾ back, back) on plain white, cut out with `tools/cutout_views.py`.
+2. image-to-sculpt fits a mesh to them (free and offline; the paid step adds face and surface detail).
+3. `tools/project_colors.py` paints the mesh from the views.
+4. `tools/rig_sculpt.py` puts it on the character's rig in Blender, with the same bones, loops and knitting props, and writes `assets/<id>.glb`:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b tools/character_build/nora/nora.blend -P tools/rig_sculpt.py -- "$PWD" painted.ply nora_sculpt --render /tmp/rig_check
+```
+
+5. Point `model` in `data/characters.json` at it. Nora's procedural body is kept as `model_procedural`. The pictures, report and timelapse are in `art/turnarounds/nora/sculpt/`.
+
+**Procedural characters.** `tools/build_character.py` holds a spec for each character: body proportions (height, shoulders, waist, hips, bust, limbs, head), face, hair style, palette and outfit. Every character gets the same skeleton and the same animations, so a loop added once works for everyone. To add a character, add a spec and rebuild, list it in `data/characters.json`, and give a villager `"look": {"model": "<id>"}` in `data/villagers.json`.
 
 Rebuild every character, and render turntables, pose sheets and a lineup:
 

@@ -230,6 +230,11 @@ var goal_label: Label
 var phone_panel: PanelContainer # "Incoming call" card during scenes
 var phone_label: Label
 var _phone_tween: Tween
+var memory_rect: ColorRect # the warm, faded look of a memory thread (story "@memory on")
+var _memory_tween: Tween
+var journal_panel: PanelContainer # the journal: memories and moments the story writes down
+var journal_list: VBoxContainer
+signal journal_opened
 
 
 func _ready() -> void:
@@ -240,6 +245,7 @@ func _ready() -> void:
 	root.theme = _make_theme()
 	add_child(root)
 	_build_vignette()
+	_build_memory()
 	var first := root.get_child_count()
 	_build_title()
 	_build_resources()
@@ -257,6 +263,7 @@ func _ready() -> void:
 	_build_menu()
 	_build_chat()
 	_build_help()
+	_build_journal()
 	fade = ColorRect.new()
 	fade.color = Color(0.02, 0.02, 0.06, 0.0)
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -486,6 +493,7 @@ func _build_left() -> void:
 	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
 	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
 	vb.add_child(graphics_btn)
+	vb.add_child(_button("Journal", func(): open_journal()))
 	vb.add_child(_button("How to Play", func(): help_panel.visible = true))
 	vb.add_child(_button("New Game", func(): new_game_pressed.emit()))
 	for c in vb.get_children():
@@ -1284,3 +1292,106 @@ void fragment() {
 	m.shader = sh
 	v.material = m
 	root.add_child(v)
+
+
+# --- memory threads and the journal --------------------------------------------------
+
+## A memory thread plays in the past: the world fades to warm sepia, softer at the edges, with a
+## slow drift of grain, like an old photo. The story box stays sharp on top.
+func _build_memory() -> void:
+	memory_rect = ColorRect.new()
+	memory_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	memory_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform float amount : hint_range(0.0, 1.0) = 0.0;
+void fragment() {
+	vec2 d = (SCREEN_UV - 0.5) * vec2(1.0, 0.8);
+	float edge = smoothstep(0.18, 0.75, length(d));
+	vec3 c = textureLod(screen_tex, SCREEN_UV, edge * 2.5 * amount).rgb;
+	float l = dot(c, vec3(0.3, 0.55, 0.15));
+	vec3 sepia = vec3(l * 1.08 + 0.06, l * 0.92 + 0.04, l * 0.72 + 0.03);
+	float grain = fract(sin(dot(floor(SCREEN_UV * 420.0) + floor(TIME * 8.0), vec2(12.9898, 78.233))) * 43758.55);
+	sepia += (grain - 0.5) * 0.035;
+	sepia = mix(sepia, vec3(0.98, 0.9, 0.78), edge * 0.55);
+	COLOR = vec4(mix(c, sepia, amount), 1.0);
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("amount", 0.0)
+	memory_rect.material = m
+	memory_rect.visible = false
+	root.add_child(memory_rect)
+
+
+## Fades the memory look in or out over `secs`. Awaitable.
+func set_memory(on: bool, secs := 1.2) -> void:
+	if _memory_tween:
+		_memory_tween.kill()
+	var m := memory_rect.material as ShaderMaterial
+	memory_rect.visible = true
+	var from := _memory_amount()
+	_memory_tween = create_tween()
+	_memory_tween.tween_method(func(v): m.set_shader_parameter("amount", v), from, 1.0 if on else 0.0, maxf(secs, 0.01))
+	await _memory_tween.finished
+	memory_rect.visible = on
+
+
+func memory_on() -> bool:
+	return memory_rect.visible and _memory_amount() > 0.5
+
+
+## The shader parameter reads back null until something sets it, so default to 0.
+func _memory_amount() -> float:
+	var v = (memory_rect.material as ShaderMaterial).get_shader_parameter("amount")
+	return float(v) if v != null else 0.0
+
+
+func _build_journal() -> void:
+	journal_panel = PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	vb.add_child(_label("Journal", 24, GOLD))
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(560, 360)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	journal_list = VBoxContainer.new()
+	journal_list.add_theme_constant_override("separation", 14)
+	journal_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(journal_list)
+	vb.add_child(sc)
+	var close := _button("Close", func(): journal_panel.visible = false)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.custom_minimum_size = Vector2(140, 36)
+	vb.add_child(close)
+	journal_panel.add_child(vb)
+	journal_panel.visible = false
+	root.add_child(journal_panel)
+	_place(journal_panel, 0.5, 0.5, Vector2.ZERO)
+
+
+## Shows the journal: Game.journal() entries, newest first. Memories are marked with a thread.
+func open_journal() -> void:
+	for c in journal_list.get_children():
+		c.queue_free()
+	var entries: Array = Game.journal()
+	if entries.is_empty():
+		journal_list.add_child(_label("Nothing written yet. Some days are like that.", 15, Color(TEXT, 0.7)))
+	for i in range(entries.size() - 1, -1, -1):
+		var e: Dictionary = entries[i]
+		var head := _label(("~ " if e.get("kind", "") == "memory" else "") + str(e.get("title", "")), 18, GOLD)
+		var when := _label("Day %d%s" % [int(e.get("day", 1)), "  ·  a memory" if e.get("kind", "") == "memory" else ""], 12, Color(TEXT, 0.6))
+		var body := _label(str(e.get("text", "")), 15)
+		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body.custom_minimum_size = Vector2(520, 0)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 2)
+		for c in [head, when, body]:
+			box.add_child(c)
+		journal_list.add_child(box)
+	journal_panel.visible = true
+	journal_opened.emit()
+

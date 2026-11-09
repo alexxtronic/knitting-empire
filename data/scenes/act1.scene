@@ -1,7 +1,9 @@
 # Act 1: Cast On. The format is described at the top of scripts/story.gd.
 # Flow: a new game opens on act1_arrival (the rain bus) → walk to the farm gate (act1_cottage,
 # Mabel and the keys) → step inside (act1_basket, Gran's basket and letter) → knit in the
-# rocking chair → act1_fence (the sheep are out; meeting Rowan).
+# rocking chair → act1_fence (memory thread #1, then the sheep are out; meeting Rowan) → take the
+# sweater to Maplewood (act1_market: Rosa buys it, Theo's wool on credit) → home at dusk
+# (act1_porch: the lawyer's voicemail, Rowan's lantern) → end card, next morning.
 
 == act1_arrival
 @trigger start
@@ -119,6 +121,19 @@ Nora (warm): One row. Just to see if my hands remember.
 @requires act1_basket
 @once
 @goal
+# memory thread #1: the first thing she knits in years brings back the last thing she knit
+@camera player 4
+@memory on 1.6
+> The last stitch closes. She holds the piece up to the window, and her hands remember another sweater.
+> Navy, with a cream band across the chest. He'd said cream made him look soft, so she made the band thin.
+Daniel: You made this? Babe. You know I don't really do wool.
+> Four months of it. Evenings, mostly, after he'd gone to bed, so it would be a surprise.
+Daniel: Don't make that face. It's sweet. It's just not... me.
+> In the morning it was in the bin by the back door, under the coffee grounds. He said it must have fallen in.
+> She didn't knit again for six years.
+@memory off 1.6
+@journal memory The navy sweater | Four months of evenings. A thin cream band, because cream made him look soft. It ended up in the bin under the coffee grounds and I didn't knit again for six years. Today I did.
+Nora (sad): ...Okay. That one still stings.
 > Somewhere outside, very close, something says "baa". Then something else says it louder.
 Nora (surprised): That is... not far enough away.
 @fade out 0.6
@@ -195,13 +210,124 @@ Rowan (wry): Good. Ellie's was terrible too. I'd hate to get used to anything el
 Rowan (warm): I know. That's sort of the point.
 @label bye
 @set met_rowan
-@set act1_done
+Rowan (neutral): That knitting on your chair. Yours?
+Nora (worried): It's nothing. First one in years.
+Rowan (wry): Take it to Rosa at the market. She'll pretend it's nothing too, right up until she pays you.
 > He tips the crook at her like a hat and heads off up the hill, whistling at nothing.
 @walk rowan 24 4.4 nowait
 @wait 2.5
-@fade out 1.2
 @home rowan off
-@title Act 1: Cast On
-@title to be continued
+@set act1_fence_done
+@camera player
+@goal Take your sweater to Rosa at the Maplewood market | 48.5 -5.6
+
+== act1_market
+# scene 5: market day. Someone values her work, out loud, in public.
+@trigger area market
+@requires act1_fence_done
+@once
+@goal
+@walk nora 48.5 -5.9
+@face rosa nora
+@face nora rosa
+@camera between rosa nora 7
+Rosa (surprised): Hold on. Hold ON. Is that hand-knit?
+Nora (worried): It's nothing. It's a first try, the tension's all over the place—
+Rosa (happy): Honey, I've sold factory jumpers for eleven years. I know nothing when I see it, and this isn't it.
+> Rosa turns the sweater inside out, the way you'd check a melon.
+Rosa (happy): Look at those floats. Look at them! Theo! THEO! Come and look at this!
+@if has sweater -> sell
+Rosa (warm): You've sold it already? Then bring me the next one, before anybody else sees it.
+@goto theo
+@label sell
+@take sweater 1
+@give coins 60
+Rosa (warm): Sixty coins, and I want the next one before anybody else sees it.
+@toast Sold your first sweater: +60 coins
+@label theo
+@walk theo 50.4 -6.0
+@face theo nora
+@face nora theo
+@camera between theo nora 7
+Theo (happy): Rosa doesn't shout for anybody. Last time she shouted it was a calf with two heads.
+Theo (neutral): You're Ellie's granddaughter. She bought her wool off me for thirty years. Never once paid on time.
+? Theo holds out a bundle of oatmeal yarn.
+- I can't take that. Let me pay you. -> pay | familiarity theo +2
+- Thank you. Really. -> thanks | trust theo +2; familiarity theo +2
+@label pay
+Theo (wry): You can. Later. That's what credit is. Ellie invented it, as far as I'm concerned.
+@goto give
+@label thanks
+Theo (warm): Pay me when the sweaters sell. They will.
+@label give
+@give wool 5
+@set theo_credit
+> Five skeins. More than anyone's handed her in a long time, and it isn't even charity. It's a bet on her.
+Nora (warm): Thank you. Both of you.
+@journal note Market day | Rosa shouted across the whole plaza. Theo gave me wool on credit, like I'm someone worth betting on. Sixty coins for something I made with my own hands.
+@time 18.5
+@set act1_market
+@camera player
+@goal Head home. It's getting dark | 9.8 3.0
+
+== act1_porch
+# scene 6: the porch at night. She can open up a little or deflect; both are valid, and it sets
+# the tone of her and Rowan's arc.
+@trigger area porch
+@requires act1_market
+@once
+@goal
+@fade out 0.8
+@time 21.5
+@place nora 9.8 3.0 90
+@camera 11.2 3.0 6
 @fade in 1.2
+> Night comes down fast out here. No streetlights. Just stars, and a porch light that hasn't worked since Gran.
+@phone Voicemail: Claire Moss, family law
+> One new voicemail. Her thumb hovers over it for a while. Then she plays it.
+Voicemail: Hi Nora, it's Claire. Daniel's side has filed to contest the sale of the house.
+Voicemail: It doesn't change much, honestly. But they want mediation. In person, in the city. Call me when you can. And take care of yourself, okay?
+@phone off
+Nora (sad): In person.
+> She sits down by the bottom step. The wood is cold through her jeans.
+@place rowan 15.0 4.8 270
+@walk rowan 11.3 2.5
+> A lantern bobs along the fence line, then stops.
+@face rowan nora
+@face nora rowan
+@camera between rowan nora 6
+Rowan (neutral): Checking your fence. It's holding. Mostly out of spite.
+Rowan (worried): You okay?
+? She could tell him. Some of it. Or none of it.
+- Not really. My ex wants to drag this out. I thought I'd left it in the city. -> open | trust rowan +3; romance rowan +1; familiarity rowan +2; set nora_opened_porch
+- I'm fine. Long day. -> deflect | familiarity rowan +1; set nora_deflected_porch
+@label open
+Rowan (neutral): Some things follow you. Took me two years to stop setting the table for two.
+> He doesn't say anything else, and it's exactly the right amount.
+Nora (warm): Thank you. For not saying something wise.
+Rowan (wry): I don't know anything wise. Ask the sheep.
+@goto lantern
+@label deflect
+Rowan (neutral): Right. Long days are the worst ones.
+> He doesn't push. He never seems to.
+@label lantern
+> He sets the lantern down by the bottom step.
+@prop lantern rowan_lantern 10.6 2.3 0
+Rowan (warm): Ellie's porch light's been broken for years. Keep that. I know the way home in the dark.
+@walk rowan 24 4.4 nowait
+@wait 2.0
+@journal note The porch | Claire called: Daniel wants mediation, in person. Rowan left his lantern by the step. I didn't ask him to.
+@fade out 1.4
+@home rowan off
+@set act1_done
+@title Act 1: Cast On
+@sleep
+@time 7.5
+@weather clear
+@place nora 9.8 3.0 90
+@camera 12.4 3.0 9
+@fade in 1.6
+> Morning. In daylight the cottage looks smaller, and a little less sad. There's a lantern by the step.
+@title to be continued
+@camera player
 @toast Act 1 complete. The farm is yours now.

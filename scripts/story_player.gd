@@ -84,6 +84,8 @@ func _run(id: String) -> void:
 	_held.clear()
 	main.cam_glide = {}
 	hud.set_phone("")
+	if hud.memory_on():
+		await hud.set_memory(false, 0.6)
 	await hud.story_end()
 	for v in main.villagers:
 		if v.tag:
@@ -266,10 +268,39 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 					main.hud.show_toast("Something shifted between you and %s." % nm)
 		"give":
 			if not a.is_empty():
-				Game.add_item(str(a[0]), int(a[1]) if a.size() > 1 else 1)
+				var n := int(a[1]) if a.size() > 1 else 1
+				if str(a[0]) == "coins":
+					Game.coins += n
+				else:
+					Game.add_item(str(a[0]), n)
 		"take":
 			if not a.is_empty():
-				Game.take_item(str(a[0]), int(a[1]) if a.size() > 1 else 1)
+				var n := int(a[1]) if a.size() > 1 else 1
+				if str(a[0]) == "coins":
+					Game.coins = maxi(0, Game.coins - n)
+				else:
+					Game.take_item(str(a[0]), n)
+		"memory":
+			var on := a.is_empty() or str(a[0]) != "off"
+			var secs := float(a[1]) if a.size() > 1 else 1.4
+			await main.hud.set_memory(on, 0.01 if auto and not cinematic else secs)
+		"journal":
+			var rest := _fill(str(op["rest"]))
+			var kind := "note"
+			if rest.begins_with("memory ") or rest.begins_with("note "):
+				kind = rest.get_slice(" ", 0)
+				rest = rest.substr(kind.length() + 1)
+			var bar := rest.find("|")
+			var title := rest.substr(0, bar).strip_edges() if bar >= 0 else rest.strip_edges()
+			var text := rest.substr(bar + 1).strip_edges() if bar >= 0 else ""
+			Game.add_journal(kind, title, text)
+			main.hud.show_toast(("A memory, written down: " if kind == "memory" else "Journal: ") + title)
+		"time":
+			if not a.is_empty():
+				var t := str(a[0])
+				Game.hour = float(t.get_slice(":", 0)) + float(t.get_slice(":", 1)) / 60.0 if ":" in t else float(t)
+		"sleep":
+			Game.sleep()
 		"toast":
 			main.hud.show_toast(_fill(str(op["rest"])))
 		"goal":
