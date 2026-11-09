@@ -1,0 +1,179 @@
+{
+ "version": 1,
+ "created": "2026-11-09T19:04:30",
+ "input": {
+  "file": "input/nora_000_front.png",
+  "sha256": "01ddf1f0b04d171278a203db8e14ae03b772745f7de1cc32436c157a9d38bd4d",
+  "size": [
+   1526,
+   1526
+  ],
+  "mode": "RGBA",
+  "kind": "auto",
+  "has_alpha_cutout": true
+ },
+ "subject": "stylized cozy-game young woman in a knitted Fair Isle sweater, jeans and boots",
+ "work": {
+  "size": [
+   1024,
+   1024
+  ],
+  "aspect": "1:1",
+  "pad_box": [
+   0,
+   0,
+   1526,
+   1526,
+   1526,
+   1526
+  ]
+ },
+ "settings": {
+  "res": 400,
+  "hull_res": 160,
+  "budget_usd": 4.0
+ },
+ "views": {
+  "az+045": {
+   "requested": {
+    "az": 45,
+    "el": 0
+   },
+   "source": "import nora_views/az+045.png",
+   "role": "train",
+   "params": {
+    "az": 17.25,
+    "el": 7.75,
+    "s": 0.9954577817178434,
+    "du": 3.8134605597158497,
+    "dv": 18.201851145406692
+   },
+   "iou_proxy": 0.8201,
+   "iou_hull": 0.8709
+  },
+  "az+090": {
+   "requested": {
+    "az": 90,
+    "el": 0
+   },
+   "source": "import nora_views/az+090.png",
+   "role": "train",
+   "params": {
+    "az": 100.75,
+    "el": 11.5,
+    "s": 0.9967217116761429,
+    "du": -5.051484655549302,
+    "dv": 25.462012594458145
+   },
+   "iou_proxy": 0.7147,
+   "iou_hull": 0.8615
+  },
+  "az+135": {
+   "requested": {
+    "az": 135,
+    "el": 0
+   },
+   "source": "import nora_views/az+135.png",
+   "role": "train",
+   "params": {
+    "az": 139.5,
+    "el": 3.5,
+    "s": 1.0103170156959616,
+    "du": 32.75594742748501,
+    "dv": 19.94025398542402
+   },
+   "iou_proxy": 0.7838,
+   "iou_hull": 0.914
+  },
+  "az180": {
+   "requested": {
+    "az": 180,
+    "el": 0
+   },
+   "source": "import nora_views/az180.png",
+   "role": "train",
+   "params": {
+    "az": 176.5,
+    "el": -1.25,
+    "s": 0.9938733780368503,
+    "du": 26.81363755289135,
+    "dv": 8.73113134765481
+   },
+   "iou_proxy": 0.8917,
+   "iou_hull": 0.8983
+  }
+ },
+ "fal": [],
+ "status": {
+  "new": "2026-11-09T19:04:30",
+  "prep": "2026-11-09T19:04:31",
+  "views": "2026-11-09T19:04:50",
+  "hull": "2026-11-09T19:07:00",
+  "fit_forms": "2026-11-09T19:11:25",
+  "finish": "2026-11-09T19:17:43",
+  "blender": "2026-11-09T19:18:32",
+  "report": "2026-11-09T19:19:45"
+ },
+ "front": {
+  "K": [
+   1406.7084387607667,
+   1406.7084387607667,
+   512.0,
+   512.0
+  ],
+  "unit_scale": 1.0,
+  "center": [
+   -0.012643899487362109,
+   1.4390599399474915,
+   0.0
+  ],
+  "mask_source": "alpha",
+  "depth_source": "none (assumed vertical fov 40.0 deg)"
+ },
+ "symmetry": {
+  "iou": 0.7292312126233879,
+  "yaw_deg": 7.5,
+  "normal": [
+   0.9914448613738104,
+   0.13052619222005157,
+   0.0
+  ],
+  "point": [
+   0.003219218294618874,
+   1.4411483590230123,
+   0.0
+  ],
+  "symmetric": false,
+  "used": false
+ },
+ "hull": {
+  "steps": [
+   0,
+   7
+  ],
+  "cuts": [
+   {
+    "cut": "front silhouette",
+    "removed": 646975
+   },
+   {
+    "cut": "view az+045",
+    "removed": 57438
+   },
+   {
+    "cut": "view az+090",
+    "removed": 136869
+   },
+   {
+    "cut": "view az+135",
+    "removed": 5540
+   },
+   {
+    "cut": "view az180",
+    "removed": 1709
+   }
+  ],
+  "voxel_hull": 0.00625,
+  "res": 400
+ }
+}
