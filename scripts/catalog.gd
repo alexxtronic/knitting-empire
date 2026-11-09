@@ -32,10 +32,37 @@ static var _mats := {}
 
 # --- primitive helpers ---------------------------------------------------------
 
-static func mat(c: Color, rough: float = 0.85, glow: float = 0.0) -> StandardMaterial3D:
+## Woolcore (shaders/woolcore.gdshader): solid surfaces are felt, and the colours below are knitted,
+## with this stitch width in metres. Glass, water and glowing things stay plain.
+static var woolcore := true
+const WOOL_SHADER := preload("res://shaders/woolcore.gdshader")
+const KNIT := [
+	[Color(0.43, 0.58, 0.28), 0.24], # grass (world.gd GRASS)
+	[Color(0.92, 0.86, 0.74), 0.15], # house plaster (main.gd PLASTER)
+	[PLAID, 0.07], [PLAID_DARK, 0.07], [CREAM, 0.08],
+	[Color(0.45, 0.12, 0.11), 0.08], [Color(0.88, 0.80, 0.62), 0.08], [Color(0.62, 0.17, 0.14), 0.08], # red rug
+	[Color(0.35, 0.42, 0.55), 0.08], [Color(0.62, 0.35, 0.25), 0.08], # round rug
+]
+
+
+static func mat(c: Color, rough: float = 0.85, glow: float = 0.0) -> Material:
 	var key := "%s_%s_%s" % [c.to_html(true), rough, glow]
 	if _mats.has(key):
 		return _mats[key]
+	if woolcore and glow <= 0.0 and rough >= 0.3 and c.a >= 0.99:
+		var stitch := 0.0
+		for k in KNIT:
+			if (k[0] as Color).is_equal_approx(c):
+				stitch = k[1]
+		var sm := ShaderMaterial.new()
+		sm.shader = WOOL_SHADER
+		sm.set_shader_parameter("albedo", c)
+		sm.set_shader_parameter("roughness", clampf(rough + 0.1, 0.0, 1.0))
+		sm.set_shader_parameter("pattern", 1 if stitch > 0.0 else 0)
+		sm.set_shader_parameter("stitch", maxf(stitch, 0.05))
+		sm.set_shader_parameter("contrast", 0.86 if stitch > 0.2 else 0.72) # big ground stitches stay gentle
+		_mats[key] = sm
+		return sm
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
 	m.roughness = rough

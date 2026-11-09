@@ -95,10 +95,14 @@ var _last_mouse := Vector2.ZERO
 var sleeping := false
 var _autosave_t := 0.0
 var _autotest_dir := ""
+var _style_frames := false # --styleframes=DIR: take the Woolcore style frames and quit
 
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--styleframes="):
+			_style_frames = true
+			a = "--autotest=" + a.substr(14)
 		if a.begins_with("--autotest="):
 			_autotest_dir = a.substr(11)
 			Game.save_path = "user://autotest_save.json"
@@ -179,7 +183,9 @@ func _ready() -> void:
 	_restore_story_state()
 	if not loaded and _autotest_dir == "":
 		_begin_new_story()
-	if _autotest_dir != "":
+	if _style_frames:
+		_take_style_frames()
+	elif _autotest_dir != "":
 		_autotest()
 	else:
 		DisplayServer.window_move_to_foreground()
@@ -231,10 +237,19 @@ func _setup_environment() -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
+	# Woolcore grade: plum-tinted shadows, warm cream highlights, a touch more contrast
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.1
+	var grade := Gradient.new()
+	grade.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	grade.colors = PackedColorArray([Color(0.07, 0.035, 0.09), Color(0.535, 0.5, 0.465), Color(1.0, 0.97, 0.9)])
+	var lut := GradientTexture1D.new()
+	lut.gradient = grade
+	lut.width = 256
+	env.adjustment_color_correction = lut
 	env.fog_enabled = true
 	env.fog_density = 0.0035
-	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.12
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
@@ -271,6 +286,7 @@ func _update_lighting() -> void:
 		env.fog_light_color = sky_mat.sky_horizon_color
 		env.ambient_light_energy *= 1.0 - 0.25 * rain
 	env.fog_density = 0.0035 + 0.012 * rain
+	env.adjustment_saturation = 1.1 - 0.3 * rain
 
 
 # --- house -------------------------------------------------------------------------
@@ -1506,6 +1522,69 @@ func _act1_checks() -> void:
 	_check("Act 1 progress survives a save", Game.flag("act1_done") == true and Game.flag("seen_act1_fence") == true)
 	story.auto = false
 	story.auto_line = 0.08
+
+
+## Woolcore style frames (run with -- --styleframes=/abs/dir): the farm at golden hour, the
+## hearth at night, and Maplewood with the embroidered dialogue box.
+func _take_style_frames() -> void:
+	Game.time_running = false
+	_set_cam_lock(false)
+	await _wait(1.0)
+	# 1. the farm, late afternoon
+	Game.hour = 16.4
+	player.position = Vector3(10.6, 0, 3.4)
+	player.face_point(Vector3(18, 0, -1))
+	cam_yaw = deg_to_rad(38.0)
+	cam_yaw_goal = cam_yaw
+	cam_target = Vector3(12.5, 0, -0.5)
+	cam_dist = 17.0
+	await _wait(1.5)
+	await _shot("style_01_farm.png")
+	# 2. the hearth: knitting by the fire after dark, Gran's words on screen
+	Game.hour = 20.2
+	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
+	player.position = Vector3(3.4, 0, 4.4)
+	_do_action(chair, "knit")
+	var t := 0.0
+	while not player.busy and t < 10.0:
+		await _wait(0.1)
+		t += 0.1
+	await _wait(1.2)
+	cam_yaw = deg_to_rad(52.0)
+	cam_yaw_goal = cam_yaw
+	cam_target = chair.position + Vector3(-0.3, 0.6, -0.4)
+	cam_dist = 6.2
+	player._label.visible = false
+	hud.story_begin()
+	hud.story_say("", "\"Knit something. It helps. It always helped.\"", null)
+	hud.story_click()
+	await _wait(1.0)
+	await _shot("style_02_hearth.png")
+	await hud.story_end()
+	# 3. Maplewood: Rowan, his portrait, and a choice
+	player.walk([])
+	Game.hour = 10.2
+	var rowan := _villager("rowan")
+	rowan.settle_at(Vector3(46.4, 0, 1.2))
+	player.position = Vector3(45.0, 0, 2.6)
+	rowan.face_point(player.position, 30.0)
+	player.face_point(rowan.position)
+	rowan.talk(30.0)
+	cam_yaw = deg_to_rad(45.0)
+	cam_yaw_goal = cam_yaw
+	cam_target = (rowan.position + player.position) * 0.5 + Vector3(0, 0.9, 0)
+	cam_dist = 7.5
+	for v in villagers:
+		if v.tag:
+			v.tag.visible = false
+	hud.story_begin()
+	hud.story_say("Rowan", "Come find me on the hill if they give you trouble. They usually do.", load("res://assets/portraits/rowan_warm.png"))
+	hud.story_click()
+	hud.story_choices("What do you say?", ["I might take you up on that.", "I'll manage. I always do.", "Are you always this friendly?"])
+	await _wait(1.4)
+	await _shot("style_03_maplewood.png")
+	print("STYLE FRAMES DONE")
+	get_tree().quit()
 
 
 ## Auto-play holds on the first line containing `sub`; finish its typing, picture it, go on.

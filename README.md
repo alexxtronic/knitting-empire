@@ -46,6 +46,8 @@ Controls:
 | `scripts/player.gd` | the character you play and her activity states |
 | `scripts/body.gd` | a skinned character body; picks and cross-fades animation loops |
 | `scripts/story.gd`, `story_player.gd` | reads and plays the plain-text story scenes in `data/scenes/` |
+| `shaders/woolcore.gdshader` | the felt and knit look |
+| `docs/woolcore/` | style frames (ignored by Godot) |
 | `tools/build_character.py` | Blender character generator: builds `assets/<id>.glb` |
 
 ## Adding content without code
@@ -94,6 +96,23 @@ Rowan (neutral): Fair enough.
 - Act 1 is in `data/scenes/act1.scene`, which is a good worked example.
 - Relationships have three stats: **familiarity** (shown as hearts), **trust** and **romance**.
 - The autotest checks every scene file, so a typo or a jump to a missing label shows up as a failed check.
+
+## Woolcore style (v0)
+
+The world is meant to look handmade: felt and knitting.
+
+![The farm](docs/woolcore/style_01_farm.png)
+
+- **Shader:** `shaders/woolcore.gdshader`. Every solid surface is felt, with soft mottling, fine fibres and a fuzzy rim. The grass, the house walls, rugs and plaid fabrics are knitted in stockinette stitches. Textures are projected in world space, so stitches stay the same size on any shape.
+- **Which surfaces are knitted:** the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width). Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
+- **Grade:** plum-tinted shadows, warm cream highlights and a little extra contrast (`_setup_environment` in `main.gd`), plus a soft vignette. Rain greys it down.
+- **UI:** bordered panels and buttons are felt patches with a running stitch sewn round the edge, drawn in code (`_stitched` in `hud.gd`), so there are no image files to keep in sync.
+
+The three style frames in `docs/woolcore/` are made by the game itself:
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --path "$PWD" --resolution 1280x800 -- --styleframes="$PWD/docs/woolcore"
+```
 
 ## Characters
 

@@ -143,6 +143,7 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = _make_theme()
 	add_child(root)
+	_build_vignette()
 	_build_title()
 	_build_resources()
 	_build_left()
@@ -167,7 +168,98 @@ func _ready() -> void:
 
 # --- styling -------------------------------------------------------------------
 
-func _sb(c: Color, radius: int, border := Color(0, 0, 0, 0), margin := 10.0) -> StyleBoxFlat:
+## Woolcore UI: a bordered panel or button is a piece of felt with a running stitch sewn around
+## it (see _stitched); a borderless one is a plain rounded shape.
+func _sb(c: Color, radius: int, border := Color(0, 0, 0, 0), margin := 10.0) -> StyleBox:
+	if border.a > 0.0 and radius >= 6:
+		return _stitched(c, radius, border, margin)
+	return _sb_flat(c, radius, border, margin)
+
+
+static var _felt_cache := {}
+
+## A felt patch with a running stitch, drawn into a small image and nine-sliced. The edges
+## tile, so the stitches keep their size on any panel. Stitch period 8 px: 5 thread, 3 gap.
+func _stitched(c: Color, radius: int, border: Color, margin: float) -> StyleBoxTexture:
+	var key := "%s|%d|%s" % [c.to_html(), radius, border.to_html()]
+	var m := maxi(radius + 6, 14) # corner size
+	var n := m * 2 + 16 # a 16 px middle band that tiles
+	var tex: ImageTexture = _felt_cache.get(key)
+	if tex == null:
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7
+		var thread := border.lerp(Color(1.0, 0.95, 0.82), 0.3)
+		thread.a = 1.0
+		var shade := Color(0, 0, 0, 0.35)
+		var size := Vector2(n, n)
+		var r := float(radius)
+		var inset := 5.5
+		var ri := maxf(r - inset, 1.5)
+		for y in n:
+			for x in n:
+				var p := Vector2(x + 0.5, y + 0.5)
+				var d := _sd_rrect(p, size, 0.5, r)
+				if d > 0.5:
+					img.set_pixel(x, y, Color(0, 0, 0, 0))
+					continue
+				var col := c
+				var grain := 1.0 + (rng.randf() - 0.5) * 0.07 + (0.03 if (x + y * 3) % 7 == 0 else 0.0)
+				col = Color(col.r * grain, col.g * grain, col.b * grain, c.a)
+				col = col.darkened(0.22 * clampf(1.0 + d / 2.5, 0.0, 1.0)) # a soft rolled edge
+				# the stitch: distance to an inset rounded path, dashed along the edges
+				var ds := absf(_sd_rrect(p, size, inset, ri))
+				var dsh := absf(_sd_rrect(p - Vector2(0, 1.2), size, inset, ri)) # its shadow, a pixel lower
+				var on := _stitch_on(p, size, inset, ri, m)
+				if on and dsh < 1.2 and ds >= 1.0:
+					col = col.lerp(shade, 0.5 * clampf(1.2 - dsh, 0.0, 1.0))
+				if on and ds < 1.25:
+					var k := clampf(1.25 - ds, 0.0, 1.0)
+					var tc := thread.lightened(0.12) if ds < 0.4 else thread
+					col = col.lerp(Color(tc.r, tc.g, tc.b, maxf(col.a, 0.95)), k)
+				col.a *= clampf(0.5 - d, 0.0, 1.0)
+				img.set_pixel(x, y, col)
+		tex = ImageTexture.create_from_image(img)
+		_felt_cache[key] = tex
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.texture_margin_left = m
+	sb.texture_margin_right = m
+	sb.texture_margin_top = m
+	sb.texture_margin_bottom = m
+	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	sb.content_margin_left = margin + 5.0
+	sb.content_margin_right = margin + 5.0
+	sb.content_margin_top = margin * 0.6 + 2.0
+	sb.content_margin_bottom = margin * 0.6 + 2.0
+	return sb
+
+
+## Signed distance from p to a rounded rectangle filling `size`, shrunk by `inset`, corner radius r.
+static func _sd_rrect(p: Vector2, size: Vector2, inset: float, r: float) -> float:
+	var c := size * 0.5
+	var b := c - Vector2(inset + r, inset + r)
+	var q := (p - c).abs() - b
+	return Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - r
+
+
+## Whether the running stitch shows at p: dashed along straight runs, one long stitch round a corner.
+static func _stitch_on(p: Vector2, size: Vector2, inset: float, r: float, m: int) -> bool:
+	var c := size * 0.5
+	var b := c - Vector2(inset + r, inset + r)
+	var q := (p - c).abs()
+	if q.x > b.x and q.y > b.y:
+		return true # the corner curve
+	var along := p.x # along the top and bottom edges; down the sides
+	if q.x > b.x:
+		along = p.y
+	elif q.y > b.y:
+		along = p.x
+	return absf(fposmod(along - m, 8.0) - 4.0) < 2.5
+
+
+func _sb_flat(c: Color, radius: int, border := Color(0, 0, 0, 0), margin := 10.0) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = c
 	s.set_corner_radius_all(radius)
@@ -884,7 +976,7 @@ func set_goal(text: String) -> void:
 
 func _build_phone() -> void:
 	phone_panel = PanelContainer.new()
-	phone_panel.add_theme_stylebox_override("panel", _sb(Color(0.08, 0.09, 0.12, 0.95), 18, Color(0.45, 0.5, 0.6), 14.0))
+	phone_panel.add_theme_stylebox_override("panel", _sb_flat(Color(0.08, 0.09, 0.12, 0.95), 18, Color(0.45, 0.5, 0.6), 14.0))
 	phone_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 2)
@@ -911,3 +1003,24 @@ func set_phone(caller: String) -> void:
 		for r in [0.05, -0.05, 0.04, -0.04, 0.0]:
 			_phone_tween.tween_property(phone_panel, "rotation", r, 0.06)
 		_phone_tween.tween_interval(0.7)
+
+
+## Woolcore: the screen's edges darken a little, like the frame of an embroidery hoop.
+func _build_vignette() -> void:
+	var v := ColorRect.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = """
+shader_type canvas_item;
+uniform float strength = 0.42;
+void fragment() {
+	vec2 d = (UV - 0.5) * vec2(1.0, 0.82);
+	float v = smoothstep(0.32, 0.8, length(d));
+	COLOR = vec4(0.13, 0.06, 0.09, v * strength);
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	v.material = m
+	root.add_child(v)
