@@ -1,5 +1,5 @@
 {
-  "_about": "Furniture you can buy in Build mode. 'size' is width x depth in metres; 'where' is in / out / any; 'shop' picks the Build-menu section. Each id needs a matching builder in scripts/catalog.gd.",
+  "_about": "Furniture you can buy in Build mode. 'size' is width x depth in metres; 'where' is in / out / any; 'shop' picks the Build-menu section. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py.",
   "items": [
     {
       "name": "Rocking Chair",
@@ -209,6 +209,16 @@
       "height": 0.5,
       "id": "hay_bale",
       "shop": "yard"
+    },
+    {
+      "name": "Milk Churn",
+      "price": 60,
+      "size": [0.6, 0.6],
+      "where": "any",
+      "height": 0.8,
+      "id": "milk_churn",
+      "shop": "yard",
+      "model": "res://assets/props/milk_churn.glb"
     }
   ]
 }

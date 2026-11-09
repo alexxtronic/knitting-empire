@@ -152,13 +152,71 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	return l
 
 
+# --- imported models (tools/import_asset.py) ----------------------------------------
+
+## The Woolcore palette (data/palette.json): id -> [colour, knit stitch width or 0 for felt].
+static var _palette := {}
+
+
+static func palette() -> Dictionary:
+	if _palette.is_empty():
+		for e in Data.load_json("palette").get("colors", []):
+			_palette[str(e["id"])] = [Color.html(str(e["hex"])), float(e.get("knit", 0.0))]
+	return _palette
+
+
+## The Woolcore material for a palette colour: knitted if the palette says so, otherwise felt.
+static func wool(pid: String) -> Material:
+	var p: Array = palette().get(pid, [Color.MAGENTA, 0.0])
+	var key := "wool_" + pid
+	if _mats.has(key):
+		return _mats[key]
+	var c: Color = p[0]
+	var stitch: float = p[1]
+	if not woolcore:
+		return mat(c)
+	var sm := ShaderMaterial.new()
+	sm.shader = WOOL_SHADER
+	sm.set_shader_parameter("albedo", c)
+	sm.set_shader_parameter("roughness", 0.95)
+	sm.set_shader_parameter("pattern", 1 if stitch > 0.0 else 0)
+	sm.set_shader_parameter("stitch", maxf(stitch, 0.05))
+	sm.set_shader_parameter("contrast", 0.86 if stitch > 0.2 else 0.72)
+	_mats[key] = sm
+	return sm
+
+
+## Adds an imported model under r and gives every wool_<palette id> surface its Woolcore material.
+## Models are made to size by the import tool: centred on their footprint, base on the floor, facing +Z.
+static func model(path: String, r: Node3D) -> Node3D:
+	if not ResourceLoader.exists(path):
+		push_warning("model %s is missing" % path)
+		return null
+	var packed := load(path) as PackedScene
+	if packed == null:
+		return null
+	var inst := packed.instantiate() as Node3D
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		for i in m.mesh.get_surface_count():
+			var sm := m.mesh.surface_get_material(i)
+			var mname := sm.resource_name if sm else ""
+			if mname.begins_with("wool_"):
+				m.set_surface_override_material(i, wool(mname.substr(5)))
+	r.add_child(inst)
+	return inst
+
+
 # --- model builders --------------------------------------------------------------
 
 static func has_builder(id: String) -> bool:
-	return id in BUILDERS
+	return id in BUILDERS or ResourceLoader.exists(str(ITEMS.get(id, {}).get("model", "")))
 
 
 static func build(id: String, r: Node3D) -> void:
+	var path := str(ITEMS.get(id, {}).get("model", ""))
+	if path != "" and model(path, r) != null:
+		return
 	match id:
 		"rocking_chair": _rocking_chair(r)
 		"armchair": _armchair(r)
