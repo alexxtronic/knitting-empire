@@ -1,11 +1,12 @@
 {
-  "_about": "Skinned characters made by tools/build_character.py. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed' is the walking speed (m/s) the Walk loop's stride matches for that body; 'label_height' is where floating text sits above them. Nora has two experimental bodies on the same rig, kept for comparison (swap one into 'model' to try it): 'model_sculpt' from image-to-sculpt (too lumpy to play) and 'model_triposr' from TripoSR (tools/run_triposr.py; good at a distance, soft face and big boots up close). She plays with the generated body until a better one exists.",
+  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed' is the walking speed (m/s) the Walk loop's stride matches for that body; 'label_height' is where floating text sits above them. Rowan comes from tools/build_character.py. Nora plays with a model made on tripo.ai from her turnaround, rigged with tools/rig_sculpt.py (her own UVs and texture, no re-bake). Her other bodies on the same rig are kept for comparison (swap one into 'model' to try it): 'model_procedural' (the generated body from tools/build_character.py), 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
   "player": "nora",
   "characters": [
     {
       "id": "nora",
       "name": "Nora",
-      "model": "res://assets/nora.glb",
+      "model": "res://assets/nora_tripo.glb",
+      "model_procedural": "res://assets/nora.glb",
       "model_triposr": "res://assets/nora_tsr.glb",
       "walk_anim_speed": 2.85,
       "label_height": 2.05,

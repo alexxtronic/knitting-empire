@@ -22,6 +22,8 @@ Controls:
 - C toggles the walls.
 - B toggles Build mode. In Build mode, R rotates a piece, X sells it and Esc cancels.
 
+The game opens on a title screen (Continue, New Game, Settings, Quit) over the farm. **Settings** (also in the left menu) has the picture quality, music and sound volumes, and full screen, all kept per computer in `user://settings.cfg`.
+
 ## What's in it
 
 - **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. Fixing the fence with him brings back the first memory thread (a sepia flashback to the navy sweater her ex threw away). She sells her first sweater to Rosa at the market, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. It takes about ten minutes, with choices that set flags and relationship stats for later. Memories and notes go into the **Journal** (left menu). Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
@@ -36,8 +38,10 @@ Controls:
 - **Rowan (romance v1):** after Act 1, talking to Rowan opens one new topic a day as he warms up: his sheep, Gran (and Nora's memory of Gran's burnt bread), the long evenings on the hill. Gifts land differently with each villager (loved, liked, anything else), and with Rowan they can grow romance; the first sweater you give him has its own scene. At three hearts he asks Nora up to the rock in the back field at sunset, where she darns the hat Gran knit him and decides how close to let him. Later, if he trusts her, he tells her about Anna.
 - **Talking to villagers:** besides **Talk** (hand-written lines), **Chat...** lets you type to Rosa, Theo, Mabel and Rowan, who answer in character (see [Chatting with villagers](#chatting-with-villagers)).
 - **World:** real grass (tens of thousands of blades that sway in the wind and part round Nora, worn earth on paths), trees that move in the wind, a pond with ripples and rain rings, a sky with drifting clouds and stars, soft shadows, bounce light, a light haze for sunbeams and mist, and depth of field in close-ups.
-- **Graphics setting:** the **Graphics** button in the left menu cycles High, Medium and Low (saved per computer in `user://settings.cfg`). Medium drops the bounce light and reflections and thins the grass; Low also drops the haze, contact shading and lamp shadows and draws less grass, nearer. On every setting the 3D view is drawn at a fixed pixel budget and upscaled (MetalFX on Macs), so a bigger window looks sharper without getting slower.
-- **Characters:** Nora (the heroine you play, working name) and Rowan (the shepherd in Maplewood) come from the Blender script `tools/build_character.py`. Two experimental Noras made from her turnaround pictures (image-to-sculpt and TripoSR) are kept in `assets/` but aren't used yet. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
+- **Sound:** footsteps on grass and on wood floors, needle clicks while she knits, page turns for the journal, soft UI clicks, birdsong by day, crickets at night and rain that cross-fade with the clock and the weather (muffled indoors), and an original guitar and flute tune, "Cast On". During a memory flashback the music goes distant and muffled. Every sound is made by `tools/make_audio.py`, so there are no samples or licences to track; real recordings can replace them later under the same file names in `assets/audio/`.
+- **Tips:** after Act 1, a one-time tip appears at the bottom of the screen the first time something becomes possible (shearing, knitting, selling, sleeping, Rowan, Build mode). Click it to dismiss.
+- **Graphics setting:** the **Graphics** button in Settings cycles High, Medium and Low (saved per computer in `user://settings.cfg`). Medium drops the bounce light and reflections and thins the grass; Low also drops the haze, contact shading and lamp shadows and draws less grass, nearer. On every setting the 3D view is drawn at a fixed pixel budget and upscaled (MetalFX on Macs), so a bigger window looks sharper without getting slower.
+- **Characters:** Nora (the heroine you play, working name) and Rowan (the shepherd in Maplewood) come from the Blender script `tools/build_character.py`. Nora plays with a model made on [tripo.ai](https://www.tripo3d.ai) from her turnaround and put on the same rig (`assets/nora_tripo.glb`); her generated body and two earlier experiments (image-to-sculpt and TripoSR) are kept in `assets/` for comparison. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
 
 ## Chatting with villagers
 
@@ -70,6 +74,8 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/pie_menu.gd` | the ring of actions |
 | `scripts/thumbs.gd` | renders the Build mode picture cards |
 | `scripts/ai_chat.gd`, `chat_panel.gd`, `data/personas.json` | typed chat with villagers |
+| `scripts/audio.gd` | music, ambience and sound effects on three buses (Music, Ambience, SFX) |
+| `tools/make_audio.py` | makes every sound in `assets/audio/` (footsteps, needles, UI, ambience loops, the music) |
 | `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, leaning into turns, breathing |
 | `scripts/grass.gd` | the ground and the grass blades |
 | `shaders/woolcore.gdshader` | the felt and knit look |
@@ -178,9 +184,17 @@ To see what each graphics effect costs, the frame-cost probe times the town at n
 
 5. Point `model` in `data/characters.json` at it. Nora's first sculpt (`model_sculpt`) came out too lumpy without the paid detail step, so for now she plays with her generated body.
 
+**Tripo.ai (what Nora uses).** Export from tripo.ai as GLB with a 2K texture, no vertex colours and no Tripo rig. `rig_sculpt.py` takes the `.glb` directly: it welds the UV-seam splits, decimates to about 30k faces and keeps Tripo's own UVs and texture (scaled to `--tex`), so nothing is re-baked. The source export is about 60 MB and stays out of the repo; the rigged `assets/nora_tripo.glb` is what the game loads:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b tools/character_build/nora/nora.blend -P tools/rig_sculpt.py -- "$PWD" ~/Downloads/tripo_export.glb nora_tripo --faces 30000 --tex 2048 --render /tmp/rig_check
+```
+
+Pictures are in `art/turnarounds/nora/tripo/`.
+
 **TripoSR (one picture).** `tools/run_triposr.py` makes a mesh from a single cut-out picture with [TripoSR](https://github.com/VAST-AI-Research/TripoSR) in about a minute on the Mac GPU, and writes a `rig_ready.ply` for step 4. Nora's try is `assets/nora_tsr.glb` (`model_triposr`): a good silhouette at playing distance, but soft up close. Pictures are in `art/turnarounds/nora/triposr/`. The pictures, report and timelapse are in `art/turnarounds/nora/sculpt/`.
 
-**Procedural characters.** `tools/build_character.py` holds a spec for each character: body proportions (height, shoulders, waist, hips, bust, limbs, head), face, hair style, palette and outfit. Every character gets the same skeleton and the same animations, so a loop added once works for everyone. To add a character, add a spec and rebuild, list it in `data/characters.json`, and give a villager `"look": {"model": "<id>"}` in `data/villagers.json`.
+**Procedural characters.** `tools/build_character.py` holds a spec for each character: body proportions (height, shoulders, waist, hips, bust, limbs, head), face, hair style, palette and outfit. Every character gets the same skeleton and the same animations, so a loop added once works for everyone. A spec can also pick its own style for some loops (`"anim": "nora"`): Nora's Idle, Walk and Talk are lighter than Rowan's, with a softer arm swing and a little hip and shoulder sway. To add a character, add a spec and rebuild, list it in `data/characters.json`, and give a villager `"look": {"model": "<id>"}` in `data/villagers.json`.
 
 Rebuild every character, and render turntables, pose sheets and a lineup:
 
