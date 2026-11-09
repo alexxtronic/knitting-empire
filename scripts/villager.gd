@@ -23,6 +23,8 @@ var _t := 0.0
 var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
 var body: Body # set when this villager wears a skinned character model
+var anim_override := "" # a story scene can hold them in a loop
+var tag: Label3D
 
 
 ## look: {"skin", "hair", "top", "bottom", "extra"} where extra is apron / glasses / hat.
@@ -36,6 +38,29 @@ func setup(id: String, name_text: String, role_text: String, loved_item: String,
 	_target = pos
 	_wait = randf_range(0.5, 3.0)
 	_build(look)
+
+
+## Story scenes: walk to a spot and stay there (no more wandering).
+func walk_to(p: Vector3) -> void:
+	home = p
+	roam = Vector2.ZERO
+	_target = p
+	_wait = 0.0
+	hold_time = 0.0
+
+
+## Story scenes: stand at a spot from now on.
+func settle_at(p: Vector3) -> void:
+	home = p
+	roam = Vector2.ZERO
+	_target = p
+	position = p
+	_wait = randf_range(1.0, 3.0)
+
+
+## Gesture while talking in a scene.
+func talk(seconds := 2.5) -> void:
+	hold_time = maxf(hold_time, seconds)
 
 
 func display_name() -> String:
@@ -103,7 +128,7 @@ func _build_shapes(look: Dictionary) -> void:
 
 
 func _add_tag_and_collider(tag_y: float) -> void:
-	var tag := Label3D.new()
+	tag = Label3D.new()
 	tag.text = "%s\n%s" % [title, role]
 	tag.font_size = 56
 	tag.pixel_size = 0.0055
@@ -161,6 +186,10 @@ func _process(delta: float) -> void:
 
 ## Skinned villagers: talk while held in a conversation, idle while waiting, walk between spots.
 func _process_body(delta: float) -> void:
+	if anim_override != "" and position.distance_to(_target) < 0.05:
+		hold_time = maxf(0.0, hold_time - delta)
+		body.play(anim_override)
+		return
 	if hold_time > 0.0:
 		hold_time -= delta
 		body.play("Talk")

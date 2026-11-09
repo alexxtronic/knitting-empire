@@ -112,6 +112,24 @@ var dlg_text: Label
 var dlg_hearts: Array = []
 var dlg_tween: Tween
 
+# story scenes (driven by story_player.gd)
+signal story_next
+signal story_chosen(index: int)
+var story_layer: Control # full screen; takes clicks while a scene plays
+var story_box: PanelContainer
+var story_portrait: TextureRect
+var story_portrait_frame: PanelContainer
+var story_name_tab: PanelContainer
+var story_name: Label
+var story_text: Label
+var story_hint: Label
+var story_choice_box: VBoxContainer
+var story_prompt: Label
+var story_fade_rect: ColorRect
+var story_title_label: Label
+var story_bars: Array[ColorRect] = []
+var _story_typing: Tween
+
 
 func _ready() -> void:
 	layer = 10
@@ -137,6 +155,7 @@ func _ready() -> void:
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
+	_build_story()
 
 
 # --- styling -------------------------------------------------------------------
@@ -622,3 +641,207 @@ func _pretty(k: String, n: int) -> String:
 		"pumpkin": return "pumpkin" if n == 1 else "pumpkins"
 		"sweater": return "sweater" if n == 1 else "sweaters"
 	return k
+
+
+# --- story scenes ----------------------------------------------------------------
+
+const STORY_W := 860.0
+
+
+func _build_story() -> void:
+	story_layer = Control.new()
+	story_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	story_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	story_layer.visible = false
+	story_layer.gui_input.connect(_on_story_input)
+	root.add_child(story_layer)
+	# cinematic bars
+	for top in [true, false]:
+		var bar := ColorRect.new()
+		bar.color = Color(0.02, 0.02, 0.03, 0.92)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.anchor_left = 0.0
+		bar.anchor_right = 1.0
+		bar.anchor_top = 0.0 if top else 1.0
+		bar.anchor_bottom = 0.0 if top else 1.0
+		bar.offset_top = 0.0
+		bar.offset_bottom = 0.0
+		story_layer.add_child(bar)
+		story_bars.append(bar)
+	# the dialogue box: portrait on the left, name tab, text, choices
+	story_box = PanelContainer.new()
+	story_box.add_theme_stylebox_override("panel", _sb(Color(0.14, 0.11, 0.09, 0.94), 14, BORDER, 16.0))
+	story_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 16)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_portrait_frame = PanelContainer.new()
+	story_portrait_frame.add_theme_stylebox_override("panel", _sb(Color(0.33, 0.25, 0.19, 1.0), 10, GOLD, 3.0))
+	story_portrait_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_portrait_frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	story_portrait = TextureRect.new()
+	story_portrait.custom_minimum_size = Vector2(150, 150)
+	story_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	story_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	story_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_portrait_frame.add_child(story_portrait)
+	hb.add_child(story_portrait_frame)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	story_name_tab = PanelContainer.new()
+	story_name_tab.add_theme_stylebox_override("panel", _sb(Color(0.55, 0.36, 0.22, 1.0), 8, Color(0, 0, 0, 0), 8.0))
+	story_name_tab.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	story_name_tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_name = _label("", 19, Color(1.0, 0.95, 0.84))
+	story_name_tab.add_child(story_name)
+	vb.add_child(story_name_tab)
+	story_text = _label("", 19)
+	story_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	story_text.custom_minimum_size = Vector2(STORY_W - 230, 64)
+	vb.add_child(story_text)
+	story_prompt = _label("", 15, GOLD)
+	story_prompt.visible = false
+	vb.add_child(story_prompt)
+	story_choice_box = VBoxContainer.new()
+	story_choice_box.add_theme_constant_override("separation", 6)
+	vb.add_child(story_choice_box)
+	story_hint = _label("click or press Space  ▸", 12, Color(0.78, 0.72, 0.62))
+	story_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	vb.add_child(story_hint)
+	hb.add_child(vb)
+	story_box.add_child(hb)
+	for c in [story_name, story_text, story_prompt, story_hint]:
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_box.custom_minimum_size = Vector2(STORY_W, 0)
+	story_box.visible = false
+	story_layer.add_child(story_box)
+	_place(story_box, 0.5, 1.0, Vector2(0, 70))
+	# fade and title card sit on top of everything
+	story_fade_rect = ColorRect.new()
+	story_fade_rect.color = Color(0.03, 0.025, 0.03, 0.0)
+	story_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	story_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(story_fade_rect)
+	story_title_label = _label("", 44, GOLD)
+	story_title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	story_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	story_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	story_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_title_label.modulate.a = 0.0
+	root.add_child(story_title_label)
+
+
+func story_begin() -> void:
+	hide_menu()
+	hide_dialogue()
+	story_layer.visible = true
+	story_box.visible = false
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(story_bars[0], "offset_bottom", 54.0, 0.45)
+	tw.tween_property(story_bars[1], "offset_top", -54.0, 0.45)
+
+
+func story_end() -> void:
+	story_box.visible = false
+	story_clear_choices()
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(story_bars[0], "offset_bottom", 0.0, 0.35)
+	tw.tween_property(story_bars[1], "offset_top", 0.0, 0.35)
+	if story_fade_rect.color.a > 0.0:
+		tw.tween_property(story_fade_rect, "color:a", 0.0, 0.5)
+	await tw.finished
+	story_layer.visible = false
+
+
+## Shows a line. name_text "" = narration (no tab, no portrait); tex null = no portrait.
+func story_say(name_text: String, text: String, tex: Texture2D) -> void:
+	story_clear_choices()
+	story_box.visible = true
+	story_name_tab.visible = name_text != ""
+	story_name.text = name_text
+	story_portrait_frame.visible = tex != null
+	story_portrait.texture = tex
+	story_text.text = text
+	story_text.add_theme_color_override("font_color", TEXT if name_text != "" else Color(0.88, 0.84, 0.76))
+	story_hint.visible = true
+	story_text.visible_ratio = 0.0
+	if _story_typing:
+		_story_typing.kill()
+	_story_typing = create_tween()
+	_story_typing.tween_property(story_text, "visible_ratio", 1.0, clampf(text.length() * 0.022, 0.25, 2.2))
+
+
+func story_choices(prompt: String, texts: Array) -> void:
+	story_clear_choices()
+	story_box.visible = true
+	story_hint.visible = false
+	story_prompt.text = prompt
+	story_prompt.visible = prompt != ""
+	if _story_typing:
+		_story_typing.kill()
+	story_text.visible_ratio = 1.0
+	for i in texts.size():
+		var b := _button("  %d.  %s" % [i + 1, texts[i]], func(): _choose(i))
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.add_theme_font_size_override("font_size", 17)
+		story_choice_box.add_child(b)
+
+
+func story_clear_choices() -> void:
+	for c in story_choice_box.get_children():
+		c.queue_free()
+	story_prompt.visible = false
+
+
+func story_has_choices() -> bool:
+	return story_choice_box.get_child_count() > 0 and story_choice_box.get_child(0).is_queued_for_deletion() == false
+
+
+func _choose(i: int) -> void:
+	story_clear_choices()
+	story_chosen.emit(i)
+
+
+## Click or key while a scene plays: finish the typing, then go to the next line.
+func story_click() -> void:
+	if not story_layer.visible or story_has_choices():
+		return
+	if _story_typing and _story_typing.is_running():
+		_story_typing.kill()
+		story_text.visible_ratio = 1.0
+		return
+	story_next.emit()
+
+
+## Picks choice n (1-based) from the keyboard.
+func story_key_choice(n: int) -> void:
+	if story_has_choices() and n >= 1 and n <= story_choice_box.get_child_count():
+		_choose(n - 1)
+
+
+func _on_story_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		story_click()
+
+
+func story_fade(alpha: float, secs: float) -> void:
+	if alpha > 0.0:
+		story_box.visible = false
+	var tw := create_tween()
+	tw.tween_property(story_fade_rect, "color:a", alpha, secs)
+	await tw.finished
+
+
+## A title card: fades in over a dark screen, holds, fades out.
+func story_title(text: String, secs: float) -> void:
+	story_box.visible = false
+	story_title_label.text = text
+	var tw := create_tween()
+	if story_fade_rect.color.a < 0.9:
+		tw.tween_property(story_fade_rect, "color:a", 1.0, secs * 0.2)
+	tw.tween_property(story_title_label, "modulate:a", 1.0, secs * 0.25)
+	tw.tween_interval(secs * 0.5)
+	tw.tween_property(story_title_label, "modulate:a", 0.0, secs * 0.25)
+	await tw.finished

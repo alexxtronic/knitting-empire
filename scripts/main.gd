@@ -12,6 +12,8 @@ const Data = preload("res://scripts/data.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Town = preload("res://scripts/town.gd")
 const Villager = preload("res://scripts/villager.gd")
+const Story = preload("res://scripts/story.gd")
+const StoryPlayer = preload("res://scripts/story_player.gd")
 const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
 
@@ -41,6 +43,7 @@ var cam_yaw := deg_to_rad(45.0)
 var cam_yaw_goal := deg_to_rad(45.0)
 var cam_dist := 23.0
 var cam_follow := true
+var cam_glide := {} # story camera cue: {"pos": Vector3, "dist": float}; the camera eases toward it
 var drag_pan := false
 var walls_up := false
 
@@ -62,6 +65,7 @@ var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
 var player: Player
 var hud: Hud
+var story: StoryPlayer
 var villagers: Array = []
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var decor_root: Node3D
@@ -143,6 +147,9 @@ func _ready() -> void:
 	add_child(player)
 	hud = Hud.new()
 	add_child(hud)
+	story = StoryPlayer.new()
+	story.main = self
+	add_child(story)
 	_connect_hud()
 	Game.toast.connect(hud.show_toast)
 	Game.day_started.connect(_on_day_started)
@@ -534,8 +541,8 @@ func _process(delta: float) -> void:
 
 
 func _update_camera(delta: float) -> void:
-	var pan := hud.cam_pad_pan
-	if not sleeping:
+	var pan := hud.cam_pad_pan if not story.is_playing() else Vector2.ZERO
+	if not sleeping and not story.is_playing():
 		if _held(KEY_W) or _held(KEY_UP):
 			pan.y -= 1
 		if _held(KEY_S) or _held(KEY_DOWN):
@@ -547,7 +554,11 @@ func _update_camera(delta: float) -> void:
 	if pan != Vector2.ZERO:
 		_set_cam_lock(false)
 		_pan_camera(pan.normalized() * 14.0 * delta * cam_dist / 23.0)
-	if cam_follow and mode == Mode.LIVE:
+	if not cam_glide.is_empty():
+		var k := 1.0 - exp(-2.6 * delta)
+		cam_target = cam_target.lerp(cam_glide["pos"], k)
+		cam_dist = lerpf(cam_dist, float(cam_glide["dist"]), k)
+	elif cam_follow and mode == Mode.LIVE:
 		cam_target = cam_target.lerp(player.position, 1.0 - exp(-4.0 * delta))
 	cam_yaw = lerp_angle(cam_yaw, cam_yaw_goal, 1.0 - exp(-8.0 * delta))
 	var pitch := deg_to_rad(CAM_PITCH)
@@ -573,7 +584,7 @@ func _pan_camera(v: Vector2) -> void:
 # --- input ------------------------------------------------------------------------------
 
 func _unhandled_input(e: InputEvent) -> void:
-	if sleeping:
+	if sleeping or story.is_playing():
 		return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
@@ -636,6 +647,15 @@ func _input(e: InputEvent) -> void:
 	if not k.pressed or k.echo:
 		return
 	var kc := k.keycode if k.keycode != KEY_NONE else k.physical_keycode
+	if story.is_playing():
+		# during a scene, keys only advance it or pick a choice
+		match kc:
+			KEY_SPACE, KEY_ENTER, KEY_KP_ENTER:
+				hud.story_click()
+			KEY_1, KEY_2, KEY_3, KEY_4:
+				hud.story_key_choice(kc - KEY_0)
+		get_viewport().set_input_as_handled()
+		return
 	var handled := true
 	match kc:
 		KEY_Q:
@@ -1297,6 +1317,73 @@ func _data_checks() -> void:
 	_check("a v1 save without flags still loads (coins %d, flags %d)" % [Game.coins, Game.flags.size()], Game.coins == coins and Game.flags.is_empty())
 
 
+## Story engine: scene files parse, a real scene plays through clicks and keys, and a scene
+## written as plain text right here plays with fades, a title card, jumps and stats.
+func _story_checks() -> void:
+	var errs := Story.validate()
+	for e in errs:
+		print("      story: ", e)
+	_check("story scenes parse (%d scenes, %d problems)" % [Story.scenes().size(), errs.size()], errs.is_empty() and Story.has_scene("rowan_town_chat"))
+	var rowan := _villager("rowan")
+	var fam0 := Game.stat("rowan", "familiarity")
+	_villager_action(rowan, "talk")
+	await _wait(1.4)
+	_check("talking to Rowan starts his scene (%s, name box '%s', portrait %s)" % [story.playing, hud.story_name.text, hud.story_portrait.texture != null],
+		story.playing == "rowan_town_chat" and hud.story_name.text == "Rowan" and hud.story_portrait_frame.visible and hud.story_portrait.texture != null)
+	await _shot("12_story_line.png")
+	var saw_choice := false
+	var t := 0.0
+	while story.is_playing() and t < 40.0:
+		if hud.story_has_choices():
+			if not saw_choice:
+				saw_choice = true
+				await _shot("13_story_choice.png")
+			hud.story_key_choice(1)
+		else:
+			hud.story_click()
+		await _wait(0.12)
+		t += 0.12
+	_check("played through with clicks and the 1 key (choice shown=%s, %d lines)" % [saw_choice, story.shown.size()], saw_choice and not story.is_playing() and story.shown.size() >= 6)
+	_check("the choice changed trust and familiarity (trust %d, familiarity %d→%d) and set met_rowan" % [Game.stat("rowan", "trust"), fam0, Game.stat("rowan", "familiarity")],
+		Game.stat("rowan", "trust") == 2 and Game.stat("rowan", "familiarity") >= fam0 + 4 and Game.flag("met_rowan") == true)
+	_check("a once-only scene doesn't repeat", Story.find_trigger("talk", "rowan") == "")
+	# a scene written as plain text, parsed and played on the spot
+	Story.parse_into("""
+== autotest_scene
+@fade out 0.2
+@title Testing, testing
+@fade in 0.2
+@camera rowan 5
+@if trust rowan >= 2 -> trusted
+Rowan (sad): You shouldn't see this line.
+@goto finish
+@label trusted
+Rowan (happy): You're alright, {player}.
+@romance rowan +1
+@label finish
+@set autotest_scene_done 3
+""", "autotest")
+	story.shown.clear()
+	story.auto = true
+	story.play("autotest_scene")
+	t = 0.0
+	while story.is_playing() and t < 20.0:
+		await _wait(0.1)
+		t += 0.1
+	story.auto = false
+	var last := str(story.shown[-1]) if not story.shown.is_empty() else ""
+	_check("a plain-text scene plays: jumps on trust, fills {player} (%s)" % last, last == "Rowan: You're alright, Nora." and story.shown.size() == 1)
+	_check("scene commands ran (romance %d, flag %s, screen faded back in)" % [Game.stat("rowan", "romance"), Game.flag("autotest_scene_done")],
+		Game.stat("rowan", "romance") == 1 and int(Game.flag("autotest_scene_done")) == 3 and hud.story_fade_rect.color.a < 0.05)
+	# a v2 save (friendship points) upgrades to v3 (familiarity, trust, romance)
+	var v2 := Game.to_dict()
+	v2["version"] = 2
+	v2["friends"] = {"rosa": {"pts": 37, "talk": 1, "gift": 0, "n": 2}}
+	Game.from_dict(JSON.parse_string(JSON.stringify(v2)))
+	_check("a v2 save upgrades: points become familiarity (rosa %d, trust %d)" % [Game.stat("rosa", "familiarity"), Game.stat("rosa", "trust")],
+		Game.stat("rosa", "familiarity") == 37 and Game.stat("rosa", "trust") == 0 and Game.hearts("rosa") == 1)
+
+
 func _check(label: String, ok: bool) -> void:
 	print(("PASS  " if ok else "FAIL  ") + label)
 
@@ -1397,6 +1484,7 @@ func _autotest() -> void:
 	_check("save file written", FileAccess.file_exists(Game.save_path))
 	await _town_checks()
 	_data_checks()
+	await _story_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
 
@@ -1633,12 +1721,18 @@ func _villager_action(v, id: String) -> void:
 	var f := Game.friend(v.vid)
 	match id:
 		"talk":
-			var line := _talk_line(v)
+			var scene_id := Story.find_trigger("talk", v.vid)
+			var line := "" if scene_id != "" else _talk_line(v)
 			f["n"] = int(f["n"]) + 1
 			if int(f["talk"]) != Game.day:
 				f["talk"] = Game.day
 				Game.add_friendship(v.vid, 8)
-			_say(v, line)
+			if scene_id != "":
+				v.face_point(player.position, 3.0)
+				player.face_point(v.position)
+				story.play(scene_id)
+			else:
+				_say(v, line)
 		"sell_sweater":
 			var n := Game.count("sweater")
 			var price := _rosa_price()
@@ -1796,16 +1890,16 @@ func _town_checks() -> void:
 	cam_dist = 20.0
 
 	var rosa := _villager("rosa")
-	var p0 := int(Game.friend("rosa")["pts"])
+	var p0 := int(Game.friend("rosa")["familiarity"])
 	_do_action(rosa, "talk")
 	await _walk_wait()
-	_check("talked to Rosa (friendship %d→%d, dialogue %s)" % [p0, int(Game.friend("rosa")["pts"]), hud.dlg_panel.visible], int(Game.friend("rosa")["pts"]) > p0 and hud.dlg_panel.visible)
+	_check("talked to Rosa (friendship %d→%d, dialogue %s)" % [p0, int(Game.friend("rosa")["familiarity"]), hud.dlg_panel.visible], int(Game.friend("rosa")["familiarity"]) > p0 and hud.dlg_panel.visible)
 	await _shot("10_dialogue.png")
 	Game.add_item("pumpkin", 1)
-	var p1 := int(Game.friend("rosa")["pts"])
+	var p1 := int(Game.friend("rosa")["familiarity"])
 	_do_action(rosa, "gift_pumpkin")
 	await _walk_wait()
-	_check("gave Rosa a pumpkin she loves (+%d)" % (int(Game.friend("rosa")["pts"]) - p1), int(Game.friend("rosa")["pts"]) == p1 + 25)
+	_check("gave Rosa a pumpkin she loves (+%d)" % (int(Game.friend("rosa")["familiarity"]) - p1), int(Game.friend("rosa")["familiarity"]) == p1 + 25)
 	_check("gift is once a day", _villager_actions(rosa).any(func(a): return a["label"] == "Already gave a gift today"))
 	Game.add_item("sweater", 2)
 	var price := _rosa_price()
@@ -1877,4 +1971,4 @@ func _town_checks() -> void:
 	_check("rent paid next morning (+%dc)" % rent, rent > 80 and Game.coins == coins_before + rent)
 	_save_game()
 	var d = JSON.parse_string(FileAccess.get_file_as_string(Game.save_path))
-	_check("save has cottage, friendships and sheep", bool(d["owns_cottage"]) and int(d["friends"]["rosa"]["pts"]) > 0 and int(d["sheep_count"]) == n0 + 1)
+	_check("save has cottage, friendships and sheep", bool(d["owns_cottage"]) and int(d["friends"]["rosa"]["familiarity"]) > 0 and int(d["sheep_count"]) == n0 + 1)

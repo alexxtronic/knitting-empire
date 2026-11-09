@@ -23,6 +23,7 @@ var _t := 0.0
 var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
 var body: Body
+var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle"...)
 var _talk_t := 0.0
 var _label: Label3D
 var _ring: MeshInstance3D
@@ -165,7 +166,9 @@ func _process(delta: float) -> void:
 func _animate(delta: float, walking: bool) -> void:
 	_talk_t = maxf(0.0, _talk_t - delta)
 	var want := "Idle"
-	if busy:
+	if anim_override != "" and not walking:
+		want = anim_override
+	elif busy:
 		if _sitting:
 			want = "SitKnit" if _activity_text == "Knitting" else "SitIdle"
 		elif _activity_text == "Reading":

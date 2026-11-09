@@ -12,7 +12,8 @@ by its palette and style switches (hair, beard, cuffs). The animation set (Idle,
 SitIdle, Work, Talk) is written once below and keyed onto every character, so they all move
 the same way. Characters face -Y in Blender, which becomes +Z (forward) in Godot.
 
-Writes <project_dir>/assets/<id>.glb, plus tools/character_build/<id>/ (.blend, textures).
+Writes <project_dir>/assets/<id>.glb, mood portraits for the dialogue box in
+assets/portraits/<id>_<mood>.png, and tools/character_build/<id>/ (.blend, textures).
 With --render: a turntable strip and portrait (and with --poses, a pose sheet and knitting
 close-ups) in <out_dir>/<id>/. With --character all, also <out_dir>/lineup.png.
 """
@@ -1143,22 +1144,133 @@ for pb in root.pose.bones:  # back to the rest pose for the turntable
     pb.location = (0, 0, 0)
 bpy.context.view_layer.update()
 
-# ----------------------------------------------------------------------------- turntable render
-if RENDER_DIR:
-    os.makedirs(RENDER_DIR, exist_ok=True)
-    props.hide_render = True  # the turntable shows the rest pose; props only make sense while knitting
+# ----------------------------------------------------------------------------- mood portraits
+# Simple facial shape keys (brows and mouth), combined with a head pose, give one portrait per
+# mood for the dialogue box: assets/portraits/<id>_<mood>.png. The keys are added after the
+# glTF export, so the game model stays as it was.
+MOODS = {  # mood: (shape-key weights, Head bone (nod, turn, tilt) in degrees)
+    "neutral": ({}, (0, 0, 0)),
+    "happy": ({"Smile": 1.0, "BrowsUp": 0.45}, (-3, 0, 4)),
+    "warm": ({"Smile": 0.6, "BrowsSad": 0.15}, (3, 0, 6)),
+    "sad": ({"BrowsSad": 1.0, "Frown": 0.7}, (10, 0, -3)),
+    "wry": ({"Smirk": 1.0, "BrowsAngry": 0.3}, (0, 0, -7)),
+    "surprised": ({"BrowsUp": 1.0}, (-7, 0, 0)),
+    "worried": ({"BrowsSad": 0.85, "Frown": 0.3}, (5, 0, 3)),
+    "angry": ({"BrowsAngry": 1.0, "Frown": 0.6}, (4, 0, 0)),
+}
+
+
+def mat_verts(prefix):
+    idx = {i for i, m in enumerate(mesh.data.materials) if m and m.name.startswith(prefix)}
+    vs = set()
+    for p in mesh.data.polygons:
+        if p.material_index in idx:
+            vs.update(p.vertices)
+    return sorted(vs)
+
+
+def add_face_keys():
+    me = mesh.data
+    if me.shape_keys is None:
+        mesh.shape_key_add(name="Basis", from_mix=False)
+    brows, lips = mat_verts("Brows"), mat_verts("Lips")
+    co = {i: me.vertices[i].co.copy() for i in brows + lips}
+    side_x = {}
+    for sx in (-1, 1):
+        xs = [abs(co[i].x) for i in brows if co[i].x * sx > 0]
+        side_x[sx] = (min(xs), max(xs)) if xs else (0.0, 1.0)
+    lip_w = max((abs(co[i].x) for i in lips), default=0.02)
+    lip_z = sum(co[i].z for i in lips) / max(1, len(lips))
+    u = 0.0068 * H
+
+    def key(name, fn, verts):
+        k = mesh.shape_key_add(name=name, from_mix=False)
+        for i in verts:
+            k.data[i].co = co[i] + fn(co[i])
+
+    def t_brow(c):  # 0 at the inner end of the brow, 1 at the outer end
+        lo, hi = side_x[1 if c.x > 0 else -1]
+        return min(1.0, max(0.0, (abs(c.x) - lo) / max(1e-6, hi - lo)))
+
+    key("BrowsUp", lambda c: Vector((0, 0, u * 1.1)), brows)
+    key("BrowsSad", lambda c: Vector((0, 0, u * (0.9 * (1 - t_brow(c)) - 0.35 * t_brow(c)))), brows)
+    key("BrowsAngry", lambda c: Vector((0, 0, u * (-0.8 * (1 - t_brow(c)) + 0.25 * t_brow(c)))), brows)
+    corner = lambda c: (abs(c.x) / lip_w) ** 2
+    key("Smile", lambda c: Vector((c.x * 0.07, 0, u * 0.9 * corner(c) - u * 0.15 * (c.z < lip_z))), lips)
+    key("Frown", lambda c: Vector((0, 0, -u * 0.7 * corner(c))), lips)
+    key("Smirk", lambda c: Vector((c.x * 0.05 * (c.x > 0), 0, u * 1.0 * corner(c) * (c.x > 0))), lips)
+
+
+def render_setup():
     for eng in ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"):
         try:
             scene.render.engine = eng
             break
         except Exception:
             continue
-    world = bpy.data.worlds.new("w")
-    world.use_nodes = True
-    bg = world.node_tree.nodes.get("Background")
-    bg.inputs[0].default_value = (*lin((0.36, 0.36, 0.36)), 1)
-    bg.inputs[1].default_value = 0.9
-    scene.world = world
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    if scene.world is None:
+        world = bpy.data.worlds.new("w")
+        world.use_nodes = True
+        bg = world.node_tree.nodes.get("Background")
+        bg.inputs[0].default_value = (*lin((0.36, 0.36, 0.36)), 1)
+        bg.inputs[1].default_value = 0.9
+        scene.world = world
+
+
+def render_portraits():
+    render_setup()
+    out_dir = os.path.join(ASSETS, "portraits")
+    os.makedirs(out_dir, exist_ok=True)
+    add_face_keys()
+    props.hide_render = True
+    scene.render.film_transparent = True
+    cam = link(bpy.data.objects.new("pcam", bpy.data.cameras.new("pcam")))
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = 0.50 * H
+    head_z = (1.47 + (1.607 - 1.47) * S["head"]) * H
+    cam.location = (0, -6, head_z - 0.03 * H)
+    cam.rotation_euler = (math.radians(90), 0, 0)
+    scene.camera = cam
+    lights = []
+    for nm, en, rot, col in (("pkey", 3.0, (55, -20, -35), (1.0, 0.93, 0.84)), ("pfill", 1.1, (70, 25, 140), (0.85, 0.9, 1.0)),
+                             ("prim", 2.2, (80, 0, 180), (1.0, 0.85, 0.7))):
+        L = link(bpy.data.objects.new(nm, bpy.data.lights.new(nm, "SUN")))
+        L.data.energy = en
+        L.data.color = col
+        L.rotation_euler = tuple(math.radians(a) for a in rot)
+        lights.append(L)
+    scene.render.resolution_x = 384
+    scene.render.resolution_y = 384
+    root.rotation_euler = (0, 0, math.radians(14))
+    keys = mesh.data.shape_keys.key_blocks
+    head = root.pose.bones["Head"]
+    for mood, (weights, (nod, turn, tilt)) in MOODS.items():
+        for k in keys[1:]:
+            k.value = weights.get(k.name, 0.0)
+        head.rotation_euler = (math.radians(nod), math.radians(turn), math.radians(tilt))
+        bpy.context.view_layer.update()
+        scene.render.filepath = os.path.join(out_dir, "%s_%s.png" % (CID, mood))
+        bpy.ops.render.render(write_still=True)
+    for k in keys[1:]:
+        k.value = 0.0
+    head.rotation_euler = (0, 0, 0)
+    root.rotation_euler = (0, 0, 0)
+    scene.render.film_transparent = False
+    for L in lights:
+        bpy.data.objects.remove(L)
+    bpy.data.objects.remove(cam)
+    print(CID.upper(), "portraits", out_dir, ", ".join(MOODS))
+
+
+render_portraits()
+
+# ----------------------------------------------------------------------------- turntable render
+if RENDER_DIR:
+    os.makedirs(RENDER_DIR, exist_ok=True)
+    props.hide_render = True  # the turntable shows the rest pose; props only make sense while knitting
+    render_setup()
     floor = link(bpy.data.objects.new("floor", bpy.data.meshes.new("floor")))
     fbm = bmesh.new()
     bmesh.ops.create_grid(fbm, x_segments=1, y_segments=1, size=4)

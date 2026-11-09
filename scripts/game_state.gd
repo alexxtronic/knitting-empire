@@ -12,7 +12,10 @@ const SEASONS := ["Spring", "Summer", "Autumn", "Winter"]
 const MAX_HOUSE_LEVEL := 3
 ## Save files carry a version; migrate() upgrades older ones step by step.
 ## v1: first prototype (no version field). v2: adds story flags.
-const SAVE_VERSION := 2
+## v3: friendship points become three relationship stats: familiarity, trust, romance.
+const SAVE_VERSION := 3
+## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
+const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
 # --- tuning, loaded from data/economy.json --------------------------------------
 var SELL_PRICES := {}
@@ -38,7 +41,7 @@ var day: int = 1
 var hour: float = 8.0
 var house_level: int = 0
 var time_running := true
-var friends := {} # villager id -> {"pts", "talk" (last day talked), "gift" (last day gifted), "n" (chats)}
+var friends := {} # villager id -> {"familiarity", "trust", "romance", "talk" (last day talked), "gift" (last day gifted), "n" (chats)}
 var owns_cottage := false
 var sheep_count: int = 3
 ## Story progress: named flags set by scenes and choices ("met_rowan", "act1_done", ...).
@@ -179,18 +182,33 @@ func market_price(item: String) -> int:
 
 func friend(id: String) -> Dictionary:
 	if not friends.has(id):
-		friends[id] = {"pts": 0, "talk": 0, "gift": 0, "n": 0}
+		friends[id] = {"familiarity": 0, "trust": 0, "romance": 0, "talk": 0, "gift": 0, "n": 0}
 	return friends[id]
 
 
-## 0..5 hearts; every 20 friendship points is one heart.
+## 0..5 hearts; every 20 familiarity is one heart.
 func hearts(id: String) -> int:
-	return mini(MAX_HEARTS, int(friend(id)["pts"]) / 20)
+	return mini(MAX_HEARTS, int(friend(id)["familiarity"]) / 20)
 
 
+## How well you know someone (talking, gifts). Shown as hearts.
 func add_friendship(id: String, pts: int) -> void:
+	add_stat(id, "familiarity", pts)
+
+
+func stat(id: String, stat_name: String) -> int:
+	return int(friend(id).get(stat_name, 0))
+
+
+## Changes familiarity, trust or romance, kept within its range. Returns the new value.
+func add_stat(id: String, stat_name: String, amount: int) -> int:
+	if not STATS.has(stat_name):
+		push_error("Unknown relationship stat '%s'" % stat_name)
+		return 0
 	var f := friend(id)
-	f["pts"] = mini(MAX_HEARTS * 20, int(f["pts"]) + pts)
+	var lim: Array = STATS[stat_name]
+	f[stat_name] = clampi(int(f.get(stat_name, 0)) + amount, int(lim[0]), int(lim[1]))
+	return int(f[stat_name])
 
 
 # --- story flags ---------------------------------------------------------------
@@ -221,6 +239,16 @@ static func migrate(d: Dictionary) -> Dictionary:
 	if v < 2:
 		d["flags"] = {} # v1 saves predate the story system
 		v = 2
+	if v < 3:
+		# friendship points become familiarity; trust and romance start at zero
+		var fr: Dictionary = d.get("friends", {})
+		for id in fr:
+			var e: Dictionary = fr[id]
+			e["familiarity"] = int(e.get("pts", e.get("familiarity", 0)))
+			e.erase("pts")
+			e["trust"] = int(e.get("trust", 0))
+			e["romance"] = int(e.get("romance", 0))
+		v = 3
 	d["version"] = v
 	return d
 
@@ -243,7 +271,8 @@ func from_dict(d: Dictionary) -> void:
 	var saved_friends: Dictionary = d.get("friends", {})
 	for id in saved_friends:
 		var e: Dictionary = saved_friends[id]
-		friends[id] = {"pts": int(e.get("pts", 0)), "talk": int(e.get("talk", 0)), "gift": int(e.get("gift", 0)), "n": int(e.get("n", 0))}
+		friends[id] = {"familiarity": int(e.get("familiarity", 0)), "trust": int(e.get("trust", 0)), "romance": int(e.get("romance", 0)),
+			"talk": int(e.get("talk", 0)), "gift": int(e.get("gift", 0)), "n": int(e.get("n", 0))}
 	owns_cottage = bool(d.get("owns_cottage", false))
 	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), START_SHEEP, MAX_SHEEP)
 	flags = (d.get("flags", {}) as Dictionary).duplicate(true)
