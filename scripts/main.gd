@@ -133,6 +133,9 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_fit_3d_resolution)
 	cam = Camera3D.new()
 	cam.fov = 32.0
+	# the camera never comes closer than about 6 m; a near plane at 0.5 m instead of 0.05 gives the
+	# depth buffer ten times the precision, so surfaces a few millimetres apart stay apart at 40 m
+	cam.near = 0.5
 	cam.far = 300.0
 	cam.attributes = cam_attr
 	add_child(cam)
@@ -1671,6 +1674,10 @@ func _graphics_checks() -> void:
 		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
 	_cycle_graphics() # High
 	await _wait(0.3)
+	var flush := coplanar_faces()
+	for f in flush:
+		print("      flush: ", f)
+	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
 	_check("back on High: every effect and all the grass return; settings file untouched",
 		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return l.shadow_enabled)
 		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
@@ -2061,6 +2068,58 @@ func _capture_opening() -> void:
 
 ## Frame-cost probe (run with --disable-vsync -- --fpsprobe): the town at midday and the farm at night, vsync
 ## off, timing each graphics effect by switching it off on its own. Prints milliseconds per frame.
+## Pairs of surfaces in different colours that face the same way in the same plane and overlap
+## by more than `min_area` m²: the GPU can't tell which is in front, so they flicker in stripes
+## as the camera moves (z-fighting). Checks the axis-aligned faces of every unrotated or
+## quarter-turned mesh in the world, except undersides (they rest on something) and spheres.
+func coplanar_faces(min_area := 0.02) -> Array:
+	var buckets := {}
+	var out := []
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null or m.mesh is SphereMesh or not m.is_visible_in_tree() or m.skin != null or hud.is_ancestor_of(m):
+			continue
+		var b := m.global_transform.basis
+		var aligned := true
+		for c in 3:
+			var v := b[c].normalized().abs()
+			if maxf(v.x, maxf(v.y, v.z)) < 0.999:
+				aligned = false
+		if not aligned:
+			continue
+		var box := m.global_transform * m.get_aabb()
+		var col := _mesh_colour(m)
+		for ax in 3:
+			for side in 2:
+				if ax == 1 and side == 0:
+					continue
+				var coord := box.end[ax] if side == 1 else box.position[ax]
+				var key := "%d_%d_%d" % [ax, side, roundi(coord / 0.003)]
+				if not buckets.has(key):
+					buckets[key] = []
+				for other in buckets[key]:
+					var ob: AABB = other[1]
+					if other[2] == col or absf((ob.end[ax] if side == 1 else ob.position[ax]) - coord) > 0.0003:
+						continue
+					var area := 1.0
+					for k in 3:
+						if k != ax:
+							area *= maxf(0.0, minf(box.end[k], ob.end[k]) - maxf(box.position[k], ob.position[k]))
+					if area > min_area:
+						out.append("%s%s at %.3f, %.2f m²: %s %s / %s %s" % ["xyz"[ax], "+" if side == 1 else "-", coord, area, col, box.get_center().snappedf(0.01), other[2], ob.get_center().snappedf(0.01)])
+				buckets[key].append([m, box, col])
+	return out
+
+
+func _mesh_colour(m: MeshInstance3D) -> String:
+	var mat = m.material_override if m.material_override else m.mesh.surface_get_material(0)
+	if mat is ShaderMaterial and mat.get_shader_parameter("albedo") != null:
+		return (mat.get_shader_parameter("albedo") as Color).to_html(false)
+	if mat is StandardMaterial3D:
+		return mat.albedo_color.to_html(false)
+	return str(mat)
+
+
 func _run_fps_probe() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Game.time_running = false

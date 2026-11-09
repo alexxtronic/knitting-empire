@@ -87,17 +87,32 @@ static func _add(p: Node3D, mesh: Mesh, pos: Vector3, c: Color, rot: Vector3) ->
 	return mi
 
 
+## Everything is built from boxes and cylinders, and a detail often ends exactly flush with what
+## it sits on or in: water in the fountain basin, the doormat on the house slab, a cap beam on a
+## wall, soil in a pot. Two surfaces in the same plane flicker in stripes as the camera moves
+## (z-fighting: the GPU can't tell which is in front). So every shape grows by a hair on all sides,
+## more the smaller it is: wherever two meet flush, the smaller one, the detail, is drawn on top.
+## About 1.5 mm per factor of ten in volume, never more than 15% of the shape's size on that axis
+## (a leaf or a sheep's eye keeps its proportions).
+static func proud(volume: float) -> float:
+	return clampf(0.003 - 0.0015 * log(maxf(volume, 1e-9)) / log(10.0), 0.0005, 0.012)
+
+
 static func box(p: Node3D, size: Vector3, pos: Vector3, c: Color, rot := Vector3.ZERO) -> MeshInstance3D:
 	var m := BoxMesh.new()
-	m.size = size
+	var pad := proud(size.x * size.y * size.z)
+	m.size = size + 2.0 * Vector3(minf(pad, size.x * 0.15), minf(pad, size.y * 0.15), minf(pad, size.z * 0.15))
 	return _add(p, m, pos, c, rot)
 
 
 static func cyl(p: Node3D, top_r: float, bot_r: float, h: float, pos: Vector3, c: Color, rot := Vector3.ZERO, segs := 16) -> MeshInstance3D:
 	var m := CylinderMesh.new()
-	m.top_radius = top_r
-	m.bottom_radius = bot_r
-	m.height = h
+	var r := maxf(top_r, bot_r)
+	var pad := proud(PI * r * r * h)
+	var rpad := minf(pad, r * 0.3)
+	m.top_radius = top_r + rpad if top_r > 0.0 else 0.0
+	m.bottom_radius = bot_r + rpad if bot_r > 0.0 else 0.0
+	m.height = h + 2.0 * minf(pad, h * 0.15)
 	m.radial_segments = segs
 	m.rings = 1
 	return _add(p, m, pos, c, rot)
