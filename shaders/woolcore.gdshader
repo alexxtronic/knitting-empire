@@ -66,7 +66,7 @@ vec2 surface(vec2 co, float st) {
 	float mott = fbm(co * 1.7);
 	float fib = vnoise(co * 55.0) * 0.5 + vnoise(co * 110.0 + 3.1) * 0.5;
 	float fw = length(fwidth(co * 55.0));
-	fib = mix(fib, 0.5, smoothstep(0.4, 1.2, fw)); // fibres fade out when they'd shimmer
+	fib = mix(fib, 0.5, smoothstep(0.15, 0.5, fw)); // fibres fade out before they'd shimmer
 	float shade = 0.92 + 0.14 * mott + 0.07 * (fib - 0.5);
 	float h = 0.6;
 	if (pattern == 1) {
@@ -74,7 +74,9 @@ vec2 surface(vec2 co, float st) {
 		float fk = length(fwidth(uv));
 		float k = knit_h(uv);
 		float tint = hash(floor(uv)) * 0.06 - 0.03;
-		float detail = 1.0 - smoothstep(0.22, 0.6, fk); // far away: just the average colour
+		// full stitches only when one is 12+ pixels across; smaller than that they crawl as the
+		// camera moves (worse once the 3D view is upscaled), so fade to the average colour
+		float detail = 1.0 - smoothstep(0.08, 0.3, fk);
 		h = mix(0.55, k, detail);
 		shade *= mix(1.0, mix(contrast, 1.08, k) + tint, detail);
 	}

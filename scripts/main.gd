@@ -345,8 +345,9 @@ const TARGET_3D_PIXELS := 1.6e6
 func _fit_3d_resolution() -> void:
 	var vp := get_viewport()
 	var px := Vector2(get_window().size)
-	# a 2x-scaled 1440p monitor full screen is 5120x2880 = 14.7M pixels, so allow down to a quarter
-	var scale := clampf(sqrt(TARGET_3D_PIXELS / maxf(px.x * px.y, 1.0)), 0.25, 1.0)
+	# a 2x-scaled 1440p monitor full screen is 5120x2880 = 14.7M pixels; below about a third of
+	# the width, fine detail and thin edges break up when upscaled, so stop there
+	var scale := clampf(sqrt(TARGET_3D_PIXELS / maxf(px.x * px.y, 1.0)), 0.35, 1.0)
 	if scale > 0.95:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		vp.scaling_3d_scale = 1.0
@@ -355,7 +356,7 @@ func _fit_3d_resolution() -> void:
 	var metal := OS.get_name() == "macOS" and scale >= 0.5
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_METALFX_SPATIAL if metal else Viewport.SCALING_3D_MODE_FSR
 	vp.scaling_3d_scale = scale
-	vp.fsr_sharpness = 0.3
+	vp.fsr_sharpness = 0.8 # 0 is sharpest; a softer setting keeps thin edges from ringing
 
 
 func _update_lighting() -> void:
@@ -2164,7 +2165,7 @@ func _chat_checks() -> void:
 	hud.chat._send()
 	await _wait(0.4)
 	msgs = Game.chat("rosa")["msgs"]
-	_check("when the API is busy, the line comes back to the box and history stays in turns (%s)" % hud.chat.note.text,
+	_check("when the API is busy, the line comes back to the box and history stays in turns (last=%s, box='%s', note='%s', camera moved %.2f)" % [msgs[-1]["role"], hud.chat.input.text, hud.chat.note.text, cam_target.distance_to(cam0)],
 		msgs[-1]["role"] == "assistant" and hud.chat.input.text == "Are you busy?" and hud.chat.note.text.contains("busy") and cam_target.distance_to(cam0) < 0.01)
 	var saved := Game.to_dict()
 	_check("the chat is saved with the game, and no API key is", (saved["chats"]["rosa"]["msgs"] as Array).size() >= 2 and not JSON.stringify(saved).contains("sk-ant"))
