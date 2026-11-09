@@ -24,7 +24,7 @@ Controls:
 
 ## What's in it
 
-- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. It takes about four to five minutes, with a few choices that set flags and relationship stats for later. Old saves skip it; start a **New Game** to see it.
+- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. It takes about four to five minutes, with a few choices that set flags and relationship stats for later. Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
 - **Home and farm:** a house you can expand, furniture to place, sheep to shear, crops to plant, water and harvest, and a shipping bin.
 - **Maplewood:**
   - three villagers (Rosa, Theo, Mabel) with friendship hearts, gifts and dialogue
@@ -107,6 +107,12 @@ The world is meant to look handmade: felt and knitting.
 - **Which surfaces are knitted:** the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width). Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
 - **Grade:** plum-tinted shadows, warm cream highlights and a little extra contrast (`_setup_environment` in `main.gd`), plus a soft vignette. Rain greys it down.
 - **UI:** bordered panels and buttons are felt patches with a running stitch sewn round the edge, drawn in code (`_stitched` in `hud.gd`), so there are no image files to keep in sync.
+
+To record the opening again (the game plays Act 1 by itself at reading pace, then quits; `ffmpeg` turns the AVI into an MP4):
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --path "$PWD" --resolution 1280x800 --write-movie /tmp/opening.avi --fixed-fps 30 -- --capture
+```
 
 The three style frames in `docs/woolcore/` are made by the game itself:
 

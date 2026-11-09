@@ -96,10 +96,14 @@ var sleeping := false
 var _autosave_t := 0.0
 var _autotest_dir := ""
 var _style_frames := false # --styleframes=DIR: take the Woolcore style frames and quit
+var _capture := false # --capture: play the opening at a person's pace (record it with --write-movie)
 
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
+		if a == "--capture":
+			_capture = true
+			a = "--autotest=" + OS.get_user_data_dir()
 		if a.begins_with("--styleframes="):
 			_style_frames = true
 			a = "--autotest=" + a.substr(14)
@@ -183,7 +187,9 @@ func _ready() -> void:
 	_restore_story_state()
 	if not loaded and _autotest_dir == "":
 		_begin_new_story()
-	if _style_frames:
+	if _capture:
+		_capture_opening()
+	elif _style_frames:
 		_take_style_frames()
 	elif _autotest_dir != "":
 		_autotest()
@@ -285,7 +291,7 @@ func _update_lighting() -> void:
 		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 		env.fog_light_color = sky_mat.sky_horizon_color
 		env.ambient_light_energy *= 1.0 - 0.25 * rain
-	env.fog_density = 0.0035 + 0.012 * rain
+	env.fog_density = 0.0035 + 0.0055 * rain
 	env.adjustment_saturation = 1.1 - 0.3 * rain
 
 
@@ -1445,10 +1451,12 @@ func _act1_checks() -> void:
 	var trust0 := Game.stat("rowan", "trust")
 	var walk_secs := 0.0
 	_check("a new game opens on Act 1 (%s)" % Story.find_trigger("start"), Story.find_trigger("start") == "act1_arrival")
+	var hour0 := Game.hour
 	story.trigger("start")
 	await _act1_shot("Last stop", "20_act1_rain_bus.png")
 	await _act1_shot("Daniel.", "21_act1_phone.png")
 	await _act1_until_done(40.0)
+	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, Game.hour], absf(Game.hour - hour0) < 0.01 and Game.time_running)
 	_check("the arrival ends at the bus stop in the rain with a goal (%s, '%s', rain %.1f)" % [str(Game.flag("act1_arrived")), hud.goal_label.text, rain],
 		Game.flag("act1_arrived") == true and player.position.distance_to(Vector3(40.2, 0, 3.4)) < 0.5 and hud.goal_panel.visible and goal_marker.visible and rain > 0.5 and str(Game.flag("weather")) == "rain")
 	await _wait(0.8)
@@ -1522,6 +1530,37 @@ func _act1_checks() -> void:
 	_check("Act 1 progress survives a save", Game.flag("act1_done") == true and Game.flag("seen_act1_fence") == true)
 	story.auto = false
 	story.auto_line = 0.08
+
+
+## Plays Act 1 from a new game at reading pace, walking between scenes, then quits. Record it:
+##   Godot --path . --resolution 1280x800 --write-movie opening.avi --fixed-fps 30 -- --capture
+func _capture_opening() -> void:
+	story.auto = true
+	story.cinematic = true
+	story.auto_line = 0.6
+	story.auto_choices = [0, 0, 0, 1, 0]
+	await _wait(0.5)
+	_begin_new_story()
+	await _act1_until_done(300.0)
+	await _wait(1.5)
+	for step in [[Vector3(25.2, 0, 3.0), "act1_cottage"], [Vector3(5.6, 0, 3.0), "act1_basket"]]:
+		player.walk(_find_path(player.position, step[0]))
+		var t := 0.0
+		while story.playing != step[1] and t < 40.0:
+			await _wait(0.1)
+			t += 0.1
+		await _act1_until_done(300.0)
+		await _wait(1.2)
+	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
+	_do_action(chair, "knit")
+	var t2 := 0.0
+	while story.playing != "act1_fence" and t2 < 30.0:
+		await _wait(0.1)
+		t2 += 0.1
+	await _act1_until_done(400.0)
+	await _wait(3.0)
+	print("CAPTURE DONE")
+	get_tree().quit()
 
 
 ## Woolcore style frames (run with -- --styleframes=/abs/dir): the farm at golden hour, the

@@ -13,6 +13,7 @@ var playing := ""
 var auto := false # autotest: lines advance by themselves and choices come from auto_choices
 var auto_choices: Array = []
 var auto_line := 0.08 # seconds each line shows in auto mode
+var cinematic := false # auto mode at a person's pace: real fades and glides, time to read each line
 var pause_on := "" # auto mode: hold on the first line containing this (the autotest takes a picture)
 var holding := false
 var shown: Array = [] # every line shown, "Name: text" (for the autotest)
@@ -47,6 +48,8 @@ func _run(id: String) -> void:
 	var sc: Dictionary = Story.scenes()[id]
 	var hud = main.hud
 	_cam0 = {"follow": main.cam_follow, "dist": main.cam_dist}
+	var clock_was: bool = Game.time_running
+	Game.time_running = false # the day doesn't slip away while you read
 	main.player.path = []
 	for v in main.villagers:
 		if v.tag:
@@ -85,6 +88,7 @@ func _run(id: String) -> void:
 	for v in main.villagers:
 		if v.tag:
 			v.tag.visible = true
+	Game.time_running = clock_was
 	main.cam_dist = _cam0["dist"]
 	main.cam_follow = _cam0["follow"]
 	if main.cam_follow:
@@ -122,7 +126,7 @@ func _say(op: Dictionary) -> void:
 			holding = true
 			while holding:
 				await get_tree().process_frame
-		await get_tree().create_timer(auto_line).timeout
+		await get_tree().create_timer(auto_line + (0.9 + text.length() * 0.035 if cinematic else 0.0)).timeout
 	else:
 		await main.hud.story_next
 
@@ -134,7 +138,7 @@ func _choose(op: Dictionary) -> int:
 	main.hud.story_choices(_fill(str(op["prompt"])), texts)
 	var idx := 0
 	if auto:
-		await get_tree().create_timer(0.08).timeout
+		await get_tree().create_timer(2.6 if cinematic else 0.08).timeout
 		idx = int(auto_choices.pop_front()) if not auto_choices.is_empty() else 0
 		main.hud.story_clear_choices()
 	else:
@@ -189,16 +193,16 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			if pos != null:
 				main.cam_follow = false
 				main.cam_glide = {"pos": pos, "dist": dist}
-				if auto:
+				if auto and not cinematic:
 					main.cam_target = pos
 					main.cam_dist = dist
 		"fade":
 			var secs := float(a[1]) if a.size() > 1 else 0.8
-			await main.hud.story_fade(1.0 if str(a[0]) == "out" else 0.0, 0.01 if auto else secs)
+			await main.hud.story_fade(1.0 if str(a[0]) == "out" else 0.0, 0.01 if auto and not cinematic else secs)
 		"title":
-			await main.hud.story_title(_fill(str(op["rest"])), 0.2 if auto else 2.6)
+			await main.hud.story_title(_fill(str(op["rest"])), 0.2 if auto and not cinematic else 2.6)
 		"wait":
-			await get_tree().create_timer(0.02 if auto else float(a[0])).timeout
+			await get_tree().create_timer(0.02 if auto and not cinematic else float(a[0])).timeout
 		"anim":
 			var n := actor(str(a[0]))
 			if n and "anim_override" in n:
@@ -285,7 +289,7 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 				main.spawn_prop(str(a[0]), str(a[1]), Vector3(float(a[2]), 0, float(a[3])), float(a[4]) if a.size() > 4 else 0.0)
 		"prop_move":
 			if a.size() >= 4:
-				main.move_prop(str(a[0]), Vector3(float(a[1]), 0, float(a[2])), 0.05 if auto else float(a[3]))
+				main.move_prop(str(a[0]), Vector3(float(a[1]), 0, float(a[2])), 0.05 if auto and not cinematic else float(a[3]))
 		"prop_remove":
 			if not a.is_empty():
 				main.remove_prop(str(a[0]))
