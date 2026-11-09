@@ -347,6 +347,7 @@ func _setup_environment() -> void:
 ## Per graphics level (Low, Medium, High): 3D pixels to aim for and the lowest scale allowed.
 const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.6e6]
 const MIN_3D_SCALE := [0.25, 0.3, 0.35]
+const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 
 # --- graphics setting ----------------------------------------------------------------
 ## Low / Medium / High, cycled from the left-hand menu and kept in user://settings.cfg (not the
@@ -381,13 +382,14 @@ func apply_graphics() -> void:
 	env.ssao_enabled = med # contact shading
 	env.ssil_enabled = hi # light bouncing off nearby surfaces
 	env.ssr_enabled = hi # reflections in the pond and wet ground
-	RenderingServer.directional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	# the sun's soft shadows never drop to the lowest filter: it speckles every shadow with a dot
+	# pattern that crawls as the camera moves; one step up costs well under a millisecond
+	RenderingServer.directional_soft_shadow_filter_set_quality([2, 2, 3][gfx])
 	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
 	Catalog.lamp_shadows = med
 	for l in find_children("*", "OmniLight3D", true, false):
 		(l as OmniLight3D).shadow_enabled = med
 	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
-	get_viewport().msaa_3d = Viewport.MSAA_2X if gfx == 0 else Viewport.MSAA_4X
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
 
@@ -395,16 +397,28 @@ func apply_graphics() -> void:
 func _fit_3d_resolution() -> void:
 	var vp := get_viewport()
 	var px := Vector2(get_window().size)
-	# a 2x-scaled 1440p monitor full screen is 5120x2880 = 14.7M pixels; below about a third of
-	# the width, fine detail and thin edges break up when upscaled, so stop there
+	# the window renders at the screen's real pixels (project.godot: allow_hidpi off). A "2x scaled"
+	# 1440p monitor would otherwise hand the game a 5120x2880 frame that macOS then shrinks back to
+	# 2560x1440: four times the upscaling, post-processing and HUD work for nothing on screen.
+	# Below about a third of the width, fine detail and thin edges break up when upscaled.
 	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
 	if scale > 0.95:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		vp.scaling_3d_scale = 1.0
+		vp.msaa_3d = Viewport.MSAA_2X if gfx == 0 else Viewport.MSAA_4X
 		return
-	# MetalFX for the usual up-to-2x step on Macs; FSR handles any ratio
-	var metal := OS.get_name() == "macOS" and scale >= 0.5
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_METALFX_SPATIAL if metal else Viewport.SCALING_3D_MODE_FSR
+	if OS.get_name() == "macOS":
+		# MetalFX temporal builds each frame from the last few, so the thousands of hair-thin grass
+		# blades stay put as the camera follows Nora. Spatial upscalers (FSR 1, MetalFX spatial)
+		# see one frame at a time: blades a pixel or two wide popped in and out every frame, the
+		# flicker on every graphics level (measured 3x less frame-to-frame change). It brings its
+		# own anti-aliasing, so MSAA is off.
+		vp.msaa_3d = Viewport.MSAA_DISABLED
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_METALFX_TEMPORAL
+		vp.scaling_3d_scale = maxf(scale, METALFX_MIN_SCALE)
+		return
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+	vp.msaa_3d = Viewport.MSAA_2X if gfx == 0 else Viewport.MSAA_4X
 	vp.scaling_3d_scale = scale
 	vp.fsr_sharpness = 0.8 # 0 is sharpest; a softer setting keeps thin edges from ringing
 
@@ -1906,6 +1920,7 @@ func _run_fps_probe() -> void:
 			for l in lamps:
 				l.shadow_enabled = on,
 		"grass": func(on): grass.visible = on,
+		"hud": func(on): hud.visible = on,
 	}
 	var vp := get_viewport()
 	var before_today := func(on):
