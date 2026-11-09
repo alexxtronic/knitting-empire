@@ -15,7 +15,7 @@ open -n -a /Applications/Godot.app --args --path .
 
 Controls:
 - Click the floor to walk.
-- Click objects and people to see what you can do with them.
+- Click objects and people to open a ring of actions round them. Click an option, or press its number (1 to 9).
 - WASD or the arrow keys pan the camera.
 - Q and E rotate the camera, and the scroll wheel or a trackpad pinch zooms.
 - Space or the lock button locks the camera to your character.
@@ -31,7 +31,26 @@ Controls:
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out
+- **Life-sim UI:** actions open in a ring round whatever you click, with progress bars on things that take time (crops, wool, knitting). A needs panel shows Energy, Hunger, Happiness, Love, Warmth and Fitness as bars with trend arrows. Build mode shows furniture as picture cards rendered in the game.
+- **Needs:** Warmth follows the weather, the time of day, being indoors and the best sweater she owns (knitting gets better with practice). Love fills from time with people. Fitness grows with walking and farm work and makes her walk a little faster.
+- **Talking to villagers:** besides **Talk** (hand-written lines), **Chat...** lets you type to Rosa, Theo, Mabel and Rowan, who answer in character (see [Chatting with villagers](#chatting-with-villagers)).
+- **World:** real grass (tens of thousands of blades that sway in the wind and part round Nora, worn earth on paths), trees that move in the wind, a pond with ripples and rain rings, a sky with drifting clouds and stars, soft shadows, bounce light, a light haze for sunbeams and mist, and depth of field in close-ups.
 - **Characters:** Nora (the heroine you play, working name) and Rowan (the shepherd in Maplewood) come from one Blender script, `tools/build_character.py`. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
+
+## Chatting with villagers
+
+**Chat...** in a villager's ring opens a chat window. Type to them and they answer as themselves, voiced by Claude through the Anthropic API. Each one has a character bible in `data/personas.json`: who they are, how they talk, what they know, and personal things they only share once they trust Nora. Every message also tells them the time, the weather, how well they know her and what's happened in the story. The last 20 lines with each villager are saved with the game. The clock stops while you chat, and the first chat of the day fills Love a little.
+
+It needs an Anthropic API key. **The key is never stored in the game or this repo.** Either:
+
+- paste it into the box in the chat window. It's saved on your computer only, in `~/Library/Application Support/Godot/app_userdata/Knitting Empire/ai.cfg`; or
+- set `ANTHROPIC_API_KEY` in the environment you launch Godot from.
+
+Without a key, villagers smile and nod, and **Talk** works as before.
+
+`ai.cfg` options (section `[ai]`): `api_key`, `model` (default `claude-opus-5-5`, at low effort; `claude-haiku-5-5` is cheaper), `enabled=false` to switch chat off, and `proxy_url` to send requests to your own server instead, which adds the key. A proxy is how this would ship to players, since a key inside a game build can be pulled out.
+
+The autotest checks the chat offline with a stand-in for the API, so it never spends anything.
 
 ## Project layout
 
@@ -46,7 +65,13 @@ Controls:
 | `scripts/player.gd` | the character you play and her activity states |
 | `scripts/body.gd` | a skinned character body; picks and cross-fades animation loops |
 | `scripts/story.gd`, `story_player.gd` | reads and plays the plain-text story scenes in `data/scenes/` |
+| `scripts/pie_menu.gd` | the ring of actions |
+| `scripts/thumbs.gd` | renders the Build mode picture cards |
+| `scripts/ai_chat.gd`, `chat_panel.gd`, `data/personas.json` | typed chat with villagers |
+| `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, leaning into turns, breathing |
+| `scripts/grass.gd` | the ground and the grass blades |
 | `shaders/woolcore.gdshader` | the felt and knit look |
+| `shaders/ground`, `grass_blade`, `foliage`, `water`, `sky` | ground, grass, trees, pond and sky |
 | `docs/woolcore/` | style frames (ignored by Godot) |
 | `tools/build_character.py` | Blender character generator: builds `assets/<id>.glb` |
 

@@ -11,11 +11,13 @@ const Player = preload("res://scripts/player.gd")
 const Data = preload("res://scripts/data.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Town = preload("res://scripts/town.gd")
+const Grass = preload("res://scripts/grass.gd")
 const Villager = preload("res://scripts/villager.gd")
 const Story = preload("res://scripts/story.gd")
 const StoryPlayer = preload("res://scripts/story_player.gd")
 const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
+const AiChat = preload("res://scripts/ai_chat.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -49,7 +51,9 @@ var walls_up := false
 
 var sun: DirectionalLight3D
 var env: Environment
-var sky_mat: ProceduralSkyMaterial
+var sky_mat: ShaderMaterial # shaders/sky.gdshader: gradient, sun, drifting clouds, stars
+var cam_attr: CameraAttributesPractical
+var _cloud_drift := Vector2.ZERO
 
 var house_root: Node3D
 var furniture_root: Node3D
@@ -59,6 +63,8 @@ var divider_rects: Array = []
 var furniture: Array = []
 var plots: Array = []
 var sheep_list: Array = []
+var grass # grass.gd: the ground and the blades
+var pond_rect := Rect2()
 var bin: Node3D
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
@@ -67,6 +73,9 @@ var player: Player
 var hud: Hud
 var story: StoryPlayer
 var villagers: Array = []
+var ai: AiChat # typed chat with villagers, voiced by Claude
+var chat_v = null # the villager you're chatting with
+var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var decor_root: Node3D
 var sign_to_town: Landmark
@@ -117,7 +126,10 @@ func _ready() -> void:
 	cam = Camera3D.new()
 	cam.fov = 32.0
 	cam.far = 300.0
+	cam.attributes = cam_attr
 	add_child(cam)
+	grass = Grass.new()
+	add_child(grass)
 	World.build_ground(self, LOT)
 	World.build_trees(self, [LOT, Town.ROAD.grow(0.8), Town.TOWN])
 	var town := Town.build(self)
@@ -129,7 +141,8 @@ func _ready() -> void:
 	add_child(decor_root)
 	_build_town_decor()
 	grid_blockers.append(World.build_barn(self, Vector3(21.5, 0, -9.5)))
-	grid_blockers.append(World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0))
+	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
+	grid_blockers.append(pond_rect)
 	grid_blockers.append_array(World.build_pen(self, PEN, PEN_GATE))
 	bin = World.build_bin(self, BIN_POS)
 	grid_blockers.append(Rect2(BIN_POS.x - 0.5, BIN_POS.z - 0.35, 1.0, 0.7))
@@ -185,6 +198,7 @@ func _ready() -> void:
 	_update_price_board()
 	cam_target = player.position
 	_restore_story_state()
+	hud.render_thumbnails()
 	if not loaded and _autotest_dir == "":
 		_begin_new_story()
 	if _capture:
@@ -209,9 +223,21 @@ func _connect_hud() -> void:
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
+	hud.stop_activity_pressed.connect(func():
+		if player.activity_text() != "Zzz":
+			player.cancel_activity())
 	hud.cam_lock_pressed.connect(func(): _set_cam_lock(not cam_follow, true))
 	hud.cam_rotate.connect(func(d): cam_yaw_goal += d * PI * 0.5)
 	hud.cam_zoom.connect(func(d): cam_dist = clampf(cam_dist + d * 3.0, 8.0, 45.0))
+	ai = AiChat.new()
+	add_child(ai)
+	ai.replied.connect(_on_chat_reply)
+	hud.chat.sent.connect(_chat_send)
+	hud.chat.closed.connect(close_chat)
+	hud.chat.key_entered.connect(func(k: String):
+		ai.save_key(k)
+		hud.chat.set_online(ai.available())
+		hud.chat.show_note("Key saved on this computer (not in the game files). Say hello!" if ai.available() else "That key didn't take."))
 
 
 func _set_cam_lock(on: bool, announce := false) -> void:
@@ -230,8 +256,10 @@ func _setup_environment() -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat = ShaderMaterial.new()
+	sky_mat.shader = preload("res://shaders/sky.gdshader")
 	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_128
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.7
@@ -240,6 +268,10 @@ func _setup_environment() -> void:
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.6
+	# light bouncing off the ground and walls tints what's near it (green under trees, warm indoors)
+	env.ssil_enabled = true
+	env.ssil_radius = 3.0
+	env.ssil_intensity = 0.7
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
@@ -256,12 +288,24 @@ func _setup_environment() -> void:
 	env.adjustment_color_correction = lut
 	env.fog_enabled = true
 	env.fog_density = 0.0035
+	# a thin volumetric haze: sunbeams through the trees at dawn and dusk, mist in the rain
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.002
+	env.volumetric_fog_anisotropy = 0.6
+	env.volumetric_fog_length = 48.0
+	env.volumetric_fog_ambient_inject = 0.04
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 70.0
+	sun.shadow_blur = 1.4
+	sun.light_angular_distance = 0.8 # soft shadow edges, wider the further from the caster
+	sun.light_volumetric_fog_energy = 1.3
 	add_child(sun)
+	# depth of field for close-ups (_update_camera turns it on when the camera's near)
+	cam_attr = CameraAttributesPractical.new()
+	cam_attr.dof_blur_amount = 0.05
 
 
 func _update_lighting() -> void:
@@ -276,23 +320,39 @@ func _update_lighting() -> void:
 	sun.light_color = Color(0.55, 0.65, 1.0).lerp(day_col, dl)
 	sun.light_energy = lerpf(0.22, 1.3, dl)
 	var horizon := Color(0.14, 0.15, 0.28).lerp(Color(0.97, 0.82, 0.62).lerp(Color(1.0, 0.62, 0.4), warm * 0.6), dl)
-	sky_mat.sky_top_color = Color(0.06, 0.08, 0.2).lerp(Color(0.38, 0.6, 0.86), dl)
-	sky_mat.sky_horizon_color = horizon
-	sky_mat.ground_horizon_color = horizon
-	sky_mat.ground_bottom_color = Color(0.08, 0.08, 0.1).lerp(Color(0.35, 0.3, 0.25), dl)
+	var top := Color(0.06, 0.08, 0.2).lerp(Color(0.38, 0.6, 0.86), dl)
+	var sky_h := horizon
 	env.ambient_light_energy = lerpf(0.3, 0.75, dl)
 	env.fog_light_color = horizon
 	if rain > 0.001: # overcast: a dimmer, greyer, mistier day
 		var grey := Color(0.52, 0.55, 0.6).lerp(Color(0.12, 0.13, 0.18), 1.0 - dl)
 		sun.light_energy *= 1.0 - 0.6 * rain
 		sun.light_color = sun.light_color.lerp(Color(0.75, 0.8, 0.9), rain * 0.7)
-		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(grey.darkened(0.15), rain * 0.85)
-		sky_mat.sky_horizon_color = horizon.lerp(grey, rain * 0.85)
-		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-		env.fog_light_color = sky_mat.sky_horizon_color
+		top = top.lerp(grey.darkened(0.15), rain * 0.85)
+		sky_h = horizon.lerp(grey, rain * 0.85)
+		env.fog_light_color = sky_h
 		env.ambient_light_energy *= 1.0 - 0.25 * rain
+	sky_mat.set_shader_parameter("sky_top_color", top)
+	sky_mat.set_shader_parameter("sky_horizon_color", sky_h)
+	sky_mat.set_shader_parameter("ground_horizon_color", sky_h)
+	sky_mat.set_shader_parameter("ground_bottom_color", Color(0.08, 0.08, 0.1).lerp(Color(0.35, 0.3, 0.25), dl))
+	sky_mat.set_shader_parameter("cloud_cover", 0.3 + 0.62 * rain)
+	sky_mat.set_shader_parameter("night", 1.0 - dl)
+	sky_mat.set_shader_parameter("cloud_light", Color(1.0, 0.97, 0.92).lerp(Color(1.0, 0.72, 0.5), warm * 0.7 * dl).lerp(Color(0.7, 0.72, 0.76), rain * 0.8))
+	sky_mat.set_shader_parameter("cloud_shade", Color(0.62, 0.6, 0.7).lerp(Color(0.4, 0.42, 0.48), rain))
+	_cloud_drift += Vector2(0.82, 0.57) * get_process_delta_time() * (0.012 + 0.02 * rain)
+	sky_mat.set_shader_parameter("cloud_offset", _cloud_drift)
 	env.fog_density = 0.0035 + 0.0055 * rain
+	env.volumetric_fog_density = 0.0012 + 0.01 * rain + 0.004 * warm * dl
+	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.95).lerp(horizon, 0.3)
 	env.adjustment_saturation = 1.1 - 0.3 * rain
+	if World.foliage_mat:
+		World.foliage_mat.set_shader_parameter("wind", 0.18 + rain * 0.3)
+		World.foliage_mat.set_shader_parameter("wet", rain)
+	if World.water_mat:
+		World.water_mat.set_shader_parameter("rain", rain)
+	var dryness := {"Spring": 0.05, "Summer": 0.25, "Autumn": 0.5, "Winter": 0.8}
+	grass.set_conditions(rain, float(dryness.get(Game.season_name(), 0.4)))
 
 
 # --- house -------------------------------------------------------------------------
@@ -311,10 +371,22 @@ func house_rect() -> Rect2:
 	return Rect2(-WALL_T * 0.5, z0 - WALL_T * 0.5, HOUSE_W + WALL_T, HOUSE_FRONT - z0 + WALL_T)
 
 
+## Where grass grows: not on paths, in the beds, under buildings and the house, or in the pond.
+func _rebuild_grass() -> void:
+	var dirt: Array = World.PATHS + Town.PATHS + [Rect2(10.25, -1.75, 5.1, 3.9)]
+	var clear: Array = grid_blockers.filter(func(r): return r != pond_rect)
+	clear.append(Rect2(-0.35, _zmin() - 0.35, HOUSE_W + 0.7, HOUSE_FRONT - _zmin() + 0.7))
+	clear.append(Town.PLAZA)
+	clear.append(Town.COTTAGE.grow(0.3))
+	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
+	grass.build(dirt, clear, [Vector3(2.5, -16.0, 2.55)])
+
+
 func _rebuild_house() -> void:
 	for c in house_root.get_children():
 		c.free()
 	walls.clear()
+	_rebuild_grass()
 	wall_rects.clear()
 	divider_rects.clear()
 	var z0 := _zmin()
@@ -575,6 +647,9 @@ func _process(delta: float) -> void:
 	_update_walls()
 	_update_lighting()
 	_update_story_staging(delta)
+	_update_needs(delta)
+	_update_gaze()
+	_update_chat()
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -584,9 +659,86 @@ func _process(delta: float) -> void:
 		_save_game()
 
 
+var hide_activity_bar := false # the style frames keep the screen clean
+
+
+## Needs that depend on the world: warmth (weather, night, indoors, her sweater) and fitness
+## (walking). Also her walking speed, and the action bar over her head.
+func _update_needs(delta: float) -> void:
+	Game.warmth_target = warmth_target()
+	grass.set_pusher(player.global_position)
+	if player.walked > 0.0:
+		if Game.time_running:
+			Game.add_need("fitness", player.walked * 0.06)
+		player.walked = 0.0
+	player.speed = 2.75 + 0.6 * Game.fitness / 100.0
+	var head := player.head_point()
+	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not cam.is_position_behind(head)
+	hud.update_activity(player.activity_text(), player.activity_progress(), cam.unproject_position(head), show, player.activity_text() != "Zzz")
+
+
+## Where each skinned character looks (rig.gd turns their head): Nora looks ahead along her
+## path while walking, so her eyes lead each turn; everyone else glances at the nearest person in
+## front of them within a few metres.
+func _update_gaze() -> void:
+	var people: Array = [player]
+	for v in villagers:
+		if v.visible:
+			people.append(v)
+	for a in people:
+		if a.body and a.body.rig:
+			a.body.look_target = _gaze_for(a, people)
+
+
+func _gaze_for(a, people: Array) -> Variant:
+	var me: Vector3 = a.global_position
+	if a == player:
+		if player.busy:
+			return null
+		if not player.path.is_empty():
+			var ahead: Vector3 = player.path[mini(1, player.path.size() - 1)]
+			if Vector2(ahead.x - me.x, ahead.z - me.z).length() > 0.8:
+				return ahead + Vector3(0, 1.25, 0)
+	var fwd: Vector3 = a.global_transform.basis.z
+	var best = null
+	var best_d := 4.5
+	for o in people:
+		if o == a:
+			continue
+		var to: Vector3 = o.global_position - me
+		to.y = 0.0
+		var d := to.length()
+		if d < best_d and d > 0.2 and fwd.dot(to / d) > -0.15:
+			best = o
+			best_d = d
+	if best == null:
+		return null
+	if best.body and best.body.ok:
+		return best.body.eye_point()
+	return best.global_position + Vector3(0, 1.45, 0)
+
+
+## How warm she'd get staying where she is: 0 (freezing) .. 100 (toasty).
+func warmth_target() -> float:
+	if area_at(player.position) == "cottage_inside" or interior_rect().has_point(Vector2(player.position.x, player.position.z)):
+		return 82.0
+	var season := {"Spring": 0.0, "Summer": 14.0, "Autumn": -6.0, "Winter": -26.0}
+	var t := 58.0 + float(season.get(Game.season_name(), 0.0))
+	t -= 22.0 * (1.0 - Game.daylight())
+	t -= 24.0 * rain
+	t += 8.0 * (Game.worn_quality - 1) # a good hand-knit sweater beats the city coat
+	return clampf(t, 0.0, 100.0)
+
+
 func _update_camera(delta: float) -> void:
+	# close-ups get a soft background
+	var near := cam_dist < 9.0
+	cam_attr.dof_blur_far_enabled = near
+	if near:
+		cam_attr.dof_blur_far_distance = cam_dist + 2.5
+		cam_attr.dof_blur_far_transition = 6.0
 	var pan := hud.cam_pad_pan if not story.is_playing() else Vector2.ZERO
-	if not sleeping and not story.is_playing():
+	if not sleeping and not story.is_playing() and not hud.is_chat_open():
 		if _held(KEY_W) or _held(KEY_UP):
 			pan.y -= 1
 		if _held(KEY_S) or _held(KEY_DOWN):
@@ -649,7 +801,12 @@ func _unhandled_input(e: InputEvent) -> void:
 					hud.hide_menu()
 			MOUSE_BUTTON_LEFT:
 				if mb.pressed:
-					hud.hide_menu()
+					if hud.is_menu_open() and mode == Mode.LIVE:
+						hud.hide_menu() # a click outside the ring just closes it
+						return
+					if hud.is_chat_open():
+						close_chat() # clicking away ends the chat (it's saved)
+						return
 					hud.hide_dialogue()
 					if mode == Mode.BUILD:
 						_build_click(mb.position, mb.shift_pressed)
@@ -702,6 +859,16 @@ func _input(e: InputEvent) -> void:
 				hud.story_click()
 			KEY_1, KEY_2, KEY_3, KEY_4:
 				hud.story_key_choice(kc - KEY_0)
+		get_viewport().set_input_as_handled()
+		return
+	if hud.is_chat_open():
+		# typing goes to the chat box; only Escape is ours
+		if kc == KEY_ESCAPE:
+			close_chat()
+			get_viewport().set_input_as_handled()
+		return
+	if hud.is_menu_open() and kc >= KEY_1 and kc <= KEY_9:
+		hud.pie.key(kc - KEY_0)
 		get_viewport().set_input_as_handled()
 		return
 	var handled := true
@@ -835,7 +1002,10 @@ func _actions_for(t) -> Array:
 			acts.append(_act("noop", "Watered today ✓", false))
 		else:
 			acts.append(_act("water", "Water"))
-		acts.append(_act("check", "Check growth  (%d%%)" % int(t.progress() * 100.0)))
+		var g := _act("check", "Growing", true)
+		g["progress"] = t.progress()
+		g["hint"] = "watered today" if t.watered else "needs water today"
+		acts.append(g)
 		return acts
 	if t is Villager:
 		return _villager_actions(t)
@@ -849,8 +1019,12 @@ func _actions_for(t) -> Array:
 				return [] if Game.owns_cottage else [_act("info", "About this cottage")]
 		return []
 	if t is Sheep:
-		var shear_label := "Shear  (+2 wool)" if t.is_woolly() else "Shear  (wool regrowing %d%%)" % int(t.wool * 100.0)
-		return [_act("shear", shear_label, t.is_woolly()), _act("pet", "Pet")]
+		var shear := _act("shear", "Shear  (+2 wool)", t.is_woolly())
+		if not t.is_woolly():
+			shear["label"] = "Shear"
+			shear["hint"] = "wool regrowing"
+			shear["progress"] = t.wool
+		return [shear, _act("pet", "Pet")]
 	return []
 
 
@@ -894,7 +1068,7 @@ func _do_action(t, id: String) -> void:
 	if t is Villager:
 		t.hold(15.0)
 	if id == "check":
-		hud.show_toast("%s: %d%% grown%s" % [t.display_name(), int(t.progress() * 100.0), "" if t.watered else " — needs water today!"])
+		hud.show_toast("%s growing%s" % [t.display_name(), "" if t.watered else ". Needs water today!"], t.progress())
 		return
 	if t is Sheep:
 		t.hold(10.0)
@@ -933,10 +1107,13 @@ func _perform(t, id: String) -> void:
 				return
 			player.start_activity("Cooking", 3.0, _finish_cook.bind(id))
 		"spin":
-			player.start_activity("Spinning", 3.0, func(): hud.show_toast("The wheel hums. Your wool is nice and even now."))
+			player.start_activity("Spinning", 3.0, func():
+				Game.add_need("happiness", 4.0)
+				hud.show_toast("The wheel hums. Your wool is nice and even now."))
 		"read":
 			player.start_activity("Reading", 3.0, func():
 				Game.energy = minf(100.0, Game.energy + 8.0)
+				Game.add_need("happiness", 6.0)
 				hud.show_toast("You learned a new cable stitch. (+8 energy)"))
 		"plant_turnip", "plant_pumpkin":
 			var crop := id.substr(6)
@@ -962,12 +1139,19 @@ func _perform(t, id: String) -> void:
 func _finish_knit() -> void:
 	if Game.take_item("wool", 3):
 		Game.add_item("sweater")
-		hud.show_toast("You knitted a cozy sweater! Ship it for %dc." % Game.SELL_PRICES["sweater"])
+		var worn0 := Game.worn_quality
+		var q := Game.knit_sweater()
+		Game.add_need("happiness", 14.0)
+		if q > worn0:
+			hud.show_toast("A %s sweater! Warmer than anything she owns. She'll wear one like it." % Game.stars(q))
+		else:
+			hud.show_toast("You knitted a %s sweater! Ship it for %dc." % [Game.stars(q), Game.SELL_PRICES["sweater"]])
 		get_tree().create_timer(0.8).timeout.connect(func(): story.trigger("event", "knit_done"))
 
 
 func _finish_rest() -> void:
 	Game.energy = minf(100.0, Game.energy + 25.0)
+	Game.add_need("happiness", 3.0)
 	hud.show_toast("Ahh, that's better. (+25 energy)")
 
 
@@ -983,11 +1167,14 @@ func _finish_cook(kind: String) -> void:
 			if Game.take_item("turnip"):
 				Game.fullness = minf(100.0, Game.fullness + 35.0)
 				Game.energy = minf(100.0, Game.energy + 5.0)
+				Game.add_need("warmth", 10.0)
+				Game.add_need("happiness", 5.0)
 				hud.show_toast("Warm turnip stew. Delicious!")
 		"cook_pumpkin":
 			if Game.take_item("pumpkin"):
 				Game.fullness = minf(100.0, Game.fullness + 60.0)
 				Game.energy = minf(100.0, Game.energy + 10.0)
+				Game.add_need("happiness", 10.0)
 				hud.show_toast("Fresh pumpkin pie. The whole house smells amazing.")
 		"snack":
 			Game.fullness = minf(100.0, Game.fullness + 20.0)
@@ -996,11 +1183,13 @@ func _finish_cook(kind: String) -> void:
 
 func _finish_plant(p, crop: String) -> void:
 	p.plant(crop)
+	Game.add_need("fitness", 1.5)
 	hud.show_toast("Planted %s. Don't forget to water them!" % Plot.CROPS[crop]["name"].to_lower())
 
 
 func _finish_water(p) -> void:
 	p.water()
+	Game.add_need("fitness", 1.0)
 
 
 func _finish_harvest(p) -> void:
@@ -1010,6 +1199,8 @@ func _finish_harvest(p) -> void:
 	var n := 2 if crop == "turnip" else 1
 	Game.add_item(crop, n)
 	p.clear_crop()
+	Game.add_need("fitness", 1.5)
+	Game.add_need("happiness", 3.0)
 	hud.show_toast("Harvested %d %s!" % [n, crop + ("s" if n > 1 else "")])
 
 
@@ -1019,6 +1210,7 @@ func _finish_shear(s) -> void:
 	s.shear()
 	s.hold(0.0)
 	Game.add_item("wool", 2)
+	Game.add_need("fitness", 3.0)
 	hud.show_toast("Snip snip! +2 wool.")
 
 
@@ -1030,6 +1222,8 @@ func _finish_pet(s) -> void:
 		tw.tween_property(h, "position:y", h.position.y + 0.9, 1.0).set_delay(i * 0.15)
 		tw.parallel().tween_property(h, "transparency", 1.0, 1.0).set_delay(i * 0.15)
 		tw.tween_callback(h.queue_free)
+	Game.add_need("happiness", 6.0)
+	Game.add_need("love", 2.0)
 	hud.show_toast("Baa! Your sheep looks happy.")
 
 
@@ -1595,7 +1789,7 @@ func _take_style_frames() -> void:
 	cam_yaw_goal = cam_yaw
 	cam_target = chair.position + Vector3(-0.3, 0.6, -0.4)
 	cam_dist = 6.2
-	player._label.visible = false
+	hide_activity_bar = true
 	hud.story_begin()
 	hud.story_say("", "\"Knit something. It helps. It always helped.\"", null)
 	hud.story_click()
@@ -1663,9 +1857,11 @@ func _autotest() -> void:
 	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
 	_live_click(cam.unproject_position(chair.global_position + Vector3(0, 0.6, 0)))
 	await _wait(0.4)
-	_check("action menu opens on rocking chair", hud.is_menu_open())
+	_check("action menu opens on rocking chair as a ring (%s)" % str(hud.pie.labels()), hud.is_menu_open() and hud.pie.labels().size() == 2)
 	await _shot("02_menu.png")
 	hud.hide_menu()
+	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
+	var happy0 := Game.happiness
 
 	await _character_checks()
 	_do_action(chair, "knit")
@@ -1679,10 +1875,29 @@ func _autotest() -> void:
 	cam_dist = cd0
 	await _wait(4.8)
 	_check("knit a sweater (sweaters=%d, wool=%d)" % [Game.count("sweater"), Game.count("wool")], Game.count("sweater") == 1 and Game.count("wool") == 0)
+	_check("knitting made her happier and she wears a better sweater (happiness %.0f→%.0f, wearing %s)" % [happy0, Game.happiness, Game.stars(Game.worn_quality)],
+		Game.happiness > happy0 + 8.0 and Game.worn_quality == 2)
 
 	_do_action(sheep_list[0], "shear")
 	await _wait(15.0)
 	_check("sheared sheep (wool=%d)" % Game.count("wool"), Game.count("wool") == 2)
+	_live_click(cam.unproject_position(sheep_list[0].global_position + Vector3(0, 0.5, 0)))
+	await _wait(0.5)
+	var shear_pill: Dictionary = hud.pie._items[0] if hud.is_menu_open() else {}
+	_check("a sheared sheep's menu shows wool regrowing as a bar (%s)" % str(hud.pie.labels()), shear_pill.has("progress") and not bool(shear_pill.get("enabled", true)))
+	await _shot("02d_menu_sheep.png")
+	hud.hide_menu()
+	var w_in := 0.0
+	var p0 := player.position
+	player.position = Vector3(3.0, 0, 2.0)
+	w_in = warmth_target()
+	player.position = Vector3(20.0, 0, 8.0)
+	var r0 := rain
+	rain = 1.0
+	var w_rain := warmth_target()
+	rain = r0
+	player.position = p0
+	_check("indoors is warmer than out in the rain (%.0f vs %.0f)" % [w_in, w_rain], w_in > w_rain + 20.0)
 
 	var coins0 := Game.coins
 	_do_action(plots[3], "plant_pumpkin")
@@ -1708,6 +1923,14 @@ func _autotest() -> void:
 	set_mode(Mode.BUILD)
 	cam_target = Vector3(4, 0, 3)
 	await _wait(0.6)
+	var nthumb := (Catalog.INDOOR + Catalog.OUTDOOR).size()
+	var tw8 := 0.0
+	while hud.thumbs.done.size() < nthumb and tw8 < 20.0:
+		await _wait(0.2)
+		tw8 += 0.2
+	var with_icon := hud.item_buttons.values().filter(func(b): return b.icon != null).size()
+	_check("every catalog card has a rendered picture (%d of %d)" % [with_icon, nthumb], with_icon == nthumb)
+	await _shot("04a_catalog.png")
 	_begin_place("armchair")
 	var sp := cam.unproject_position(Vector3(5.5, 0, 4.9))
 	_last_mouse = sp
@@ -1756,10 +1979,68 @@ func _autotest() -> void:
 	_check("save file written", FileAccess.file_exists(Game.save_path))
 	await _town_checks()
 	_data_checks()
+	await _chat_checks()
 	await _story_checks()
 	await _act1_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
+
+
+## Typed chat, all offline: the request we'd send, reading replies and errors, and the chat
+## window with a stand-in for the API (ai.mock), so the test never touches the network.
+func _chat_checks() -> void:
+	var rosa = _villager("rosa")
+	var hist: Array = []
+	AiChat.push_history(hist, "assistant", "dropped") # a conversation must start with Nora
+	AiChat.push_history(hist, "user", "Hi Rosa!")
+	var body := ai.build_request("rosa", hist, ai.situation_text("rosa", _chat_context(rosa)))
+	var sys: Array = body["system"]
+	_check("chat request: %s, cached character bible + live situation, starts with Nora" % body["model"],
+		body["model"] == ai.model and sys.size() == 2 and sys[0].has("cache_control") and not sys[1].has("cache_control")
+		and str(sys[0]["text"]).contains("Rosa Marchetti") and str(sys[1]["text"]).contains("Day ") and hist.size() == 1 and hist[0]["role"] == "user"
+		and not JSON.stringify(body).contains("x-api-key"))
+	_check("villagers only share secrets once they trust Nora",
+		not ai.situation_text("rowan", {"trust": 0, "familiarity": 5}).contains("Anna") and ai.situation_text("rowan", {"trust": 50, "familiarity": 60}).contains("Anna"))
+	var long: Array = []
+	for i in 30:
+		AiChat.push_history(long, "user" if i % 2 == 0 else "assistant", str(i))
+	_check("chat history is trimmed to the last %d lines, starting with Nora (%d)" % [AiChat.MAX_HISTORY, long.size()], long.size() <= AiChat.MAX_HISTORY and long[0]["role"] == "user")
+	var good := AiChat.parse_response(200, JSON.stringify({"content": [{"type": "text", "text": "[warm] *wipes her hands* Hello, pet!"}], "stop_reason": "end_turn"}))
+	_check("a reply is read: mood %s, text '%s'" % [good["mood"], good["text"]], good["ok"] and good["mood"] == "warm" and good["text"] == "*wipes her hands* Hello, pet!")
+	var errs := [AiChat.parse_response(401, "{}")["error"], AiChat.parse_response(529, "{}")["error"],
+		AiChat.parse_response(200, JSON.stringify({"content": [], "stop_reason": "refusal"}))["error"], AiChat.parse_response(200, JSON.stringify({"content": []}))["error"]]
+	_check("API errors are told apart (%s)" % str(errs), errs == ["key", "busy", "refusal", "empty"])
+	_check("chat text can't inject markup", AiChat.to_bbcode("[b]hi *nods*") == "[lb]b]hi [i][color=#d9c9a8]nods[/color][/i]")
+
+	var clock0 := Game.time_running
+	var love0 := Game.love
+	var fam0 := Game.stat("rosa", "familiarity")
+	ai.mock = func(_b): return {"code": 200, "body": JSON.stringify({"content": [{"type": "text", "text": "[happy] Oh, lovely to see you, love! Busy as bees today."}], "stop_reason": "end_turn"})}
+	player.position = rosa.talk_spot if rosa.talk_spot != null else rosa.position + Vector3(0, 0, 1.4)
+	_villager_action(rosa, "chat")
+	await _wait(0.3)
+	_check("the chat window opens and the clock waits", hud.is_chat_open() and not Game.time_running and rosa.listening)
+	hud.chat.input.text = "Hello Rosa! How's the market today?"
+	hud.chat._send()
+	await _wait(0.4)
+	var msgs: Array = Game.chat("rosa")["msgs"]
+	_check("Rosa answers in the chat (love %.0f→%.0f, familiarity %d→%d)" % [love0, Game.love, fam0, Game.stat("rosa", "familiarity")],
+		hud.chat.transcript().contains("lovely to see you") and msgs.size() >= 2 and msgs[-1]["role"] == "assistant"
+		and str(ai.last_request["messages"][-1]["content"]).contains("market") and Game.love > love0 and Game.stat("rosa", "familiarity") > fam0)
+	var cam0 := cam_target
+	await _shot("07_chat.png")
+	ai.mock = func(_b): return {"code": 529, "body": "{}"}
+	hud.chat.input.text = "Are you busy?"
+	hud.chat._send()
+	await _wait(0.4)
+	msgs = Game.chat("rosa")["msgs"]
+	_check("when the API is busy, the line comes back to the box and history stays in turns (%s)" % hud.chat.note.text,
+		msgs[-1]["role"] == "assistant" and hud.chat.input.text == "Are you busy?" and hud.chat.note.text.contains("busy") and cam_target.distance_to(cam0) < 0.01)
+	var saved := Game.to_dict()
+	_check("the chat is saved with the game, and no API key is", (saved["chats"]["rosa"]["msgs"] as Array).size() >= 2 and not JSON.stringify(saved).contains("sk-ant"))
+	close_chat()
+	_check("closing the chat starts the clock again", not hud.is_chat_open() and Game.time_running == clock0 and not rosa.listening)
+	ai.mock = Callable()
 
 
 func _character_checks() -> void:
@@ -1802,6 +2083,32 @@ func _character_checks() -> void:
 		await _shot("02d_rowan.png")
 		rowan.hold_time = 0.0
 		cam_follow = follow0
+		# the procedural rig turns her head toward someone standing beside her
+		var r_pos := rowan.position
+		var r_rot := rowan.rotation.y
+		player.rotation.y = 0.0
+		rowan.position = player.position + Vector3(1.6, 0, 0.5)
+		rowan.hold_time = 3.0
+		await _wait(1.6)
+		var sk: Skeleton3D = player.body.skeleton
+		var hb := sk.find_bone("Head")
+		# modifiers pose the bones only for drawing, then Godot puts the animated pose back, so read
+		# the head right after the skeleton updates
+		var hz := [Vector3.ZERO]
+		sk.skeleton_updated.connect(func(): hz[0] = sk.get_bone_global_pose(hb).basis * (player.body.rig._fwd_rest["Head"] as Vector3), CONNECT_ONE_SHOT)
+		await _wait(0.1)
+		var head_fwd: Vector3 = sk.global_transform.basis * (hz[0] as Vector3)
+		var to_r := rowan.position - player.position
+		var a_body := rad_to_deg(Vector2(0, 1).angle_to(Vector2(to_r.x, to_r.z)))
+		var a_head := rad_to_deg(Vector2(head_fwd.x, head_fwd.z).angle_to(Vector2(to_r.x, to_r.z)))
+		_check("she turns her head toward Rowan beside her (body %.0f° off, head %.0f° off)" % [absf(a_body), absf(a_head)], absf(a_head) < absf(a_body) - 25.0)
+		cam_target = player.position + Vector3(0.6, 0.9, 0.2)
+		cam_dist = 5.0
+		await _wait(0.3)
+		await _shot("02e_look_at.png")
+		rowan.position = r_pos
+		rowan.rotation.y = r_rot
+		rowan.hold_time = 0.0
 	cam_target = player.position
 	cam_dist = cd0
 
@@ -2161,6 +2468,8 @@ func _update_price_board() -> void:
 
 func _villager_actions(v) -> Array:
 	var acts := [_act("talk", "Talk")]
+	if ai.has_persona(v.vid):
+		acts.append(_act("chat", "Chat..."))
 	match v.vid:
 		"rosa":
 			var sw := Game.count("sweater")
@@ -2186,7 +2495,9 @@ func _villager_actions(v) -> Array:
 	else:
 		for item in ["sweater", "pumpkin", "turnip"]:
 			if Game.count(item) > 0:
-				acts.append(_act("gift_" + item, "Give a %s as a gift" % item))
+				var gift := _act("gift_" + item, "A %s" % item)
+				gift["group"] = "Give a gift"
+				acts.append(gift)
 	return acts
 
 
@@ -2215,12 +2526,16 @@ func _villager_action(v, id: String) -> void:
 			if int(f["talk"]) != Game.day:
 				f["talk"] = Game.day
 				Game.add_friendship(v.vid, 8)
+				Game.add_need("love", 6.0)
+				Game.add_need("happiness", 2.0)
 			if scene_id != "":
 				v.face_point(player.position, 3.0)
 				player.face_point(v.position)
 				story.play(scene_id)
 			else:
 				_say(v, line)
+		"chat":
+			open_chat(v)
 		"sell_sweater":
 			var n := Game.count("sweater")
 			var price := _rosa_price()
@@ -2261,10 +2576,157 @@ func _villager_action(v, id: String) -> void:
 				if int(f["gift"]) == Game.day or not Game.take_item(item):
 					return
 				f["gift"] = Game.day
+				Game.add_need("love", 8.0)
 				var loved: bool = item == v.loves
 				Game.add_friendship(v.vid, 25 if loved else 12)
 				_say(v, Dialogue.GIFT_LOVED[v.vid] if loved else "Oh, a %s! That's very thoughtful of you. Thank you." % item)
 	_update_price_board()
+
+
+# --- typed chat (ai_chat.gd, chat_panel.gd) -------------------------------------------
+
+func open_chat(v) -> void:
+	if hud.is_chat_open():
+		close_chat()
+	chat_v = v
+	hud.hide_menu()
+	hud.hide_dialogue()
+	_chat_clock_was = Game.time_running
+	Game.time_running = false # like a story scene, the day waits while you talk
+	v.listening = true
+	v.face_point(player.position, 2.0)
+	player.face_point(v.position)
+	var c := Game.chat(v.vid)
+	hud.chat.open(v.title, Game.hearts(v.vid), c["msgs"], ai.available())
+
+
+func close_chat() -> void:
+	if chat_v == null:
+		return
+	chat_v.listening = false
+	chat_v.hold_time = 2.0
+	chat_v = null
+	Game.time_running = _chat_clock_was
+	hud.chat.visible = false
+
+
+func _update_chat() -> void:
+	if chat_v == null:
+		return
+	if story.is_playing() or sleeping or player.position.distance_to(chat_v.position) > 4.0:
+		close_chat()
+		return
+	chat_v.face_point(player.position, 2.0)
+
+
+func _chat_send(text: String) -> void:
+	if chat_v == null or ai.busy:
+		return
+	text = text.substr(0, AiChat.MAX_INPUT)
+	var v = chat_v
+	var c := Game.chat(v.vid)
+	AiChat.push_history(c["msgs"], "user", text)
+	hud.chat.add_line("user", text)
+	player.talk(1.5)
+	if not ai.available() and not ai.mock.is_valid():
+		_chat_reaction(v, "*smiles* " + ai.offline_line(v.vid), "neutral", false)
+		c["msgs"].pop_back() # nothing was really said back; don't keep it
+		return
+	hud.chat.set_thinking(true)
+	hud.chat.show_note("")
+	ai.send(v.vid, c["msgs"], ai.situation_text(v.vid, _chat_context(v)))
+
+
+func _on_chat_reply(vid: String, r: Dictionary) -> void:
+	hud.chat.set_thinking(false)
+	var c := Game.chat(vid)
+	var v = chat_v if chat_v != null and chat_v.vid == vid else null
+	if not r["ok"]:
+		# the line Nora typed wasn't answered: take it back out so the history stays in turns
+		if c["msgs"].size() > 0 and c["msgs"][-1]["role"] == "user":
+			var t: String = c["msgs"].pop_back()["content"]
+			if v != null and hud.chat.input.text == "":
+				hud.chat.input.text = t
+		if r["error"] == "refusal":
+			if v != null:
+				_chat_reaction(v, "*shifts a little* Let's talk about something else, eh?", "neutral", false)
+		else:
+			hud.chat.set_online(ai.available() and r["error"] != "key")
+			hud.chat.show_note(AiChat.error_note(r["error"]))
+		return
+	AiChat.push_history(c["msgs"], "assistant", str(r.get("raw", r["text"])))
+	if v == null:
+		return
+	_chat_reaction(v, str(r["text"]), str(r["mood"]), true)
+	if int(c["day"]) != Game.day:
+		# the first real chat of the day: time with people fills Love, and you get to know them
+		c["day"] = Game.day
+		Game.add_need("love", 4.0)
+		Game.add_need("happiness", 1.0)
+		Game.add_friendship(vid, 3)
+		hud.chat.set_hearts(Game.hearts(vid))
+
+
+func _chat_reaction(v, text: String, mood: String, keep: bool) -> void:
+	if keep:
+		hud.chat.add_line("assistant", text, mood)
+	else:
+		hud.chat.add_line("assistant", text)
+	v.speak_time = clampf(text.length() * 0.05, 1.2, 5.0)
+
+
+## What the villager knows about this moment, for the prompt (ai_chat.gd situation_text).
+func _chat_context(v) -> Dictionary:
+	var f := Game.friend(v.vid)
+	var place := {"rosa": "your market stall on the plaza", "theo": "Woolly Goods, your shop", "mabel": "the Land Office"}
+	var where: String = place.get(v.vid, "")
+	if where == "":
+		where = "Maplewood, near the plaza" if v.position.x > 30.0 else "Birchfield Farm, Nora's place"
+	var weather := "raining" if rain > 0.5 else "dry"
+	var h := Game.hour
+	var part := "early morning" if h < 9.0 else ("morning" if h < 12.0 else ("afternoon" if h < 17.0 else ("evening" if h < 21.0 else "late at night")))
+	var facts: Array = []
+	match v.vid:
+		"rowan":
+			if Game.flag("nora_opened"):
+				facts.append("When the gate slammed she flinched hard, then said: 'Sorry. Loud noises. Long story.' You didn't push.")
+			elif Game.flag("nora_deflected"):
+				facts.append("When the gate slammed she flinched hard and said she was fine, it just made her jump. It was more than that.")
+			if Game.flag("act1_done"):
+				facts.append("You owe her a fixed fence; she owes you tea.")
+		"mabel":
+			if Game.flag("asked_about_gran"):
+				facts.append("Nora asked you whether it was bad at the end for Ellie. You told her it was peaceful.")
+		"rosa":
+			facts.append("Today you're paying %dc a sweater." % _rosa_price())
+		"theo":
+			facts.append("Today a bundle of 3 wool costs %dc and a sheep %dc." % [_theo_price(Game.WOOL_PACK_PRICE), _theo_price(Game.SHEEP_PRICE)])
+	if int(f["gift"]) == Game.day:
+		facts.append("Nora already gave you a gift today.")
+	if Game.knit_xp > 0:
+		facts.append("Nora has knitted %d sweater%s so far." % [Game.knit_xp, "" if Game.knit_xp == 1 else "s"])
+	var looks: Array = []
+	if Game.warmth < 35.0:
+		looks.append("cold" + (", still in that thin city coat" if Game.worn_quality <= 1 else ""))
+	elif Game.worn_quality >= 3:
+		looks.append("cosy in a good hand-knit sweater")
+	if Game.energy < 30.0:
+		looks.append("tired")
+	if Game.fullness < 30.0:
+		looks.append("hungry")
+	if Game.happiness > 75.0:
+		looks.append("in good spirits")
+	elif Game.happiness < 30.0:
+		looks.append("low")
+	var ctx := {
+		"day": Game.day, "day_of_season": Game.day_of_season(), "season": Game.season_name(), "clock": "%s (%s)" % [part, Game.clock_text()],
+		"weather": weather, "place": where,
+		"familiarity": int(f["familiarity"]), "trust": int(f["trust"]), "romance": int(f["romance"]),
+		"facts": facts, "last_day": int(Game.chat(v.vid)["day"]),
+	}
+	if looks.size() > 0:
+		ctx["nora"] = ", ".join(looks)
+	return ctx
 
 
 func cottage_interior() -> Rect2:

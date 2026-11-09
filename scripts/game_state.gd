@@ -13,7 +13,9 @@ const MAX_HOUSE_LEVEL := 3
 ## Save files carry a version; migrate() upgrades older ones step by step.
 ## v1: first prototype (no version field). v2: adds story flags.
 ## v3: friendship points become three relationship stats: familiarity, trust, romance.
-const SAVE_VERSION := 3
+## v4: adds the needs happiness, love, warmth and fitness, knitting skill and the sweater she wears.
+## v5: adds typed chats with villagers (the last lines of each conversation).
+const SAVE_VERSION := 5
 ## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
 const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
@@ -35,8 +37,19 @@ var save_path := "user://knitting_empire_save.json"
 
 var coins: int = 250
 var inv := {}
+# --- needs, 0..100 (100 = fully met). Shown in the needs panel (hud.gd). ---------
 var energy: float = 100.0
-var fullness: float = 80.0
+var fullness: float = 80.0 # shown as "Hunger"
+var happiness: float = 70.0 # knitting, animals, reading, good food; sinks when other needs are low
+var love: float = 50.0 # time with people: talking, gifts, story moments
+var warmth: float = 70.0 # drifts toward warmth_target (main.gd: weather, night, indoors, her sweater)
+var fitness: float = 45.0 # walking and farm work
+var warmth_target: float = 70.0
+## Knitting skill: sweaters knit so far. Quality (1..5 stars) grows with it.
+var knit_xp: int = 0
+## Quality of the warmest thing she owns to wear: 1 = the thin city coat she arrived in.
+var worn_quality: int = 1
+const NEEDS := ["energy", "fullness", "happiness", "love", "warmth", "fitness"]
 var day: int = 1
 var hour: float = 8.0
 var house_level: int = 0
@@ -46,6 +59,8 @@ var owns_cottage := false
 var sheep_count: int = 3
 ## Story progress: named flags set by scenes and choices ("met_rowan", "act1_done", ...).
 var flags := {}
+## Typed chats (ai_chat.gd): villager id -> {"day": last day you chatted, "msgs": [{role, content}]}.
+var chats := {}
 
 
 func _init() -> void:
@@ -75,6 +90,13 @@ func reset() -> void:
 	inv = START_INVENTORY.duplicate()
 	energy = 100.0
 	fullness = 80.0
+	happiness = 70.0
+	love = 50.0
+	warmth = 70.0
+	warmth_target = 70.0
+	fitness = 45.0
+	knit_xp = 0
+	worn_quality = 1
 	day = 1
 	hour = 8.0
 	house_level = 0
@@ -83,6 +105,7 @@ func reset() -> void:
 	owns_cottage = false
 	sheep_count = START_SHEEP
 	flags = {}
+	chats = {}
 
 
 func _process(delta: float) -> void:
@@ -92,6 +115,40 @@ func _process(delta: float) -> void:
 	fullness = maxf(0.0, fullness - delta * 0.22)
 	if fullness <= 0.0:
 		energy = maxf(0.0, energy - delta * 0.4)
+	warmth = move_toward(warmth, warmth_target, delta * 1.2)
+	if warmth < 25.0:
+		energy = maxf(0.0, energy - delta * 0.08) # shivering is tiring
+	# happiness slips slowly, faster when she's hungry, cold, exhausted or lonely
+	var low := 0.0
+	for v in [fullness, warmth, energy, love]:
+		if v < 25.0:
+			low += 0.07
+	happiness = clampf(happiness - delta * (0.05 + low), 0.0, 100.0)
+	love = maxf(0.0, love - delta * 0.035)
+	fitness = maxf(0.0, fitness - delta * 0.02)
+
+
+## Adds to a need (energy, fullness, happiness, love, warmth, fitness), kept within 0..100.
+func add_need(need: String, amount: float) -> void:
+	set(need, clampf(float(get(need)) + amount, 0.0, 100.0))
+
+
+## Quality (1..5) of the next sweater she knits: better with every few she's made.
+func knit_quality() -> int:
+	return clampi(2 + knit_xp / 3, 2, 5)
+
+
+## Records a finished sweater. Returns its quality. She wears the best one she's made.
+func knit_sweater() -> int:
+	var q := knit_quality()
+	knit_xp += 1
+	if q > worn_quality:
+		worn_quality = q
+	return q
+
+
+static func stars(q: int) -> String:
+	return "★".repeat(q) + "☆".repeat(maxi(0, 5 - q))
 
 
 # --- clock -------------------------------------------------------------------
@@ -131,6 +188,8 @@ func sleep() -> void:
 	hour = 6.0
 	energy = 100.0
 	fullness = maxf(15.0, fullness - 25.0)
+	happiness = clampf(happiness + 10.0, 0.0, 100.0) # a fresh morning
+	warmth = maxf(warmth, 70.0) # under the quilt all night
 	day_started.emit(day)
 
 
@@ -213,6 +272,13 @@ func add_stat(id: String, stat_name: String, amount: int) -> int:
 
 # --- story flags ---------------------------------------------------------------
 
+## The saved conversation with a villager (created empty on first use).
+func chat(id: String) -> Dictionary:
+	if not chats.has(id):
+		chats[id] = {"day": 0, "msgs": []}
+	return chats[id]
+
+
 func set_flag(flag_name: String, value: Variant = true) -> void:
 	flags[flag_name] = value
 
@@ -225,8 +291,10 @@ func flag(flag_name: String, default: Variant = false) -> Variant:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": SAVE_VERSION, "flags": flags,
+		"version": SAVE_VERSION, "flags": flags, "chats": chats,
 		"coins": coins, "inv": inv, "energy": energy, "fullness": fullness,
+		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
+		"knit_xp": knit_xp, "worn_quality": worn_quality,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
@@ -249,6 +317,18 @@ static func migrate(d: Dictionary) -> Dictionary:
 			e["trust"] = int(e.get("trust", 0))
 			e["romance"] = int(e.get("romance", 0))
 		v = 3
+	if v < 4:
+		# new needs start at comfortable values; skill counts sweaters already made by guessing none
+		d["happiness"] = 70.0
+		d["love"] = 50.0
+		d["warmth"] = 70.0
+		d["fitness"] = 45.0
+		d["knit_xp"] = 0
+		d["worn_quality"] = 1
+		v = 4
+	if v < 5:
+		d["chats"] = {}
+		v = 5
 	d["version"] = v
 	return d
 
@@ -264,6 +344,13 @@ func from_dict(d: Dictionary) -> void:
 		inv[str(k)] = int(saved_inv[k])
 	energy = float(d.get("energy", 100.0))
 	fullness = float(d.get("fullness", 80.0))
+	happiness = float(d.get("happiness", 70.0))
+	love = float(d.get("love", 50.0))
+	warmth = float(d.get("warmth", 70.0))
+	warmth_target = warmth
+	fitness = float(d.get("fitness", 45.0))
+	knit_xp = int(d.get("knit_xp", 0))
+	worn_quality = clampi(int(d.get("worn_quality", 1)), 1, 5)
 	day = int(d.get("day", 1))
 	hour = float(d.get("hour", 8.0))
 	house_level = int(d.get("house_level", 0))
@@ -276,3 +363,13 @@ func from_dict(d: Dictionary) -> void:
 	owns_cottage = bool(d.get("owns_cottage", false))
 	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), START_SHEEP, MAX_SHEEP)
 	flags = (d.get("flags", {}) as Dictionary).duplicate(true)
+	chats = {}
+	var saved_chats: Dictionary = d.get("chats", {})
+	for id in saved_chats:
+		var c = saved_chats[id]
+		if c is Dictionary:
+			var msgs: Array = []
+			for m in c.get("msgs", []):
+				if m is Dictionary and str(m.get("role", "")) in ["user", "assistant"]:
+					msgs.append({"role": str(m["role"]), "content": str(m.get("content", ""))})
+			chats[str(id)] = {"day": int(c.get("day", 0)), "msgs": msgs}

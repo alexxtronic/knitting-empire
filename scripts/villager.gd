@@ -25,6 +25,9 @@ var _arms: Array[MeshInstance3D] = []
 var body: Body # set when this villager wears a skinned character model
 var anim_override := "" # a story scene can hold them in a loop
 var tag: Label3D
+## Chatting with Nora (main.gd): they stay put facing her, and talk while `speak_time` runs.
+var listening := false
+var speak_time := 0.0
 
 
 ## look: {"skin", "hair", "top", "bottom", "extra"} where extra is apron / glasses / hat.
@@ -153,6 +156,9 @@ func _add_tag_and_collider(tag_y: float) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	speak_time = maxf(0.0, speak_time - delta)
+	if listening:
+		hold_time = maxf(hold_time, 1.0)
 	if body:
 		_process_body(delta)
 		return
@@ -189,6 +195,9 @@ func _process_body(delta: float) -> void:
 	if anim_override != "" and position.distance_to(_target) < 0.05:
 		hold_time = maxf(0.0, hold_time - delta)
 		body.play(anim_override)
+		return
+	if listening:
+		body.play("Talk" if speak_time > 0.0 else "Idle")
 		return
 	if hold_time > 0.0:
 		hold_time -= delta

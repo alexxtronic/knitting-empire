@@ -22,6 +22,9 @@ const FARM_ARRIVE := Vector3(23.5, 0, 3.0)
 # Villager homes are in res://data/villagers.json.
 
 const PATH := Color(0.62, 0.50, 0.34)
+## The road from the farm and the town paths: bakery lane, shop door, office door, cottage walk.
+const PATHS := [Rect2(16.8, 2.35, 28.4, 1.3), Rect2(41.2, -8.8, 1.1, 11.0), Rect2(55.95, -9.2, 1.1, 3.2),
+	Rect2(63.7, -8.5, 1.1, 2.6), Rect2(60.85, 3.9, 1.3, 3.2)]
 const COBBLE := Color(0.66, 0.62, 0.55)
 
 
@@ -29,12 +32,7 @@ const COBBLE := Color(0.66, 0.62, 0.55)
 ## "sign_to_town": Landmark, "sign_to_farm": Landmark}.
 static func build(root: Node3D) -> Dictionary:
 	var blockers := []
-	# the road from the farm, plus town paths
-	Catalog.box(root, Vector3(28.4, 0.01, 1.3), Vector3(31.0, -0.002, 3.0), PATH)
-	Catalog.box(root, Vector3(1.1, 0.01, 11.0), Vector3(41.75, -0.002, -3.3), PATH) # bakery lane
-	Catalog.box(root, Vector3(1.1, 0.01, 3.2), Vector3(56.5, -0.002, -7.6), PATH) # shop door
-	Catalog.box(root, Vector3(1.1, 0.01, 2.6), Vector3(64.25, -0.002, -7.2), PATH) # office door
-	Catalog.box(root, Vector3(1.3, 0.01, 3.2), Vector3(61.5, -0.002, 5.5), PATH) # cottage walk
+	# the road from the farm and the town paths are worn earth in the ground shader (PATHS)
 	# cobbled plaza with a checker of slightly different stones
 	Catalog.box(root, Vector3(PLAZA.size.x, 0.012, PLAZA.size.y), Vector3(PLAZA.get_center().x, -0.001, PLAZA.get_center().y), COBBLE)
 	var rng := RandomNumberGenerator.new()
@@ -43,7 +41,6 @@ static func build(root: Node3D) -> Dictionary:
 		var p := Vector3(rng.randf_range(PLAZA.position.x + 0.4, PLAZA.end.x - 0.4), 0.004, rng.randf_range(PLAZA.position.y + 0.4, PLAZA.end.y - 0.4))
 		Catalog.box(root, Vector3(0.5, 0.01, 0.5), p, COBBLE.darkened(rng.randf_range(0.04, 0.12)), Vector3(0, rng.randf() * 90.0, 0))
 	# the cottage yard reads as a tidy lawn
-	Catalog.box(root, Vector3(COTTAGE_LOT.size.x, 0.008, COTTAGE_LOT.size.y), Vector3(COTTAGE_LOT.get_center().x, -0.004, COTTAGE_LOT.get_center().y), Color(0.47, 0.64, 0.3))
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
 	blockers.append_array(stall["blockers"])

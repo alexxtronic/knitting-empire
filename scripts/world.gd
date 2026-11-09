@@ -6,26 +6,29 @@ const Catalog = preload("res://scripts/catalog.gd")
 const GRASS := Color(0.43, 0.58, 0.28)
 const PATH := Color(0.62, 0.50, 0.34)
 
+## Shared by every canopy (colour per tree is an instance uniform) and the pond, so main.gd can
+## turn up the wind and the rain on all of them at once.
+static var foliage_mat: ShaderMaterial
+static var water_mat: ShaderMaterial
 
+
+static func _foliage(m: MeshInstance3D, c: Color) -> void:
+	if foliage_mat == null:
+		foliage_mat = ShaderMaterial.new()
+		foliage_mat.shader = preload("res://shaders/foliage.gdshader")
+	m.material_override = foliage_mat
+	m.set_instance_shader_parameter("tint", c)
+
+
+## Worn-earth paths on the farm: door → along the farm → sheep pen gate. Drawn by the
+## ground shader (grass.gd), not as boxes.
+const PATHS := [Rect2(8.1, 2.55, 9.0, 0.9), Rect2(16.15, -0.95, 0.9, 4.4), Rect2(16.5, -1.45, 1.0, 0.9)]
+
+
+## The ground itself is grass.gd; this adds the doormat and fallen leaves.
 static func build_ground(root: Node3D, lot: Rect2) -> void:
-	var mi := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(180, 180)
-	mi.mesh = pm
-	mi.material_override = Catalog.mat(GRASS, 0.95)
-	mi.position = Vector3(10, -0.01, -5)
-	root.add_child(mi)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
-	for i in 120:
-		var p := Vector3(rng.randf_range(-40, 90), -0.009 + i * 0.00004, rng.randf_range(-50, 35))
-		var rr := rng.randf_range(0.8, 3.2)
-		var c := GRASS.darkened(rng.randf_range(0.02, 0.06)) if rng.randf() < 0.6 else GRASS.lightened(rng.randf_range(0.02, 0.05))
-		Catalog.cyl(root, rr, rr, 0.002, p, c, Vector3.ZERO, 20)
-	# dirt paths: door → along the farm → sheep pen gate
-	Catalog.box(root, Vector3(9.0, 0.01, 0.9), Vector3(12.6, -0.002, 3.0), PATH)
-	Catalog.box(root, Vector3(0.9, 0.01, 4.4), Vector3(16.6, -0.002, 1.25), PATH)
-	Catalog.box(root, Vector3(1.0, 0.01, 0.9), Vector3(17.0, -0.002, -1.0), PATH)
 	# doormat
 	Catalog.box(root, Vector3(0.9, 0.02, 1.2), Vector3(8.6, 0.0, 3.0), Color(0.45, 0.33, 0.2))
 	# fallen autumn leaves
@@ -67,16 +70,16 @@ static func _tree(root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> void:
 	Catalog.cyl(t, 0.15, 0.22, 2.0, Vector3(0, 1, 0), Catalog.WOOD_DARK)
 	if rng.randf() < 0.3:
 		var pine := Color(0.2, 0.36, 0.22)
-		Catalog.cyl(t, 0.0, 1.3, 2.2, Vector3(0, 2.4, 0), pine)
-		Catalog.cyl(t, 0.0, 1.0, 1.8, Vector3(0, 3.4, 0), pine.lightened(0.05))
-		Catalog.cyl(t, 0.0, 0.7, 1.4, Vector3(0, 4.2, 0), pine.lightened(0.1))
+		_foliage(Catalog.cyl(t, 0.0, 1.3, 2.2, Vector3(0, 2.4, 0), pine), pine)
+		_foliage(Catalog.cyl(t, 0.0, 1.0, 1.8, Vector3(0, 3.4, 0), pine.lightened(0.05)), pine.lightened(0.05))
+		_foliage(Catalog.cyl(t, 0.0, 0.7, 1.4, Vector3(0, 4.2, 0), pine.lightened(0.1)), pine.lightened(0.1))
 	else:
 		var palette := [Color(0.85, 0.45, 0.15), Color(0.9, 0.65, 0.2), Color(0.72, 0.3, 0.12),
 			Color(0.42, 0.56, 0.25), Color(0.8, 0.56, 0.18)]
 		var c: Color = palette[rng.randi() % palette.size()]
-		Catalog.ball(t, 1.25, Vector3(0, 2.8, 0), c)
-		Catalog.ball(t, 0.95, Vector3(0.65, 2.4, 0.3), c.darkened(0.1))
-		Catalog.ball(t, 0.85, Vector3(-0.5, 3.4, -0.2), c.lightened(0.08))
+		_foliage(Catalog.ball(t, 1.25, Vector3(0, 2.8, 0), c), c)
+		_foliage(Catalog.ball(t, 0.95, Vector3(0.65, 2.4, 0.3), c.darkened(0.1)), c.darkened(0.1))
+		_foliage(Catalog.ball(t, 0.85, Vector3(-0.5, 3.4, -0.2), c.lightened(0.08)), c.lightened(0.08))
 
 
 static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
@@ -111,7 +114,11 @@ static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
 static func build_pond(root: Node3D, pos: Vector3, r: float) -> Rect2:
 	Catalog.cyl(root, r + 0.35, r + 0.45, 0.06, pos + Vector3(0, 0.0, 0), Color(0.55, 0.52, 0.46), Vector3.ZERO, 32)
 	var w := Catalog.cyl(root, r, r, 0.07, pos + Vector3(0, 0.01, 0), Color(0.32, 0.52, 0.62), Vector3.ZERO, 32)
-	w.material_override = Catalog.mat(Color(0.32, 0.52, 0.62), 0.05)
+	water_mat = ShaderMaterial.new()
+	water_mat.shader = preload("res://shaders/water.gdshader")
+	water_mat.set_shader_parameter("centre", pos)
+	water_mat.set_shader_parameter("radius", r)
+	w.material_override = water_mat
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9
 	for i in 5:

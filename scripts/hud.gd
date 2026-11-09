@@ -64,6 +64,30 @@ class Icon extends Control:
 				draw_circle(c + Vector2(-hr * 0.45, -hr * 0.18), hr * 0.5, hc)
 				draw_circle(c + Vector2(hr * 0.45, -hr * 0.18), hr * 0.5, hc)
 				draw_colored_polygon(PackedVector2Array([c + Vector2(-hr * 0.93, -hr * 0.02), c + Vector2(hr * 0.93, -hr * 0.02), c + Vector2(0, hr * 0.9)]), hc)
+			"bolt":
+				draw_colored_polygon(PackedVector2Array([c + Vector2(r * 0.25, -r * 1.25), c + Vector2(-r * 0.7, r * 0.15), c + Vector2(-r * 0.05, r * 0.15),
+					c + Vector2(-r * 0.3, r * 1.25), c + Vector2(r * 0.7, -r * 0.2), c + Vector2(r * 0.05, -r * 0.2)]), col)
+			"bowl":
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 1.1, -r * 0.05), c + Vector2(r * 1.1, -r * 0.05), c + Vector2(r * 0.6, r * 0.85), c + Vector2(-r * 0.6, r * 0.85)]), col)
+				for i in 3:
+					var x := (i - 1) * r * 0.5
+					draw_arc(c + Vector2(x, -r * 0.6), r * 0.22, PI * 0.5, PI * 1.5, 8, col, 1.8, true)
+			"smile":
+				draw_arc(c, r * 1.1, 0.0, TAU, 28, col, 2.2, true)
+				draw_circle(c + Vector2(-r * 0.4, -r * 0.3), r * 0.16, col)
+				draw_circle(c + Vector2(r * 0.4, -r * 0.3), r * 0.16, col)
+				draw_arc(c + Vector2(0, r * 0.05), r * 0.6, 0.35, PI - 0.35, 14, col, 2.2, true)
+			"flame":
+				var pts := PackedVector2Array()
+				for i in 25:
+					var a := float(i) / 24.0 * TAU
+					var rr := r * (1.0 - 0.45 * pow(maxf(0.0, -sin(a)), 3.0)) * 1.05
+					pts.append(c + Vector2(cos(a) * rr * 0.8, sin(a) * rr * 0.75 + r * 0.2) + Vector2(0, -pow(maxf(0.0, -sin(a)), 6.0) * r * 0.9))
+				draw_colored_polygon(pts, col)
+			"dumbbell":
+				draw_line(c - Vector2(r * 0.8, 0), c + Vector2(r * 0.8, 0), col, 2.6)
+				for sx in [-1.0, 1.0]:
+					draw_rect(Rect2(c + Vector2(sx * r * 0.85 - r * 0.22, -r * 0.6), Vector2(r * 0.44, r * 1.2)), col)
 			"lock", "unlock":
 				var body := Rect2(c.x - r * 0.8, c.y - r * 0.05, r * 1.6, r * 1.15)
 				draw_rect(body, col)
@@ -75,6 +99,63 @@ class Icon extends Control:
 				if kind == "lock":
 					draw_line(sc - Vector2(sr, 0), Vector2(sc.x - sr, body.position.y), col, 3.0)
 
+## A rounded bar for needs and progress. Colour follows the value (green, amber, red) unless
+## `fixed` is set. `trend` (-2..2) draws arrows at the end of the fill, pointing the way it's moving.
+class Meter extends Control:
+	var value := 1.0
+	var trend := 0
+	var fixed := Color(0, 0, 0, 0)
+	var _track: StyleBoxFlat
+	var _fill: StyleBoxFlat
+
+	func _init(v := 1.0, sz := Vector2(150, 12), fixed_color := Color(0, 0, 0, 0)) -> void:
+		value = clampf(v, 0.0, 1.0)
+		fixed = fixed_color
+		custom_minimum_size = sz
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_track = StyleBoxFlat.new()
+		_track.bg_color = Color(0.05, 0.04, 0.03, 0.55)
+		_track.set_corner_radius_all(int(sz.y * 0.5))
+		_track.border_color = Color(0, 0, 0, 0.35)
+		_track.set_border_width_all(1)
+		_fill = StyleBoxFlat.new()
+		_fill.set_corner_radius_all(int(sz.y * 0.5))
+
+	func set_value(v: float, t := 0) -> void:
+		v = clampf(v, 0.0, 1.0)
+		if absf(v - value) > 0.001 or t != trend:
+			value = v
+			trend = t
+			queue_redraw()
+
+	static func color_for(v: float) -> Color:
+		if v > 0.6:
+			return Color(0.45, 0.8, 0.33)
+		if v > 0.3:
+			return Color(0.86, 0.7, 0.26)
+		return Color(0.84, 0.33, 0.22)
+
+	func _draw() -> void:
+		var h := size.y
+		draw_style_box(_track, Rect2(Vector2.ZERO, size))
+		if value <= 0.005:
+			return
+		var w := maxf(h, size.x * value)
+		var col := fixed if fixed.a > 0.0 else color_for(value)
+		_fill.bg_color = col
+		draw_style_box(_fill, Rect2(Vector2(1, 1), Vector2(w - 2, h - 2)))
+		draw_line(Vector2(h * 0.5, h * 0.32), Vector2(maxf(h * 0.5, w - h * 0.5), h * 0.32), col.lightened(0.35), maxf(1.0, h * 0.18), true)
+		var arrow := col.darkened(0.45)
+		for i in absi(trend):
+			var d := 1.0 if trend > 0 else -1.0
+			var x := w - h * 0.6 - i * h * 0.75
+			if x < h:
+				break
+			var cy := h * 0.5
+			var s := h * 0.3
+			draw_colored_polygon(PackedVector2Array([Vector2(x + s * d, cy), Vector2(x - s * d, cy - s), Vector2(x - s * d, cy + s)]), arrow)
+
+
 const BG := Color(0.17, 0.13, 0.11, 0.9)
 const BG_LIGHT := Color(0.27, 0.21, 0.17, 0.95)
 const BORDER := Color(0.55, 0.42, 0.28, 0.85)
@@ -83,21 +164,34 @@ const TEXT := Color(0.97, 0.93, 0.85)
 
 var root: Control
 var res_labels := {}
-var energy_bar: ProgressBar
-var food_bar: ProgressBar
+var needs_meters := {} # need -> Meter
+var needs_cells := {} # need -> the cell (for tooltips)
+var _need_prev := {}
+var _need_rate := {}
+var _need_t := 0.0
+var now_row: HBoxContainer # the current action in the needs panel, with a Stop button
+var now_label: Label
+var now_meter: Meter
+var act_bubble: PanelContainer # the action bar floating over her head
+var act_label: Label
+var act_meter: Meter
+signal stop_activity_pressed
 var clock_label: Label
 var toast_panel: PanelContainer
 var toast_label: Label
 var toast_tween: Tween
+var toast_meter: Meter
 var live_btn: Button
 var build_btn: Button
 var expand_btn: Button
 var catalog_panel: PanelContainer
 var item_buttons := {}
+var thumbs # thumbs.gd
 var holding_bar: HBoxContainer
 var sell_btn: Button
-var menu_panel: PanelContainer
-var menu_box: VBoxContainer
+var chrome: Array[Control] = [] # the everyday panels, faded out during story scenes
+var pie # pie_menu.gd: the ring of actions round whatever you clicked
+var chat # chat_panel.gd: typing to a villager
 var help_panel: PanelContainer
 var fade: ColorRect
 var lock_btn: Button
@@ -144,17 +238,22 @@ func _ready() -> void:
 	root.theme = _make_theme()
 	add_child(root)
 	_build_vignette()
+	var first := root.get_child_count()
 	_build_title()
 	_build_resources()
 	_build_left()
 	_build_needs()
 	_build_clock()
 	_build_camera_pad()
+	for i in range(first, root.get_child_count()):
+		if root.get_child(i) != act_bubble:
+			chrome.append(root.get_child(i))
 	_build_catalog()
 	_build_holding()
 	_build_toast()
 	_build_dialogue()
 	_build_menu()
+	_build_chat()
 	_build_help()
 	fade = ColorRect.new()
 	fade.color = Color(0.02, 0.02, 0.06, 0.0)
@@ -387,31 +486,137 @@ func _build_left() -> void:
 	_place(vb, 0.0, 0.0, Vector2(16, 104))
 
 
-func _bar(color: Color) -> ProgressBar:
-	var p := ProgressBar.new()
-	p.custom_minimum_size = Vector2(190, 14)
-	p.show_percentage = false
-	p.max_value = 100
-	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	p.add_theme_stylebox_override("fill", _sb(color, 6, Color(0, 0, 0, 0), 0.0))
-	return p
+## A small bar for progress (crop growth, wool, an action), Sims-green unless given a colour.
+func meter(v: float, sz := Vector2(150, 10), col := Color(0.5, 0.84, 0.36)) -> Meter:
+	return Meter.new(v, sz, col)
 
 
+const NEED_INFO := {
+	"energy": ["Energy", "bolt", Color(0.95, 0.75, 0.25)],
+	"fullness": ["Hunger", "bowl", Color(0.55, 0.78, 0.4)],
+	"happiness": ["Happiness", "smile", Color(0.98, 0.62, 0.3)],
+	"love": ["Love", "heart", Color(0.92, 0.36, 0.46)],
+	"warmth": ["Warmth", "flame", Color(0.95, 0.5, 0.22)],
+	"fitness": ["Fitness", "dumbbell", Color(0.45, 0.68, 0.9)],
+}
+
+
+## The needs panel: six needs in two columns, each an icon badge, a name and a bar whose arrows
+## show which way it's heading. Above them, while she's busy, what she's doing and a Stop button.
 func _build_needs() -> void:
 	var pc := PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	now_row = HBoxContainer.new()
+	now_row.add_theme_constant_override("separation", 8)
+	now_label = _label("", 14, GOLD)
+	now_label.custom_minimum_size = Vector2(90, 0)
+	now_row.add_child(now_label)
+	now_meter = meter(0.0, Vector2(150, 12))
+	now_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	now_meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	now_row.add_child(now_meter)
+	var stop := _button("Stop", func(): stop_activity_pressed.emit())
+	stop.add_theme_font_size_override("font_size", 12)
+	now_row.add_child(stop)
+	now_row.visible = false
+	vb.add_child(now_row)
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 8)
-	grid.add_child(_label("Energy", 14))
-	energy_bar = _bar(Color(0.95, 0.75, 0.25))
-	grid.add_child(energy_bar)
-	grid.add_child(_label("Food", 14))
-	food_bar = _bar(Color(0.45, 0.78, 0.35))
-	grid.add_child(food_bar)
-	pc.add_child(grid)
+	for need in Game.NEEDS:
+		var info: Array = NEED_INFO[need]
+		var cell := HBoxContainer.new()
+		cell.add_theme_constant_override("separation", 7)
+		cell.mouse_filter = Control.MOUSE_FILTER_PASS
+		var badge := Panel.new()
+		badge.custom_minimum_size = Vector2(28, 28)
+		badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.add_theme_stylebox_override("panel", _sb_flat(info[2].darkened(0.45), 14, info[2], 0.0))
+		var ic := Icon.new(info[1])
+		ic.col = Color(1.0, 0.96, 0.88)
+		badge.add_child(ic)
+		cell.add_child(badge)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 2)
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(_label(info[0], 12, Color(0.9, 0.85, 0.76)))
+		var m := Meter.new(1.0, Vector2(118, 12))
+		col.add_child(m)
+		cell.add_child(col)
+		grid.add_child(cell)
+		needs_meters[need] = m
+		needs_cells[need] = cell
+		_need_prev[need] = float(Game.get(need))
+		_need_rate[need] = 0.0
+	vb.add_child(grid)
+	pc.add_child(vb)
 	root.add_child(pc)
 	_place(pc, 0.0, 1.0, Vector2(16, 16))
+	# the action bar over her head
+	act_bubble = PanelContainer.new()
+	act_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	act_bubble.add_theme_stylebox_override("panel", _sb(Color(0.17, 0.13, 0.11, 0.9), 10, BORDER, 6.0))
+	var ab := VBoxContainer.new()
+	ab.add_theme_constant_override("separation", 3)
+	ab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	act_label = _label("", 13)
+	act_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ab.add_child(act_label)
+	act_meter = meter(0.0, Vector2(120, 10))
+	ab.add_child(act_meter)
+	act_bubble.add_child(ab)
+	act_bubble.visible = false
+	root.add_child(act_bubble)
+
+
+func _update_needs(delta: float) -> void:
+	_need_t += delta
+	var sample := _need_t >= 0.5
+	for need in needs_meters:
+		var v := float(Game.get(need))
+		if sample:
+			var inst: float = (v - float(_need_prev[need])) / _need_t
+			_need_rate[need] = lerpf(float(_need_rate[need]), inst, 0.35)
+			_need_prev[need] = v
+		var r: float = _need_rate[need]
+		var t := 0
+		if r > 1.5:
+			t = 2
+		elif r > 0.04:
+			t = 1
+		elif r < -1.5:
+			t = -2
+		elif r < -0.04:
+			t = -1
+		needs_meters[need].set_value(v / 100.0, t)
+	if sample:
+		_need_t = 0.0
+		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("her thin city coat" if Game.worn_quality <= 1 else "a %s sweater she knit" % Game.stars(Game.worn_quality))
+		needs_cells["fitness"].tooltip_text = "Fitness: walking and farm work. Fitter means faster walking and less tiring work."
+		needs_cells["happiness"].tooltip_text = "Happiness: knitting, animals, books and good food. Low needs drag it down."
+		needs_cells["love"].tooltip_text = "Love: time with people. Talk, give gifts, keep your promises."
+
+
+## Shows what she's doing as a bar over her head and in the needs panel. Called every frame by main.gd.
+func update_activity(text: String, progress: float, screen_pos: Vector2, show: bool, can_stop := true) -> void:
+	act_bubble.visible = show
+	now_row.visible = show
+	if not show:
+		return
+	act_label.text = text
+	act_meter.set_value(progress)
+	now_label.text = text
+	now_meter.set_value(progress)
+	now_row.get_child(2).visible = can_stop
+	act_bubble.reset_size()
+	var vs := root.get_viewport_rect().size
+	var p := screen_pos - Vector2(act_bubble.size.x * 0.5, act_bubble.size.y)
+	p.x = clampf(p.x, 8.0, vs.x - act_bubble.size.x - 8.0)
+	p.y = clampf(p.y, 64.0, vs.y - act_bubble.size.y - 8.0)
+	act_bubble.position = p.round()
 
 
 func _build_clock() -> void:
@@ -485,7 +690,7 @@ func _build_camera_pad() -> void:
 	vb.add_child(grid)
 	pc.add_child(vb)
 	root.add_child(pc)
-	_place(pc, 0.0, 1.0, Vector2(16, 96))
+	_place(pc, 1.0, 1.0, Vector2(16, 66)) # bottom right, above the clock
 	set_cam_locked(true)
 
 
@@ -497,35 +702,71 @@ func set_cam_locked(on: bool) -> void:
 	lock_btn.tooltip_text = "Camera locked to your character. Click to unlock (Space)" if on else "Free camera. Click to lock onto your character (Space)"
 
 
+## Build & Buy: tabs for indoors and the yard, and a grid of cards with a rendered picture of
+## each item (see thumbs.gd), its name and price. Cards you can't afford dim out.
 func _build_catalog() -> void:
 	catalog_panel = PanelContainer.new()
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
+	vb.add_theme_constant_override("separation", 8)
 	vb.add_child(_label("Build & Buy", 20, GOLD))
-	var hint := _label("Pick an item, click to place it.\nR rotate · Right-click cancel\nClick placed items to move or sell them.", 12, Color(0.85, 0.8, 0.7))
-	vb.add_child(hint)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 6)
+	vb.add_child(tabs)
+	var group := ButtonGroup.new()
+	var pages: Array[Control] = []
+	var sections := [["Indoors", Catalog.INDOOR], ["Yard & Garden", Catalog.OUTDOOR]]
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(270, 470)
+	scroll.custom_minimum_size = Vector2(408, 430)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 4)
-	for section in [["INDOORS", Catalog.INDOOR], ["YARD & GARDEN", Catalog.OUTDOOR]]:
-		list.add_child(_label(section[0], 12, GOLD))
-		for id in section[1]:
+	var stack := VBoxContainer.new()
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(stack)
+	for si in sections.size():
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		for id in sections[si][1]:
 			var info: Dictionary = Catalog.ITEMS[id]
 			var item_id: String = id
-			var b := _button("%s   ·   %dc" % [info["name"], info["price"]], func(): item_chosen.emit(item_id))
-			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			list.add_child(b)
+			var b := _button("%s\n%dc" % [info["name"], info["price"]], func(): item_chosen.emit(item_id))
+			b.custom_minimum_size = Vector2(128, 138)
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+			b.expand_icon = true
+			b.add_theme_constant_override("icon_max_width", 112)
+			b.add_theme_font_size_override("font_size", 12)
+			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			b.tooltip_text = "%s · %dc" % [info["name"], info["price"]]
+			grid.add_child(b)
 			item_buttons[id] = b
-	scroll.add_child(list)
+		grid.visible = si == 0
+		stack.add_child(grid)
+		pages.append(grid)
+		var tab := _button(sections[si][0], func():
+			for k in pages.size():
+				pages[k].visible = k == si)
+		tab.toggle_mode = true
+		tab.button_group = group
+		tab.button_pressed = si == 0
+		tabs.add_child(tab)
 	vb.add_child(scroll)
+	vb.add_child(_label("R rotates · right-click cancels · click a placed item to move or sell it", 11, Color(0.85, 0.8, 0.7)))
 	catalog_panel.add_child(vb)
 	catalog_panel.visible = false
 	root.add_child(catalog_panel)
 	_place(catalog_panel, 1.0, 0.5, Vector2(16, 0))
+	var th = preload("res://scripts/thumbs.gd").new()
+	add_child(th)
+	th.thumb_ready.connect(func(id: String, tex: Texture2D):
+		if item_buttons.has(id):
+			item_buttons[id].icon = tex)
+	thumbs = th
+
+
+## Starts rendering the catalog pictures (main.gd calls this once the world is up).
+func render_thumbnails() -> void:
+	thumbs.render(Catalog.INDOOR + Catalog.OUTDOOR)
 
 
 func _build_holding() -> void:
@@ -542,8 +783,16 @@ func _build_holding() -> void:
 
 func _build_toast() -> void:
 	toast_panel = PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
 	toast_label = _label("", 17)
-	toast_panel.add_child(toast_label)
+	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(toast_label)
+	toast_meter = meter(0.0, Vector2(220, 12))
+	toast_meter.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	toast_meter.visible = false
+	vb.add_child(toast_meter)
+	toast_panel.add_child(vb)
 	toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_panel.visible = false
 	root.add_child(toast_panel)
@@ -611,14 +860,25 @@ func hide_dialogue() -> void:
 	dlg_panel.visible = false
 
 
+func make_icon(kind: String) -> Control:
+	return Icon.new(kind)
+
+
+func _build_chat() -> void:
+	chat = preload("res://scripts/chat_panel.gd").new()
+	chat.build(self)
+	root.add_child(chat)
+	_place(chat, 0.5, 1.0, Vector2(0, 24))
+
+
+func is_chat_open() -> bool:
+	return chat != null and chat.visible
+
+
 func _build_menu() -> void:
-	menu_panel = PanelContainer.new()
-	menu_panel.add_theme_stylebox_override("panel", _sb(Color(0.12, 0.1, 0.09, 0.82), 10, Color(0, 0, 0, 0), 8.0))
-	menu_box = VBoxContainer.new()
-	menu_box.add_theme_constant_override("separation", 5)
-	menu_panel.add_child(menu_box)
-	menu_panel.visible = false
-	root.add_child(menu_panel)
+	pie = preload("res://scripts/pie_menu.gd").new()
+	pie.hud = self
+	root.add_child(pie)
 
 
 func _build_help() -> void:
@@ -672,8 +932,13 @@ func set_expand_text(text: String, enabled: bool) -> void:
 	expand_btn.disabled = not enabled
 
 
-func show_toast(text: String) -> void:
+## A short notice at the top. With a progress (0..1) it also shows a bar.
+func show_toast(text: String, progress := -1.0) -> void:
 	toast_label.text = text
+	toast_meter.visible = progress >= 0.0
+	if progress >= 0.0:
+		toast_meter.set_value(progress)
+	toast_panel.reset_size()
 	toast_panel.visible = true
 	toast_panel.modulate.a = 1.0
 	if toast_tween:
@@ -683,35 +948,18 @@ func show_toast(text: String) -> void:
 	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, 0.6)
 
 
-## actions: Array of {"id", "label", "enabled"}; cb receives the chosen id.
+## Opens the action ring at a screen point. actions: Array of {"id", "label", "enabled"} and
+## optional "group", "progress", "hint" (see pie_menu.gd); cb receives the chosen id.
 func show_menu(screen_pos: Vector2, title: String, actions: Array, cb: Callable) -> void:
-	for c in menu_box.get_children():
-		c.queue_free()
-	menu_box.add_child(_label(title, 14, GOLD))
-	for a in actions:
-		var id: String = a["id"]
-		var b := _button(a["label"], func():
-			hide_menu()
-			cb.call(id))
-		b.disabled = not a["enabled"]
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.custom_minimum_size = Vector2(230, 34)
-		menu_box.add_child(b)
-	menu_panel.visible = true
-	menu_panel.reset_size()
-	menu_panel.position = screen_pos + Vector2(22, -14)
-	await get_tree().process_frame
-	var vs := root.get_viewport_rect().size
-	menu_panel.position.x = minf(menu_panel.position.x, vs.x - menu_panel.size.x - 8.0)
-	menu_panel.position.y = clampf(menu_panel.position.y, 8.0, vs.y - menu_panel.size.y - 8.0)
+	pie.open(screen_pos, title, actions, cb)
 
 
 func hide_menu() -> void:
-	menu_panel.visible = false
+	pie.close()
 
 
 func is_menu_open() -> bool:
-	return menu_panel.visible
+	return pie.is_open()
 
 
 func fade_sleep() -> void:
@@ -725,8 +973,7 @@ func _process(_delta: float) -> void:
 	res_labels["coins"].text = "%d" % Game.coins
 	for k in ["wool", "turnip", "pumpkin", "sweater"]:
 		res_labels[k].text = "%d %s" % [Game.count(k), _pretty(k, Game.count(k))]
-	energy_bar.value = Game.energy
-	food_bar.value = Game.fullness
+	_update_needs(_delta)
 	clock_label.text = "%s, Day %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.clock_text()]
 	if catalog_panel.visible:
 		for id in item_buttons:
@@ -839,6 +1086,8 @@ func story_begin() -> void:
 	story_box.visible = false
 	goal_panel.visible = false
 	var tw := create_tween().set_parallel(true)
+	for c in chrome:
+		tw.tween_property(c, "modulate:a", 0.0, 0.35)
 	tw.tween_property(story_bars[0], "offset_bottom", 54.0, 0.45)
 	tw.tween_property(story_bars[1], "offset_top", -54.0, 0.45)
 
@@ -847,6 +1096,8 @@ func story_end() -> void:
 	story_box.visible = false
 	story_clear_choices()
 	var tw := create_tween().set_parallel(true)
+	for c in chrome:
+		tw.tween_property(c, "modulate:a", 1.0, 0.4)
 	tw.tween_property(story_bars[0], "offset_bottom", 0.0, 0.35)
 	tw.tween_property(story_bars[1], "offset_top", 0.0, 0.35)
 	if story_fade_rect.color.a > 0.0:

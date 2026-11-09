@@ -4,6 +4,7 @@ extends Node3D
 ## player and NPCs all move with the same library. Callers pick a loop; this cross-fades.
 
 const Data = preload("res://scripts/data.gd")
+const Rig = preload("res://scripts/rig.gd")
 const ANIMS := ["Idle", "Walk", "SitKnit", "SitIdle", "Work", "Talk"]
 const BLEND := 0.22
 
@@ -14,6 +15,17 @@ var skeleton: Skeleton3D
 var props: Node3D # knitting needles and swatch, shown only while knitting
 var walk_anim_speed := 3.0
 var label_height := 2.1
+var rig: Rig # procedural look-at, lean and breathing on top of the loops (rig.gd)
+## Where this character is looking (a world point), or null. Set by main.gd each frame.
+var look_target = null:
+	set(v):
+		look_target = v
+		if rig:
+			rig.look_target = v
+var _last_pos := Vector3.ZERO
+var _last_yaw := 0.0
+var _last_speed := 0.0
+var _have_last := false
 
 
 ## Loads the character's model. Returns false (and adds nothing) if it's missing or incomplete.
@@ -46,6 +58,11 @@ func load_character(char_id: String) -> bool:
 	add_child(inst)
 	var sk := inst.find_children("*", "Skeleton3D", true, false)
 	skeleton = sk[0] if not sk.is_empty() else null
+	if skeleton:
+		rig = Rig.new()
+		rig.body = self
+		rig.seed_t = randf() * 10.0
+		skeleton.add_child(rig)
 	props = inst.find_child("KnitProps", true, false) as Node3D
 	if props:
 		props.visible = false
@@ -63,6 +80,32 @@ func play(loop_name: String, ground_speed := 0.0) -> void:
 	anim.speed_scale = ground_speed / walk_anim_speed if loop_name == "Walk" and ground_speed > 0.0 else 1.0
 	if props:
 		props.visible = loop_name == "SitKnit"
+
+
+## Tells the rig how the character really moved this frame (speed, turning, speeding up).
+func _process(delta: float) -> void:
+	if rig == null or delta <= 0.0:
+		return
+	var p := global_position
+	var yaw := global_rotation.y
+	if _have_last:
+		var v := Vector2(p.x - _last_pos.x, p.z - _last_pos.z).length() / delta
+		var spd := lerpf(rig.speed, v, clampf(delta * 10.0, 0.0, 1.0))
+		rig.accel = lerpf(rig.accel, (spd - _last_speed) / delta, clampf(delta * 6.0, 0.0, 1.0))
+		_last_speed = spd
+		rig.speed = spd
+		rig.turn_rate = lerpf(rig.turn_rate, angle_difference(_last_yaw, yaw) / delta, clampf(delta * 8.0, 0.0, 1.0))
+		rig.moving = spd > 0.4
+		# seated or working: the loops own the spine; keep the head free
+		rig.look_strength = 0.6 if current() in ["SitKnit", "Work"] else 1.0
+	_last_pos = p
+	_last_yaw = yaw
+	_have_last = true
+
+
+## World point just in front of the eyes, for others to look at.
+func eye_point() -> Vector3:
+	return global_position + Vector3(0, label_height - 0.55, 0)
 
 
 func current() -> String:

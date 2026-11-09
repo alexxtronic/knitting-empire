@@ -25,8 +25,8 @@ var _arms: Array[MeshInstance3D] = []
 var body: Body
 var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle"...)
 var _talk_t := 0.0
-var _label: Label3D
 var _ring: MeshInstance3D
+var walked := 0.0 # metres walked since main.gd last counted them (for fitness)
 
 
 func _ready() -> void:
@@ -38,16 +38,6 @@ func _ready() -> void:
 	if not detailed:
 		_build_simple_model()
 	_ring = Catalog.glow(Catalog.ring(self, 0.4, 0.46, Vector3(0, 0.03, 0), Color(0.55, 0.95, 0.4)), Color(0.55, 0.95, 0.4), 0.8)
-	_label = Label3D.new()
-	_label.position = Vector3(0, body.label_height if detailed else 1.8, 0)
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.no_depth_test = true
-	_label.font_size = 44
-	_label.pixel_size = 0.006
-	_label.outline_size = 10
-	_label.modulate = Color(1.0, 0.96, 0.85)
-	_label.visible = false
-	add_child(_label)
 
 
 func _build_simple_model() -> void:
@@ -91,7 +81,6 @@ func start_activity(text: String, duration: float, done: Callable, sit_pos = nul
 	_activity_t = 0.0
 	_activity_total = duration
 	_activity_done = done
-	_label.visible = true
 	_ring.visible = false
 	_sitting = sit_pos != null
 	if sit_pos != null:
@@ -110,7 +99,6 @@ func cancel_activity() -> void:
 func _end_activity() -> void:
 	busy = false
 	_sitting = false
-	_label.visible = false
 	_ring.visible = true
 	if not detailed:
 		_model.position.y = 0.0
@@ -128,13 +116,26 @@ func _arrive() -> void:
 		cb.call()
 
 
+## What she's doing ("Knitting"), or "" when she isn't busy.
+func activity_text() -> String:
+	return _activity_text if busy else ""
+
+
+## How far through the current activity she is, 0..1.
+func activity_progress() -> float:
+	return clampf(_activity_t / maxf(_activity_total, 0.001), 0.0, 1.0)
+
+
+## Where the action bar floats: just over her head.
+func head_point() -> Vector3:
+	return global_position + Vector3(0, (body.label_height if detailed else 1.8) + 0.05, 0)
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	var walking := false
 	if busy:
 		_activity_t += delta
-		var pct := clampf(_activity_t / _activity_total, 0.0, 1.0)
-		_label.text = "%s… %d%%" % [_activity_text, int(pct * 100.0)]
 		if _activity_t >= _activity_total:
 			var cb := _activity_done
 			_activity_done = Callable()
@@ -149,12 +150,14 @@ func _process(delta: float) -> void:
 		var d := to.length()
 		var step := speed * delta
 		if d <= step:
+			walked += d
 			position = Vector3(next.x, 0.0, next.z)
 			path.remove_at(0)
 			if path.is_empty():
 				_arrive()
 		else:
 			position += to / d * step
+			walked += step
 			rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.25)
 	if detailed:
 		_animate(delta, walking)
