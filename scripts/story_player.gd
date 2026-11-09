@@ -12,6 +12,9 @@ var main: Node
 var playing := ""
 var auto := false # autotest: lines advance by themselves and choices come from auto_choices
 var auto_choices: Array = []
+var auto_line := 0.08 # seconds each line shows in auto mode
+var pause_on := "" # auto mode: hold on the first line containing this (the autotest takes a picture)
+var holding := false
 var shown: Array = [] # every line shown, "Name: text" (for the autotest)
 var _held: Array = [] # actors put into an animation by @anim
 var _cam0 := {}
@@ -77,6 +80,7 @@ func _run(id: String) -> void:
 			a.anim_override = ""
 	_held.clear()
 	main.cam_glide = {}
+	hud.set_phone("")
 	await hud.story_end()
 	for v in main.villagers:
 		if v.tag:
@@ -113,7 +117,12 @@ func _say(op: Dictionary) -> void:
 		actor.hold(2.5)
 	main.hud.story_say(name_text, text, tex)
 	if auto:
-		await get_tree().create_timer(0.08).timeout
+		if pause_on != "" and pause_on in text:
+			pause_on = ""
+			holding = true
+			while holding:
+				await get_tree().process_frame
+		await get_tree().create_timer(auto_line).timeout
 	else:
 		await main.hud.story_next
 
@@ -160,6 +169,13 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 				pos = main.player.position + Vector3(0, 0.9, 0)
 				if a.size() > 1:
 					dist = float(a[1])
+			elif str(a[0]) == "between" and a.size() >= 3:
+				var n1 := actor(str(a[1]))
+				var n2 := actor(str(a[2]))
+				if n1 and n2:
+					pos = (n1.position + n2.position) * 0.5 + Vector3(0, 0.9, 0)
+				if a.size() > 3:
+					dist = float(a[3])
 			elif str(a[0]).is_valid_float():
 				pos = Vector3(float(a[0]), 0.9, float(a[1]) if a.size() > 1 else 0.0)
 				if a.size() > 2:
@@ -192,9 +208,12 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 					_held.append(n)
 		"face":
 			var n := actor(str(a[0]))
-			var t := actor(str(a[1])) if a.size() > 1 else null
-			if n and t:
-				n.face_point(t.position)
+			if n and a.size() > 2 and str(a[1]).is_valid_float():
+				n.face_point(Vector3(float(a[1]), 0, float(a[2])))
+			else:
+				var t := actor(str(a[1])) if a.size() > 1 else null
+				if n and t:
+					n.face_point(t.position)
 		"walk":
 			var n := actor(str(a[0]))
 			if n and a.size() >= 3:
@@ -203,14 +222,16 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 					main.player.walk(main._find_path(main.player.position, dest))
 				else:
 					n.walk_to(dest)
-				var t := 0.0
-				while t < 25.0 and n.position.distance_to(dest) > 0.15:
+				var t := 0.0 if a.size() < 4 or str(a[3]) != "nowait" else 99.0
+				while t < 25.0 and (not main.player.path.is_empty() if n == main.player else n.position.distance_to(dest) > 0.15):
 					await get_tree().process_frame
 					t += get_process_delta_time()
 		"place":
 			var n := actor(str(a[0]))
 			if n and a.size() >= 3:
 				var p := Vector3(float(a[1]), 0, float(a[2]))
+				if n == main.player:
+					main.player.walk([])
 				n.position = p
 				if a.size() > 3:
 					n.rotation.y = deg_to_rad(float(a[3]))
@@ -247,6 +268,40 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 				Game.take_item(str(a[0]), int(a[1]) if a.size() > 1 else 1)
 		"toast":
 			main.hud.show_toast(_fill(str(op["rest"])))
+		"goal":
+			var rest := _fill(str(op["rest"]))
+			var bar := rest.find("|")
+			var pos = null
+			if bar >= 0:
+				var xz := rest.substr(bar + 1).strip_edges().split(" ", false)
+				if xz.size() >= 2:
+					pos = Vector2(float(xz[0]), float(xz[1]))
+				rest = rest.substr(0, bar).strip_edges()
+			main.set_goal(rest, pos)
+		"weather":
+			main.set_weather(str(a[0]) if not a.is_empty() else "clear")
+		"prop":
+			if a.size() >= 4:
+				main.spawn_prop(str(a[0]), str(a[1]), Vector3(float(a[2]), 0, float(a[3])), float(a[4]) if a.size() > 4 else 0.0)
+		"prop_move":
+			if a.size() >= 4:
+				main.move_prop(str(a[0]), Vector3(float(a[1]), 0, float(a[2])), 0.05 if auto else float(a[3]))
+		"prop_remove":
+			if not a.is_empty():
+				main.remove_prop(str(a[0]))
+		"phone":
+			var caller := "" if a.is_empty() or str(a[0]) == "off" else str(op["rest"])
+			main.hud.set_phone(caller)
+		"shake":
+			main.shake(float(a[0]) if not a.is_empty() else 0.4)
+		"sheep":
+			main.sheep_out(not a.is_empty() and str(a[0]) == "out")
+		"home":
+			if a.size() >= 2:
+				if str(a[1]) == "off":
+					main.set_home(str(a[0]))
+				elif a.size() >= 3:
+					main.set_home(str(a[0]), Vector3(float(a[1]), 0, float(a[2])))
 		"if":
 			var parts := Story.split_if(str(op["rest"]))
 			if Story.condition(parts[0]):

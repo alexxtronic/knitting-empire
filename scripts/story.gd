@@ -2,7 +2,9 @@ extends RefCounted
 ## Story scenes, written as plain text in res://data/scenes/*.scene and played by story_player.gd.
 ##
 ##   == meet_rowan                  starts a scene (one file can hold many)
-##   @trigger talk rowan            when it plays: "talk <villager>", "start" (new game), "area <name>"
+##   @trigger talk rowan            when it plays: "talk <villager>", "start" (a new game),
+##                                   "area <name>" (walking into a place from data/areas.json;
+##                                   area scenes must be @once), "event knit_done" (finishing a knit)
 ##   @requires met_rowan            only if a flag is set; "!flag" = only if it isn't
 ##   @once                          play it only once per save
 ##   # a comment
@@ -19,21 +21,33 @@ extends RefCounted
 ##   @set flag [value] / @unset flag
 ##   @trust rowan +2                 also @familiarity, @romance
 ##   @camera rowan [distance]        point the camera at someone (or "@camera x z [distance]",
+##                                   "@camera between rowan nora [distance]" to frame two people,
 ##                                   "@camera player" to follow the player again)
 ##   @fade out [seconds] / @fade in [seconds]
 ##   @title Act 1: Cast On           a title card over the screen
 ##   @wait seconds
 ##   @anim rowan Work                hold someone in an animation loop ("@anim rowan off" to release)
-##   @face nora rowan                turn someone toward someone
-##   @walk rowan 30 4                walk someone to x, z and wait until they arrive
+##   @face nora rowan                turn someone toward someone (or toward x, z)
+##   @walk rowan 30 4 [nowait]       walk someone to x, z and wait until they arrive (or don't)
 ##   @place rowan 30 4 [yaw]         put someone at x, z instantly (villagers stay there)
 ##   @give wool 3 / @take wool 1     change the inventory
 ##   @toast Some text                a small notice
+##   @goal Walk to the farm | 24 3   the goal shown at the top of the screen, with a marker at x, z
+##                                   (the "| x z" part is optional; "@goal" alone clears it)
+##   @weather rain / @weather clear
+##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter; name, x, z, yaw
+##   @prop_move bus1 70 6 4          slide it to x, z over some seconds (doesn't wait)
+##   @prop_remove bus1
+##   @phone Daniel / @phone off      a phone ringing on screen
+##   @shake 0.4                      shake the camera
+##   @sheep out / @sheep home        three sheep get out by the south fence, or go back in
+##   @home rowan 21 5                a villager stays at x, z (survives saves); "@home rowan off"
 ## Text can use {player} for the heroine's name.
 
 const SCENE_DIR := "res://data/scenes"
 const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "walk", "place", "set", "unset",
-	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast"]
+	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
+	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home"]
 const STATS := ["familiarity", "trust", "romance"]
 
 static var _scenes := {}
@@ -213,6 +227,8 @@ static func validate() -> Array:
 	for id in _scenes:
 		var sc: Dictionary = _scenes[id]
 		var labels: Dictionary = sc["labels"]
+		if not sc["trigger"].is_empty() and str(sc["trigger"][0]) == "area" and not sc["once"]:
+			errs.append("%s: an area scene must be @once (it would replay while you stand there)" % sc["where"])
 		for op in sc["ops"]:
 			if op["op"] == "choice":
 				if op["options"].is_empty():
@@ -230,6 +246,9 @@ static func validate() -> Array:
 						errs.append("%s: @if needs '-> label'" % op["where"])
 				if target != "" and not labels.has(target):
 					errs.append("%s: no '@label %s' in scene %s" % [op["where"], target, id])
+				var need := {"prop": 4, "prop_move": 4, "prop_remove": 1, "weather": 1, "phone": 1, "sheep": 1, "home": 2, "walk": 3, "place": 3}
+				if need.has(op["cmd"]) and op["args"].size() < int(need[op["cmd"]]):
+					errs.append("%s: @%s needs more (see the list at the top of story.gd)" % [op["where"], op["cmd"]])
 				if op["cmd"] in STATS and op["args"].size() < 2:
 					errs.append("%s: @%s needs a name and an amount, like '@%s rowan +2'" % [op["where"], op["cmd"], op["cmd"]])
 	return errs

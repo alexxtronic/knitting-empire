@@ -24,6 +24,7 @@ Controls:
 
 ## What's in it
 
+- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. It takes about four to five minutes, with a few choices that set flags and relationship stats for later. Old saves skip it; start a **New Game** to see it.
 - **Home and farm:** a house you can expand, furniture to place, sheep to shear, crops to plant, water and harvest, and a shipping bin.
 - **Maplewood:**
   - three villagers (Rosa, Theo, Mabel) with friendship hearts, gifts and dialogue
@@ -88,6 +89,9 @@ Rowan (neutral): Fair enough.
 - `> text` is narration.
 - `?` starts a choice, followed by `- option -> label | effects`.
 - Other commands move the camera, fade, show title cards, walk and animate characters, set flags, and change relationship stats.
+- Staging commands set the goal shown at the top of the screen (with a marker on the map), make it rain, put down props like a bus or a suitcase, ring the phone, shake the camera, let the sheep out, and park a villager somewhere until a later scene sends them home.
+- A scene plays when you talk to someone (`@trigger talk rowan`), on a new game (`@trigger start`), when you walk into a named place from `data/areas.json` (`@trigger area farm_gate`), or after an event such as finishing a knit (`@trigger event knit_done`).
+- Act 1 is in `data/scenes/act1.scene`, which is a good worked example.
 - Relationships have three stats: **familiarity** (shown as hearts), **trust** and **romance**.
 - The autotest checks every scene file, so a typo or a jump to a missing label shows up as a failed check.
 

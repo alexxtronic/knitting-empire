@@ -1,18 +1,26 @@
 # Rowan's scenes in Maplewood. The format is described at the top of scripts/story.gd.
 
-== rowan_town_chat
+== rowan_away
+# before the fence scene he's up on the hill with his flock
 @trigger talk rowan
+@requires act1_arrived !met_rowan
+> He's counting sheep on the far side of the hill and doesn't look up. Maybe later.
+
+== rowan_town_chat
+# the first time you find him in Maplewood, after Act 1
+@trigger talk rowan
+@requires met_rowan
 @once
 @camera rowan 6
-Rowan (neutral): Morning. You're the one who took the Birchfield place.
-Nora (worried): Is it that obvious?
-Rowan (wry): You've got hay on your sweater and a city coat over it. Small town. We notice.
+Rowan (neutral): You found the town, then.
+Nora (wry): It found me. There's one road.
+Rowan (wry): Two, if you count the one the sheep take.
 ? What do you say?
-- I'm still figuring out which end of a sheep is which. -> honest | trust rowan +2; familiarity rowan +4
-- I'll manage. I always do. -> guarded | familiarity rowan +2; set nora_guarded
+- Thanks again for the other day. I'd still be chasing them. -> honest | trust rowan +2; familiarity rowan +4
+- I'd have managed. I always do. -> guarded | familiarity rowan +2; set nora_guarded
 - Are you always this friendly? -> tease | familiarity rowan +3
 @label honest
-Rowan (happy): The end that bites is the front. Mostly.
+Rowan (happy): You'd have caught one. Eventually. The slow one.
 Rowan (warm): Come find me on the hill if they give you trouble. They usually do.
 @goto done
 @label guarded
@@ -23,5 +31,4 @@ Rowan (warm): Offer stands anyway. The hill, past your fence. If you need a hand
 Rowan (wry): This is me at my friendliest. Ask Theo.
 Nora (happy): I might.
 @label done
-@set met_rowan
 > He tips his head and goes back to watching the road, like he's waiting for something that never comes.

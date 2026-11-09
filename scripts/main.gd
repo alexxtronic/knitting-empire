@@ -73,6 +73,15 @@ var sign_to_town: Landmark
 var sign_to_farm: Landmark
 var price_board: Label3D
 var _morning_note := ""
+# story staging (Act 1 and later): see the @goal, @weather, @prop, @shake, @sheep, @home commands
+var areas := {} # name -> Rect2, from data/areas.json
+var _area_t := 0.0
+var goal_marker: Node3D
+var props := {} # name -> Node3D placed by @prop
+var rain_fx: CPUParticles3D
+var rain := 0.0 # 0 clear .. 1 raining (eases toward the weather flag)
+var _shake_t := 0.0
+var _shake_len := 0.0
 
 var ghost: Furniture = null
 var ghost_rot := 0
@@ -150,6 +159,7 @@ func _ready() -> void:
 	story = StoryPlayer.new()
 	story.main = self
 	add_child(story)
+	_setup_story_staging()
 	_connect_hud()
 	Game.toast.connect(hud.show_toast)
 	Game.day_started.connect(_on_day_started)
@@ -166,8 +176,9 @@ func _ready() -> void:
 	_update_expand_button()
 	_update_price_board()
 	cam_target = player.position
+	_restore_story_state()
 	if not loaded and _autotest_dir == "":
-		hud.help_panel.visible = true
+		_begin_new_story()
 	if _autotest_dir != "":
 		_autotest()
 	else:
@@ -250,6 +261,16 @@ func _update_lighting() -> void:
 	sky_mat.ground_bottom_color = Color(0.08, 0.08, 0.1).lerp(Color(0.35, 0.3, 0.25), dl)
 	env.ambient_light_energy = lerpf(0.3, 0.75, dl)
 	env.fog_light_color = horizon
+	if rain > 0.001: # overcast: a dimmer, greyer, mistier day
+		var grey := Color(0.52, 0.55, 0.6).lerp(Color(0.12, 0.13, 0.18), 1.0 - dl)
+		sun.light_energy *= 1.0 - 0.6 * rain
+		sun.light_color = sun.light_color.lerp(Color(0.75, 0.8, 0.9), rain * 0.7)
+		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(grey.darkened(0.15), rain * 0.85)
+		sky_mat.sky_horizon_color = horizon.lerp(grey, rain * 0.85)
+		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
+		env.fog_light_color = sky_mat.sky_horizon_color
+		env.ambient_light_energy *= 1.0 - 0.25 * rain
+	env.fog_density = 0.0035 + 0.012 * rain
 
 
 # --- house -------------------------------------------------------------------------
@@ -531,6 +552,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_walls()
 	_update_lighting()
+	_update_story_staging(delta)
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -566,6 +588,10 @@ func _update_camera(delta: float) -> void:
 	off.y = sin(pitch) * cam_dist
 	cam.position = cam_target + off
 	cam.look_at(cam_target + Vector3(0, 0.6, 0), Vector3.UP)
+	if _shake_t > 0.0:
+		_shake_t -= delta
+		var k := 0.22 * clampf(_shake_t / maxf(_shake_len, 0.01), 0.0, 1.0)
+		cam.position += Vector3(randf_range(-k, k), randf_range(-k, k), randf_range(-k, k))
 
 
 ## Layout-proof key check: matches the key by its label or by its physical position.
@@ -915,6 +941,7 @@ func _finish_knit() -> void:
 	if Game.take_item("wool", 3):
 		Game.add_item("sweater")
 		hud.show_toast("You knitted a cozy sweater! Ship it for %dc." % Game.SELL_PRICES["sweater"])
+		get_tree().create_timer(0.8).timeout.connect(func(): story.trigger("event", "knit_done"))
 
 
 func _finish_rest() -> void:
@@ -1324,6 +1351,7 @@ func _story_checks() -> void:
 	for e in errs:
 		print("      story: ", e)
 	_check("story scenes parse (%d scenes, %d problems)" % [Story.scenes().size(), errs.size()], errs.is_empty() and Story.has_scene("rowan_town_chat"))
+	Game.set_flag("met_rowan") # his town chat comes after Act 1
 	var rowan := _villager("rowan")
 	var fam0 := Game.stat("rowan", "familiarity")
 	_villager_action(rowan, "talk")
@@ -1344,7 +1372,7 @@ func _story_checks() -> void:
 		await _wait(0.12)
 		t += 0.12
 	_check("played through with clicks and the 1 key (choice shown=%s, %d lines)" % [saw_choice, story.shown.size()], saw_choice and not story.is_playing() and story.shown.size() >= 6)
-	_check("the choice changed trust and familiarity (trust %d, familiarity %d→%d) and set met_rowan" % [Game.stat("rowan", "trust"), fam0, Game.stat("rowan", "familiarity")],
+	_check("the choice changed trust and familiarity (trust %d, familiarity %d→%d)" % [Game.stat("rowan", "trust"), fam0, Game.stat("rowan", "familiarity")],
 		Game.stat("rowan", "trust") == 2 and Game.stat("rowan", "familiarity") >= fam0 + 4 and Game.flag("met_rowan") == true)
 	_check("a once-only scene doesn't repeat", Story.find_trigger("talk", "rowan") == "")
 	# a scene written as plain text, parsed and played on the spot
@@ -1382,6 +1410,127 @@ Rowan (happy): You're alright, {player}.
 	Game.from_dict(JSON.parse_string(JSON.stringify(v2)))
 	_check("a v2 save upgrades: points become familiarity (rosa %d, trust %d)" % [Game.stat("rosa", "familiarity"), Game.stat("rosa", "trust")],
 		Game.stat("rosa", "familiarity") == 37 and Game.stat("rosa", "trust") == 0 and Game.hearts("rosa") == 1)
+
+
+## Act 1 from a fresh story: the rain bus, Mabel at the gate, Gran's basket, knitting, and
+## Rowan at the broken fence. The heroine walks between the triggers for real.
+func _act1_checks() -> void:
+	Game.flags = {}
+	Game.hour = 9.0
+	Game.energy = 100.0
+	for vid in ["rowan", "mabel"]:
+		set_home(vid)
+	mode = Mode.LIVE
+	story.shown.clear()
+	story.auto = true
+	story.auto_line = 0.3
+	story.auto_choices = [0, 0, 0, 1, 0]
+	var wool0 := Game.count("wool")
+	var trust0 := Game.stat("rowan", "trust")
+	var walk_secs := 0.0
+	_check("a new game opens on Act 1 (%s)" % Story.find_trigger("start"), Story.find_trigger("start") == "act1_arrival")
+	story.trigger("start")
+	await _act1_shot("Last stop", "20_act1_rain_bus.png")
+	await _act1_shot("Daniel.", "21_act1_phone.png")
+	await _act1_until_done(40.0)
+	_check("the arrival ends at the bus stop in the rain with a goal (%s, '%s', rain %.1f)" % [str(Game.flag("act1_arrived")), hud.goal_label.text, rain],
+		Game.flag("act1_arrived") == true and player.position.distance_to(Vector3(40.2, 0, 3.4)) < 0.5 and hud.goal_panel.visible and goal_marker.visible and rain > 0.5 and str(Game.flag("weather")) == "rain")
+	await _wait(0.8)
+	await _shot("22_act1_goal.png")
+	var t0 := Time.get_ticks_msec()
+	player.walk(_find_path(player.position, Vector3(25.2, 0, 3.0)))
+	var t := 0.0
+	while story.playing != "act1_cottage" and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("walking to the farm gate starts Mabel's scene (%s after %.1fs)" % [story.playing, t], story.playing == "act1_cottage")
+	await _act1_shot("Here. Keys.", "23_act1_mabel_keys.png")
+	await _act1_until_done(40.0)
+	_check("Mabel handed over the keys (goal '%s')" % hud.goal_label.text, Game.flag("act1_keys") == true and hud.goal_label.text.begins_with("Go inside"))
+	t0 = Time.get_ticks_msec()
+	player.walk(_find_path(player.position, Vector3(5.6, 0, 3.0)))
+	t = 0.0
+	while story.playing != "act1_basket" and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("stepping inside starts Gran's basket scene (%s)" % story.playing, story.playing == "act1_basket")
+	await _act1_shot("For when you come home", "24_act1_letter.png")
+	await _act1_until_done(40.0)
+	_check("read Gran's letter and got her yarn (wool %d→%d)" % [wool0, Game.count("wool")],
+		Game.flag("read_gran_letter") == true and Game.count("wool") == wool0 + 3 and Game.flag("act1_basket") == true)
+	var mabel := _villager("mabel")
+	_check("Mabel went back to the Land Office (%.1f away)" % mabel.position.distance_to(Vector3(64.2, 0, -7.2)), mabel.position.distance_to(Vector3(64.2, 0, -7.2)) < 1.5)
+	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
+	t0 = Time.get_ticks_msec()
+	_do_action(chair, "knit")
+	t = 0.0
+	while story.playing != "act1_fence" and t < 30.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("finishing a knit starts the fence scene (%s)" % story.playing, story.playing == "act1_fence")
+	await _act1_shot("pay rent", "")
+	var loose := 0
+	for i in 3:
+		if not PEN.has_point(Vector2(sheep_list[i].position.x, sheep_list[i].position.z)):
+			loose += 1
+	_check("three sheep are out of the pen (%d)" % loose, loose == 3)
+	await _act1_shot("You alright?", "25_act1_rowan_fence.png")
+	await _act1_shot("fell over once", "26_act1_after.png")
+	await _act1_until_done(60.0)
+	var in_pen := 0
+	for s in sheep_list:
+		if PEN.has_point(Vector2(s.position.x, s.position.z)):
+			in_pen += 1
+	var rowan := _villager("rowan")
+	_check("Act 1 done: met Rowan, opened up (trust %d→%d), sheep home (%d/%d), Rowan back in town, sky clear" % [trust0, Game.stat("rowan", "trust"), in_pen, sheep_list.size(), ],
+		Game.flag("act1_done") == true and Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3
+		and in_pen == sheep_list.size() and rowan.position.distance_to(Vector3(44.2, 0, 2.4)) < 1.0 and str(Game.flag("weather")) == "clear" and not hud.goal_panel.visible)
+	# how long it takes a person: reading time for every line shown, choices, walks and the knit
+	var read := 0.0
+	var choices := 0
+	for l in story.shown:
+		var line := str(l)
+		if line.begins_with("> "):
+			choices += 1
+		read += 0.7 + line.length() / 17.0
+	var titles := 3 * 2.6
+	var total := read + choices * 3.0 + walk_secs + titles
+	_check("Act 1 plays in about 4 minutes (%d lines, %d choices: %.0fs reading + %.0fs walking/knitting = %.1f min)" % [story.shown.size(), choices, read + choices * 3.0 + titles, walk_secs, total / 60.0],
+		total > 180.0 and total < 330.0)
+	var d := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	Game.flags = {}
+	Game.from_dict(d)
+	_check("Act 1 progress survives a save", Game.flag("act1_done") == true and Game.flag("seen_act1_fence") == true)
+	story.auto = false
+	story.auto_line = 0.08
+
+
+## Auto-play holds on the first line containing `sub`; finish its typing, picture it, go on.
+func _act1_shot(sub: String, fname: String) -> void:
+	story.pause_on = sub
+	var t := 0.0
+	while not story.holding and story.is_playing() and t < 40.0:
+		await _wait(0.05)
+		t += 0.05
+	if story.holding:
+		hud.story_click()
+		await _wait(0.9)
+		if fname != "":
+			await _shot(fname)
+	else:
+		print("      (never saw a line with '%s')" % sub)
+	story.pause_on = ""
+	story.holding = false
+
+
+func _act1_until_done(timeout: float) -> void:
+	var t := 0.0
+	while story.is_playing() and t < timeout:
+		await _wait(0.1)
+		t += 0.1
 
 
 func _check(label: String, ok: bool) -> void:
@@ -1485,6 +1634,7 @@ func _autotest() -> void:
 	await _town_checks()
 	_data_checks()
 	await _story_checks()
+	await _act1_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
 
@@ -1636,6 +1786,221 @@ func _add_sheep() -> void:
 	s.position = Vector3(18.5 + (i % 3) * 1.5, 0, -2.5 + (i % 3) * 0.6 + (i / 3) * 1.8)
 	add_child(s)
 	sheep_list.append(s)
+
+
+# --- story staging -----------------------------------------------------------------
+# Scenes (data/scenes/*.scene) drive these through story_player.gd. What must survive a save
+# (goal, weather, where a villager stands) lives in Game.flags.
+
+func _setup_story_staging() -> void:
+	var d := Data.load_json("areas")
+	for k in d.get("areas", {}):
+		var a: Array = d["areas"][k]
+		areas[k] = Rect2(float(a[0]), float(a[1]), float(a[2]), float(a[3]))
+	goal_marker = Node3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.82, 0.38, 0.85)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.55
+	tm.outer_radius = 0.68
+	ring.mesh = tm
+	ring.material_override = mat
+	ring.scale = Vector3(1, 0.15, 1)
+	ring.position.y = 0.05
+	goal_marker.add_child(ring)
+	var gem := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.26
+	cm.bottom_radius = 0.0
+	cm.height = 0.45
+	cm.radial_segments = 4
+	cm.rings = 1
+	gem.mesh = cm
+	gem.material_override = mat
+	gem.name = "Gem"
+	gem.position.y = 2.4
+	goal_marker.add_child(gem)
+	goal_marker.visible = false
+	add_child(goal_marker)
+	rain_fx = CPUParticles3D.new()
+	rain_fx.amount = 2200
+	rain_fx.lifetime = 0.9
+	rain_fx.local_coords = false
+	rain_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	rain_fx.emission_box_extents = Vector3(16, 0.5, 16)
+	rain_fx.direction = Vector3(0.12, -1, 0.05)
+	rain_fx.spread = 2.0
+	rain_fx.initial_velocity_min = 15.0
+	rain_fx.initial_velocity_max = 18.0
+	rain_fx.gravity = Vector3(0, -6, 0)
+	var drop := BoxMesh.new()
+	drop.size = Vector3(0.014, 0.5, 0.014)
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.albedo_color = Color(0.82, 0.87, 0.95, 0.32)
+	drop.material = dm
+	rain_fx.mesh = drop
+	rain_fx.emitting = false
+	add_child(rain_fx)
+
+
+## After a load (or a fresh start): goal, weather and villagers a scene moved.
+func _restore_story_state() -> void:
+	_show_goal()
+	rain = 1.0 if str(Game.flag("weather", "clear")) == "rain" else 0.0
+	for v in villagers:
+		var h = Game.flag("home_" + v.vid, null)
+		if h is Array and h.size() >= 2:
+			v.settle_at(Vector3(float(h[0]), 0, float(h[1])))
+
+
+## A new game opens on Act 1, if a scene has "@trigger start"; otherwise on the help card.
+func _begin_new_story() -> void:
+	if Story.find_trigger("start") == "":
+		hud.help_panel.visible = true
+		return
+	story.trigger("start")
+
+
+func _update_story_staging(delta: float) -> void:
+	var raining := str(Game.flag("weather", "clear")) == "rain"
+	rain = move_toward(rain, 1.0 if raining else 0.0, delta * 0.5)
+	var indoors := interior_rect().has_point(Vector2(cam_target.x, cam_target.z)) and cam_dist < 16.0
+	rain_fx.emitting = raining and not indoors
+	rain_fx.position = cam_target + Vector3(0, 13, 0)
+	if goal_marker.visible:
+		var gem := goal_marker.get_node("Gem") as Node3D
+		gem.position.y = 2.4 + 0.18 * sin(Time.get_ticks_msec() * 0.003)
+		gem.rotation.y += delta * 1.6
+	_area_t += delta
+	if _area_t < 0.25 or story.is_playing() or sleeping or mode != Mode.LIVE:
+		return
+	_area_t = 0.0
+	var p := Vector2(player.position.x, player.position.z)
+	for k in areas:
+		if (areas[k] as Rect2).has_point(p) and story.trigger("area", k) != "":
+			return
+
+
+## Where the heroine is, by area name ("" if none).
+func area_at(p: Vector3) -> String:
+	for k in areas:
+		if (areas[k] as Rect2).has_point(Vector2(p.x, p.z)):
+			return k
+	return ""
+
+
+func set_goal(text: String, pos = null) -> void:
+	if text == "":
+		Game.flags.erase("goal")
+		Game.flags.erase("goal_pos")
+	else:
+		Game.set_flag("goal", text)
+		if pos is Vector2:
+			Game.set_flag("goal_pos", [pos.x, pos.y])
+		else:
+			Game.flags.erase("goal_pos")
+	_show_goal()
+
+
+func _show_goal() -> void:
+	var text := str(Game.flag("goal", ""))
+	hud.set_goal(text if text != "false" else "")
+	var gp = Game.flag("goal_pos", null)
+	goal_marker.visible = text != "" and text != "false" and gp is Array
+	if goal_marker.visible:
+		goal_marker.position = Vector3(float(gp[0]), 0, float(gp[1]))
+
+
+func set_weather(kind: String) -> void:
+	Game.set_flag("weather", kind)
+
+
+func shake(secs: float) -> void:
+	_shake_t = secs
+	_shake_len = secs
+
+
+## Builds a story prop: "bus", "suitcase", "rail" (a broken fence board) or "letter".
+func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> void:
+	remove_prop(prop_name)
+	var n := Node3D.new()
+	n.position = p
+	n.rotation.y = deg_to_rad(yaw_deg)
+	match kind:
+		"bus":
+			var paint := Color(0.36, 0.55, 0.52)
+			var cream := Color(0.93, 0.88, 0.76)
+			Catalog.box(n, Vector3(6.4, 1.1, 2.3), Vector3(0, 0.95, 0), paint)
+			Catalog.box(n, Vector3(6.4, 0.9, 2.3), Vector3(0, 1.95, 0), cream)
+			Catalog.box(n, Vector3(6.3, 0.12, 2.2), Vector3(0, 2.46, 0), paint.darkened(0.2))
+			for i in 6:
+				Catalog.box(n, Vector3(0.78, 0.6, 2.34), Vector3(-2.4 + i * 0.92, 1.98, 0), Color(0.2, 0.26, 0.32))
+			Catalog.box(n, Vector3(0.06, 0.8, 2.0), Vector3(3.21, 1.9, 0), Color(0.2, 0.26, 0.32))
+			for z in [-1.16, 1.16]:
+				for x in [-2.1, 2.1]:
+					Catalog.cyl(n, 0.42, 0.42, 0.28, Vector3(x, 0.42, z), Color(0.12, 0.12, 0.13), Vector3(90, 0, 0))
+			for z in [-0.75, 0.75]:
+				var lamp := Catalog.ball(n, 0.13, Vector3(3.22, 0.85, z), Color(1.0, 0.92, 0.6))
+				lamp.material_override = Catalog.mat(Color(1.0, 0.9, 0.6), 0.5, 2.5)
+		"suitcase":
+			Catalog.box(n, Vector3(0.52, 0.64, 0.22), Vector3(0, 0.36, 0), Color(0.55, 0.25, 0.2))
+			Catalog.box(n, Vector3(0.54, 0.05, 0.24), Vector3(0, 0.5, 0), Color(0.35, 0.18, 0.14))
+			Catalog.box(n, Vector3(0.18, 0.05, 0.05), Vector3(0, 0.72, 0), Color(0.2, 0.15, 0.12))
+			for x in [-0.2, 0.2]:
+				Catalog.cyl(n, 0.035, 0.035, 0.04, Vector3(x, 0.03, 0.08), Color(0.1, 0.1, 0.1))
+		"rail":
+			Catalog.box(n, Vector3(2.0, 0.07, 0.05), Vector3(0, 0.2, 0), Color(0.62, 0.48, 0.32), Vector3(0, 0, 14))
+		"letter":
+			Catalog.box(n, Vector3(0.22, 0.01, 0.15), Vector3(0, 0.01, 0), Color(0.96, 0.93, 0.85))
+		_:
+			Catalog.box(n, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.25, 0), Color(0.8, 0.3, 0.8))
+	add_child(n)
+	props[prop_name] = n
+
+
+func move_prop(prop_name: String, p: Vector3, secs: float) -> void:
+	var n = props.get(prop_name)
+	if n and is_instance_valid(n):
+		create_tween().tween_property(n, "position", p, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+
+func remove_prop(prop_name: String) -> void:
+	var n = props.get(prop_name)
+	if n and is_instance_valid(n):
+		n.queue_free()
+	props.erase(prop_name)
+
+
+## "out": the first three sheep slip the pen and mill about by the south fence. "home": back in.
+func sheep_out(out: bool) -> void:
+	var inside := Rect2(PEN.position + Vector2(0.7, 0.7), PEN.size - Vector2(1.4, 1.4))
+	var loose := Rect2(10.9, -1.3, 4.0, 3.0) # the vegetable beds
+	for i in mini(3, sheep_list.size()):
+		var s = sheep_list[i]
+		s.pen = loose if out else inside
+		s.position = Vector3(loose.position.x + 1.2 + i * 2.1, 0, loose.position.y + 0.6 + (i % 2) * 1.4) if out else Vector3(18.5 + i * 1.5, 0, -2.5 + i * 0.6)
+		s._pick_target()
+
+
+## A villager stands somewhere else until told otherwise ("off" = back to their usual spot).
+func set_home(vid: String, p = null) -> void:
+	var v := _villager(vid)
+	if v == null:
+		return
+	if p is Vector3:
+		Game.set_flag("home_" + vid, [p.x, p.z])
+		v.settle_at(p)
+	else:
+		Game.flags.erase("home_" + vid)
+		for d in _villager_defs():
+			if d["id"] == vid:
+				v.settle_at(d["pos"])
+				v.roam = d["roam"]
 
 
 ## Who lives in Maplewood: res://data/villagers.json.

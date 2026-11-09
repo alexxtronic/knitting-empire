@@ -129,6 +129,11 @@ var story_fade_rect: ColorRect
 var story_title_label: Label
 var story_bars: Array[ColorRect] = []
 var _story_typing: Tween
+var goal_panel: PanelContainer # the current story goal, top centre
+var goal_label: Label
+var phone_panel: PanelContainer # "Incoming call" card during scenes
+var phone_label: Label
+var _phone_tween: Tween
 
 
 func _ready() -> void:
@@ -156,6 +161,8 @@ func _ready() -> void:
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
 	_build_story()
+	_build_goal()
+	_build_phone()
 
 
 # --- styling -------------------------------------------------------------------
@@ -738,6 +745,7 @@ func story_begin() -> void:
 	hide_dialogue()
 	story_layer.visible = true
 	story_box.visible = false
+	goal_panel.visible = false
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(story_bars[0], "offset_bottom", 54.0, 0.45)
 	tw.tween_property(story_bars[1], "offset_top", -54.0, 0.45)
@@ -753,6 +761,7 @@ func story_end() -> void:
 		tw.tween_property(story_fade_rect, "color:a", 0.0, 0.5)
 	await tw.finished
 	story_layer.visible = false
+	goal_panel.visible = goal_label.text != ""
 
 
 ## Shows a line. name_text "" = narration (no tab, no portrait); tex null = no portrait.
@@ -845,3 +854,60 @@ func story_title(text: String, secs: float) -> void:
 	tw.tween_interval(secs * 0.5)
 	tw.tween_property(story_title_label, "modulate:a", 0.0, secs * 0.25)
 	await tw.finished
+
+
+# --- story goal and phone card ----------------------------------------------------
+
+func _build_goal() -> void:
+	goal_panel = PanelContainer.new()
+	goal_panel.add_theme_stylebox_override("panel", _sb(Color(0.16, 0.12, 0.09, 0.9), 10, GOLD, 10.0))
+	goal_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 8)
+	hb.add_child(_label("▸", 16, GOLD))
+	goal_label = _label("", 16)
+	hb.add_child(goal_label)
+	goal_panel.add_child(hb)
+	goal_panel.visible = false
+	root.add_child(goal_panel)
+	_place(goal_panel, 0.5, 0.0, Vector2(0, 16))
+
+
+## Shows the current goal ("" hides it).
+func set_goal(text: String) -> void:
+	goal_label.text = text
+	goal_panel.visible = text != "" and not story_layer.visible
+	if goal_panel.visible:
+		goal_panel.modulate.a = 0.0
+		create_tween().tween_property(goal_panel, "modulate:a", 1.0, 0.5)
+
+
+func _build_phone() -> void:
+	phone_panel = PanelContainer.new()
+	phone_panel.add_theme_stylebox_override("panel", _sb(Color(0.08, 0.09, 0.12, 0.95), 18, Color(0.45, 0.5, 0.6), 14.0))
+	phone_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 2)
+	vb.add_child(_label("Incoming call", 13, Color(0.7, 0.75, 0.82)))
+	phone_label = _label("", 24, Color(0.96, 0.96, 0.98))
+	vb.add_child(phone_label)
+	vb.add_child(_label("mobile", 12, Color(0.55, 0.6, 0.68)))
+	phone_panel.add_child(vb)
+	phone_panel.visible = false
+	root.add_child(phone_panel)
+	_place(phone_panel, 1.0, 0.0, Vector2(28, 76))
+
+
+## A phone ringing with a caller's name ("" puts it away).
+func set_phone(caller: String) -> void:
+	if _phone_tween:
+		_phone_tween.kill()
+	phone_panel.visible = caller != ""
+	phone_label.text = caller
+	phone_panel.rotation = 0.0
+	if caller != "":
+		phone_panel.pivot_offset = Vector2(90, 40)
+		_phone_tween = create_tween().set_loops()
+		for r in [0.05, -0.05, 0.04, -0.04, 0.0]:
+			_phone_tween.tween_property(phone_panel, "rotation", r, 0.06)
+		_phone_tween.tween_interval(0.7)

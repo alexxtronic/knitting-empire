@@ -1,0 +1,207 @@
+# Act 1: Cast On. The format is described at the top of scripts/story.gd.
+# Flow: a new game opens on act1_arrival (the rain bus) → walk to the farm gate (act1_cottage,
+# Mabel and the keys) → step inside (act1_basket, Gran's basket and letter) → knit in the
+# rocking chair → act1_fence (the sheep are out; meeting Rowan).
+
+== act1_arrival
+@trigger start
+@once
+@weather rain
+@home rowan 25.6 -5.5
+@home mabel 22.4 4.6
+@place nora 40.2 3.4 180
+@prop bus bus 42.6 0.6 0
+@prop suitcase case 40.8 3.7 20
+@fade out 0.01
+@title Knitting Empire
+@camera 41.2 2.2 10
+@fade in 2.0
+> Maplewood. Last stop. The rain has followed her all the way from the city.
+@prop_move bus 52 0.6 5
+> The bus pulls away. One suitcase, and a coat that was never meant for weather like this.
+Nora (sad): Okay. You did it. You actually got on the bus.
+@phone Daniel
+> Her phone buzzes. She doesn't need to look. She looks anyway.
+@camera 40.2 3.4 5
+Nora (worried): Daniel.
+? The phone keeps ringing.
+- Decline the call. -> declined | phone off; set declined_daniel
+- Let it ring out. -> ringout | phone off; set ignored_daniel
+@label declined
+> She presses the red button. It's the smallest thing she's done in months, and her hand shakes doing it.
+Nora (neutral): Not today.
+@goto after
+@label ringout
+> She watches it ring until it stops. Then a little longer, in case.
+Nora (sad): Still can't do it, huh.
+@label after
+@prop_remove bus
+@camera 40.2 3.4 8
+> She hauls the suitcase up by its one good handle.
+@prop_remove case
+Nora (wry): Gran always said you could smell the sheep from the signpost. Gran, you were not exaggerating.
+@goal Walk down the road to Birchfield Farm | 24.6 3
+@set act1_arrived
+@camera player
+@toast Click the ground to walk. Follow the gold marker.
+
+== act1_cottage
+@trigger area farm_gate
+@requires act1_arrived
+@once
+@goal
+@walk mabel 24.0 4.2 nowait
+@walk nora 25.3 3.0
+@face mabel nora
+@face nora mabel
+@camera between mabel nora 8
+Mabel (happy): There you are! I'd started to think the bus had eaten you.
+Nora (surprised): Mabel? You didn't have to wait out here in this.
+Mabel (warm): Course I did. Ellie would have had my hide. Here. Keys.
+> The keys are old and heavy, on a loop of knitted cord gone grey with handling.
+Mabel (wry): Front door sticks. Lift it a bit and shove. She never fixed it. Said it kept the salesmen out.
+Nora (sad): I should have come back sooner. Before...
+Mabel (neutral): You're here now. That's the bit that counts.
+? What do you say?
+- Thank you. For all of it. The funeral too. -> thanks | familiarity mabel +4; trust mabel +2
+- Was it bad? At the end? -> theend | familiarity mabel +3; set asked_about_gran
+@label thanks
+Mabel (warm): Oh, hush. Half the town turned up. She'd knitted for most of them.
+@goto keys
+@label theend
+Mabel (sad): Quiet. She was in her chair with the radio on. Needles in her lap.
+Mabel (warm): I don't think she minded, love. I think she was just tired.
+@label keys
+Mabel (happy): The Land Office is on the plaza if you need anything. Papers, gossip, cake. Mostly cake.
+@set act1_keys
+@walk mabel 34 3 nowait
+@goal Go inside the cottage | 9.0 3
+@camera player
+
+== act1_basket
+@trigger area cottage_inside
+@requires act1_keys
+@once
+@goal
+@home mabel off
+@camera 3.6 2.6 9
+> Dust on everything. The clock on the mantel stopped at twenty past four.
+Nora (sad): Hi, Gran.
+> It still smells like her. Lanolin and woodsmoke and the lemon drops she kept in her apron.
+@walk nora 2.9 2.4
+@face nora 2.25 2.25
+@camera 2.7 2.6 6
+> Her knitting basket sits by the fire where it always did. Half a sleeve, the needles still in it.
+> Tucked under the yarn is an envelope. Gran's handwriting, all loops and hurry.
+Nora (surprised): "For when you come home."
+? The envelope is soft from being handled.
+- Open it now. -> open | set read_gran_letter
+- Not yet. Keep it for later. -> later | set kept_gran_letter
+@label open
+> "Nora, love. If you're reading this, I've gone and done the one thing I always told you not to: left without saying goodbye. Sorry about that."
+> "The flock knows what to do even when you don't. The yarn in the basket is the good stuff. Don't you dare save it for best."
+> "And whatever sent you home, it doesn't get to follow you through that door. Knit something. It helps. It always helped. Gran."
+Nora (sad): ...Okay. Okay, Gran.
+@goto knit
+@label later
+Nora (sad): Not yet. I can't yet.
+> She slips the envelope into her coat pocket, over her heart, where it sits heavy.
+@label knit
+@give wool 3
+@toast Gran's good yarn: +3 wool
+Nora (warm): One row. Just to see if my hands remember.
+@goal Sit in the rocking chair and knit | 2.4 3.6
+@set act1_basket
+@camera player
+
+== act1_fence
+@trigger event knit_done
+@requires act1_basket
+@once
+@goal
+> Somewhere outside, very close, something says "baa". Then something else says it louder.
+Nora (surprised): That is... not far enough away.
+@fade out 0.6
+@weather clear
+@sheep out
+@prop rail rail1 18.6 2.3 0
+@home rowan 16.3 2.7
+@place nora 9.4 3.2 90
+@face rowan nora
+@camera 13.6 2.2 11
+@fade in 0.8
+> The rain has stopped. Three of Gran's sheep are standing in the vegetable beds like they pay rent. A board hangs off the fence.
+> And there's a man with a shepherd's crook watching them, like he's been there a while.
+@walk nora 14.9 4.1
+@face nora rowan
+@face rowan nora
+@camera between rowan nora 6.5
+Rowan (wry): Afternoon. Yours, I think.
+Nora (worried): Are they? I mean, yes. Probably. How can you tell?
+Rowan (neutral): Ellie's blue mark on the ear. And that one's eating your lettuce.
+Nora (wry): I don't have lettuce.
+Rowan (wry): Not anymore.
+Rowan (neutral): Rowan. I keep the flock up on the hill. Ellie and I traded favours. Mostly she fed me and I fixed things.
+Nora (neutral): Nora. The granddaughter. The one from the city.
+Rowan (warm): I know. She talked about you. A lot, actually.
+Rowan (neutral): Right. I'll get the gate open, you stand there and look big.
+@walk rowan 16.3 -0.2
+@anim rowan Work
+@camera between rowan nora 9.5
+@wait 0.6
+@shake 0.5
+> The gate slams back in the wind, a crack like a gunshot.
+Nora (surprised): Ah!
+> Her whole body jerks. Her hands are up before she can stop them.
+@anim rowan off
+@face rowan nora
+@face nora rowan
+Rowan (worried): Hey. You alright?
+? Rowan watches her, careful, the way you'd watch a skittish ewe.
+- I'm fine. It just made me jump. -> fine | familiarity rowan +2; set nora_deflected
+- Sorry. Loud noises. Long story. -> honest | trust rowan +3; familiarity rowan +2; set nora_opened
+@label fine
+Rowan (neutral): Right. Course.
+> He doesn't push. He does wedge the gate with a stone so it can't do that again.
+@goto roundup
+@label honest
+Rowan (warm): Nothing to be sorry for. I'll keep the gate quiet.
+> He wedges it with a stone, gently, like the gate's the one that needs calming down.
+Nora (warm): Thanks.
+@label roundup
+Rowan (happy): Arms out, walk slow, and whatever you do, don't run. They can smell fear and they think it's funny.
+@fade out 0.8
+> Twenty minutes of slow walking, outstretched arms, and one sheep that would not be told.
+@sheep home
+@prop_remove rail1
+@place nora 14.6 3.8 90
+@home rowan 15.8 2.6
+@face rowan nora
+@face nora rowan
+@camera between rowan nora 5.5
+@fade in 0.8
+Rowan (wry): Not bad. You only fell over once.
+Nora (happy): Twice. You missed the second one.
+Rowan (happy): I didn't.
+> It's the first time she's laughed in a long while. It comes out rusty.
+Rowan (neutral): I'll come by tomorrow and fix that fence properly. I'll bring nails. You bring tea.
+? What do you say?
+- Deal. I make terrible tea. -> deal | familiarity rowan +3
+- You don't have to do that. -> nohelp | trust rowan +1; familiarity rowan +1
+@label deal
+Rowan (wry): Good. Ellie's was terrible too. I'd hate to get used to anything else.
+@goto bye
+@label nohelp
+Rowan (warm): I know. That's sort of the point.
+@label bye
+@set met_rowan
+@set act1_done
+> He tips the crook at her like a hat and heads off up the hill, whistling at nothing.
+@walk rowan 24 4.4 nowait
+@wait 2.5
+@fade out 1.2
+@home rowan off
+@title Act 1: Cast On
+@title to be continued
+@fade in 1.2
+@toast Act 1 complete. The farm is yours now.
