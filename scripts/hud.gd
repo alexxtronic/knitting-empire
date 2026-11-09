@@ -8,6 +8,11 @@ signal walls_pressed
 signal save_pressed
 signal new_game_pressed
 signal graphics_pressed
+signal title_continue
+signal title_new_game
+signal title_quit
+signal volumes_changed(music: float, sound: float)
+signal fullscreen_toggled(on: bool)
 signal item_chosen(id: String)
 signal rotate_pressed
 signal sell_pressed
@@ -186,6 +191,17 @@ var live_btn: Button
 var build_btn: Button
 var expand_btn: Button
 var graphics_btn: Button
+var settings_panel: PanelContainer
+var music_slider: HSlider
+var sound_slider: HSlider
+var fullscreen_check: CheckButton
+var title_layer: Control
+var tip_panel: PanelContainer
+var tip_label: Label
+var _tip_tween: Tween
+var title_continue_btn: Button
+var title_new_btn: Button
+var _title_new_armed := false
 var catalog_panel: PanelContainer
 var item_buttons := {}
 var thumbs # thumbs.gd
@@ -272,6 +288,9 @@ func _ready() -> void:
 	_build_story()
 	_build_goal()
 	_build_phone()
+	_build_tip()
+	_build_settings()
+	_build_title_screen()
 
 
 # --- styling -------------------------------------------------------------------
@@ -429,10 +448,19 @@ func set_graphics_label(level: String) -> void:
 	graphics_btn.text = "Graphics: " + level
 
 
+var sfx := Callable() # main.gd's audio.play(name, db): a soft click for buttons
+
+
+func click(sound := "ui_click") -> void:
+	if sfx.is_valid():
+		sfx.call(sound, -10.0)
+
+
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(func(): click())
 	b.pressed.connect(cb)
 	return b
 
@@ -490,12 +518,12 @@ func _build_left() -> void:
 	vb.add_child(expand_btn)
 	vb.add_child(_button("Walls Up / Down", func(): walls_pressed.emit()))
 	vb.add_child(_button("Save Game", func(): save_pressed.emit()))
-	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
-	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
-	vb.add_child(graphics_btn)
+	vb.add_child(_button("Settings", func(): open_settings()))
 	vb.add_child(_button("Journal", func(): open_journal()))
 	vb.add_child(_button("How to Play", func(): help_panel.visible = true))
-	vb.add_child(_button("New Game", func(): new_game_pressed.emit()))
+	var new_btn := _button("New Game", func(): pass)
+	new_btn.pressed.connect(_confirm_then.bind(new_btn, "Click again: lose this farm", func(): new_game_pressed.emit()))
+	vb.add_child(new_btn)
 	for c in vb.get_children():
 		(c as Button).custom_minimum_size = Vector2(170, 0)
 		(c as Button).alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -916,7 +944,9 @@ func _build_help() -> void:
 [b]Build & Buy:[/b] pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
 [b]Camera:[/b] use the camera pad (bottom left), WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · the [b]lock[/b] button (or [b]Space[/b]) locks the camera onto your character · [b]C[/b] toggles walls.
 [b]Maplewood:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
-[b]Days:[/b] sleep in your bed to start a new day. Watered crops grow overnight. The game saves when you sleep and when you quit."""
+[b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
+[b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (left menu).
+[b]Days:[/b] sleep in your bed to start a new day. Watered crops grow overnight. The game saves when you sleep and when you quit. Sound, music, picture quality and full screen are in [b]Settings[/b]."""
 	vb.add_child(rt)
 	var go := _button("Let's knit!", func(): help_panel.visible = false)
 	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1375,6 +1405,7 @@ func _build_journal() -> void:
 
 ## Shows the journal: Game.journal() entries, newest first. Memories are marked with a thread.
 func open_journal() -> void:
+	click("ui_open")
 	for c in journal_list.get_children():
 		c.queue_free()
 	var entries: Array = Game.journal()
@@ -1395,3 +1426,204 @@ func open_journal() -> void:
 	journal_panel.visible = true
 	journal_opened.emit()
 
+
+
+# --- settings and the title screen --------------------------------------------------------------
+
+## A button that needs a second click within 3 seconds (for anything you can't undo).
+func _confirm_then(b: Button, ask: String, cb: Callable) -> void:
+	if b.has_meta("armed") and b.get_meta("armed"):
+		b.set_meta("armed", false)
+		b.text = str(b.get_meta("label"))
+		cb.call()
+		return
+	b.set_meta("label", b.text)
+	b.set_meta("armed", true)
+	b.text = ask
+	get_tree().create_timer(3.0).timeout.connect(func():
+		if is_instance_valid(b) and b.get_meta("armed", false):
+			b.set_meta("armed", false)
+			b.text = str(b.get_meta("label")))
+
+
+func _slider_row(vb: VBoxContainer, text: String, value: float) -> HSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var l := _label(text, 16)
+	l.custom_minimum_size = Vector2(120, 0)
+	row.add_child(l)
+	var s := HSlider.new()
+	s.min_value = 0.0
+	s.max_value = 1.0
+	s.step = 0.05
+	s.value = value
+	s.custom_minimum_size = Vector2(240, 24)
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	s.focus_mode = Control.FOCUS_NONE
+	row.add_child(s)
+	vb.add_child(row)
+	return s
+
+
+func _build_settings() -> void:
+	settings_panel = PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	vb.add_child(_label("Settings", 24, GOLD))
+	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
+	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
+	graphics_btn.custom_minimum_size = Vector2(200, 36)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var gl := _label("Picture", 16)
+	gl.custom_minimum_size = Vector2(120, 0)
+	row.add_child(gl)
+	row.add_child(graphics_btn)
+	vb.add_child(row)
+	music_slider = _slider_row(vb, "Music", 0.7)
+	sound_slider = _slider_row(vb, "Sound", 0.8)
+	for s in [music_slider, sound_slider]:
+		s.value_changed.connect(func(_v): volumes_changed.emit(music_slider.value, sound_slider.value))
+	fullscreen_check = CheckButton.new()
+	fullscreen_check.text = "Full screen"
+	fullscreen_check.focus_mode = Control.FOCUS_NONE
+	fullscreen_check.toggled.connect(func(on): click(); fullscreen_toggled.emit(on))
+	vb.add_child(fullscreen_check)
+	vb.add_child(_label("Music and sounds are placeholders made in code (tools/make_audio.py).", 12, Color(TEXT, 0.55)))
+	var close := _button("Close", func(): settings_panel.visible = false)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.custom_minimum_size = Vector2(140, 36)
+	vb.add_child(close)
+	settings_panel.add_child(vb)
+	settings_panel.visible = false
+	root.add_child(settings_panel)
+	_place(settings_panel, 0.5, 0.5, Vector2.ZERO)
+
+
+func open_settings(music_v := -1.0, sound_v := -1.0, fullscreen := false) -> void:
+	click("ui_open")
+	if music_v >= 0.0:
+		music_slider.set_value_no_signal(music_v)
+	if sound_v >= 0.0:
+		sound_slider.set_value_no_signal(sound_v)
+	fullscreen_check.set_pressed_no_signal(fullscreen or DisplayServer.window_get_mode() >= DisplayServer.WINDOW_MODE_FULLSCREEN)
+	settings_panel.visible = true
+	settings_panel.move_to_front()
+
+
+func _build_title_screen() -> void:
+	title_layer = Control.new()
+	title_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	title_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	# a warm dark wash from the left, so the words sit on something calm and the farm shows through
+	var g := Gradient.new()
+	g.set_color(0, Color(0.09, 0.06, 0.05, 0.88))
+	g.set_color(1, Color(0.09, 0.06, 0.05, 0.0))
+	g.add_point(0.45, Color(0.09, 0.06, 0.05, 0.55))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 256
+	gt.height = 4
+	var wash := TextureRect.new()
+	wash.texture = gt
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_layer.add_child(wash)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	var name_l := _label("Knitting Empire", 64, GOLD)
+	name_l.add_theme_constant_override("outline_size", 10)
+	name_l.add_theme_color_override("font_outline_color", Color(0.12, 0.08, 0.06, 0.9))
+	vb.add_child(name_l)
+	vb.add_child(_label("Cast on a new life.", 22, Color(TEXT, 0.88)))
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 26)
+	vb.add_child(gap)
+	title_continue_btn = _button("Continue", func(): title_continue.emit())
+	title_new_btn = _button("New Game", func():
+		if title_continue_btn.visible:
+			_confirm_then(title_new_btn, "Start over? Click again", func(): title_new_game.emit())
+		else:
+			title_new_game.emit())
+	var settings_btn := _button("Settings", func(): open_settings())
+	var quit_btn := _button("Quit", func(): title_quit.emit())
+	for b in [title_continue_btn, title_new_btn, settings_btn, quit_btn]:
+		b.custom_minimum_size = Vector2(260, 46)
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.add_theme_font_size_override("font_size", 19)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		vb.add_child(b)
+	title_layer.add_child(vb)
+	_place(vb, 0.0, 0.5, Vector2(96, 0))
+	vb.offset_top = -190
+	var foot := _label("Prototype · Nov 2026", 12, Color(TEXT, 0.5))
+	title_layer.add_child(foot)
+	_place(foot, 0.0, 1.0, Vector2(24, 18))
+	title_layer.visible = false
+	root.add_child(title_layer)
+
+
+func show_title(has_save: bool) -> void:
+	title_continue_btn.visible = has_save
+	title_new_btn.text = "New Game"
+	title_new_btn.set_meta("armed", false)
+	title_layer.visible = true
+	title_layer.modulate.a = 1.0
+	goal_panel.visible = false
+	for c in chrome:
+		c.modulate.a = 0.0
+	settings_panel.move_to_front()
+
+
+func title_visible() -> bool:
+	return title_layer.visible
+
+
+func hide_title() -> void:
+	settings_panel.visible = false
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(title_layer, "modulate:a", 0.0, 0.5)
+	for c in chrome:
+		tw.tween_property(c, "modulate:a", 1.0, 0.6)
+	await tw.finished
+	title_layer.visible = false
+	goal_panel.visible = goal_label.text != ""
+
+
+# --- tips: a one-time nudge the first time something becomes possible (main.gd _update_tips) ----
+
+func _build_tip() -> void:
+	tip_panel = PanelContainer.new()
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 12)
+	var head := _label("Tip", 15, GOLD)
+	head.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	hb.add_child(head)
+	tip_label = _label("", 15)
+	tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip_label.custom_minimum_size = Vector2(480, 0)
+	hb.add_child(tip_label)
+	tip_panel.add_child(hb)
+	tip_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	tip_panel.gui_input.connect(func(e):
+		if e is InputEventMouseButton and e.pressed:
+			tip_panel.visible = false)
+	tip_panel.visible = false
+	root.add_child(tip_panel)
+	_place(tip_panel, 0.5, 1.0, Vector2(0, 26))
+
+
+func show_tip(text: String, secs := 11.0) -> void:
+	tip_label.text = text
+	tip_panel.reset_size()
+	tip_panel.visible = true
+	tip_panel.modulate.a = 0.0
+	click("ui_open")
+	if _tip_tween:
+		_tip_tween.kill()
+	_tip_tween = create_tween()
+	_tip_tween.tween_property(tip_panel, "modulate:a", 1.0, 0.4)
+	_tip_tween.tween_interval(secs)
+	_tip_tween.tween_property(tip_panel, "modulate:a", 0.0, 0.8)
+	_tip_tween.tween_callback(func(): tip_panel.visible = false)

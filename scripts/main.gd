@@ -18,6 +18,7 @@ const StoryPlayer = preload("res://scripts/story_player.gd")
 const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
+const GameAudio = preload("res://scripts/audio.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -73,6 +74,7 @@ var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
 var player: Player
 var hud: Hud
+var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
 var ai: AiChat # typed chat with villagers, voiced by Claude
@@ -190,6 +192,12 @@ func _ready() -> void:
 	add_child(player)
 	hud = Hud.new()
 	add_child(hud)
+	audio = GameAudio.new()
+	add_child(audio)
+	audio.setup(self, _autotest_dir != "")
+	hud.sfx = audio.play
+	player.footstep.connect(func(): audio.footstep(player.position))
+	player.needle_click.connect(audio.needle)
 	story = StoryPlayer.new()
 	story.main = self
 	add_child(story)
@@ -213,7 +221,14 @@ func _ready() -> void:
 	_restore_story_state()
 	_load_graphics()
 	hud.render_thumbnails()
-	if not loaded and _autotest_dir == "":
+	_load_display()
+	tips_enabled = _autotest_dir == "" # the autotest turns them on for its own check
+	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
+	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
+	Engine.set_meta("ke_skip_title", false)
+	if _autotest_dir == "" and not skip_title:
+		show_title(loaded)
+	elif not loaded and _autotest_dir == "":
 		_begin_new_story()
 	if _capture:
 		_capture_opening()
@@ -236,6 +251,15 @@ func _connect_hud() -> void:
 		_save_game()
 		hud.show_toast("Game saved."))
 	hud.new_game_pressed.connect(_new_game)
+	hud.title_continue.connect(_title_continue)
+	hud.title_new_game.connect(_title_new_game)
+	hud.title_quit.connect(func(): get_tree().quit())
+	hud.volumes_changed.connect(audio.set_volumes)
+	hud.fullscreen_toggled.connect(set_fullscreen)
+	hud.settings_panel.visibility_changed.connect(func():
+		if hud.settings_panel.visible:
+			hud.music_slider.set_value_no_signal(audio.music_volume)
+			hud.sound_slider.set_value_no_signal(audio.sound_volume))
 	hud.item_chosen.connect(_begin_place)
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
@@ -485,6 +509,16 @@ func _update_lighting() -> void:
 
 func _zmin() -> float:
 	return -4.0 * Game.house_level
+
+
+## What's underfoot at a spot, for footsteps: "wood" indoors (home or Rosewood Cottage), else "grass".
+func surface_at(p: Vector3) -> String:
+	var q := Vector2(p.x, p.z)
+	return "wood" if interior_rect().has_point(q) or Town.COTTAGE.has_point(q) else "grass"
+
+
+func player_indoors() -> bool:
+	return surface_at(player.position) == "wood"
 
 
 func interior_rect() -> Rect2:
@@ -769,6 +803,8 @@ func _line_clear(a: Vector3, b: Vector3) -> bool:
 # --- camera & per-frame -------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if title_on:
+		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
 	_update_camera(delta)
 	_update_walls()
 	_update_lighting()
@@ -776,6 +812,7 @@ func _process(delta: float) -> void:
 	_update_needs(delta)
 	_update_gaze()
 	_update_chat()
+	_update_tips(delta)
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -913,7 +950,7 @@ func _pan_camera(v: Vector2) -> void:
 # --- input ------------------------------------------------------------------------------
 
 func _unhandled_input(e: InputEvent) -> void:
-	if sleeping or story.is_playing():
+	if sleeping or story.is_playing() or title_on:
 		return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
@@ -975,7 +1012,7 @@ func _is_repeat_gesture(g: InputEventGesture) -> bool:
 
 ## Keys are read here, before the on-screen UI gets a chance to swallow them.
 func _input(e: InputEvent) -> void:
-	if sleeping or not (e is InputEventKey):
+	if sleeping or title_on or not (e is InputEventKey):
 		return
 	var k := e as InputEventKey
 	if not k.pressed or k.echo:
@@ -1642,6 +1679,94 @@ func _load_game() -> bool:
 	return true
 
 
+# --- tips ------------------------------------------------------------------------------------------
+
+## One-time tips, the first time each becomes useful: [id, when, text]. Each shows once per save
+## (flag tip_<id>), only in open play (no scene, title or sleep), and at most one every 20 seconds.
+## Act 1 teaches the basics itself, so most wait until it's over.
+var tips_enabled := true
+var _tip_t := 3.0
+
+
+func _tips() -> Array:
+	var after_act1: bool = Game.flag("act1_done") == true
+	return [
+		["click", after_act1, "Click anything (sheep, the rocking chair, soil, people) to see what you can do with it."],
+		["shear", after_act1 and Game.count("wool") < 3, "Sheep grow wool every day. Click a woolly one to shear it: three wool knit one sweater."],
+		["knit", after_act1 and Game.has_item("wool", 3), "Enough wool for a sweater. Click the rocking chair and choose Knit Sweater."],
+		["sell", after_act1 and Game.count("sweater") > 0, "Sell sweaters to Rosa at the Maplewood market (her price changes daily), ship them in the bin, or give one as a gift."],
+		["night", after_act1 and Game.hour >= 21.0, "It's getting late. Click the bed to sleep: crops grow, prices change, and the game saves."],
+		["rowan", after_act1 and Game.hearts("rowan") >= 1, "Rowan has more to say than he lets on. Talk to him once a day and a little more comes out."],
+		["build", mode == Mode.BUILD, "Pick a piece from the catalog and click to place it. R rotates, right-click cancels. Click a placed piece to move or sell it."],
+	]
+
+
+func _update_tips(delta: float) -> void:
+	_tip_t -= delta
+	if _tip_t > 0.0 or not tips_enabled or title_on or story.is_playing() or sleeping:
+		return
+	_tip_t = 1.0
+	for t in _tips():
+		if t[1] and not Game.flag("tip_" + str(t[0])):
+			Game.set_flag("tip_" + str(t[0]))
+			hud.show_tip(str(t[2]))
+			_tip_t = 20.0
+			return
+
+
+# --- title screen and display ----------------------------------------------------------------------
+
+var title_on := false
+var _title_clock := true
+
+
+func show_title(has_save: bool) -> void:
+	title_on = true
+	_title_clock = Game.time_running
+	Game.time_running = false
+	cam_follow = false
+	cam_glide = {"pos": Vector3(9.0, 0.0, -2.0), "dist": 24.0}
+	hud.show_title(has_save)
+
+
+func _leave_title() -> void:
+	title_on = false
+	cam_glide = {}
+	cam_follow = true
+	Game.time_running = _title_clock
+	hud.hide_title()
+
+
+func _title_continue() -> void:
+	_leave_title()
+
+
+func _title_new_game() -> void:
+	if FileAccess.file_exists(Game.save_path) and _autotest_dir == "":
+		Engine.set_meta("ke_skip_title", true)
+		_new_game()
+		return
+	_leave_title()
+	_begin_new_story()
+
+
+func _load_display() -> void:
+	if _autotest_dir != "":
+		return
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK and bool(cfg.get_value("display", "fullscreen", false)):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
+func set_fullscreen(on: bool) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	if _autotest_dir == "":
+		var cfg := ConfigFile.new()
+		cfg.load(SETTINGS_PATH)
+		cfg.set_value("display", "fullscreen", on)
+		cfg.save(SETTINGS_PATH)
+
+
 func _new_game() -> void:
 	if FileAccess.file_exists(Game.save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
@@ -2275,6 +2400,78 @@ func _act1_until_done(timeout: float) -> void:
 		t += 0.1
 
 
+## Day 5 polish: sound (muted in the test, but every play is counted), the title screen,
+## the settings panel and first-time tips.
+func _polish_checks() -> void:
+	story.auto = false
+	hud.hide_dialogue()
+	var steps_g := int(audio.played.get("step_grass", 0))
+	var steps_w := int(audio.played.get("step_wood", 0))
+	var needles := int(audio.played.get("needle", 0))
+	_check("footsteps sound on grass and wood, needles click while knitting (grass %d, wood %d, needle %d)" % [steps_g, steps_w, needles],
+		steps_g > 10 and steps_w > 3 and needles > 3)
+	_check("what's underfoot: wood in the living room, grass in the yard (%s, %s)" % [surface_at(Vector3(3, 0, 2)), surface_at(Vector3(20, 0, 8))],
+		surface_at(Vector3(3, 0, 2)) == "wood" and surface_at(Vector3(20, 0, 8)) == "grass")
+	# ambience follows the time of day and the weather
+	var p0 := player.position
+	var w0 = Game.flag("weather", "clear")
+	var h0 := Game.hour
+	player.walk([])
+	player.position = Vector3(20, 0, 8)
+	Game.hour = 13.0
+	Game.set_flag("weather", "clear")
+	await _wait(5.0)
+	var day_g := [audio.gain("day"), audio.gain("night"), audio.gain("rain")]
+	Game.hour = 23.0
+	Game.set_flag("weather", "rain") # rain eases in over two seconds
+	await _wait(5.0)
+	var night_g := [audio.gain("day"), audio.gain("night"), audio.gain("rain")]
+	_check("ambience: birds by day, crickets and rain at a wet midnight (day %s, night %s)" % [str(day_g), str(night_g)],
+		day_g[0] > 0.6 and day_g[1] < 0.2 and day_g[2] < 0.1 and night_g[1] > 0.3 and night_g[2] > 0.6 and night_g[0] < 0.1)
+	Game.set_flag("weather", w0)
+	Game.hour = h0
+	player.position = p0
+	# memories muffle the music
+	hud.set_memory(true, 0.2)
+	await _wait(3.0)
+	var mg := audio.gain("music")
+	var lp := AudioServer.is_bus_effect_enabled(AudioServer.get_bus_index("Music"), audio._memory_fx)
+	hud.set_memory(false, 0.2)
+	await _wait(3.0)
+	_check("a memory flashback muffles and quietens the music (gain %.2f, low-pass %s, after %.2f)" % [mg, lp, audio.gain("music")],
+		mg < 0.7 and lp and audio.gain("music") > 0.9)
+	# settings
+	audio.set_volumes(0.3, 0.5)
+	hud.open_settings(0.3, 0.5, false)
+	var mdb := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music"))
+	var sdb := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX"))
+	await _wait(0.4)
+	await _shot("40_settings.png")
+	_check("settings: music and sound sliders set the buses (%.1f dB, %.1f dB; panel %s, slider %.1f)" % [mdb, sdb, hud.settings_panel.visible, hud.music_slider.value],
+		hud.settings_panel.visible and absf(mdb - linear_to_db(0.09)) < 0.1 and absf(sdb - linear_to_db(0.25)) < 0.1 and is_equal_approx(hud.music_slider.value, 0.3))
+	audio.set_volumes(0.7, 0.8)
+	hud.settings_panel.visible = false
+	# title screen
+	show_title(true)
+	await _wait(1.2)
+	await _shot("41_title.png")
+	var faded := hud.chrome.all(func(c): return c.modulate.a < 0.05)
+	_check("title screen: shown over the farm, clock paused, chrome hidden (visible %s, continue %s, chrome hidden %s)" % [hud.title_visible(), hud.title_continue_btn.visible, faded],
+		hud.title_visible() and hud.title_continue_btn.visible and not Game.time_running and faded)
+	_title_continue()
+	await _wait(1.0)
+	_check("Continue leaves the title and starts the clock again (title %s, clock %s)" % [hud.title_visible(), Game.time_running],
+		not hud.title_visible() and Game.time_running and not title_on)
+	# tips
+	tips_enabled = true
+	_tip_t = 0.0
+	await _wait(1.6)
+	await _shot("42_tip.png")
+	_check("a first-time tip appears after Act 1 and is remembered ('%s')" % hud.tip_label.text.left(40),
+		hud.tip_panel.visible and Game.flag("tip_click") == true)
+	tips_enabled = false
+
+
 func _check(label: String, ok: bool) -> void:
 	print(("PASS  " if ok else "FAIL  ") + label)
 
@@ -2412,6 +2609,7 @@ func _autotest() -> void:
 	await _story_checks()
 	await _act1_checks()
 	await _romance_checks()
+	await _polish_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
 

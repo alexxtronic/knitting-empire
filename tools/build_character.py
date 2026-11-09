@@ -51,7 +51,7 @@ SPECS = {
         eye=1.1, nose=0.82, lips=(0.0195, 0.0075, 0.0068), brow=(0.019, 0.0038, 0.0032, -13),
         skin=(0.94, 0.76, 0.65), lip_color=(0.80, 0.43, 0.43), blush=0.24, iris=(0.27, 0.38, 0.24),
         hair=(0.42, 0.19, 0.10), hair_hi=(0.58, 0.29, 0.14), brow_color=(0.34, 0.17, 0.09),
-        hair_style="bun", beard=None, lashes=True, earrings=True,
+        hair_style="bun", beard=None, lashes=True, earrings=True, anim="nora",
         knit=((0.77, 0.53, 0.53), (0.95, 0.90, 0.81), (0.70, 0.47, 0.47)),
         body_bands=[(33, "dots"), (35, "line"), (37, "diamonds"), (43, "star"), (57, "line"), (59, "dots")],
         sleeve_bands=[(44, "diamonds"), (50, "line"), (52, "dots")],
@@ -1001,8 +1001,47 @@ def a_talk(p):
     return d
 
 
-ANIMS = [("Idle", 60, a_idle), ("Walk", 18, a_walk), ("SitKnit", 40, a_sit_knit),
-         ("SitIdle", 90, a_sit_idle), ("Work", 30, a_work), ("Talk", 60, a_talk)]
+# --- Nora's own loops (spec anim="nora"): same names and lengths, so the game treats them alike.
+# Early on she holds herself a little guarded: hands loosely together in front, weight shifting
+# from foot to foot. Her walk has a lighter arm swing and more sway through the hips and chest,
+# and she talks with both hands.
+
+def a_idle_nora(p):
+    b = math.sin(2 * math.pi * p)
+    sway = math.sin(2 * math.pi * p + 0.6)
+    d = P(Spine=(1.0, 2.0 * sway, -1.5 * sway), Chest=(1.2 * b, -1.0 * sway, 1.0 * sway),
+          Neck=(-0.8 * b, 0, 0), Head=(2.0, 4 * math.sin(2 * math.pi * p + 1), 3.0 + 2.0 * sway),
+          LeftUpperArm=(4 + 1.5 * b, 0, 0), LeftLowerArm=(16 + 2 * b, 0, 0), LeftHand=(0, 0, 6))
+    mirror(d, "Left", "Right")
+    d["hips_loc"] = 0.003 * b
+    return d
+
+
+def a_walk_nora(p):
+    s, c = math.sin(2 * math.pi * p), math.cos(2 * math.pi * p)
+    d = a_walk(p)
+    for n, sg in (("Left", 1), ("Right", -1)):
+        d[n + "UpperArm"] = (-15 * sg * s, 0, 0)
+        d[n + "LowerArm"] = (18 + 10 * max(0.0, -sg * s), 0, 0)
+    d["Spine"] = (2, 7 * s, 2.0 * c)
+    d["Chest"] = (1, -5 * s, -1.0 * c)
+    d["Head"] = (-1, -2.5 * s, 0.8 * c)
+    return d
+
+
+def a_talk_nora(p):
+    k = math.sin(2 * math.pi * p * 2)
+    w = math.sin(2 * math.pi * p)
+    return P(Chest=(0, 3 * w, 1.5 * w), Head=(2 + 2 * k, 5 * w, 4 * math.sin(2 * math.pi * p + 0.8)),
+             RightUpperArm=(20, -8, -6), RightLowerArm=(64 + 10 * k, 0, 0), RightHand=(-8 * k, 0, 0),
+             LeftUpperArm=(6, 15, 6), LeftLowerArm=(40 - 8 * k, 0, 0), LeftHand=(6 * k, 0, 0))
+
+
+STYLE = S.get("anim", "base")
+ANIMS = [("Idle", 60, a_idle_nora if STYLE == "nora" else a_idle),
+         ("Walk", 18, a_walk_nora if STYLE == "nora" else a_walk), ("SitKnit", 40, a_sit_knit),
+         ("SitIdle", 90, a_sit_idle), ("Work", 30, a_work),
+         ("Talk", 60, a_talk_nora if STYLE == "nora" else a_talk)]
 root.animation_data_create()
 actions = {}
 for name, frames, fn in ANIMS:

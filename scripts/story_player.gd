@@ -305,6 +305,8 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			var title := rest.substr(0, bar).strip_edges() if bar >= 0 else rest.strip_edges()
 			var text := rest.substr(bar + 1).strip_edges() if bar >= 0 else ""
 			Game.add_journal(kind, title, text)
+			if main.audio:
+				main.audio.play("journal", -8.0)
 			main.hud.show_toast(("A memory, written down: " if kind == "memory" else "Journal: ") + title)
 		"time":
 			if not a.is_empty():

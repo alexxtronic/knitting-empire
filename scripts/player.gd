@@ -27,6 +27,10 @@ var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle
 var _talk_t := 0.0
 var _ring: MeshInstance3D
 var walked := 0.0 # metres walked since main.gd last counted them (for fitness)
+signal footstep # a foot lands (from the Walk loop's timing)
+signal needle_click # a stitch while she knits
+var _walk_phase := -1.0
+var _needle_t := 0.4
 
 
 func _ready() -> void:
@@ -183,6 +187,25 @@ func _animate(delta: float, walking: bool) -> void:
 	elif _talk_t > 0.0:
 		want = "Talk"
 	body.play(want, speed)
+	_sound_cues(delta)
+
+
+## Footsteps land twice per Walk loop, when each leg is furthest forward (a quarter and three
+## quarters through it, see a_walk in tools/build_character.py); needles click while she knits.
+func _sound_cues(delta: float) -> void:
+	var cur := body.current()
+	if cur == "Walk" and body.anim.current_animation_length > 0.0:
+		var ph := fmod(body.anim.current_animation_position / body.anim.current_animation_length + 0.75, 1.0)
+		if _walk_phase >= 0.0 and (ph < _walk_phase or (_walk_phase < 0.5 and ph >= 0.5)):
+			footstep.emit()
+		_walk_phase = ph
+	else:
+		_walk_phase = -1.0
+	if cur == "SitKnit":
+		_needle_t -= delta
+		if _needle_t <= 0.0:
+			needle_click.emit()
+			_needle_t = randf_range(0.28, 0.65)
 
 
 func _animate_simple(walking: bool) -> void:
