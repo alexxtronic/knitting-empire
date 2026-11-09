@@ -127,6 +127,8 @@ func _ready() -> void:
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
 			Game.reset()
 	_setup_environment()
+	_fit_3d_resolution()
+	get_viewport().size_changed.connect(_fit_3d_resolution)
 	cam = Camera3D.new()
 	cam.fov = 32.0
 	cam.far = 300.0
@@ -333,6 +335,27 @@ func _setup_environment() -> void:
 	# depth of field for close-ups (_update_camera turns it on when the camera's near)
 	cam_attr = CameraAttributesPractical.new()
 	cam_attr.dof_blur_amount = 0.05
+
+
+## The 3D scene is drawn at about 1.6 million pixels whatever the window size, then upscaled
+## (MetalFX on Macs, FSR elsewhere); the menus stay at full resolution. A full-screen Retina
+## window is 4 to 7 million pixels, which a laptop GPU can't fill at 60 fps with these effects.
+const TARGET_3D_PIXELS := 1.6e6
+
+func _fit_3d_resolution() -> void:
+	var vp := get_viewport()
+	var px := Vector2(get_window().size)
+	# a 2x-scaled 1440p monitor full screen is 5120x2880 = 14.7M pixels, so allow down to a quarter
+	var scale := clampf(sqrt(TARGET_3D_PIXELS / maxf(px.x * px.y, 1.0)), 0.25, 1.0)
+	if scale > 0.95:
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		vp.scaling_3d_scale = 1.0
+		return
+	# MetalFX for the usual up-to-2x step on Macs; FSR handles any ratio
+	var metal := OS.get_name() == "macOS" and scale >= 0.5
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_METALFX_SPATIAL if metal else Viewport.SCALING_3D_MODE_FSR
+	vp.scaling_3d_scale = scale
+	vp.fsr_sharpness = 0.3
 
 
 func _update_lighting() -> void:
@@ -1806,7 +1829,7 @@ func _run_fps_probe() -> void:
 		"vol_fog": func(on): env.volumetric_fog_enabled = on,
 		"glow": func(on): env.glow_enabled = on,
 		"sun_shadow": func(on): sun.shadow_enabled = on,
-		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 1),
+		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(3 if on else 1),
 		"lamp_shadows": func(on):
 			for l in lamps:
 				l.shadow_enabled = on,
@@ -1814,17 +1837,19 @@ func _run_fps_probe() -> void:
 	}
 	var vp := get_viewport()
 	var before_today := func(on):
-		# on = today's settings; off = what the game shipped with yesterday
+		# on = today's settings; off = what the game shipped with before the shadow pass
 		env.ssr_enabled = on
-		RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH if on else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, not on, 0.5, 2, 50.0, 300.0)
-		RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 2)
-		RenderingServer.directional_shadow_atlas_set_size(8192 if on else 4096, true)
+		RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH if on else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, true, 0.5, 2, 50.0, 300.0)
+		RenderingServer.directional_soft_shadow_filter_set_quality(3 if on else 2)
 		for l in lamps:
 			l.shadow_enabled = on
-	toggles["TODAY'S CHANGES"] = before_today
-	toggles["3D at 100% (vs 75% FSR)"] = func(on):
-		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR if on else Viewport.SCALING_3D_MODE_FSR
-		vp.scaling_3d_scale = 1.0 if on else 0.75
+	toggles["shadow-pass changes"] = before_today
+	toggles["upscaling (vs full res)"] = func(on):
+		if on:
+			_fit_3d_resolution()
+		else:
+			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+			vp.scaling_3d_scale = 1.0
 	for view in [["town noon", Vector3(53, 0, -3), 30.0, 10.8], ["farm night", Vector3(8, 0, -2), 23.0, 21.5]]:
 		cam_target = view[1]
 		cam_dist = view[2]
@@ -1832,7 +1857,7 @@ func _run_fps_probe() -> void:
 		await _wait(3.0)
 		await _frame_ms()
 		var base := await _frame_ms()
-		print("PROBE %s  %s  all on: %.2f ms" % [view[0], vp.get_visible_rect().size, base])
+		print("PROBE %s  window %s px, 3D at %d%%  all on: %.2f ms (%.0f fps)" % [view[0], get_window().size, roundi(vp.scaling_3d_scale * 100.0), base, 1000.0 / base])
 		for k in toggles:
 			toggles[k].call(false)
 			await _wait(0.6)

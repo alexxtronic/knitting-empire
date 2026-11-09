@@ -32,6 +32,8 @@ const LOOK_BONES := [["Neck", 0.4], ["Head", 1.0]]
 const MAX_YAW := deg_to_rad(70.0)
 const MAX_PITCH_UP := deg_to_rad(25.0)
 const MAX_PITCH_DOWN := deg_to_rad(35.0)
+const SPRING_STEP := 1.0 / 120.0
+const MAX_LEAN := 0.25 # radians, about 14 degrees
 
 
 func _setup() -> void:
@@ -71,10 +73,20 @@ func _process_modification_with_delta(delta: float) -> void:
 		want.y = 0.035 + clampf(accel * 0.03, -0.08, 0.1) # a slight forward lean, more when speeding up
 	else:
 		want.x = sin((_t + seed_t) * 0.55) * 0.018 # idle weight shift
+	# stepped in small fixed slices: one big step on a slow frame would overshoot further each
+	# frame until the spine spun round (the arms-flying glitch at low frame rates)
 	var k := 70.0
 	var c := 11.0
-	_lean_v += ((want - _lean) * k - _lean_v * c) * delta
-	_lean += _lean_v * delta
+	var left := minf(delta, 0.25)
+	while left > 0.0:
+		var h := minf(left, SPRING_STEP)
+		_lean_v += ((want - _lean) * k - _lean_v * c) * h
+		_lean += _lean_v * h
+		left -= h
+	if not (_lean.is_finite() and _lean_v.is_finite()):
+		_lean = Vector2.ZERO
+		_lean_v = Vector2.ZERO
+	_lean = _lean.clamp(Vector2(-MAX_LEAN, -MAX_LEAN), Vector2(MAX_LEAN, MAX_LEAN))
 	var breath := sin((_t + seed_t) * TAU * 0.24)
 	_add_rot(sk, "Spine", right, _lean.y * 0.5 - breath * 0.004)
 	_add_rot(sk, "Spine", fwd, _lean.x * 0.55)
@@ -87,6 +99,8 @@ func _process_modification_with_delta(delta: float) -> void:
 	var target_w := 0.0
 	if look_target != null:
 		var tl: Vector3 = sk.global_transform.affine_inverse() * (look_target as Vector3)
+		if not tl.is_finite():
+			tl = _target
 		_target = tl if _w < 0.01 else _target.lerp(tl, clampf(delta * 6.0, 0.0, 1.0))
 		target_w = look_strength
 	_w = move_toward(_w, target_w, delta * (2.2 if target_w > _w else 1.6))
@@ -99,6 +113,8 @@ func _process_modification_with_delta(delta: float) -> void:
 		var gp := sk.get_bone_global_pose(bi)
 		var cur: Vector3 = (gp.basis * (_fwd_rest[n] as Vector3)).normalized()
 		var desired := _limit((_target - gp.origin).normalized(), fwd, up, right)
+		if cur.is_zero_approx() or not desired.is_finite() or cur.dot(desired) < -0.99:
+			continue # pointing straight back: no stable rotation, leave the animated pose
 		var q := Quaternion(cur, desired)
 		q = Quaternion.IDENTITY.slerp(q, share * _w)
 		_set_global_basis(sk, bi, Basis(q) * gp.basis)
