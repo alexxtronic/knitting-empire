@@ -2,7 +2,7 @@ extends RefCounted
 ## Game content lives in res://data/*.json so it can be tuned and written without touching code:
 ##   furniture.json  Build-mode catalog        crops.json      seeds and growth times
 ##   economy.json    prices, costs, limits     villagers.json  who lives in Maplewood
-##   dialogue.json   what villagers say
+##   dialogue.json   what villagers say    characters.json skinned character models
 ## Each file is read once and cached. validate() cross-checks the files (run by the autotest).
 ## When exporting the game, add "data/*.json" to the export preset's non-resource include filter.
 
@@ -91,6 +91,19 @@ static func villagers() -> Array:
 	return out
 
 
+## Skinned character info by id (model path, stride...). Empty if unknown.
+static func character(id: String) -> Dictionary:
+	for c in load_json("characters").get("characters", []):
+		if str(c.get("id", "")) == id:
+			return c
+	return {}
+
+
+## Which character you play.
+static func player_character() -> String:
+	return str(load_json("characters").get("player", "nora"))
+
+
 static func dialogue() -> Dictionary:
 	return load_json("dialogue")
 
@@ -122,4 +135,9 @@ static func validate(has_builder: Callable) -> Array:
 			errs.append("villager '%s' needs 3 tiers of lines" % id)
 		if not dlg.get("gift_loved", {}).has(id):
 			errs.append("villager '%s' has no loved-gift line" % id)
+		var model := str(v.get("look", {}).get("model", ""))
+		if model != "" and character(model).is_empty():
+			errs.append("villager '%s' uses unknown character model '%s'" % [id, model])
+	if character(player_character()).is_empty():
+		errs.append("characters.json: player '%s' isn't a listed character" % player_character())
 	return errs

@@ -2,7 +2,7 @@
 
 A cozy life-sim prototype built in Godot 4. Raise sheep, knit sweaters, grow crops, decorate your house, make friends in the town of Maplewood and buy property to rent out.
 
-![The farmer knitting](tools/farmer_build/knit_closeup.png)
+![Rowan and Nora](tools/character_build/lineup.png)
 
 ## Play
 
@@ -18,7 +18,7 @@ Controls:
 - Click objects and people to see what you can do with them.
 - WASD or the arrow keys pan the camera.
 - Q and E rotate the camera, and the scroll wheel or a trackpad pinch zooms.
-- Space or the lock button locks the camera to the farmer.
+- Space or the lock button locks the camera to your character.
 - C toggles the walls.
 - B toggles Build mode. In Build mode, R rotates a piece, X sells it and Esc cancels.
 
@@ -30,7 +30,7 @@ Controls:
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out
-- **The farmer:** modelled, rigged and animated in Blender by `tools/build_farmer.py`. He's one skinned mesh on a humanoid skeleton named to match Godot's humanoid profile, with loops for Idle, Walk, SitKnit, SitIdle, Work and Talk, plus knitting needles and a swatch that appear while he knits.
+- **Characters:** Nora (the heroine you play, working name) and Rowan (the shepherd in Maplewood) come from one Blender script, `tools/build_character.py`. Each is one skinned mesh on the same 22-bone humanoid skeleton, named to match Godot's humanoid profile, and both share the same loops: Idle, Walk, SitKnit, SitIdle, Work and Talk. Knitting needles and a swatch appear while knitting.
 
 ## Project layout
 
@@ -42,8 +42,9 @@ Controls:
 | `scripts/game_state.gd` | autoloaded save data, economy and story flags |
 | `scripts/hud.gd` | HUD, menus, camera pad, dialogue |
 | `scripts/town.gd`, `villager.gd`, `dialogue.gd` | Maplewood |
-| `scripts/player.gd` | the farmer and his animation states |
-| `tools/build_farmer.py` | Blender script that builds `assets/farmer.glb` |
+| `scripts/player.gd` | the character you play and her activity states |
+| `scripts/body.gd` | a skinned character body; picks and cross-fades animation loops |
+| `tools/build_character.py` | Blender character generator: builds `assets/<id>.glb` |
 
 ## Adding content without code
 
@@ -60,10 +61,14 @@ Story progress is kept as named flags (`Game.set_flag("met_rowan")`, `Game.flag(
 
 When exporting, add `data/*.json` to the export preset's non-resource include filter.
 
-Rebuild the character:
+## Characters
+
+`tools/build_character.py` holds a spec for each character: body proportions (height, shoulders, waist, hips, bust, limbs, head), face, hair style, palette and outfit. Every character gets the same skeleton and the same animations, so a loop added once works for everyone. To add a character, add a spec and rebuild, list it in `data/characters.json`, and give a villager `"look": {"model": "<id>"}` in `data/villagers.json`.
+
+Rebuild every character, and render turntables, pose sheets and a lineup:
 
 ```bash
-/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/build_farmer.py -- "$PWD" --render /tmp/farmer_render --poses
+/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/build_character.py -- "$PWD" --character all --render /tmp/character_render --poses
 ```
 
 Run the automated smoke test, which writes screenshots and prints PASS/FAIL lines:

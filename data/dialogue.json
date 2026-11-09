@@ -3,7 +3,8 @@
   "intro": {
     "rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
     "theo": "Welcome to Woolly Goods! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
-    "mabel": "Mabel Finch, Maplewood Land Office. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours."
+    "mabel": "Mabel Finch, Maplewood Land Office. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
+    "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably."
   },
   "lines": {
     "rosa": [
@@ -56,12 +57,30 @@
         "One day this whole valley will be wearing your sweaters and renting your houses.",
         "Keep this up and they'll name a street after you."
       ]
+    ],
+    "rowan": [
+      [
+        "Your fence on the east side leans. I'd fix it before the ewes notice.",
+        "Weather's turning. Sheep always know first.",
+        "Most folks who move out here from the city last a season. You've got a look like you might stay."
+      ],
+      [
+        "You've got wool on your sleeve. Suits you.",
+        "I walked past your place last night. Light was on late. Knitting, or not sleeping?",
+        "Theo won't stop talking about your work. Takes a lot to get Theo talking. Well. Less than you'd think."
+      ],
+      [
+        "I used to hate quiet evenings. Lately I don't mind them.",
+        "If you ever want to see the hill at sunset, I know the best rock to sit on.",
+        "You don't have to tell me what you left behind. But I'd listen, if you wanted."
+      ]
     ]
   },
   "gift_loved": {
     "rosa": "A pumpkin! Oh, you remembered. I'm baking a pie tonight and you're getting the first slice.",
     "theo": "Is this... one of YOUR sweaters? For me? I'm wearing it every day. Every single day.",
-    "mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy."
+    "mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy.",
+    "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill."
   },
   "new_sheep_names": [
     "Clover",

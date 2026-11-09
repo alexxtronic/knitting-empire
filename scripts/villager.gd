@@ -1,8 +1,12 @@
 extends Node3D
 ## A Maplewood townsperson: idles near their post, turns to face you when you
 ## come over, and wears a name tag. Friendship lives in Game.friends.
+## With look.model set (a character id from data/characters.json) they wear that skinned
+## body and share the player's animations; otherwise they get a simple shape model.
 
 const Catalog = preload("res://scripts/catalog.gd")
+const Body = preload("res://scripts/body.gd")
+const WALK_SPEED := 1.0
 
 var vid := ""
 var title := ""
@@ -18,6 +22,7 @@ var _wait := 0.0
 var _t := 0.0
 var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
+var body: Body # set when this villager wears a skinned character model
 
 
 ## look: {"skin", "hair", "top", "bottom", "extra"} where extra is apron / glasses / hat.
@@ -52,6 +57,22 @@ func face_point(p: Vector3, seconds := 8.0) -> void:
 func _build(look: Dictionary) -> void:
 	_model = Node3D.new()
 	add_child(_model)
+	var tag_y := 2.05
+	var model_id := str(look.get("model", ""))
+	if model_id != "":
+		body = Body.new()
+		_model.add_child(body)
+		if body.load_character(model_id):
+			tag_y = body.label_height + 0.12
+		else:
+			body.queue_free()
+			body = null
+	if body == null:
+		_build_shapes(look)
+	_add_tag_and_collider(tag_y)
+
+
+func _build_shapes(look: Dictionary) -> void:
 	var skin: Color = look.get("skin", Color(0.93, 0.76, 0.62))
 	var hair: Color = look.get("hair", Color(0.3, 0.2, 0.12))
 	var top: Color = look.get("top", Catalog.CREAM)
@@ -79,6 +100,9 @@ func _build(look: Dictionary) -> void:
 			Catalog.cyl(_model, 0.3, 0.3, 0.03, Vector3(0, 1.42, 0), Color(0.25, 0.2, 0.32))
 			Catalog.cyl(_model, 0.15, 0.17, 0.2, Vector3(0, 1.52, 0), Color(0.25, 0.2, 0.32))
 			Catalog.cyl(_model, 0.172, 0.172, 0.05, Vector3(0, 1.46, 0), Catalog.BRASS)
+
+
+func _add_tag_and_collider(tag_y: float) -> void:
 	var tag := Label3D.new()
 	tag.text = "%s\n%s" % [title, role]
 	tag.font_size = 56
@@ -87,7 +111,7 @@ func _build(look: Dictionary) -> void:
 	tag.no_depth_test = true
 	tag.modulate = Color(1.0, 0.95, 0.82)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.position = Vector3(0, 2.05, 0)
+	tag.position = Vector3(0, tag_y, 0)
 	add_child(tag)
 	var body := StaticBody3D.new()
 	body.collision_layer = 2
@@ -104,6 +128,9 @@ func _build(look: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if body:
+		_process_body(delta)
+		return
 	if hold_time > 0.0:
 		hold_time -= delta
 		_model.position.y = lerpf(_model.position.y, 0.0, 0.2)
@@ -130,3 +157,27 @@ func _process(delta: float) -> void:
 	_model.position.y = absf(sin(_t * 9.0)) * 0.04
 	for i in _arms.size():
 		_arms[i].rotation_degrees.x = 18.0 * sin(_t * 9.0 + i * PI)
+
+
+## Skinned villagers: talk while held in a conversation, idle while waiting, walk between spots.
+func _process_body(delta: float) -> void:
+	if hold_time > 0.0:
+		hold_time -= delta
+		body.play("Talk")
+		return
+	if _wait > 0.0:
+		_wait -= delta
+		body.play("Idle")
+		return
+	var to := _target - position
+	to.y = 0.0
+	var d := to.length()
+	var step := WALK_SPEED * delta
+	if d <= step:
+		position = Vector3(_target.x, 0.0, _target.z)
+		_wait = randf_range(2.0, 6.0)
+		_target = home + Vector3(randf_range(-roam.x, roam.x), 0, randf_range(-roam.y, roam.y))
+		return
+	position += to / d * step
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.2)
+	body.play("Walk", WALK_SPEED)

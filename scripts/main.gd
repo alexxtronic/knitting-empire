@@ -190,7 +190,7 @@ func _set_cam_lock(on: bool, announce := false) -> void:
 	cam_follow = on
 	hud.set_cam_locked(on)
 	if announce:
-		hud.show_toast("Camera locked onto your farmer." if on else "Camera unlocked: pan anywhere.")
+		hud.show_toast("Camera locked onto you." if on else "Camera unlocked: pan anywhere.")
 
 
 # --- environment & lighting ------------------------------------------------------
@@ -1314,7 +1314,7 @@ func _autotest() -> void:
 	await _character_checks()
 	_do_action(chair, "knit")
 	await _wait(3.6)
-	_check("farmer sits to knit (%s, needles shown=%s)" % [player._anim.current_animation, player._props != null and player._props.visible], player.busy and player.position.distance_to(chair.position) < 1.2 and player._anim.current_animation == "SitKnit" and player._props != null and player._props.visible)
+	_check("heroine sits to knit (%s, needles shown=%s)" % [player.body.current(), player.body.props != null and player.body.props.visible], player.busy and player.position.distance_to(chair.position) < 1.2 and player.body.current() == "SitKnit" and player.body.props != null and player.body.props.visible)
 	var cd0 := cam_dist
 	cam_target = player.position
 	cam_dist = 5.5
@@ -1402,22 +1402,56 @@ func _autotest() -> void:
 
 
 func _character_checks() -> void:
-	_check("Blender farmer model loaded", player.detailed)
+	_check("heroine model loaded (%s, %d bones)" % [player.body.id, player.body.bone_names().size()], player.detailed and player.body.id == Data.player_character())
 	var cd0 := cam_dist
 	cam_target = player.position
 	cam_dist = 5.0
 	await _wait(1.6)
-	await _shot("02a_farmer_closeup.png")
+	await _shot("02a_heroine_closeup.png")
 	var home := player.position
 	player.walk(_find_path(player.position, home + Vector3(2.5, 0, 0)))
 	await _wait(0.45)
-	_check("farmer plays the Walk animation (%s)" % player._anim.current_animation, player._anim.current_animation == "Walk")
+	_check("heroine plays the Walk animation (%s)" % player.body.current(), player.body.current() == "Walk")
 	cam_target = player.position
-	await _shot("02b_farmer_walk.png")
+	await _shot("02b_heroine_walk.png")
 	await _wait(1.0)
 	player.walk(_find_path(player.position, home))
 	await _wait(1.5)
+	# Rowan wears the same skeleton and plays the same loops as the heroine
+	var rowan := _villager("rowan")
+	var rb = rowan.body if rowan else null
+	var same_bones: bool = rb != null and rb.bone_names() == player.body.bone_names() and rb.bone_names().size() == 22
+	_check("Rowan is in Maplewood on the heroine's skeleton (%d bones, same names=%s)" % [rb.bone_names().size() if rb else 0, same_bones], same_bones)
+	var shared := 0
+	if rb:
+		for n in player.body.ANIMS:
+			var a: Animation = player.body.anim.get_animation(n)
+			var b: Animation = rb.anim.get_animation(n)
+			if a and b and _anim_bones(a) == _anim_bones(b) and absf(a.length - b.length) < 0.001:
+				shared += 1
+	_check("Rowan and the heroine share all %d animation loops (%d match)" % [player.body.ANIMS.size(), shared], shared == player.body.ANIMS.size())
+	if rowan:
+		rowan.face_point(rowan.position + Vector3(0, 0, 2), 2.5)
+		var follow0 := cam_follow
+		cam_follow = false
+		cam_target = rowan.position + Vector3(0, 0.9, 0)
+		cam_dist = 5.0
+		await _wait(1.2)
+		_check("Rowan gestures while talking (%s)" % rb.current(), rb.current() == "Talk")
+		await _shot("02d_rowan.png")
+		rowan.hold_time = 0.0
+		cam_follow = follow0
+	cam_target = player.position
 	cam_dist = cd0
+
+
+## Bones an animation moves, by name (track paths also carry the character's own node name).
+func _anim_bones(a: Animation) -> Array:
+	var out := []
+	for i in a.get_track_count():
+		out.append(str(a.track_get_path(i).get_concatenated_subnames()) + ":" + str(a.track_get_type(i)))
+	out.sort()
+	return out
 
 
 func _key_tap(kc: Key, hold := 0.0) -> void:
@@ -1434,7 +1468,7 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 
 
 func _camera_checks() -> void:
-	# lock button starts locked and follows the farmer
+	# lock button starts locked and follows the heroine
 	_set_cam_lock(true)
 	_check("camera starts locked, lock icon closed", cam_follow and hud.cam_locked and hud.lock_btn.button_pressed)
 	# a real key event for W must pan and unlock (even with the help panel open)
@@ -1476,10 +1510,10 @@ func _camera_checks() -> void:
 	_check("trackpad pinch zooms once (%.1f→%.1f)" % [d0, cam_dist], absf(cam_dist - d0 / 1.5) < 0.1)
 	cam_dist = d0
 	await _shot("07_camera_unlocked.png")
-	# clicking the lock button re-locks and flies back to the farmer
+	# clicking the lock button re-locks and flies back to the heroine
 	hud.lock_btn.button_pressed = true
 	await _wait(1.5)
-	_check("lock button re-locks onto the farmer (%.1fm away)" % Vector2(cam_target.x - player.position.x, cam_target.z - player.position.z).length(), cam_follow and hud.cam_locked and Vector2(cam_target.x - player.position.x, cam_target.z - player.position.z).length() < 1.0)
+	_check("lock button re-locks onto the heroine (%.1fm away)" % Vector2(cam_target.x - player.position.x, cam_target.z - player.position.z).length(), cam_follow and hud.cam_locked and Vector2(cam_target.x - player.position.x, cam_target.z - player.position.z).length() < 1.0)
 	await _shot("08_camera_locked.png")
 
 

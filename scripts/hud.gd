@@ -371,12 +371,12 @@ func _build_camera_pad() -> void:
 	set_cam_locked(true)
 
 
-## Shows the lock as closed (camera follows your farmer) or open (free camera).
+## Shows the lock as closed (camera follows your character) or open (free camera).
 func set_cam_locked(on: bool) -> void:
 	cam_locked = on
 	lock_btn.set_pressed_no_signal(on)
 	lock_icon.set_kind("lock" if on else "unlock", Color(1.0, 0.92, 0.7) if on else TEXT)
-	lock_btn.tooltip_text = "Camera locked to your farmer. Click to unlock (Space)" if on else "Free camera. Click to lock onto your farmer (Space)"
+	lock_btn.tooltip_text = "Camera locked to your character. Click to unlock (Space)" if on else "Free camera. Click to lock onto your character (Space)"
 
 
 func _build_catalog() -> void:
@@ -519,7 +519,7 @@ func _build_help() -> void:
 [b]Live mode:[/b] click the ground to walk. Click things (chair, bed, kitchen, soil plots, sheep, shipping bin) for a menu of actions.
 [b]Farming:[/b] plant seeds in the soil plots, water them every day, harvest when they glow. Eat crops at the kitchen or ship them.
 [b]Build & Buy:[/b] pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
-[b]Camera:[/b] use the camera pad (bottom left), WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · the [b]lock[/b] button (or [b]Space[/b]) locks the camera onto your farmer · [b]C[/b] toggles walls.
+[b]Camera:[/b] use the camera pad (bottom left), WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · the [b]lock[/b] button (or [b]Space[/b]) locks the camera onto your character · [b]C[/b] toggles walls.
 [b]Maplewood:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]Days:[/b] sleep in your bed to start a new day. Watered crops grow overnight. The game saves when you sleep and when you quit."""
 	vb.add_child(rt)

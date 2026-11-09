@@ -1,0 +1,20 @@
+{
+  "_about": "Skinned characters made by tools/build_character.py. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed' is the walking speed (m/s) the Walk loop's stride matches for that body; 'label_height' is where floating text sits above them.",
+  "player": "nora",
+  "characters": [
+    {
+      "id": "nora",
+      "name": "Nora",
+      "model": "res://assets/nora.glb",
+      "walk_anim_speed": 2.85,
+      "label_height": 2.05
+    },
+    {
+      "id": "rowan",
+      "name": "Rowan",
+      "model": "res://assets/rowan.glb",
+      "walk_anim_speed": 3.0,
+      "label_height": 2.15
+    }
+  ]
+}

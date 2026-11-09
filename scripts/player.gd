@@ -1,14 +1,12 @@
 extends Node3D
-## The farmer: follows paths, sits, and runs timed activities (knitting, shearing...).
-## Uses the Blender-made character in res://assets/farmer.glb (built by tools/build_farmer.py):
-## a skinned humanoid with Idle, Walk, SitKnit, SitIdle, Work and Talk loops, cross-faded here.
-## Falls back to a simple shape model if the file is missing.
+## The character you play: follows paths, sits, and runs timed activities (knitting, shearing...).
+## Wears the skinned body named as "player" in data/characters.json (see scripts/body.gd),
+## which shares its skeleton and animation loops with every other character.
+## Falls back to a simple shape model if the model is missing.
 
 const Catalog = preload("res://scripts/catalog.gd")
-const MODEL_PATH := "res://assets/farmer.glb"
-const ANIMS := ["Idle", "Walk", "SitKnit", "SitIdle", "Work", "Talk"]
-const WALK_ANIM_SPEED := 3.0 # walking speed (m/s) the Walk loop's stride was keyed for
-const BLEND := 0.22
+const Data = preload("res://scripts/data.gd")
+const Body = preload("res://scripts/body.gd")
 
 var speed := 3.0
 var path: Array = []
@@ -24,8 +22,7 @@ var _sitting := false
 var _t := 0.0
 var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
-var _anim: AnimationPlayer
-var _props: Node3D # needles + swatch, shown only while knitting
+var body: Body
 var _talk_t := 0.0
 var _label: Label3D
 var _ring: MeshInstance3D
@@ -34,34 +31,14 @@ var _ring: MeshInstance3D
 func _ready() -> void:
 	_model = Node3D.new()
 	add_child(_model)
-	if ResourceLoader.exists(MODEL_PATH):
-		var packed := load(MODEL_PATH) as PackedScene
-		if packed:
-			var inst := packed.instantiate() as Node3D
-			_model.add_child(inst)
-			var aps := inst.find_children("*", "AnimationPlayer", true, false)
-			if not aps.is_empty():
-				_anim = aps[0]
-				detailed = true
-				for n in ANIMS:
-					if not _anim.has_animation(n):
-						detailed = false
-					else:
-						_anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
-			if detailed:
-				_anim.play("Idle")
-				_props = inst.find_child("KnitProps", true, false) as Node3D
-				if _props:
-					_props.visible = false
-			else:
-				push_warning("farmer.glb has no animations; using the simple model")
-				inst.queue_free()
-				_anim = null
+	body = Body.new()
+	_model.add_child(body)
+	detailed = body.load_character(Data.player_character())
 	if not detailed:
 		_build_simple_model()
 	_ring = Catalog.glow(Catalog.ring(self, 0.4, 0.46, Vector3(0, 0.03, 0), Color(0.55, 0.95, 0.4)), Color(0.55, 0.95, 0.4), 0.8)
 	_label = Label3D.new()
-	_label.position = Vector3(0, 2.15 if detailed else 1.8, 0)
+	_label.position = Vector3(0, body.label_height if detailed else 1.8, 0)
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.no_depth_test = true
 	_label.font_size = 44
@@ -184,7 +161,7 @@ func _process(delta: float) -> void:
 		_animate_simple(walking)
 
 
-## Skinned character: pick the loop for the current state and cross-fade to it.
+## Skinned character: pick the loop for the current state; the body cross-fades to it.
 func _animate(delta: float, walking: bool) -> void:
 	_talk_t = maxf(0.0, _talk_t - delta)
 	var want := "Idle"
@@ -199,11 +176,7 @@ func _animate(delta: float, walking: bool) -> void:
 		want = "Walk"
 	elif _talk_t > 0.0:
 		want = "Talk"
-	if _anim.current_animation != want:
-		_anim.play(want, BLEND)
-	if _props:
-		_props.visible = want == "SitKnit"
-	_anim.speed_scale = speed / WALK_ANIM_SPEED if want == "Walk" else 1.0
+	body.play(want, speed)
 
 
 func _animate_simple(walking: bool) -> void:

@@ -1,5 +1,5 @@
 {
-  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id; 'look.extra' is apron / glasses / hat.",
+  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
@@ -45,6 +45,17 @@
         "top": "#52477a",
         "bottom": "#333342",
         "extra": "hat"
+      }
+    },
+    {
+      "id": "rowan",
+      "name": "Rowan",
+      "role": "Shepherd",
+      "loves": "sweater",
+      "pos": [44.2, 0.0, 2.4],
+      "roam": [0.8, 0.4],
+      "look": {
+        "model": "rowan"
       }
     }
   ]

@@ -1,26 +1,96 @@
-"""Builds the main character (the knitter in the Fair Isle sweater) in Blender.
+"""Character generator: builds humanoid characters in Blender from a spec.
 
 Run headless:
-  Blender -b -P tools/build_farmer.py -- <project_dir> [--render <out_dir>]
+  Blender -b -P tools/build_character.py -- <project_dir> [--character rowan|nora|all]
+                                            [--render <out_dir> [--poses]]
 
-Writes <project_dir>/assets/farmer.glb (+ farmer.blend and textures) and, with --render,
-an 8-angle turntable strip to compare against the reference sheet.
+Every character is one skinned mesh on the same 22-bone humanoid skeleton, with bone names
+that follow Godot's SkeletonProfileHumanoid (Hips, Spine, Chest, UpperChest, Neck, Head,
+Left/Right Shoulder, UpperArm, LowerArm, Hand, UpperLeg, LowerLeg, Foot, Toes). The body is
+shaped by the numbers in SPECS (height, shoulders, waist, hips, bust, limbs, head) and dressed
+by its palette and style switches (hair, beard, cuffs). The animation set (Idle, Walk, SitKnit,
+SitIdle, Work, Talk) is written once below and keyed onto every character, so they all move
+the same way. Characters face -Y in Blender, which becomes +Z (forward) in Godot.
 
-The character is one skinned mesh on a humanoid skeleton whose bone names follow Godot's
-SkeletonProfileHumanoid (Hips, Spine, Chest, UpperChest, Neck, Head, Left/Right Shoulder,
-UpperArm, LowerArm, Hand, UpperLeg, LowerLeg, Foot, Toes), so retargeted animation libraries
-can be used later. It ships with hand-keyed loops: Idle, Walk, SitKnit, SitIdle, Work, Talk.
-The character faces -Y in Blender, which becomes +Z (forward) in Godot.
+Writes <project_dir>/assets/<id>.glb, plus tools/character_build/<id>/ (.blend, textures).
+With --render: a turntable strip and portrait (and with --poses, a pose sheet and knitting
+close-ups) in <out_dir>/<id>/. With --character all, also <out_dir>/lineup.png.
 """
-import bpy, bmesh, math, os, sys
+import bpy, bmesh, math, os, subprocess, sys
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 PROJECT = os.path.abspath(argv[0]) if argv else os.getcwd()
-RENDER_DIR = argv[argv.index("--render") + 1] if "--render" in argv else None
+WHO = argv[argv.index("--character") + 1] if "--character" in argv else "all"
+RENDER_ROOT = argv[argv.index("--render") + 1] if "--render" in argv else None
+
+# ----------------------------------------------------------------------------- character specs
+# Body numbers are multipliers on the base (male) build, so 1.0 everywhere is Rowan.
+SPECS = {
+    "rowan": dict(
+        name="Rowan", height=1.0, shoulder=1.0, chest=1.0, waist=1.0, hip=1.0, neck=1.0, bust=0.0,
+        arm=1.0, hand=1.0, thigh=1.0, calf=1.0, foot=1.0, head=1.09, jaw=1.0, arm_tilt=7,
+        eye=1.0, nose=1.0, lips=(0.019, 0.0065, 0.0055), brow=(0.019, 0.005, 0.0048, -8),
+        skin=(0.90, 0.69, 0.56), lip_color=(0.78, 0.50, 0.44), blush=0.15, iris=(0.26, 0.16, 0.09),
+        hair=(0.31, 0.19, 0.11), hair_hi=(0.42, 0.27, 0.16), brow_color=(0.36, 0.24, 0.15),
+        hair_style="curls", beard=(0.36, 0.24, 0.15), lashes=False, earrings=False,
+        knit=((0.80, 0.74, 0.65), (0.39, 0.25, 0.16), (0.74, 0.68, 0.59)),  # base, motif, rib
+        body_bands=[(37, "line"), (39, "diamonds"), (45, "star"), (59, "diamonds")],
+        sleeve_bands=[(42, "line"), (44, "star"), (58, "dots")],
+        swatch=((0.80, 0.74, 0.65), (0.39, 0.25, 0.16), (0.74, 0.68, 0.59)),
+        denim=(0.29, 0.30, 0.34), cuffs=(0.64, 0.63, 0.60),
+        leather=(0.52, 0.32, 0.18), leather_dk=(0.36, 0.22, 0.13), sole=(0.22, 0.16, 0.12),
+    ),
+    # The heroine, v1 (working name Nora): auburn hair up in a bun with soft bangs, a dusty-rose
+    # hand-knit sweater with a cream Fair Isle yoke, dark jeans tucked into ankle boots.
+    "nora": dict(
+        name="Nora", height=0.955, shoulder=0.87, chest=0.93, waist=0.87, hip=1.06, neck=0.88, bust=1.0,
+        arm=0.86, hand=0.86, thigh=0.95, calf=0.88, foot=0.88, head=1.08, jaw=0.93, arm_tilt=10,
+        eye=1.1, nose=0.82, lips=(0.0195, 0.0075, 0.0068), brow=(0.019, 0.0038, 0.0032, -13),
+        skin=(0.94, 0.76, 0.65), lip_color=(0.80, 0.43, 0.43), blush=0.24, iris=(0.27, 0.38, 0.24),
+        hair=(0.42, 0.19, 0.10), hair_hi=(0.58, 0.29, 0.14), brow_color=(0.34, 0.17, 0.09),
+        hair_style="bun", beard=None, lashes=True, earrings=True,
+        knit=((0.77, 0.53, 0.53), (0.95, 0.90, 0.81), (0.70, 0.47, 0.47)),
+        body_bands=[(33, "dots"), (35, "line"), (37, "diamonds"), (43, "star"), (57, "line"), (59, "dots")],
+        sleeve_bands=[(44, "diamonds"), (50, "line"), (52, "dots")],
+        swatch=((0.62, 0.68, 0.56), (0.95, 0.90, 0.81), (0.56, 0.62, 0.50)),  # sage, for the piece she knits
+        denim=(0.20, 0.23, 0.31), cuffs=None,
+        leather=(0.47, 0.29, 0.17), leather_dk=(0.33, 0.20, 0.12), sole=(0.20, 0.15, 0.12),
+    ),
+}
+
+if WHO == "all":
+    # Build each character in its own clean Blender process, then render a side-by-side lineup.
+    for cid in SPECS:
+        cmd = [bpy.app.binary_path, "-b", "-P", os.path.abspath(__file__), "--", PROJECT, "--character", cid]
+        if RENDER_ROOT:
+            cmd += ["--render", RENDER_ROOT] + (["--poses"] if "--poses" in argv else [])
+        print("CHARACTER building", cid, flush=True)
+        subprocess.run(cmd, check=True)
+    if RENDER_ROOT:
+        imgs = []
+        for cid in SPECS:
+            p = os.path.join(RENDER_ROOT, cid, "turn_000.png")
+            if os.path.exists(p):
+                im = bpy.data.images.load(p)
+                imgs.append(np.array(im.pixels[:], np.float32).reshape(im.size[1], im.size[0], 4))
+        if imgs:
+            strip = np.concatenate(imgs, axis=1)
+            out = bpy.data.images.new("lineup", strip.shape[1], strip.shape[0], alpha=True)
+            out.pixels.foreach_set(strip.ravel())
+            out.filepath_raw = os.path.join(RENDER_ROOT, "lineup.png")
+            out.file_format = "PNG"
+            out.save()
+            print("CHARACTER lineup", out.filepath_raw)
+    sys.exit(0)
+
+S = SPECS[WHO]
+CID = WHO
+H = S["height"]
+RENDER_DIR = os.path.join(RENDER_ROOT, CID) if RENDER_ROOT else None
 ASSETS = os.path.join(PROJECT, "assets")
-BUILD = os.path.join(PROJECT, "tools", "farmer_build")  # source files kept out of Godot's import
+BUILD = os.path.join(PROJECT, "tools", "character_build", CID)  # source files kept out of Godot's import
 TEXDIR = os.path.join(BUILD, "textures")
 os.makedirs(TEXDIR, exist_ok=True)
 
@@ -29,21 +99,58 @@ scene = bpy.context.scene
 rng = np.random.default_rng(7)
 
 # ----------------------------------------------------------------------------- palette (sRGB)
-SKIN = (0.90, 0.69, 0.56)
-LIPS = (0.78, 0.50, 0.44)
-HAIR = (0.31, 0.19, 0.11)
-HAIR_HI = (0.42, 0.27, 0.16)
-BEARD = (0.36, 0.24, 0.15)
-OAT = (0.80, 0.74, 0.65)       # sweater body
-OAT_RIB = (0.74, 0.68, 0.59)   # ribbing
-MOTIF = (0.39, 0.25, 0.16)     # fair isle brown
-DENIM = (0.29, 0.30, 0.34)
-CUFF = (0.64, 0.63, 0.60)
-LEATHER = (0.52, 0.32, 0.18)
-LEATHER_DK = (0.36, 0.22, 0.13)
-SOLE = (0.22, 0.16, 0.12)
+SKIN = S["skin"]
+LIPS = S["lip_color"]
+HAIR = S["hair"]
+HAIR_HI = S["hair_hi"]
+BROW = S["brow_color"]
+DENIM = S["denim"]
+LEATHER = S["leather"]
+LEATHER_DK = S["leather_dk"]
+SOLE = S["sole"]
 EYE_W = (0.95, 0.94, 0.91)
-IRIS = (0.26, 0.16, 0.09)
+IRIS = S["iris"]
+
+
+def lerp_keys(keys, x):
+    """Piecewise-linear lookup in [(x, value), ...] sorted by x."""
+    if x <= keys[0][0]:
+        return keys[0][1]
+    for (x0, v0), (x1, v1) in zip(keys, keys[1:]):
+        if x <= x1:
+            return v0 + (v1 - v0) * (x - x0) / (x1 - x0)
+    return keys[-1][1]
+
+
+def width_f(z):
+    """How much wider (>1) or narrower than the base build the body is at height z."""
+    return lerp_keys([(0.80, S["hip"]), (0.96, S["hip"]), (1.10, S["waist"]), (1.24, S["chest"]),
+                      (1.33, S["shoulder"]), (1.40, S["shoulder"]), (1.50, S["neck"])], z)
+
+
+def shape_profile(prof, depth=0.6, bust=False, densify=False):
+    """Apply the spec's body shape to a lathe profile: widths follow width_f(z), depth follows
+    it more gently, and a bust adds depth to the front of the chest."""
+    rows = [tuple(p) + (0.0,) * (5 - len(p)) for p in prof]
+    if densify and S["bust"] > 0:
+        dense = []
+        for a, b in zip(rows, rows[1:]):
+            dense.append(a)
+            if b[0] - a[0] > 0.05 and 1.10 < (a[0] + b[0]) / 2 < 1.36:
+                for t in (1 / 3, 2 / 3):
+                    dense.append(tuple(a[i] + (b[i] - a[i]) * t for i in range(5)))
+        rows = dense + [rows[-1]]
+    out = []
+    for z, rx, ry, cx, cy in rows:
+        f = width_f(z)
+        rx *= f
+        ry *= 1 + (f - 1) * depth
+        if bust:
+            b = S["bust"] * 0.021 * math.exp(-((z - 1.235) / 0.055) ** 2)
+            ry += b
+            cy -= b
+        out.append((z, rx, ry, cx, cy))
+    return out
 
 
 def lin(c):
@@ -103,7 +210,7 @@ def star_motif():
 STAR = star_motif()
 
 
-def knit_texture(name, cols, rows, bands, rib_rows=(), seed=1):
+def knit_texture(name, cols, rows, bands, rib_rows=(), seed=1, pal=None):
     """Stitch-grid texture. bands: list of (row0, kind) placing motif rows (row 0 = bottom)."""
     grid = np.zeros((rows, cols), np.int8)  # 0 base, 1 motif, 2 rib-knit, 3 rib-purl
     for r0, r1 in rib_rows:
@@ -139,7 +246,8 @@ def knit_texture(name, cols, rows, bands, rib_rows=(), seed=1):
                 grid[r0, c] = 1
     noise = np.random.default_rng(seed).normal(0, 0.025, (rows, cols))
     tex = np.zeros((rows * 8, cols * 8, 3), np.float32)
-    base = {0: OAT, 1: MOTIF, 2: OAT_RIB, 3: OAT_RIB}
+    base_c, motif_c, rib_c = pal or S["knit"]
+    base = {0: base_c, 1: motif_c, 2: rib_c, 3: rib_c}
     for r in range(rows):
         for c in range(cols):
             k = int(grid[r, c])
@@ -165,7 +273,7 @@ def cuff_texture():
     h, w = 64, 256
     y, x = np.mgrid[0:h, 0:w]
     n = np.random.default_rng(5).normal(0, 1, (h, w))
-    arr = np.array(CUFF)[None, None, :] * (0.95 + 0.04 * n)[..., None]
+    arr = np.array(S["cuffs"])[None, None, :] * (0.95 + 0.04 * n)[..., None]
     arr[h - 6:, :] = np.array((0.80, 0.79, 0.76))  # pale fold at the top edge
     arr[:6, :] *= 0.85
     return save_image("cuff", arr)
@@ -191,7 +299,10 @@ def head_texture():
     arr = np.ones((h, w, 3), np.float32) * np.array(SKIN)
     # warm cheeks and nose
     blush = np.exp(-(((du - 0.12) / 0.05) ** 2 + ((z - 1.575) / 0.02) ** 2))
-    arr = arr * (1 - 0.15 * blush[..., None]) + np.array((0.86, 0.52, 0.45)) * 0.15 * blush[..., None]
+    k = S["blush"]
+    arr = arr * (1 - k * blush[..., None]) + np.array((0.86, 0.52, 0.45)) * k * blush[..., None]
+    if not S["beard"]:
+        return save_image("head", arr)
     # short, trimmed beard: jaw, chin, mustache, sideburns
     top = np.where(du < 0.06, 1.551, 1.551 + (du - 0.06) * 0.30)
     stache = (du < 0.06) & (z > 1.535) & (z < 1.551)
@@ -203,8 +314,20 @@ def head_texture():
     edge = np.where(side, np.clip((1.635 - z) / 0.01, 0, 1), edge)
     stub = np.random.default_rng(8).random((h, w))
     dens = np.where(mask, np.clip(edge, 0, 1) * (0.42 + 0.30 * (stub > 0.45)), 0.0)
-    arr = arr * (1 - dens[..., None]) + np.array(BEARD) * dens[..., None]
+    arr = arr * (1 - dens[..., None]) + np.array(S["beard"]) * dens[..., None]
     return save_image("head", arr)
+
+
+def hair_texture():
+    """Fine strands running up the head (lathe UVs: u around, v up), for sleek styles."""
+    h, w = 256, 512
+    r = np.random.default_rng(11)
+    u_noise = np.repeat(r.normal(0, 1, (1, w)), h, axis=0)
+    u_noise = 0.6 * u_noise + 0.4 * np.roll(u_noise, 1, axis=1)
+    v_drift = np.linspace(0, 1, h)[:, None]
+    t = np.clip(0.5 + 0.28 * u_noise + 0.08 * np.sin(v_drift * 9 + np.arange(w)[None, :] * 0.05), 0, 1)
+    arr = np.array(HAIR)[None, None, :] * (1 - t[..., None]) + np.array(HAIR_HI)[None, None, :] * t[..., None]
+    return save_image("hair", arr)
 
 
 # ----------------------------------------------------------------------------- materials
@@ -382,20 +505,22 @@ def attach(child, parent):
 
 
 # ----------------------------------------------------------------------------- materials & textures
-tex_body = knit_texture("sweater_body", 128, 64, bands=[(37, "line"), (39, "diamonds"), (45, "star"), (59, "diamonds")], rib_rows=[(0, 7), (62, 64)], seed=1)
-tex_sleeve = knit_texture("sweater_sleeve", 48, 64, bands=[(42, "line"), (44, "star"), (58, "dots")], rib_rows=[(0, 6)], seed=2)
+OAT, OAT_RIB = S["knit"][0], S["knit"][2]
+tex_body = knit_texture("sweater_body", 128, 64, bands=S["body_bands"], rib_rows=[(0, 7), (62, 64)], seed=1)
+tex_sleeve = knit_texture("sweater_sleeve", 48, 64, bands=S["sleeve_bands"], rib_rows=[(0, 6)], seed=2)
 m_sweater = material("Sweater", OAT, tex_body, rough=0.95)
 m_sleeve = material("SweaterSleeve", OAT, tex_sleeve, rough=0.95)
 m_collar = material("SweaterRib", OAT_RIB, rough=0.95)
 m_denim = material("Denim", DENIM, denim_texture(), rough=0.9)
-m_cuff = material("JeansCuff", CUFF, cuff_texture(), rough=0.9)
+m_cuff = material("JeansCuff", S["cuffs"], cuff_texture(), rough=0.9) if S["cuffs"] else None
 m_skin = material("Skin", SKIN, rough=0.55)
 m_head = material("Face", SKIN, head_texture(), rough=0.55)
 m_lips = material("Lips", LIPS, rough=0.5)
 m_hair = material("Hair", HAIR, rough=0.6)
 m_hair_hi = material("HairLight", HAIR_HI, rough=0.6)
-m_brow = material("Brows", BEARD, rough=0.8)
-m_beard = material("Beard", (0.55, 0.40, 0.30), rough=0.9)
+m_brow = material("Brows", BROW, rough=0.8)
+m_lash = material("Lashes", (0.10, 0.07, 0.06), rough=0.8)
+m_gold = material("Gold", (0.85, 0.68, 0.38), rough=0.3)
 m_eye = material("EyeWhite", EYE_W, rough=0.25)
 m_iris = material("Iris", IRIS, rough=0.2)
 m_leather = material("Leather", LEATHER, leather_texture(), rough=0.55)
@@ -405,36 +530,47 @@ m_sole = material("Sole", SOLE, rough=0.8)
 # ----------------------------------------------------------------------------- body (torso, hips, neck)
 TORSO_Z0, TORSO_Z1 = 0.90, 1.462
 torso_v = lambda z: (z - TORSO_Z0) / (TORSO_Z1 - TORSO_Z0)
-torso = lathe("torso", [
+torso = lathe("torso", shape_profile([
     (0.900, 0.172, 0.118), (0.955, 0.173, 0.119), (0.966, 0.181, 0.125), (1.05, 0.183, 0.126),
     (1.15, 0.185, 0.128), (1.25, 0.190, 0.131), (1.32, 0.192, 0.128), (1.37, 0.180, 0.118),
     (1.405, 0.150, 0.102), (1.438, 0.105, 0.084), (1.462, 0.076, 0.070),
-], m_sweater, segs=40, v_of_z=torso_v, caps=(True, False))
-collar = lathe("collar", [(1.430, 0.080, 0.074), (1.452, 0.078, 0.073), (1.470, 0.071, 0.067), (1.476, 0.062, 0.060)],
+], bust=True, densify=True), m_sweater, segs=40, v_of_z=torso_v, caps=(True, False))
+collar = lathe("collar", shape_profile([(1.430, 0.080, 0.074), (1.452, 0.078, 0.073), (1.470, 0.071, 0.067), (1.476, 0.062, 0.060)]),
                m_collar, segs=32, caps=(False, False))
-hips = lathe("hips", [(0.80, 0.150, 0.102), (0.86, 0.162, 0.110), (0.96, 0.163, 0.112)], m_denim, segs=32)
-neck = lathe("neck", [(1.40, 0.054, 0.052), (1.47, 0.050, 0.050, 0, 0.006), (1.53, 0.048, 0.048, 0, 0.012)], m_skin, segs=24)
+hips = lathe("hips", shape_profile([(0.80, 0.150, 0.102), (0.86, 0.162, 0.110), (0.96, 0.163, 0.112)], depth=0.8), m_denim, segs=32)
+NK = S["neck"]
+neck = lathe("neck", [(1.40, 0.054 * NK, 0.052 * NK), (1.47, 0.050 * NK, 0.050 * NK, 0, 0.006), (1.53, 0.048 * NK, 0.048 * NK, 0, 0.012)], m_skin, segs=24)
 
 # ----------------------------------------------------------------------------- head & face
 HEAD_C = Vector((0.0, 0.006, 1.607))
 head_v = lambda z: (z - Z_CHIN) / (Z_TOP - Z_CHIN)
-head = lathe("head", [
+JAW = lambda z: 1.0 + (S["jaw"] - 1.0) * min(1.0, max(0.0, (1.60 - z) / 0.09))  # narrower jaw and chin
+head = lathe("head", [(z, rx * JAW(z), ry, cx, cy) for z, rx, ry, cx, cy in [
     (Z_CHIN, 0.032, 0.026, 0, -0.050), (1.488, 0.062, 0.058, 0, -0.034), (1.515, 0.080, 0.083, 0, -0.016),
     (1.555, 0.087, 0.097, 0, -0.005), (1.600, 0.090, 0.105, 0, 0.0), (1.640, 0.091, 0.108, 0, 0.005),
     (1.680, 0.087, 0.105, 0, 0.008), (1.712, 0.073, 0.091, 0, 0.010), (1.732, 0.047, 0.062, 0, 0.010), (Z_TOP, 0.012, 0.016, 0, 0.010),
-], m_head, segs=40, v_of_z=head_v)
+]], m_head, segs=40, v_of_z=head_v)
 face = [head]
+E, N = S["eye"], S["nose"]
+bw, bt, bh, broll = S["brow"]
 for sx in (-1, 1):
-    face.append(ellipsoid("eye", (sx * 0.035, -0.087, 1.613), (0.0165, 0.0165, 0.0165), m_eye))
-    face.append(ellipsoid("iris", (sx * 0.035, -0.1015, 1.612), (0.0098, 0.004, 0.0105), m_iris, segs=12, rings=8))
-    face.append(ellipsoid("lid", (sx * 0.035, -0.090, 1.623), (0.019, 0.0165, 0.009), m_skin, rot=(math.radians(-12), 0, 0)))
-    face.append(ellipsoid("brow", (sx * 0.037, -0.0985, 1.642), (0.019, 0.005, 0.0048), m_brow, segs=10, rings=6, rot=(0, math.radians(sx * -8), 0)))
-    face.append(ellipsoid("ear", (sx * 0.091, 0.012, 1.598), (0.011, 0.021, 0.032), m_skin, rot=(0, 0, math.radians(sx * -12))))
-face.append(ellipsoid("nose", (0, -0.1035, 1.588), (0.0095, 0.013, 0.027), m_skin, rot=(math.radians(-14), 0, 0)))
-face.append(ellipsoid("nosetip", (0, -0.1125, 1.569), (0.0118, 0.0105, 0.0098), m_skin))
+    face.append(ellipsoid("eye", (sx * 0.035, -0.087, 1.613), (0.0165 * E, 0.0165, 0.0165 * E), m_eye))
+    face.append(ellipsoid("iris", (sx * 0.035, -0.1015, 1.612), (0.0098 * E, 0.004, 0.0105 * E), m_iris, segs=12, rings=8))
+    face.append(ellipsoid("lid", (sx * 0.035, -0.090, 1.623 + 0.0015 * (E - 1) * 10), (0.019 * E, 0.0165, 0.009), m_skin, rot=(math.radians(-12), 0, 0)))
+    face.append(ellipsoid("brow", (sx * 0.037, -0.0985, 1.642 + 0.002 * (E - 1) * 10), (bw, bt, bh), m_brow, segs=10, rings=6, rot=(0, math.radians(sx * broll), 0)))
+    face.append(ellipsoid("ear", (sx * 0.091 * S["jaw"] ** 0.5, 0.012, 1.598), (0.011, 0.021, 0.032), m_skin, rot=(0, 0, math.radians(sx * -12))))
+    if S["lashes"]:
+        face.append(ellipsoid("lash", (sx * 0.0362, -0.1032, 1.6205), (0.0175 * E, 0.0022, 0.0016), m_lash, segs=12, rings=6,
+                              rot=(math.radians(-8), math.radians(sx * -6), 0)))
+        face.append(ellipsoid("lashtip", (sx * 0.0535, -0.0975, 1.6225), (0.0042, 0.0018, 0.0016), m_lash, segs=8, rings=5,
+                              rot=(0, math.radians(sx * -28), 0)))
+    if S["earrings"]:
+        face.append(ellipsoid("earring", (sx * 0.0955 * S["jaw"] ** 0.5, 0.004, 1.566), (0.0048, 0.0048, 0.0048), m_gold, segs=10, rings=6))
+face.append(ellipsoid("nose", (0, -0.1035 + 0.006 * (1 - N), 1.588), (0.0095 * N, 0.013 * N, 0.027 * N), m_skin, rot=(math.radians(-14), 0, 0)))
+face.append(ellipsoid("nosetip", (0, -0.1125 + 0.010 * (1 - N), 1.569 + 0.004 * (1 - N)), (0.0118 * N, 0.0105 * N, 0.0098 * N), m_skin))
 for sx in (-1, 1):
-    face.append(ellipsoid("nostril", (sx * 0.0092, -0.1065, 1.566), (0.0062, 0.0072, 0.0062), m_skin))
-face.append(ellipsoid("lips", (0, -0.0975, 1.526), (0.019, 0.0065, 0.0055), m_lips))
+    face.append(ellipsoid("nostril", (sx * 0.0092 * N, -0.1065 + 0.008 * (1 - N), 1.566 + 0.004 * (1 - N)), (0.0062 * N, 0.0072 * N, 0.0062 * N), m_skin))
+face.append(ellipsoid("lips", (0, -0.0975, 1.526), S["lips"], m_lips))
 
 # hair: a cap over the scalp plus clumps of curls
 HR = Vector((0.093, 0.109, 0.134))
@@ -451,103 +587,180 @@ def hair_ok(d, margin=0.0):
     return d.z > thr + margin
 
 
-cap = lathe("haircap", [
-    (1.45, 0.066, 0.080, 0, 0.012), (1.52, 0.085, 0.100, 0, 0.012), (1.58, 0.094, 0.111, 0, 0.008),
-    (1.63, 0.096, 0.113, 0, 0.007), (1.68, 0.092, 0.110, 0, 0.008), (1.715, 0.079, 0.097, 0, 0.010),
-    (1.742, 0.052, 0.068, 0, 0.010), (1.756, 0.01, 0.012, 0, 0.010),
-], m_hair, segs=36, subsurf=0)
-bm = bmesh.new()
-bm.from_mesh(cap.data)
-kill = [f for f in bm.faces if not hair_ok((f.calc_center_median() - HEAD_C).normalized(), 0.04)]
-bmesh.ops.delete(bm, geom=kill, context="FACES")
-bm.to_mesh(cap.data)
-bm.free()
-m = cap.modifiers.new("ss", "SUBSURF")
-m.levels = 1
-hair = [cap]
-n = 700
-for k in range(n):
-    zz = 1 - 2 * (k + 0.5) / n
-    rr = math.sqrt(max(0.0, 1 - zz * zz))
-    ph = k * math.pi * (3 - math.sqrt(5))
-    d = Vector((rr * math.cos(ph), rr * math.sin(ph), zz))
-    if not hair_ok(d):
-        continue
-    if rng.random() < 0.18:
-        continue
-    r = rng.uniform(0.020, 0.027)
-    lift = 0.004 + 0.008 * max(0.0, d.z) ** 1.5
-    p = HEAD_C + Vector((HR.x * d.x, HR.y * d.y, HR.z * d.z)) + d * (lift - 0.004)
-    # flow direction: down the sides/back, swept forward and outward on top
-    down = Vector((0, 0, -1)) - d * (-d.z)
-    out = Vector((d.x * 0.6, 1.0, 0.25))
-    w = min(1.0, max(0.0, (d.z - 0.35) / 0.4 + max(0.0, -d.y) * 0.8))
-    t = (down.normalized() * (1 - w) + (out.normalized() if out.length > 1e-3 else Vector((0, -1, 0))) * w)
-    t = (t - d * t.dot(d)).normalized()
-    t = (t + Vector((rng.normal(0, 0.25), rng.normal(0, 0.25), rng.normal(0, 0.15)))).normalized()
+def hair_cap(margin, subsurf, mat=None, front_lift=0.0, feather=False):
+    prof = [
+        (1.45, 0.066, 0.080, 0, 0.012), (1.52, 0.085, 0.100, 0, 0.012), (1.58, 0.094, 0.111, 0, 0.008),
+        (1.63, 0.096, 0.113, 0, 0.007), (1.68, 0.092, 0.110, 0, 0.008), (1.715, 0.079, 0.097, 0, 0.010),
+        (1.742, 0.052, 0.068, 0, 0.010), (1.756, 0.01, 0.012, 0, 0.010),
+    ]
+    segs = 36
+    if feather:
+        # finer rings and segments so the hairline can follow a curve instead of a ring
+        fine = []
+        for a, b in zip(prof, prof[1:]):
+            for t in (0, 0.25, 0.5, 0.75):
+                fine.append(tuple(a[i] + (b[i] - a[i]) * t for i in range(5)))
+        prof = fine + [prof[-1]]
+        segs = 72
+    cap = lathe("haircap", prof, mat or m_hair, segs=segs, subsurf=0)
+    bm = bmesh.new()
+    bm.from_mesh(cap.data)
+
+    def keep(f):
+        d = (f.calc_center_median() - HEAD_C).normalized()
+        return hair_ok(d, margin + front_lift * max(0.0, -d.y) ** 2)  # front_lift arches the hairline up over the forehead
+    kill = [f for f in bm.faces if not keep(f)]
+    bmesh.ops.delete(bm, geom=kill, context="FACES")
+    if feather:
+        # feather the hairline: pull the open edge (and the ring inside it) down onto the scalp
+        edge = {v for v in bm.verts if v.is_boundary}
+        inner = {o for v in edge for e in v.link_edges for o in e.verts} - edge
+        for vs, k in ((edge, 0.952), (inner, 0.985)):
+            for v in vs:
+                v.co = HEAD_C + (v.co - HEAD_C) * k
+    bm.to_mesh(cap.data)
+    bm.free()
+    m = cap.modifiers.new("ss", "SUBSURF")
+    m.levels = subsurf
+    return cap
+
+
+def oriented(name, p, d, t, sc, mat):
+    """Ellipsoid at p whose thin axis is the surface normal d and long axis is t."""
     t = (t - d * t.dot(d)).normalized()
     xl = d.cross(t).normalized()
-    basis = __import__("mathutils").Matrix((xl, d, t)).transposed()
-    rot = tuple(basis.to_euler())
-    sc = (r * rng.uniform(1.0, 1.3), r * rng.uniform(0.5, 0.65), r * rng.uniform(1.9, 2.6))
-    hair.append(ellipsoid("curl", p, sc, m_hair_hi if rng.random() < 0.3 else m_hair, segs=12, rings=8, rot=rot, subsurf=0))
-# a few loose curls falling over the forehead and over the ears
-for p, r in [((0.088, -0.02, 1.640), 0.019), ((-0.090, -0.02, 1.642), 0.019),
-             ((0.066, 0.068, 1.548), 0.021), ((-0.066, 0.068, 1.548), 0.021), ((0.0, 0.094, 1.543), 0.022)]:
-    hair.append(ellipsoid("curl", p, (r, r * 0.8, r * 1.4), m_hair, segs=12, rings=8, rot=(rng.uniform(-0.5, 0.5), 0.3, rng.uniform(0, 3)), subsurf=0))
+    basis = Matrix((xl, d, t)).transposed()
+    return ellipsoid(name, p, sc, mat, segs=12, rings=8, rot=tuple(basis.to_euler()), subsurf=0)
+
+
+def hair_curls():
+    """Short curly hair (Rowan): a cap over the scalp plus clumps of curls."""
+    cap = hair_cap(0.04, 1)
+    hair = [cap]
+    n = 700
+    for k in range(n):
+        zz = 1 - 2 * (k + 0.5) / n
+        rr = math.sqrt(max(0.0, 1 - zz * zz))
+        ph = k * math.pi * (3 - math.sqrt(5))
+        d = Vector((rr * math.cos(ph), rr * math.sin(ph), zz))
+        if not hair_ok(d):
+            continue
+        if rng.random() < 0.18:
+            continue
+        r = rng.uniform(0.020, 0.027)
+        lift = 0.004 + 0.008 * max(0.0, d.z) ** 1.5
+        p = HEAD_C + Vector((HR.x * d.x, HR.y * d.y, HR.z * d.z)) + d * (lift - 0.004)
+        # flow direction: down the sides/back, swept forward and outward on top
+        down = Vector((0, 0, -1)) - d * (-d.z)
+        out = Vector((d.x * 0.6, 1.0, 0.25))
+        w = min(1.0, max(0.0, (d.z - 0.35) / 0.4 + max(0.0, -d.y) * 0.8))
+        t = (down.normalized() * (1 - w) + (out.normalized() if out.length > 1e-3 else Vector((0, -1, 0))) * w)
+        t = (t - d * t.dot(d)).normalized()
+        t = (t + Vector((rng.normal(0, 0.25), rng.normal(0, 0.25), rng.normal(0, 0.15)))).normalized()
+        t = (t - d * t.dot(d)).normalized()
+        xl = d.cross(t).normalized()
+        basis = __import__("mathutils").Matrix((xl, d, t)).transposed()
+        rot = tuple(basis.to_euler())
+        sc = (r * rng.uniform(1.0, 1.3), r * rng.uniform(0.5, 0.65), r * rng.uniform(1.9, 2.6))
+        hair.append(ellipsoid("curl", p, sc, m_hair_hi if rng.random() < 0.3 else m_hair, segs=12, rings=8, rot=rot, subsurf=0))
+    # a few loose curls falling over the forehead and over the ears
+    for p, r in [((0.088, -0.02, 1.640), 0.019), ((-0.090, -0.02, 1.642), 0.019),
+                 ((0.066, 0.068, 1.548), 0.021), ((-0.066, 0.068, 1.548), 0.021), ((0.0, 0.094, 1.543), 0.022)]:
+        hair.append(ellipsoid("curl", p, (r, r * 0.8, r * 1.4), m_hair, segs=12, rings=8, rot=(rng.uniform(-0.5, 0.5), 0.3, rng.uniform(0, 3)), subsurf=0))
+    return hair
+
+
+def hair_bun():
+    """Hair up in a bun with soft curved bangs (Nora), and loose strands framing the face."""
+    m_sleek = material("HairSleek", HAIR, hair_texture(), rough=0.5)
+    cap = hair_cap(0.03, 2, m_sleek, front_lift=0.09)  # soft curved bangs
+    hair = [cap]
+    # the bun: a round knot with a few rolled loops around it
+    bun_c = HEAD_C + Vector((0.0, 0.108, 0.104))
+    hair.append(ellipsoid("bun", bun_c, (0.043, 0.036, 0.040), m_sleek, segs=20, rings=12, rot=(math.radians(35), 0, 0), subsurf=1))
+    for i in range(6):
+        a = i * math.tau / 6 + 0.4
+        off = Vector((math.cos(a) * 0.030, 0.006, math.sin(a) * 0.028))
+        hair.append(ellipsoid("bunloop", bun_c + off, (0.022, 0.018, 0.016), m_hair_hi if i % 2 else m_hair, segs=14, rings=9,
+                              rot=(math.radians(35), 0, a), subsurf=1))
+    # loose strands framing the face, from the temples down to the jaw, hugging the cheek
+    for sx in (-1, 1):
+        pts = [Vector((sx * 0.082, -0.058, 1.705)), Vector((sx * 0.086, -0.060, 1.660)), Vector((sx * 0.085, -0.056, 1.618)),
+               Vector((sx * 0.081, -0.050, 1.588))]
+        for a, b in zip(pts, pts[1:]):
+            mid = (a + b) * 0.5
+            out = Vector((sx, -0.35, 0)).normalized()
+            hair.append(oriented("wisp", mid, out, b - a, (0.0062, 0.0028, (b - a).length * 0.8), m_hair))
+    # a few short wisps at the nape
+    for x in (-0.03, 0.0, 0.032):
+        hair.append(oriented("nape", Vector((x, 0.084, 1.515)), Vector((0, 1, -0.2)).normalized(), Vector((0, 0.2, -1)),
+                             (0.008, 0.0035, 0.020), m_hair))
+    return hair
+
+
+hair = hair_curls() if S["hair_style"] == "curls" else hair_bun()
 
 # ----------------------------------------------------------------------------- arms
 SHOULDER_Z = 1.372
 sleeve_v = lambda z: (z - 0.862) / (1.425 - 0.862)
 arm_parts = {}
+A, HD = S["arm"], S["hand"]
+SHOULDER_X = 0.186 * S["shoulder"]
 for side, sx in (("L", 1), ("R", -1)):
-    x = sx * 0.186
+    x = sx * SHOULDER_X
     parts = [lathe("sleeve", [
-        (0.862, 0.044, 0.044, x, 0), (0.905, 0.046, 0.046, x, 0), (0.916, 0.051, 0.051, x, 0),
-        (1.02, 0.054, 0.053, x, 0.003), (1.10, 0.057, 0.055, x, 0.004), (1.22, 0.062, 0.060, x, 0.002),
-        (1.31, 0.066, 0.065, x, 0), (1.365, 0.058, 0.060, x - sx * 0.008, 0), (1.392, 0.030, 0.036, x - sx * 0.02, 0),
+        (0.862, 0.044 * A, 0.044 * A, x, 0), (0.905, 0.046 * A, 0.046 * A, x, 0), (0.916, 0.051 * A, 0.051 * A, x, 0),
+        (1.02, 0.054 * A, 0.053 * A, x, 0.003), (1.10, 0.057 * A, 0.055 * A, x, 0.004), (1.22, 0.062 * A, 0.060 * A, x, 0.002),
+        (1.31, 0.066 * A, 0.065 * A, x, 0), (1.365, 0.058 * A, 0.060 * A, x - sx * 0.008 * A, 0), (1.392, 0.030 * A, 0.036 * A, x - sx * 0.02 * A, 0),
     ], m_sleeve, segs=24, v_of_z=sleeve_v)]
-    # hand hanging relaxed, palm facing the leg
+    # hand hanging relaxed, palm facing the leg (sized about the wrist at z 0.85)
     hx = x + sx * 0.002
-    parts.append(lathe("wrist", [(0.85, 0.032, 0.036, hx, 0), (0.885, 0.034, 0.038, hx, 0)], m_skin, segs=16, caps=(False, True)))
-    parts.append(rbox("palm", (hx, -0.004, 0.805), (0.034, 0.078, 0.092), m_skin, cuts=2, subsurf=2))
-    parts.append(rbox("fingers", (hx - sx * 0.002, -0.006, 0.735), (0.03, 0.072, 0.072), m_skin, cuts=2, subsurf=2, rot=(0, math.radians(sx * 4), 0)))
-    parts.append(ellipsoid("thumb", (hx - sx * 0.008, -0.044, 0.79), (0.014, 0.016, 0.036), m_skin, rot=(math.radians(-18), math.radians(sx * 10), 0)))
+    WZ = 0.85
+    parts.append(lathe("wrist", [(0.85, 0.032 * HD, 0.036 * HD, hx, 0), (0.885, 0.034 * HD, 0.038 * HD, hx, 0)], m_skin, segs=16, caps=(False, True)))
+    parts.append(rbox("palm", (hx, -0.004 * HD, WZ - 0.045 * HD), (0.034 * HD, 0.078 * HD, 0.092 * HD), m_skin, cuts=2, subsurf=2))
+    parts.append(rbox("fingers", (hx - sx * 0.002, -0.006 * HD, WZ - 0.115 * HD), (0.03 * HD, 0.072 * HD, 0.072 * HD), m_skin, cuts=2, subsurf=2, rot=(0, math.radians(sx * 4), 0)))
+    parts.append(ellipsoid("thumb", (hx - sx * 0.008 * HD, -0.044 * HD, WZ - 0.06 * HD), (0.014 * HD, 0.016 * HD, 0.036 * HD), m_skin, rot=(math.radians(-18), math.radians(sx * 10), 0)))
     arm_parts[side] = parts
 
 # ----------------------------------------------------------------------------- legs & boots
 HIP_Z, KNEE_Z = 0.86, 0.48
 leg_parts, shin_parts = {}, {}
+TH, CF, FT = S["thigh"], S["calf"], S["foot"]
+LEG_X = 0.087 * S["hip"]
 for side, sx in (("L", 1), ("R", -1)):
-    x = sx * 0.087
+    x = sx * LEG_X
     leg_parts[side] = [lathe("thigh", [
-        (0.455, 0.062, 0.064, x, 0), (0.60, 0.069, 0.071, x, 0), (0.75, 0.078, 0.080, x, 0.002), (0.90, 0.086, 0.088, x * 0.92, 0.004),
+        (0.455, 0.062 * CF, 0.064 * CF, x, 0), (0.60, 0.069 * TH, 0.071 * TH, x, 0), (0.75, 0.078 * TH, 0.080 * TH, x, 0.002),
+        (0.90, 0.086 * TH, 0.088 * TH, x * 0.92, 0.004),
     ], m_denim, segs=24)]
+    # rolled cuffs over the boots, or jeans tucked into the boot shaft
+    shin_z0 = 0.235 if S["cuffs"] else 0.15
     sp = [lathe("shin", [
-        (0.235, 0.060, 0.062, x, 0), (0.33, 0.060, 0.062, x, 0), (0.44, 0.063, 0.065, x, 0), (0.52, 0.066, 0.068, x, 0),
+        (shin_z0, 0.058 * CF if not S["cuffs"] else 0.060, 0.060 * CF if not S["cuffs"] else 0.062, x, 0),
+        (0.33, 0.060 * CF, 0.062 * CF, x, 0), (0.44, 0.063 * CF, 0.065 * CF, x, 0), (0.52, 0.066 * CF, 0.068 * CF, x, 0),
     ], m_denim, segs=24)]
-    sp.append(lathe("cuff", [(0.165, 0.071, 0.073, x, 0), (0.200, 0.073, 0.075, x, 0), (0.250, 0.073, 0.075, x, 0), (0.258, 0.066, 0.068, x, 0)],
-                    m_cuff, segs=24, caps=(False, False)))
-    sp.append(lathe("bootshaft", [(0.03, 0.057, 0.064, x, -0.004), (0.10, 0.055, 0.060, x, 0.0), (0.165, 0.058, 0.061, x, 0.0), (0.18, 0.063, 0.066, x, 0.0)],
+    if S["cuffs"]:
+        sp.append(lathe("cuff", [(0.165, 0.071, 0.073, x, 0), (0.200, 0.073, 0.075, x, 0), (0.250, 0.073, 0.075, x, 0), (0.258, 0.066, 0.068, x, 0)],
+                        m_cuff, segs=24, caps=(False, False)))
+    sp.append(lathe("bootshaft", [(0.03, 0.057 * FT, 0.064 * FT, x, -0.004), (0.10, 0.055 * FT, 0.060 * FT, x, 0.0),
+                                  (0.165, 0.058 * FT, 0.061 * FT, x, 0.0), (0.18, 0.063 * FT, 0.066 * FT, x, 0.0)],
                     m_leather, segs=24))
-    sp.append(rbox("bootfoot", (x, -0.045, 0.048), (0.102, 0.245, 0.09), m_leather, cuts=3, subsurf=2))
-    sp.append(rbox("toecap", (x, -0.125, 0.045), (0.096, 0.08, 0.075), m_leather_dk, cuts=2, subsurf=2))
-    sp.append(rbox("sole", (x, -0.04, 0.012), (0.112, 0.265, 0.026), m_sole, cuts=2, subsurf=1))
-    sp.append(rbox("heel", (x, 0.055, 0.018), (0.1, 0.075, 0.034), m_sole, cuts=1, subsurf=1))
-    sp.append(rbox("tongue", (x, -0.058, 0.115), (0.04, 0.012, 0.09), m_leather_dk, cuts=1, subsurf=1, rot=(math.radians(-12), 0, 0)))
+    sp.append(rbox("bootfoot", (x, -0.045 * FT, 0.048), (0.102 * FT, 0.245 * FT, 0.09), m_leather, cuts=3, subsurf=2))
+    sp.append(rbox("toecap", (x, -0.125 * FT, 0.045), (0.096 * FT, 0.08 * FT, 0.075), m_leather_dk, cuts=2, subsurf=2))
+    sp.append(rbox("sole", (x, -0.04 * FT, 0.012), (0.112 * FT, 0.265 * FT, 0.026), m_sole, cuts=2, subsurf=1))
+    sp.append(rbox("heel", (x, 0.055 * FT, 0.018), (0.1 * FT, 0.075 * FT, 0.034), m_sole, cuts=1, subsurf=1))
+    sp.append(rbox("tongue", (x, -0.058 * FT, 0.115), (0.04 * FT, 0.012, 0.09), m_leather_dk, cuts=1, subsurf=1, rot=(math.radians(-12), 0, 0)))
     for i, zl in enumerate([0.085, 0.11, 0.135, 0.16]):
-        sp.append(rbox("lace", (x, -0.064 + i * 0.002, zl), (0.05, 0.008, 0.007), m_sole, cuts=0, subsurf=0))
+        sp.append(rbox("lace", (x, (-0.064 + i * 0.002) * FT, zl), (0.05 * FT, 0.008, 0.007), m_sole, cuts=0, subsurf=0))
     shin_parts[side] = sp
 
 # ----------------------------------------------------------------------------- skeleton, skin weights
-from mathutils import Matrix
-
 SIDES = (("L", 1), ("R", -1))
 SIDE_NAME = {"L": "Left", "R": "Right"}
-ARM_TILT = math.radians(7)            # rest pose: arms hang slightly away from the hips
+ARM_TILT = math.radians(S["arm_tilt"])  # rest pose: arms hang slightly away from the hips
 UPPER_ARM, FORE_ARM, HAND_LEN = 0.272, 0.233, 0.17
 ANKLE_Z = 0.10
-SH = {s: Vector((sx * 0.186, 0, SHOULDER_Z)) for s, sx in SIDES}
+SH = {s: Vector((sx * SHOULDER_X, 0, SHOULDER_Z)) for s, sx in SIDES}
 
 
 def arm_dir(sx):
@@ -594,8 +807,8 @@ def body_w(co):
 
 def arm_w(s, sx):
     n = SIDE_NAME[s]
-    S, d = SH[s], arm_dir(sx)
-    return lambda co: chain((co - S).dot(d), [n + "UpperArm", n + "LowerArm", n + "Hand"],
+    sp, d = SH[s], arm_dir(sx)
+    return lambda co: chain((co - sp).dot(d), [n + "UpperArm", n + "LowerArm", n + "Hand"],
                             [UPPER_ARM, UPPER_ARM + FORE_ARM], [0.05, 0.02])
 
 
@@ -606,7 +819,7 @@ def leg_w(s):
         w = chain(HIP_Z - co.z, [n + "UpperLeg", n + "LowerLeg"], [HIP_Z - KNEE_Z], [0.05])
         foot = smooth(0.15, 0.085, co.z) * smooth(0.02, -0.04, co.y)
         if foot > 0:
-            toe = smooth(-0.08, -0.125, co.y)
+            toe = smooth(-0.08 * FT, -0.125 * FT, co.y)
             for k in w:
                 w[k] *= 1 - foot
             w[n + "Foot"] = foot * (1 - toe)
@@ -622,7 +835,7 @@ weigh(body, body_w)
 parts.append(body)
 headm = join(face + hair, "head_part")
 # stylised proportions: a slightly larger head, scaled about the neck
-headm.data.transform(Matrix.Translation((0, 0, 1.47)) @ Matrix.Scale(1.09, 4) @ Matrix.Translation((0, 0, -1.47)))
+headm.data.transform(Matrix.Translation((0, 0, 1.47)) @ Matrix.Scale(S["head"], 4) @ Matrix.Translation((0, 0, -1.47)))
 weigh(headm, lambda co: {"Head": 1.0})
 parts.append(headm)
 for s, sx in SIDES:
@@ -641,11 +854,12 @@ for o in parts:
 bpy.context.view_layer.objects.active = body
 bpy.ops.object.join()
 mesh = body
-mesh.name = "FarmerMesh"
-mesh.data.name = "FarmerMesh"
+mesh.name = S["name"] + "Mesh"
+mesh.data.name = S["name"] + "Mesh"
+mesh.data.transform(Matrix.Scale(H, 4))  # overall height; the skeleton below is scaled to match
 
-rig = bpy.data.armatures.new("FarmerRig")
-root = link(bpy.data.objects.new("Farmer", rig))
+rig = bpy.data.armatures.new(S["name"] + "Rig")
+root = link(bpy.data.objects.new(S["name"], rig))
 for o in scene.objects:
     if o is not None:
         o.select_set(False)
@@ -657,7 +871,7 @@ FWD, UP = Vector((0, -1, 0)), Vector((0, 0, 1))
 
 def bone(name, head, tail, parent=None, roll_to=FWD):
     b = rig.edit_bones.new(name)
-    b.head, b.tail = Vector(head), Vector(tail)
+    b.head, b.tail = Vector(head) * H, Vector(tail) * H
     b.align_roll(roll_to)
     if parent:
         b.parent = rig.edit_bones[parent]
@@ -672,16 +886,16 @@ bone("Neck", (0, 0, 1.42), (0, 0, 1.50), "UpperChest")
 bone("Head", (0, 0, 1.50), (0, 0, 1.78), "Neck")
 for s, sx in SIDES:
     n = SIDE_NAME[s]
-    S, d = SH[s], arm_dir(sx)
-    bone(n + "Shoulder", (sx * 0.03, 0, 1.385), (sx * 0.15, 0, 1.385), "UpperChest")
-    bone(n + "UpperArm", S, S + d * UPPER_ARM, n + "Shoulder")
-    bone(n + "LowerArm", S + d * UPPER_ARM, S + d * (UPPER_ARM + FORE_ARM), n + "UpperArm")
-    bone(n + "Hand", S + d * (UPPER_ARM + FORE_ARM), S + d * (UPPER_ARM + FORE_ARM + HAND_LEN), n + "LowerArm")
-    x = sx * 0.087
+    sp, d = SH[s], arm_dir(sx)
+    bone(n + "Shoulder", (sx * 0.03, 0, 1.385), (sx * 0.15 * S["shoulder"], 0, 1.385), "UpperChest")
+    bone(n + "UpperArm", sp, sp + d * UPPER_ARM, n + "Shoulder")
+    bone(n + "LowerArm", sp + d * UPPER_ARM, sp + d * (UPPER_ARM + FORE_ARM), n + "UpperArm")
+    bone(n + "Hand", sp + d * (UPPER_ARM + FORE_ARM), sp + d * (UPPER_ARM + FORE_ARM + HAND_LEN), n + "LowerArm")
+    x = sx * LEG_X
     bone(n + "UpperLeg", (x, 0, HIP_Z), (x, 0, KNEE_Z), "Hips")
     bone(n + "LowerLeg", (x, 0, KNEE_Z), (x, 0, ANKLE_Z), n + "UpperLeg")
-    bone(n + "Foot", (x, 0, ANKLE_Z), (x, -0.10, 0.035), n + "LowerLeg", roll_to=UP)
-    bone(n + "Toes", (x, -0.10, 0.035), (x, -0.165, 0.035), n + "Foot", roll_to=UP)
+    bone(n + "Foot", (x, 0, ANKLE_Z), (x, -0.10 * FT, 0.035), n + "LowerLeg", roll_to=UP)
+    bone(n + "Toes", (x, -0.10 * FT, 0.035), (x, -0.165 * FT, 0.035), n + "Foot", roll_to=UP)
 bpy.ops.object.mode_set(mode="OBJECT")
 
 mesh.parent = root
@@ -710,7 +924,7 @@ def P(**kw):
     return {k: v for k, v in kw.items()}
 
 
-SIT_DROP = -(HIP_Z - 0.08)  # hips rest on a seat whose top is at the character origin + 0.08
+SIT_DROP = -(HIP_Z * H - 0.08)  # hips rest on a seat whose top is at the character origin + 0.08
 
 
 def a_idle(p):
@@ -817,8 +1031,8 @@ for pb in root.pose.bones:
 # mesh ("KnitProps") that the game only shows while knitting.
 m_needle = material("Needle", (0.86, 0.70, 0.47), rough=0.35)
 m_needle_cap = material("NeedleCap", (0.45, 0.24, 0.16), rough=0.4)
-m_swatch = material("Swatch", OAT, knit_texture("swatch", 24, 18, bands=[(5, "line"), (7, "diamonds"), (13, "line")],
-                                                 rib_rows=[(0, 3)], seed=4), rough=0.95)
+m_swatch = material("Swatch", S["swatch"][0], knit_texture("swatch", 24, 18, bands=[(5, "line"), (7, "diamonds"), (13, "line")],
+                                                             rib_rows=[(0, 3)], seed=4, pal=S["swatch"]), rough=0.95)
 
 root.animation_data.action = actions["SitKnit"]
 scene.frame_set(0)
@@ -836,7 +1050,7 @@ gL, dirL, defL = hand_frame("Left")
 gR, dirR, defR = hand_frame("Right")
 UPV = Vector((0, 0, 1))
 mid = (gL + gR) * 0.5 + UPV * 0.035 + Vector((0, -0.03, 0))  # needle tips cross a little above and ahead
-print("FARMER knit grips L", tuple(round(x, 3) for x in gL), "R", tuple(round(x, 3) for x in gR), "gap", round((gL - gR).length, 3))
+print(CID.upper(), "knit grips L", tuple(round(x, 3) for x in gL), "R", tuple(round(x, 3) for x in gR), "gap", round((gL - gR).length, 3))
 
 
 def stick(a, b, r, cap_at_a=True):
@@ -914,14 +1128,14 @@ pm.object = root
 root.animation_data.action = None
 
 bpy.context.view_layer.update()
-print("FARMER faces:", len(mesh.data.polygons), "bones:", len(rig.bones), "groups:", len(mesh.vertex_groups))
+print(CID.upper(), "faces:", len(mesh.data.polygons), "bones:", len(rig.bones), "groups:", len(mesh.vertex_groups))
 
 os.makedirs(ASSETS, exist_ok=True)
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(BUILD, "farmer.blend"))
-bpy.ops.export_scene.gltf(filepath=os.path.join(ASSETS, "farmer.glb"), export_format="GLB", export_apply=True,
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(BUILD, CID + ".blend"))
+bpy.ops.export_scene.gltf(filepath=os.path.join(ASSETS, CID + ".glb"), export_format="GLB", export_apply=True,
                           export_yup=True, export_cameras=False, export_lights=False, export_skins=True,
                           export_animations=True, export_animation_mode="ACTIONS", export_force_sampling=True)
-print("FARMER exported", os.path.join(ASSETS, "farmer.glb"))
+print(CID.upper(), "exported", os.path.join(ASSETS, CID + ".glb"))
 for t in root.animation_data.nla_tracks:
     t.mute = True
 for pb in root.pose.bones:  # back to the rest pose for the turntable
@@ -975,7 +1189,7 @@ if RENDER_DIR:
         frames.append(p)
     root.rotation_euler = (0, 0, math.radians(20))
     cam.data.ortho_scale = 0.42
-    cam.location = (0, -6, 1.63)
+    cam.location = (0, -6, 1.63 * H)
     scene.render.resolution_x = 600
     scene.render.resolution_y = 600
     scene.render.filepath = os.path.join(RENDER_DIR, "portrait.png")
@@ -991,7 +1205,7 @@ if RENDER_DIR:
     out.filepath_raw = os.path.join(RENDER_DIR, "turntable.png")
     out.file_format = "PNG"
     out.save()
-    print("FARMER turntable", out.filepath_raw)
+    print(CID.upper(), "turntable", out.filepath_raw)
 
     # pose sheet: each animation at two moments, seen from the front-left and the side
     if "--poses" in argv:
@@ -1041,4 +1255,4 @@ if RENDER_DIR:
         out.filepath_raw = os.path.join(RENDER_DIR, "poses.png")
         out.file_format = "PNG"
         out.save()
-        print("FARMER poses", out.filepath_raw)
+        print(CID.upper(), "poses", out.filepath_raw)
