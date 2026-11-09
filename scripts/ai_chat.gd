@@ -18,7 +18,7 @@ signal replied(vid: String, result: Dictionary) # {"ok", "text", "mood", "error"
 
 const API_URL := "https://api.anthropic.com/v1/messages"
 const API_VERSION := "2026-10-21"
-const DEFAULT_MODEL := "claude-opus-5-5"
+const DEFAULT_MODEL := "claude-haiku-5-5" # cheapest current model; strong at staying in character
 const CFG_PATH := "user://ai.cfg"
 const MAX_HISTORY := 20 # messages kept per villager (10 exchanges)
 const MAX_INPUT := 280 # characters Nora can type in one go
@@ -124,11 +124,21 @@ func build_request(vid: String, history: Array, situation: String) -> Dictionary
 		],
 		"messages": history.duplicate(true),
 	}
-	if proxy_url == "":
+	if proxy_url == "" and supports_fallback():
 		body["fallbacks"] = "default" # if this model is overloaded, the API answers with a fallback
-	if model.contains("opus") or model.contains("sonnet") or model.contains("fable"):
+	if supports_effort():
 		body["output_config"] = {"effort": "low"} # small talk: fast and cheap
 	return body
+
+
+## Server-side fallback exists for Opus, Sonnet and Fable; Haiku 5.5 rejects the field.
+func supports_fallback() -> bool:
+	return model.contains("opus") or model.contains("sonnet") or model.contains("fable")
+
+
+## `effort` is on every current model except the older Haiku 4.5 and the Claude 3 family.
+func supports_effort() -> bool:
+	return not (model.contains("haiku-4") or model.begins_with("claude-3"))
 
 
 ## The text for system[1]: what's true right now. `ctx` comes from main.gd.
@@ -192,7 +202,8 @@ func send(vid: String, history: Array, situation: String) -> bool:
 	var headers := PackedStringArray(["content-type: application/json", "anthropic-version: " + API_VERSION])
 	if proxy_url == "":
 		headers.append("x-api-key: " + api_key)
-		headers.append("anthropic-beta: server-side-fallback-2026-07-01")
+		if supports_fallback():
+			headers.append("anthropic-beta: server-side-fallback-2026-07-01")
 	var err := _http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(body))
 	if err != OK:
 		busy = false

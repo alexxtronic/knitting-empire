@@ -48,7 +48,7 @@ It needs an Anthropic API key. **The key is never stored in the game or this rep
 
 Without a key, villagers smile and nod, and **Talk** works as before.
 
-`ai.cfg` options (section `[ai]`): `api_key`, `model` (default `claude-opus-5-5`, at low effort; `claude-haiku-5-5` is cheaper), `enabled=false` to switch chat off, and `proxy_url` to send requests to your own server instead, which adds the key. A proxy is how this would ship to players, since a key inside a game build can be pulled out.
+`ai.cfg` options (section `[ai]`): `api_key`, `model` (default `claude-haiku-5-5` at low effort, the cheapest current model at well under a tenth of a cent per reply; `claude-sonnet-5-5` or `claude-opus-5-5` write richer replies at 20 to 40 times the price), `enabled=false` to switch chat off, and `proxy_url` to send requests to your own server instead, which adds the key. A proxy is how this would ship to players, since a key inside a game build can be pulled out.
 
 The autotest checks the chat offline with a stand-in for the API, so it never spends anything.
 
@@ -143,6 +143,12 @@ The three style frames in `docs/woolcore/` are made by the game itself:
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path "$PWD" --resolution 1280x800 -- --styleframes="$PWD/docs/woolcore"
+```
+
+To see what each graphics effect costs, the frame-cost probe times the town at noon and the farm at night with each effect switched off in turn (vsync off; macOS sometimes turns it back on, and then every reading pins at the display's refresh time):
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --path "$PWD" --disable-vsync --always-on-top --resolution 1280x800 -- --fpsprobe
 ```
 
 ## Characters

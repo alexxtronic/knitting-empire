@@ -25,7 +25,7 @@ const PATH := Color(0.62, 0.50, 0.34)
 ## The road from the farm and the town paths: bakery lane, shop door, office door, cottage walk.
 const PATHS := [Rect2(16.8, 2.35, 28.4, 1.3), Rect2(41.2, -8.8, 1.1, 11.0), Rect2(55.95, -9.2, 1.1, 3.2),
 	Rect2(63.7, -8.5, 1.1, 2.6), Rect2(60.85, 3.9, 1.3, 3.2)]
-const COBBLE := Color(0.66, 0.62, 0.55)
+const COBBLE := Color(0.5, 0.47, 0.42) # real stone is darker than it looks; the sun does the rest
 
 
 ## Builds everything static. Returns {"blockers": Array[Rect2], "board": Label3D,
@@ -39,7 +39,7 @@ static func build(root: Node3D) -> Dictionary:
 	rng.seed = 21
 	for i in 70:
 		var p := Vector3(rng.randf_range(PLAZA.position.x + 0.4, PLAZA.end.x - 0.4), 0.004, rng.randf_range(PLAZA.position.y + 0.4, PLAZA.end.y - 0.4))
-		Catalog.box(root, Vector3(0.5, 0.01, 0.5), p, COBBLE.darkened(rng.randf_range(0.04, 0.12)), Vector3(0, rng.randf() * 90.0, 0))
+		Catalog.box(root, Vector3(0.5, 0.01, 0.5), p, COBBLE.darkened(rng.randf_range(0.05, 0.2)), Vector3(0, rng.randf() * 90.0, 0))
 	# the cottage yard reads as a tidy lawn
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)

@@ -106,12 +106,16 @@ var _autosave_t := 0.0
 var _autotest_dir := ""
 var _style_frames := false # --styleframes=DIR: take the Woolcore style frames and quit
 var _capture := false # --capture: play the opening at a person's pace (record it with --write-movie)
+var _fps_probe := false # --fpsprobe: measure frame cost in town with each effect switched off in turn
 
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a == "--capture":
 			_capture = true
+			a = "--autotest=" + OS.get_user_data_dir()
+		if a == "--fpsprobe":
+			_fps_probe = true
 			a = "--autotest=" + OS.get_user_data_dir()
 		if a.begins_with("--styleframes="):
 			_style_frames = true
@@ -203,6 +207,8 @@ func _ready() -> void:
 		_begin_new_story()
 	if _capture:
 		_capture_opening()
+	elif _fps_probe:
+		_run_fps_probe()
 	elif _style_frames:
 		_take_style_frames()
 	elif _autotest_dir != "":
@@ -262,32 +268,43 @@ func _setup_environment() -> void:
 	sky.radiance_size = Sky.RADIANCE_SIZE_128
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 0.95
+	env.tonemap_white = 6.0 # bright sun on cream walls rolls off softly instead of clipping
+	# contact darkening where things meet the ground, and it shows in sunlight too
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
+	env.ssao_radius = 1.0
+	env.ssao_intensity = 2.2
+	env.ssao_power = 1.6
+	env.ssao_detail = 0.8
+	env.ssao_light_affect = 0.15
+	# the pond (and puddly ground in the rain) reflects what's around it
+	env.ssr_enabled = true
+	env.ssr_max_steps = 48
+	env.ssr_fade_in = 0.2
+	env.ssr_fade_out = 2.0
 	# light bouncing off the ground and walls tints what's near it (green under trees, warm indoors)
 	env.ssil_enabled = true
 	env.ssil_radius = 3.0
 	env.ssil_intensity = 0.7
 	env.glow_enabled = true
-	env.glow_intensity = 0.5
-	env.glow_bloom = 0.04
+	env.glow_intensity = 0.32
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.1 # only real highlights glow (lamps, the sun on water), not the whole frame
 	# Woolcore grade: plum-tinted shadows, warm cream highlights, a touch more contrast
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
+	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 1.1
 	var grade := Gradient.new()
 	grade.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
-	grade.colors = PackedColorArray([Color(0.07, 0.035, 0.09), Color(0.535, 0.5, 0.465), Color(1.0, 0.97, 0.9)])
+	grade.colors = PackedColorArray([Color(0.025, 0.012, 0.035), Color(0.52, 0.49, 0.455), Color(1.0, 0.97, 0.9)])
 	var lut := GradientTexture1D.new()
 	lut.gradient = grade
 	lut.width = 256
 	env.adjustment_color_correction = lut
 	env.fog_enabled = true
-	env.fog_density = 0.0035
+	env.fog_density = 0.0015
 	# a thin volumetric haze: sunbeams through the trees at dawn and dusk, mist in the rain
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.002
@@ -298,9 +315,19 @@ func _setup_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 70.0
-	sun.shadow_blur = 1.4
-	sun.light_angular_distance = 0.8 # soft shadow edges, wider the further from the caster
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_max_distance = 70.0 # _update_camera tightens this when zoomed in
+	sun.directional_shadow_split_1 = 0.08
+	sun.directional_shadow_split_2 = 0.2
+	sun.directional_shadow_split_3 = 0.45
+	sun.directional_shadow_blend_splits = true
+	sun.directional_shadow_fade_start = 0.85
+	sun.shadow_bias = 0.03
+	sun.shadow_normal_bias = 1.0
+	sun.shadow_blur = 1.0
+	# the real sun is about half a degree across: crisp where a thing touches the ground,
+	# softer the further the shadow falls from it
+	sun.light_angular_distance = 0.55
 	sun.light_volumetric_fog_energy = 1.3
 	add_child(sun)
 	# depth of field for close-ups (_update_camera turns it on when the camera's near)
@@ -318,11 +345,11 @@ func _update_lighting() -> void:
 	var warm := 1.0 - arc
 	var day_col := Color(1.0, 0.94, 0.84).lerp(Color(1.0, 0.62, 0.36), warm * 0.85)
 	sun.light_color = Color(0.55, 0.65, 1.0).lerp(day_col, dl)
-	sun.light_energy = lerpf(0.22, 1.3, dl)
+	sun.light_energy = lerpf(0.3, 1.85, dl)
 	var horizon := Color(0.14, 0.15, 0.28).lerp(Color(0.97, 0.82, 0.62).lerp(Color(1.0, 0.62, 0.4), warm * 0.6), dl)
 	var top := Color(0.06, 0.08, 0.2).lerp(Color(0.38, 0.6, 0.86), dl)
 	var sky_h := horizon
-	env.ambient_light_energy = lerpf(0.3, 0.75, dl)
+	env.ambient_light_energy = lerpf(0.38, 0.5, dl)
 	env.fog_light_color = horizon
 	if rain > 0.001: # overcast: a dimmer, greyer, mistier day
 		var grey := Color(0.52, 0.55, 0.6).lerp(Color(0.12, 0.13, 0.18), 1.0 - dl)
@@ -342,7 +369,7 @@ func _update_lighting() -> void:
 	sky_mat.set_shader_parameter("cloud_shade", Color(0.62, 0.6, 0.7).lerp(Color(0.4, 0.42, 0.48), rain))
 	_cloud_drift += Vector2(0.82, 0.57) * get_process_delta_time() * (0.012 + 0.02 * rain)
 	sky_mat.set_shader_parameter("cloud_offset", _cloud_drift)
-	env.fog_density = 0.002 + 0.0065 * rain
+	env.fog_density = 0.0012 + 0.0068 * rain
 	# haze only when it earns its keep: rain, and low sun at dawn and dusk (sunbeams)
 	env.volumetric_fog_density = 0.01 * rain + 0.004 * warm * warm * dl
 	env.volumetric_fog_enabled = env.volumetric_fog_density > 0.0006
@@ -736,6 +763,8 @@ func _update_camera(delta: float) -> void:
 	# close-ups get a soft background
 	var near := cam_dist < 9.0
 	cam_attr.dof_blur_far_enabled = near
+	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
+	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, 70.0)
 	if near:
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
@@ -1761,6 +1790,70 @@ func _capture_opening() -> void:
 	get_tree().quit()
 
 
+## Frame-cost probe (run with --disable-vsync -- --fpsprobe): the town at midday and the farm at night, vsync
+## off, timing each graphics effect by switching it off on its own. Prints milliseconds per frame.
+func _run_fps_probe() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Game.time_running = false
+	_set_cam_lock(false)
+	var lamps: Array = []
+	for n in find_children("*", "OmniLight3D", true, false):
+		lamps.append(n)
+	var toggles := {
+		"ssr": func(on): env.ssr_enabled = on,
+		"ssao": func(on): env.ssao_enabled = on,
+		"ssil": func(on): env.ssil_enabled = on,
+		"vol_fog": func(on): env.volumetric_fog_enabled = on,
+		"glow": func(on): env.glow_enabled = on,
+		"sun_shadow": func(on): sun.shadow_enabled = on,
+		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 1),
+		"lamp_shadows": func(on):
+			for l in lamps:
+				l.shadow_enabled = on,
+		"grass": func(on): grass.visible = on,
+	}
+	var vp := get_viewport()
+	var before_today := func(on):
+		# on = today's settings; off = what the game shipped with yesterday
+		env.ssr_enabled = on
+		RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH if on else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, not on, 0.5, 2, 50.0, 300.0)
+		RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 2)
+		RenderingServer.directional_shadow_atlas_set_size(8192 if on else 4096, true)
+		for l in lamps:
+			l.shadow_enabled = on
+	toggles["TODAY'S CHANGES"] = before_today
+	toggles["3D at 100% (vs 75% FSR)"] = func(on):
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR if on else Viewport.SCALING_3D_MODE_FSR
+		vp.scaling_3d_scale = 1.0 if on else 0.75
+	for view in [["town noon", Vector3(53, 0, -3), 30.0, 10.8], ["farm night", Vector3(8, 0, -2), 23.0, 21.5]]:
+		cam_target = view[1]
+		cam_dist = view[2]
+		Game.hour = view[3]
+		await _wait(3.0)
+		await _frame_ms()
+		var base := await _frame_ms()
+		print("PROBE %s  %s  all on: %.2f ms" % [view[0], vp.get_visible_rect().size, base])
+		for k in toggles:
+			toggles[k].call(false)
+			await _wait(0.6)
+			var ms := await _frame_ms()
+			toggles[k].call(true)
+			await _wait(0.3)
+			var again := await _frame_ms()
+			print("PROBE %s  without %-26s %.2f ms (saves %.2f; all on again %.2f)" % [view[0], k, ms, again - ms, again])
+	print("PROBE DONE")
+	get_tree().quit()
+
+
+## Average wall-clock time per frame over 90 frames (run with --disable-vsync to see past the
+## display's refresh rate; Metal doesn't report GPU timings).
+func _frame_ms() -> float:
+	var t0 := Time.get_ticks_usec()
+	for i in 150:
+		await get_tree().process_frame
+	return (Time.get_ticks_usec() - t0) / 150000.0
+
+
 ## Woolcore style frames (run with -- --styleframes=/abs/dir): the farm at golden hour, the
 ## hearth at night, and Maplewood with the embroidered dialogue box.
 func _take_style_frames() -> void:
@@ -2001,6 +2094,16 @@ func _chat_checks() -> void:
 		body["model"] == ai.model and sys.size() == 2 and sys[0].has("cache_control") and not sys[1].has("cache_control")
 		and str(sys[0]["text"]).contains("Rosa Marchetti") and str(sys[1]["text"]).contains("Day ") and hist.size() == 1 and hist[0]["role"] == "user"
 		and not JSON.stringify(body).contains("x-api-key"))
+	# the API rejects fields a model doesn't support, so check the request each model would get
+	var keep_model: String = ai.model
+	ai.model = "claude-haiku-5-5"
+	var b_haiku := ai.build_request("rosa", hist, "")
+	ai.model = "claude-opus-5-5"
+	var b_opus := ai.build_request("rosa", hist, "")
+	ai.model = keep_model
+	_check("Haiku is the default and gets no fallback list; Opus keeps it; both at low effort",
+		AiChat.DEFAULT_MODEL == "claude-haiku-5-5" and not b_haiku.has("fallbacks") and b_haiku.get("output_config", {}).get("effort") == "low"
+		and (ai.proxy_url != "" or b_opus.has("fallbacks")) and b_opus.get("output_config", {}).get("effort") == "low")
 	_check("villagers only share secrets once they trust Nora",
 		not ai.situation_text("rowan", {"trust": 0, "familiarity": 5}).contains("Anna") and ai.situation_text("rowan", {"trust": 50, "familiarity": 60}).contains("Anna"))
 	var long: Array = []

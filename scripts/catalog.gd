@@ -122,6 +122,7 @@ static func ring(p: Node3D, inner: float, outer: float, pos: Vector3, c: Color, 
 
 static func glow(mi: MeshInstance3D, c: Color, strength: float) -> MeshInstance3D:
 	mi.material_override = mat(c, 0.6, strength)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # a flame or bulb never blocks its own light
 	return mi
 
 
@@ -131,6 +132,17 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	l.light_color = c
 	l.omni_range = rng
 	l.light_energy = day_e
+	# real shadows from the fire and lamps (furniture, people), cheap two-sided maps that fade
+	# out with distance so a whole street of lamps doesn't cost much
+	l.shadow_enabled = true
+	l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+	l.shadow_blur = 1.5
+	l.light_size = 0.12
+	# far-off lamps (the whole town from the farm) drop their shadows first, then their light
+	l.distance_fade_enabled = true
+	l.distance_fade_begin = 70.0
+	l.distance_fade_shadow = 40.0
+	l.distance_fade_length = 10.0
 	l.set_meta("day_energy", day_e)
 	l.set_meta("night_energy", night_e)
 	p.add_child(l)
