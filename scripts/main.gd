@@ -1452,11 +1452,13 @@ func _act1_checks() -> void:
 	var walk_secs := 0.0
 	_check("a new game opens on Act 1 (%s)" % Story.find_trigger("start"), Story.find_trigger("start") == "act1_arrival")
 	var hour0 := Game.hour
+	var hour_end := [-1.0] # read the moment the scene ends, before the clock starts again
+	story.scene_finished.connect(func(_id): hour_end[0] = Game.hour, CONNECT_ONE_SHOT)
 	story.trigger("start")
 	await _act1_shot("Last stop", "20_act1_rain_bus.png")
 	await _act1_shot("Daniel.", "21_act1_phone.png")
 	await _act1_until_done(40.0)
-	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, Game.hour], absf(Game.hour - hour0) < 0.01 and Game.time_running)
+	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, hour_end[0]], absf(hour_end[0] - hour0) < 0.001 and Game.time_running)
 	_check("the arrival ends at the bus stop in the rain with a goal (%s, '%s', rain %.1f)" % [str(Game.flag("act1_arrived")), hud.goal_label.text, rain],
 		Game.flag("act1_arrived") == true and player.position.distance_to(Vector3(40.2, 0, 3.4)) < 0.5 and hud.goal_panel.visible and goal_marker.visible and rain > 0.5 and str(Game.flag("weather")) == "rain")
 	await _wait(0.8)
@@ -1691,7 +1693,10 @@ func _autotest() -> void:
 	_check("watered plot", plots[3].watered)
 	await _wait(2.0)
 	_do_action(plots[0], "harvest")
-	await _wait(4.0)
+	var th := 0.0 # she walks there first; on a slow machine that takes longer than 4 s
+	while (Game.count("turnip") < 4 or player.busy) and th < 12.0:
+		await _wait(0.2)
+		th += 0.2
 	_check("harvested turnips (turnips=%d)" % Game.count("turnip"), Game.count("turnip") == 4)
 	await _shot("03_farm.png")
 
