@@ -20,15 +20,22 @@ loops named in --map it:
      are untouched), deletes the library, saves tools/character_build/<out_id>/<out_id>.blend and
      exports assets/<out_id>.glb.
 
-Loops not named in --map keep their old keys (SitKnit's knitting hands, for instance).
+Loops not named in --map keep their old keys (SitKnit's knitting hands, for instance); a name the
+rig doesn't have yet (Run) gets a new action set up like the others.
+
+A --map entry is Loop=Clip, with two optional extras: "Clip:a-b" loops only frames a..b and blends
+the seam ("Fixing_Kneeling:30-118" stays kneeling), and "Clip*s" scales the stride (the library's
+walk is a slow stroll and its jog a fast one: "Walk_Loop*1.3" and "Jog_Fwd_Loop*0.7" suit a 1.3 m/s
+walk and a 3 m/s jog). For Walk and Run it prints the stride speed, the ground speed the planted foot
+implies; put those in data/characters.json as walk_anim_speed and run_anim_speed.
 """
 import bpy, math, os, sys
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 PROJECT, LIB, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[2]
-DEFAULT_MAP = ("Idle=Idle_Loop,Walk=Walk_Loop,Talk=Idle_Talking_Loop,SitIdle=Sitting_Idle_Loop,"
-               "Work=Fixing_Kneeling:30-118")
+DEFAULT_MAP = ("Idle=Idle_Loop,Walk=Walk_Loop*1.3,Run=Jog_Fwd_Loop*0.7,Talk=Idle_Talking_Loop,"
+               "SitIdle=Sitting_Idle_Loop,Work=Fixing_Kneeling:30-118")
 MAP = dict(kv.split("=") for kv in (argv[argv.index("--map") + 1] if "--map" in argv else DEFAULT_MAP).split(","))
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
 SEATED = {"SitIdle", "SitKnit"}
@@ -165,10 +172,54 @@ def sample(t):
 
 SEAM = 12  # frames blended into the start when a loop is cut from the middle of a clip
 
+STRIDE_BONES = ("UpperLeg", "LowerLeg", "Foot", "Toes", "UpperArm", "LowerArm", "Hand")
+
+
+def mean_quat(qs):
+    acc = Quaternion((0, 0, 0, 0))
+    for q in qs:
+        acc += q if acc.dot(q) >= 0 else -q
+    return acc.normalized()
+
+
+def stride_speed(action, n):
+    """Ground speed the loop's feet imply: how fast the planted (lowest) foot slides back, m/s."""
+    rig.animation_data.action = action
+    prev, dist, count = None, 0.0, 0
+    for f in range(n + 1):
+        scene.frame_set(f)
+        feet = {s: rig.pose.bones[s + "Foot"].tail.copy() for s in ("Left", "Right")}
+        low = min(feet, key=lambda s: feet[s].z)
+        if prev and prev[0] == low and feet[low].z < rest_low + 0.03:  # planted, not mid-air
+            dist += abs(feet[low].y - prev[1].y)
+            count += 1
+        prev = (low, feet[low])
+    rig.animation_data.action = None
+    return dist / count * FPS if count else 0.0
+
+
+def ensure_action(name):
+    """Our action of that name, or a new one set up like build_character.py's (slot, NLA track)."""
+    if name in bpy.data.actions:
+        return bpy.data.actions[name]
+    act = bpy.data.actions.new(name)
+    act.use_fake_user = True
+    slot = act.slots.new(id_type="OBJECT", name=rig.name)
+    act.layers.new("Layer").strips.new(type="KEYFRAME").channelbag(slot, ensure=True)
+    track = rig.animation_data.nla_tracks.new()
+    track.name = name
+    track.strips.new(name, 0, act)
+    return act
+
+
 for name, spec in MAP.items():
     # "Clip" loops the whole clip; "Clip:a-b" loops frames a..b of it (our frame rate: the importer
     # already retimed the clip) and blends the last SEAM frames into the frames before a, so the cut
-    # doesn't show (Fixing_Kneeling:30-118 keeps her kneeling instead of getting up every loop)
+    # doesn't show (Fixing_Kneeling:30-118 keeps her kneeling instead of getting up every loop).
+    # "Clip*s" scales the stride: legs and arm swing turn s times as far from their average pose,
+    # and the hips bob s times as much (Jog_Fwd_Loop*0.7 is a lighter jog that covers less ground).
+    spec, _, stride = spec.partition("*")
+    stride = float(stride) if stride else 1.0
     clip, _, cut = spec.partition(":")
     act = bpy.data.actions[clip]
     s0, s1 = act.frame_range
@@ -183,8 +234,7 @@ for name, spec in MAP.items():
     src.animation_data.action = act
     if act.slots:
         src.animation_data.action_slot = act.slots[0]
-    rot_keys = {b.name: [] for b in order}
-    hips = []
+    poses, hips = [], []
     for i in range(n + 1):
         t = s0 + span * (i % n) / n
         want, head = sample(t)
@@ -193,6 +243,24 @@ for name, spec in MAP.items():
             want2, head2 = sample(t - span)
             want = {k: q.slerp(want2[k], w) for k, q in want.items()}
             head = head.lerp(head2, w)
+        poses.append(want)
+        hips.append(head)
+    if stride != 1.0:
+        # scale each limb bone's swing relative to its parent (world swings would drag children
+        # along twice), then rebuild the limbs parents-first from the scaled swings
+        scaled = [s + p for s in ("Left", "Right") for p in STRIDE_BONES]
+        rel = {bn: [p[T[bn].parent.name].inverted() @ p[bn] for p in poses] for bn in scaled}
+        mean = {bn: mean_quat(r[:-1]) for bn, r in rel.items()}
+        for f, p in enumerate(poses):
+            for b in order:
+                if b.name in scaled:
+                    m, r = mean[b.name], rel[b.name][f]
+                    d = m.inverted() @ (r if m.dot(r) >= 0 else -r)  # swing away from the average
+                    p[b.name] = p[b.parent.name] @ m @ Quaternion(d.axis, d.angle * stride)
+        mid = sum((h.z for h in hips[:-1]), 0.0) / n
+        hips = [Vector((h.x, h.y, mid + (h.z - mid) * stride)) for h in hips]
+    rot_keys = {b.name: [] for b in order}
+    for want in poses:
         want = {k: q.to_matrix() for k, q in want.items()}
         for b in order:
             if b.parent is None:
@@ -202,7 +270,6 @@ for name, spec in MAP.items():
                          @ want[b.parent.name].inverted() @ want[b.name])
             prev = rot_keys[b.name][-1] if rot_keys[b.name] else None
             rot_keys[b.name].append(local.to_euler("XYZ", prev) if prev else local.to_euler("XYZ"))
-        hips.append(head)
     # close the loop: take out any drift so the last frame lands on the first
     drift = hips[-1] - hips[0]
     hips = [h - drift * (i / n) for i, h in enumerate(hips)]
@@ -210,16 +277,19 @@ for name, spec in MAP.items():
         mean = sum(hips[:-1], Vector()) / n
         hips = [h + (anchors[name] - mean) for h in hips]
     loc = [rest_rot["Hips"].inverted() @ (h - T["Hips"].head_local) for h in hips]
-    rig_act = bpy.data.actions[name]
+    rig_act = ensure_action(name)
     write(rig_act, rot_keys, loc)
     note = ""
     if name not in SEATED:
         lows = lowest_foot(rig_act, range(0, n))
+        lows = sorted(lows)[:max(1, len(lows) // 4)]  # the planted moments (a jog has a flight phase)
         dz = rest_low - sum(lows) / len(lows)
         loc = [l + rest_rot["Hips"].inverted() @ Vector((0, 0, dz)) for l in loc]
         write(rig_act, rot_keys, loc)
         note = f"feet {dz:+.3f} m"
-    print("LOOP", name, "<-", spec, "frames", n, "seam", seam, "drift", round(drift.length, 3), note)
+    if name in ("Walk", "Run"):
+        note += f" stride speed {stride_speed(rig_act, n):.2f} m/s"
+    print("LOOP", name, "<-", spec, "x", stride, "frames", n, "seam", seam, "drift", round(drift.length, 3), note)
 
 # --------------------------------------------------------------------------- clean up, save, export
 src.animation_data.action = None

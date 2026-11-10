@@ -46,13 +46,17 @@ grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 | What | Made by | Rebuild with |
 |---|---|---|
 | `assets/nora.glb`, `assets/rowan.glb` (procedural bodies, shared 22-bone rig and animation loops) | `tools/build_character.py` (Blender) | `Blender -b -P tools/build_character.py -- "$PWD" --character all` |
-| `assets/nora_tripo.glb`, `assets/rowan_tripo.glb` (the models the game uses, from tripo.ai) | `tools/rig_sculpt.py` (Blender) | the command in the README's Characters section; it needs the source export, which isn't in the repo |
+| `assets/nora_tripo.glb`, `assets/rowan_tripo.glb` (the models the game uses, from tripo.ai) | `tools/rig_sculpt.py` (Blender), then `tools/retarget_anims.py` for the mocap loops | the command in the README's Characters section (it needs the source export, which isn't in the repo), then the retarget command below |
 | `assets/audio/*` (every sound and the music) | `tools/make_audio.py` | `uv run --no-project --with numpy --with scipy python tools/make_audio.py "$PWD"` |
 | `assets/props/*.glb` | `tools/import_asset.py` | see `docs/STYLE_GUIDE.md` |
 
-Animation loops (Idle, Walk, SitKnit, SitIdle, Work, Talk) are made with Python pose functions in `build_character.py`. After changing them, rebuild the procedural bodies, then re-rig the Tripo models so they pick up the new loops.
+Animation loops: the procedural bodies get theirs (Idle, Walk, SitKnit, SitIdle, Work, Talk) from Python pose functions in `build_character.py`. The Tripo models the game uses get motion-captured loops instead: `tools/retarget_anims.py` copies Idle, Walk, Run (the Shift jog), Talk, SitIdle and Work from Quaternius's Universal Animation Library (CC0, free on itch.io, not in the repo) onto their rigs, and keeps their SitKnit. The order matters. Re-rigging a Tripo model with `rig_sculpt.py` brings back the procedural loops, so run the retarget after it:
 
-`tools/retarget_anims.py` is an unfinished tool for moving motion-capture loops onto the rig. It hasn't been run, and the game doesn't use it.
+```bash
+Blender -b tools/character_build/nora_tripo/nora_tripo.blend -P tools/retarget_anims.py -- "$PWD" "<pack>/Unreal-Godot/UAL1_Standard.glb" nora_tripo
+```
+
+It prints each loop's stride speed. Put the Walk and Run ones in `data/characters.json` (`walk_anim_speed`, `run_anim_speed`) so the feet don't slide.
 
 ## Rules
 

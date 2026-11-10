@@ -8,7 +8,10 @@ const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
 const Body = preload("res://scripts/body.gd")
 
-var speed := 3.0
+var speed := 1.1 # ground speed right now: walk_speed, or run_speed while she jogs
+var walk_speed := 1.1 # m/s; main.gd raises both with fitness
+var run_speed := 3.0
+var running := false # Shift held (main.gd sets it every frame; the autotest can hold it too)
 var path: Array = []
 var busy := false
 var detailed := false # true when the Blender character loaded
@@ -152,6 +155,7 @@ func _process(delta: float) -> void:
 		var to := next - position
 		to.y = 0.0
 		var d := to.length()
+		speed = run_speed if running else walk_speed
 		var step := speed * delta
 		if d <= step:
 			walked += d
@@ -183,7 +187,7 @@ func _animate(delta: float, walking: bool) -> void:
 		else:
 			want = "Work"
 	elif walking:
-		want = "Walk"
+		want = "Run" if running else "Walk"
 	elif _talk_t > 0.0:
 		want = "Talk"
 	body.play(want, speed)
@@ -194,7 +198,7 @@ func _animate(delta: float, walking: bool) -> void:
 ## quarters through it, see a_walk in tools/build_character.py); needles click while she knits.
 func _sound_cues(delta: float) -> void:
 	var cur := body.current()
-	if cur == "Walk" and body.anim.current_animation_length > 0.0:
+	if cur in ["Walk", "Run"] and body.anim.current_animation_length > 0.0:
 		var ph := fmod(body.anim.current_animation_position / body.anim.current_animation_length + 0.75, 1.0)
 		if _walk_phase >= 0.0 and (ph < _walk_phase or (_walk_phase < 0.5 and ph >= 0.5)):
 			footstep.emit()

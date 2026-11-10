@@ -41,6 +41,7 @@ const PLASTER := Color(0.92, 0.86, 0.74)
 enum Mode { LIVE, BUILD }
 
 var mode := Mode.LIVE
+var autotest_jog := false # the autotest jogs her everywhere (as if Shift were held), so its timings hold
 var cam: Camera3D
 var cam_target := Vector3(6, 0, 2.5)
 var cam_yaw := deg_to_rad(45.0)
@@ -834,7 +835,9 @@ func _update_needs(delta: float) -> void:
 		if Game.time_running:
 			Game.add_need("fitness", player.walked * 0.06)
 		player.walked = 0.0
-	player.speed = 2.75 + 0.6 * Game.fitness / 100.0
+	player.walk_speed = 1.05 + 0.15 * Game.fitness / 100.0
+	player.run_speed = 2.75 + 0.6 * Game.fitness / 100.0
+	player.running = autotest_jog or _held(KEY_SHIFT)
 	var head := player.head_point()
 	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not cam.is_position_behind(head)
 	hud.update_activity(player.activity_text(), player.activity_progress(), cam.unproject_position(head), show, player.activity_text() != "Zzz")
@@ -2477,6 +2480,7 @@ func _check(label: String, ok: bool) -> void:
 
 
 func _autotest() -> void:
+	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
 	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
@@ -2689,9 +2693,15 @@ func _character_checks() -> void:
 	await _wait(1.6)
 	await _shot("02a_heroine_closeup.png")
 	var home := player.position
+	autotest_jog = false
 	player.walk(_find_path(player.position, home + Vector3(2.5, 0, 0)))
 	await _wait(0.45)
-	_check("heroine plays the Walk animation (%s)" % player.body.current(), player.body.current() == "Walk")
+	_check("heroine plays the Walk animation (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
+		player.body.current() == "Walk" and player.speed < 2.0 and absf(player.body.anim.speed_scale - 1.0) < 0.5)
+	autotest_jog = true
+	await _wait(0.4)
+	_check("holding Shift she jogs, with the stride matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
+		player.body.current() == "Run" and player.speed > 2.5 and absf(player.body.anim.speed_scale - 1.0) < 0.3)
 	cam_target = player.position
 	await _shot("02b_heroine_walk.png")
 	await _wait(1.0)

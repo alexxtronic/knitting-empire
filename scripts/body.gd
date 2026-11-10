@@ -6,6 +6,7 @@ extends Node3D
 const Data = preload("res://scripts/data.gd")
 const Rig = preload("res://scripts/rig.gd")
 const ANIMS := ["Idle", "Walk", "SitKnit", "SitIdle", "Work", "Talk"]
+const OPTIONAL := ["Run"] # a jog, for the player holding Shift; bodies without it walk instead
 const BLEND := 0.22
 
 var id := ""
@@ -14,6 +15,7 @@ var anim: AnimationPlayer
 var skeleton: Skeleton3D
 var props: Node3D # knitting needles and swatch, shown only while knitting
 var walk_anim_speed := 3.0
+var run_anim_speed := 3.0 # the ground speed the Run loop's stride matches
 var label_height := 2.1
 var rig: Rig # procedural look-at, lean and breathing on top of the loops (rig.gd)
 ## Where this character is looking (a world point), or null. Set by main.gd each frame.
@@ -33,6 +35,7 @@ func load_character(char_id: String) -> bool:
 	id = char_id
 	var info := Data.character(char_id)
 	walk_anim_speed = float(info.get("walk_anim_speed", 3.0))
+	run_anim_speed = float(info.get("run_anim_speed", 3.0))
 	label_height = float(info.get("label_height", 2.1))
 	var path := str(info.get("model", "res://assets/%s.glb" % char_id))
 	if not ResourceLoader.exists(path):
@@ -55,6 +58,9 @@ func load_character(char_id: String) -> bool:
 			push_warning("%s is missing the %s loop" % [path, n])
 			return false
 		anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	for n in OPTIONAL:
+		if anim.has_animation(n):
+			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 	add_child(inst)
 	var sk := inst.find_children("*", "Skeleton3D", true, false)
 	skeleton = sk[0] if not sk.is_empty() else null
@@ -71,13 +77,19 @@ func load_character(char_id: String) -> bool:
 	return true
 
 
-## Cross-fades to a loop. For "Walk", pass the ground speed so the stride matches it.
+## Cross-fades to a loop. For "Walk" and "Run", pass the ground speed so the stride matches it.
 func play(loop_name: String, ground_speed := 0.0) -> void:
 	if not ok:
 		return
+	if loop_name == "Run" and not anim.has_animation("Run"):
+		loop_name = "Walk"
 	if anim.current_animation != loop_name:
 		anim.play(loop_name, BLEND)
-	anim.speed_scale = ground_speed / walk_anim_speed if loop_name == "Walk" and ground_speed > 0.0 else 1.0
+	anim.speed_scale = 1.0
+	if ground_speed > 0.0 and loop_name == "Walk":
+		anim.speed_scale = ground_speed / walk_anim_speed
+	elif ground_speed > 0.0 and loop_name == "Run":
+		anim.speed_scale = ground_speed / run_anim_speed
 	if props:
 		props.visible = loop_name == "SitKnit"
 
