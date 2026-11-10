@@ -71,8 +71,10 @@ def make_rigid(me, rig):
         total = sum(w.values()) or 1.0
         h0 = w.pop("Head", 0.0) / total  # how much of this vertex followed the head before
         h = h0 + (1.0 - h0) * float(s[i])  # ...rising to all of it at the chin
-        for g in list(v.groups):
-            me.vertex_groups[g.group].remove([i])
+        # take the group indices first: removing a vertex from a group reshuffles v.groups underneath a
+        # loop over it, and the skipped groups would keep pulling the face toward the shoulders
+        for gi in [g.group for g in v.groups]:
+            me.vertex_groups[gi].remove([i])
         head_g.add([i], h, "REPLACE")
         if h >= 0.999 or not w:
             if h < 0.999:
@@ -83,6 +85,11 @@ def make_rigid(me, rig):
         for n, x in w.items():
             groups[n].add([i], (1.0 - h) * x / rest, "REPLACE")
         band += 1
+    # check: above the jaw line every vertex follows the Head bone and nothing else
+    stray = sum(1 for i, v in enumerate(me.data.vertices) if s[i] >= 0.999
+                and any(g.weight > 0.0 and g.group != head_g.index for g in v.groups))
+    if stray:
+        raise RuntimeError(f"rigid_head: {stray} vertices above the jaw line still follow other bones")
     print(f"RIGID HEAD {me.name}: chin at {chin:.3f} m (Neck bone {neck_z:.3f}, Head bone {head_z:.3f}); "
           f"{rigid} verts rigid, {band} in the neck band")
     return chin

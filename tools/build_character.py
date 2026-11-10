@@ -1168,6 +1168,10 @@ pm.object = root
 root.animation_data.action = None
 
 bpy.context.view_layer.update()
+# every character's head turns as one rigid piece on a short band of neck (tools/rigid_head.py)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rigid_head  # noqa: E402
+rigid_head.make_rigid(mesh, root)
 print(CID.upper(), "faces:", len(mesh.data.polygons), "bones:", len(rig.bones), "groups:", len(mesh.vertex_groups))
 
 os.makedirs(ASSETS, exist_ok=True)
