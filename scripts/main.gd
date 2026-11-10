@@ -2135,6 +2135,12 @@ func _romance_checks() -> void:
 		t += 0.1
 	_check("walking into the back field starts the date (%s after %.1fs)" % [story.playing, t], story.playing == "rowan_date1")
 	await _act1_shot("Best rock", "35_rowan_date_rock.png")
+	var rowan_v = _villager("rowan")
+	var seat_r: float = rowan_v.position.y if rowan_v else 0.0
+	var pose_r: String = rowan_v.body.current() if rowan_v and rowan_v.body else ""
+	var pose_n: String = player.body.current() if player.body else ""
+	_check("on the rock they sit up on it, not sunk into it (%s %.2f m up, Rowan %s %.2f m up)" % [pose_n, player.position.y, pose_r, seat_r],
+		player.position.y > 0.35 and seat_r > 0.35 and pose_n == "SitIdle" and pose_r == "SitIdle")
 	var sunset := Game.hour
 	await _act1_shot("four minutes", "36_rowan_date_darning.png")
 	var knit := player.body.current() if player.body else ""
@@ -2143,7 +2149,8 @@ func _romance_checks() -> void:
 	_check("the date: sunset (%.1fh), she darns his hat (%s), leans on his shoulder (romance +%d), journal '%s', rock gone, he heads home" % [sunset, knit, Game.stat("rowan", "romance") - ro0, Game.journal()[-1]["title"] if Game.journal().size() > j0 else ""],
 		sunset >= 17.5 and sunset < 19.0 and knit == "SitKnit" and Game.flag("date1_done") == true and Game.flag("rowan_close") == true
 		and Game.stat("rowan", "romance") >= ro0 + 4 and Game.journal().size() == j0 + 1 and not props.has("date_rock")
-		and not Game.flag("home_rowan", false) and not hud.goal_panel.visible and player.anim_override == "")
+		and not Game.flag("home_rowan", false) and not hud.goal_panel.visible and player.anim_override == ""
+		and is_zero_approx(player.position.y))
 	Game.day += 1
 	f["trust"] = maxi(int(f["trust"]), 14)
 	var anna: String = await talk.call()
@@ -2694,11 +2701,13 @@ func _character_checks() -> void:
 	await _shot("02a_heroine_closeup.png")
 	var home := player.position
 	autotest_jog = false
+	player.running = false # now, not on main's next frame: a slow frame here would start her off jogging
 	player.walk(_find_path(player.position, home + Vector3(2.5, 0, 0)))
 	await _wait(0.45)
 	_check("heroine plays the Walk animation (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
 		player.body.current() == "Walk" and player.speed < 2.0 and absf(player.body.anim.speed_scale - 1.0) < 0.5)
 	autotest_jog = true
+	player.running = true
 	await _wait(0.4)
 	_check("holding Shift she jogs, with the stride matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
 		player.body.current() == "Run" and player.speed > 2.5 and absf(player.body.anim.speed_scale - 1.0) < 0.3)

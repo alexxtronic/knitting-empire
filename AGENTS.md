@@ -58,6 +58,10 @@ Blender -b tools/character_build/nora_tripo/nora_tripo.blend -P tools/retarget_a
 
 It prints each loop's stride speed. Put the Walk and Run ones in `data/characters.json` (`walk_anim_speed`, `run_anim_speed`) so the feet don't slide.
 
+Heads: `rig_sculpt.py` also runs `tools/rigid_head.py`, which binds everything from the jaw line up to the Head bone alone and fades that over 6 cm of neck, so a turned head never shears the face. The look-at in `scripts/rig.gd` spreads the turn over the upper chest, neck and head, and turns then nods (no roll). To fix a model rigged before this without re-rigging it: `Blender -b tools/character_build/<id>/<id>.blend -P tools/rigid_head.py -- "$PWD" <id>`.
+
+Seated story scenes: the seated loops put the seat at the character's origin, so `@place` takes a height after the yaw for anyone sitting on something above the ground (the date rock is 0.43).
+
 ## Rules
 
 - **Never commit secrets.** That means API keys, tokens, `.env` files, passwords, certificates, and `.p8`/`.p12` keys. Villager chat needs an Anthropic API key, but it is never stored in the repo or the game. Players paste it into the game (it's saved in Godot's user folder) or set `ANTHROPIC_API_KEY`. Don't add a key, a default key or a key file to the project.

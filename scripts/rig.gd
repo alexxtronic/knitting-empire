@@ -28,7 +28,9 @@ var _bones := {}
 var _fwd_rest := {} # each bone's forward axis in its own space at rest
 var _ready_bones := false
 
-const LOOK_BONES := [["Neck", 0.4], ["Head", 1.0]]
+## How far each bone turns toward the target, down the chain: the upper chest takes a little, the neck
+## more, the head the rest. Spread out like this no one joint twists far.
+const LOOK_BONES := [["UpperChest", 0.25], ["Neck", 0.45], ["Head", 1.0]]
 const MAX_YAW := deg_to_rad(70.0)
 const MAX_PITCH_UP := deg_to_rad(25.0)
 const MAX_PITCH_DOWN := deg_to_rad(35.0)
@@ -45,7 +47,8 @@ func _setup() -> void:
 		if _bones[n] < 0:
 			return
 	var fwd_sk := _body_fwd_in_skeleton(sk)
-	for n in ["Neck", "Head"]:
+	for lb in LOOK_BONES:
+		var n: String = lb[0]
 		var rest := sk.get_bone_global_rest(_bones[n])
 		_fwd_rest[n] = (rest.basis.inverse() * fwd_sk).normalized()
 	_ready_bones = true
@@ -115,9 +118,26 @@ func _process_modification_with_delta(delta: float) -> void:
 		var desired := _limit((_target - gp.origin).normalized(), fwd, up, right)
 		if cur.is_zero_approx() or not desired.is_finite() or cur.dot(desired) < -0.99:
 			continue # pointing straight back: no stable rotation, leave the animated pose
-		var q := Quaternion(cur, desired)
+		var q := _aim(cur, desired, up)
 		q = Quaternion.IDENTITY.slerp(q, share * _w)
 		_set_global_basis(sk, bi, Basis(q) * gp.basis)
+
+
+## The rotation that turns `cur` to `desired` as a person turns their head: a turn about the vertical,
+## then a nod. The shortest-arc rotation would also roll the head sideways when it starts off bowed
+## (seated, or mid-step), which reads as the face twisting.
+func _aim(cur: Vector3, desired: Vector3, up: Vector3) -> Quaternion:
+	var ch := cur - up * cur.dot(up)
+	var dh := desired - up * desired.dot(up)
+	if ch.length() < 0.05 or dh.length() < 0.05:
+		return Quaternion(cur, desired)
+	ch = ch.normalized()
+	dh = dh.normalized()
+	var turn := Quaternion(up, atan2(ch.cross(dh).dot(up), ch.dot(dh)))
+	var c2 := (turn * cur).normalized()
+	if c2.dot(desired) > 0.99999:
+		return turn
+	return Quaternion(c2, desired) * turn
 
 
 ## Clamps a look direction to how far a neck can turn from the body's forward.

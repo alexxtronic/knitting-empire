@@ -16,7 +16,8 @@ tools/build_character.py, then:
      generated turnarounds stand in a wider A-pose than the rig), binds the mesh to it with automatic
      weights, then splits arm skin from body skin by distance along the surface so a hand resting on
      a thigh doesn't move with the leg (or the arm sink into the body), swings the arms back to the
-     rig's rest pose and applies that, so the mesh now matches the real rig's rest pose;
+     rig's rest pose and applies that, so the mesh now matches the real rig's rest pose; the head is made
+     one rigid piece from the jaw line up (tools/rigid_head.py), so it doesn't bend when it turns;
   4. swaps the procedural body for the sculpt on the real rig (bones, animations and knitting
      props are untouched) and exports assets/<out_id>.glb, plus a turntable/pose check with --render.
 """
@@ -294,6 +295,11 @@ for side, sx in (("Left", 1), ("Right", -1)):
             lo.vertex_groups[gidx[best]].add([int(i)], 1.0, "REPLACE")
     print("SPLIT", side, "arm verts", int(is_arm.sum()), "body verts", int(is_body.sum()), "weights moved", moved,
           "hand verts", int((is_arm & (d_hand < 0.06)).sum()))
+
+# the head: one rigid piece from the jaw line up, turning on a short band of neck (tools/rigid_head.py)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rigid_head  # noqa: E402
+rigid_head.make_rigid(lo, temp)
 
 # swing the arms back to the real rig's rest angle and bake that into the mesh
 select_only(temp)

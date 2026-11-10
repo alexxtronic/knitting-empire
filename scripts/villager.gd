@@ -56,9 +56,9 @@ func walk_to(p: Vector3) -> void:
 
 ## Story scenes: stand at a spot from now on.
 func settle_at(p: Vector3) -> void:
-	home = p
+	home = Vector3(p.x, 0.0, p.z) # p may be up on a seat (a story's @place height); home is on the ground
 	roam = Vector2.ZERO
-	_target = p
+	_target = home
 	position = p
 	_wait = randf_range(1.0, 3.0)
 
@@ -194,7 +194,8 @@ func _process(delta: float) -> void:
 
 ## Skinned villagers: talk while held in a conversation, idle while waiting, walk between spots.
 func _process_body(delta: float) -> void:
-	if anim_override != "" and position.distance_to(_target) < 0.05:
+	# on the spot (ignoring height: a scene may have seated them up on a rock)
+	if anim_override != "" and Vector2(position.x - _target.x, position.z - _target.z).length() < 0.05:
 		hold_time = maxf(0.0, hold_time - delta)
 		body.play(anim_override)
 		return

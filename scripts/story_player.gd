@@ -18,6 +18,7 @@ var pause_on := "" # auto mode: hold on the first line containing this (the auto
 var holding := false
 var shown: Array = [] # every line shown, "Name: text" (for the autotest)
 var _held: Array = [] # actors put into an animation by @anim
+var _lifted: Array = [] # actors @place put up on a seat; set back on the ground when the scene ends
 var _cam0 := {}
 
 
@@ -84,6 +85,10 @@ func _run(id: String) -> void:
 		if is_instance_valid(a):
 			a.anim_override = ""
 	_held.clear()
+	for a in _lifted: # back down off the rock
+		if is_instance_valid(a):
+			a.position.y = 0.0
+	_lifted.clear()
 	main.cam_glide = {}
 	hud.set_phone("")
 	if hud.memory_on():
@@ -246,7 +251,11 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 		"place":
 			var n := actor(str(a[0]))
 			if n and a.size() >= 3:
-				var p := Vector3(float(a[1]), 0, float(a[2]))
+				# an optional height after the yaw seats them up on something (the seated loops put
+				# the seat at the character's origin)
+				var p := Vector3(float(a[1]), float(a[4]) if a.size() > 4 else 0.0, float(a[2]))
+				if p.y != 0.0 and not _lifted.has(n):
+					_lifted.append(n)
 				if n == main.player:
 					main.player.walk([])
 				n.position = p

@@ -33,7 +33,8 @@ extends RefCounted
 ##   @anim rowan Work                hold someone in an animation loop ("@anim rowan off" to release)
 ##   @face nora rowan                turn someone toward someone (or toward x, z)
 ##   @walk rowan 30 4 [nowait]       walk someone to x, z and wait until they arrive (or don't)
-##   @place rowan 30 4 [yaw]         put someone at x, z instantly (villagers stay there)
+##   @place rowan 30 4 [yaw] [height]  put someone at x, z instantly (villagers stay there); a height
+##                                   seats them up on something, e.g. 0.43 on a rock, for SitIdle
 ##   @give wool 3 / @take wool 1     change the inventory
 ##   @toast Some text                a small notice
 ##   @goal Walk to the farm | 24 3   the goal shown at the top of the screen, with a marker at x, z

@@ -190,8 +190,8 @@ Rowan (warm): Tonight.
 @time 18.0
 @label placed
 @prop rock date_rock 23.6 -16.6 0
-@place nora 23.15 -16.35 10
-@place rowan 24.05 -16.35 350
+@place nora 23.15 -16.4 10 0.43
+@place rowan 24.05 -16.4 350 0.43
 @anim nora SitIdle
 @anim rowan SitIdle
 @camera between rowan nora 4.5 low
