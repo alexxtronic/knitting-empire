@@ -1,0 +1,42 @@
+{
+  "name": "plaza_fountain",
+  "triangles": 5972,
+  "materials": [
+    "Stone_coping",
+    "Stone_blocks",
+    "Stone_hewn",
+    "Water_fountain",
+    "wool_iron",
+    "Water_foam",
+    "Water_fall",
+    "wool_sunflower",
+    "wool_gold",
+    "wool_terracotta"
+  ],
+  "size_m": [
+    3.545,
+    3.449,
+    2.31
+  ],
+  "min_m": [
+    -1.773,
+    -1.75,
+    0.0
+  ],
+  "max_m": [
+    1.772,
+    1.699,
+    2.31
+  ],
+  "images": [
+    "plaza_fountain_blocks",
+    "plaza_fountain_blocks_normal",
+    "plaza_fountain_coping",
+    "plaza_fountain_coping_normal",
+    "plaza_fountain_plain",
+    "plaza_fountain_plain_normal",
+    "plaza_fountain_water",
+    "plaza_fountain_water_normal"
+  ],
+  "glb_bytes": 3545744
+}

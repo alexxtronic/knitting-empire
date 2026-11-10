@@ -35,7 +35,8 @@
       "where": "in",
       "height": 1.0,
       "id": "bed",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/gran_bed.glb"
     },
     {
       "name": "Kitchen Counter",
@@ -49,11 +50,12 @@
     {
       "name": "Round Coffee Table",
       "price": 90,
-      "size": [1.0, 1.0],
+      "size": [1.2, 1.2],
       "where": "in",
       "height": 0.6,
       "id": "coffee_table",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/coffee_table.glb"
     },
     {
       "name": "Farmhouse Table",

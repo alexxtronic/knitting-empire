@@ -1,0 +1,19 @@
+{
+  "title": "Gran's bed",
+  "subject": "a turned-post farmhouse bed with a patchwork quilt, stylised for a cozy felt-and-wool game",
+  "render_as": "a stylised game prop",
+  "collection_prefix": "KE_",
+  "hdri": "",
+  "hdri_strength": 0.07,
+  "hdri_rotation_deg": 215.0,
+  "ground": "asphalt",
+  "ground_z": -0.001,
+  "cameras": {
+    "hero": [[2.6, -3.3, 2.3], [0.0, 0.0, 0.55], 50],
+    "game": [[3.4, -3.4, 5.4], [0.0, 0.0, 0.4], 70],
+    "side": [[4.2, 0.0, 1.0], [0.0, 0.0, 0.6], 50],
+    "detail": [[0.9, -1.9, 1.5], [0.2, -0.5, 0.65], 70]
+  },
+  "final": {"res": [1600, 1066], "samples": 128},
+  "preview": {"res": [960, 640], "samples": 48}
+}

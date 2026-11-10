@@ -9,6 +9,7 @@ const DIR := "res://assets/audio/"
 const SETTINGS_PATH := "user://settings.cfg"
 const MUSIC_DB := -9.0
 const AMB_DB := -7.0
+const MUSIC_ON := false # the tune is off for now; ambience and sound effects still play
 
 var main: Node
 var music: AudioStreamPlayer
@@ -35,7 +36,8 @@ func setup(m: Node, mute := false) -> void:
 		amb[k] = _player("Ambience", _loop("amb_%s.ogg" % k))
 		amb[k].volume_db = -80.0
 		amb[k].play()
-	music.play()
+	if MUSIC_ON:
+		music.play()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"

@@ -192,6 +192,8 @@ var build_btn: Button
 var expand_btn: Button
 var graphics_btn: Button
 var settings_panel: PanelContainer
+var fps_label: Label
+var _fps_t := 0.0
 var music_slider: HSlider
 var sound_slider: HSlider
 var fullscreen_check: CheckButton
@@ -501,6 +503,13 @@ func _build_resources() -> void:
 		res_labels[spec[0]] = l
 	root.add_child(hb)
 	_place(hb, 1.0, 0.0, Vector2(16, 16))
+	# frames per second, under the resource chips (updated twice a second)
+	fps_label = _label("-- FPS", 14, Color(1, 1, 1, 0.85))
+	fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	fps_label.add_theme_constant_override("outline_size", 4)
+	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(fps_label)
+	_place(fps_label, 1.0, 0.0, Vector2(20, 58))
 
 
 func _build_left() -> void:
@@ -1017,6 +1026,12 @@ func fade_sleep() -> void:
 
 
 func _process(_delta: float) -> void:
+	_fps_t -= _delta
+	if _fps_t <= 0.0:
+		_fps_t = 0.5
+		var fps := Engine.get_frames_per_second()
+		fps_label.text = "%d FPS" % fps
+		fps_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if fps >= 50 else (Color(1.0, 0.85, 0.4) if fps >= 30 else Color(1.0, 0.5, 0.45)))
 	res_labels["coins"].text = "%d" % Game.coins
 	for k in ["wool", "turnip", "pumpkin", "sweater"]:
 		res_labels[k].text = "%d %s" % [Game.count(k), _pretty(k, Game.count(k))]

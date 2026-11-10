@@ -149,8 +149,8 @@ The full rules (palette, materials, shapes, polygon budgets, UI and how to bring
 
 ![The farm](docs/woolcore/style_01_farm.png)
 
-- **Shader:** `shaders/woolcore.gdshader`. Every solid surface is felt, with soft mottling, fine fibres and a fuzzy rim. The grass, the house walls, rugs and plaid fabrics are knitted in stockinette stitches. Textures are projected in world space, so stitches stay the same size on any shape.
-- **Which surfaces are knitted:** the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width). Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
+- **Shader:** `shaders/woolcore.gdshader`. Every solid surface is felt, with soft mottling, fine fibres and a fuzzy rim. The shader can also knit surfaces in stockinette stitches, but that overlay is switched off for now (`KNIT_STITCHES` in `scripts/catalog.gd`), so everything is plain felt. Textures are projected in world space, so the felt grain stays the same size on any shape.
+- **Which surfaces would be knitted** (with `KNIT_STITCHES` on): the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width) and the `knit` widths in `data/palette.json`. Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
 - **Grade:** plum-tinted shadows, warm cream highlights and a little extra contrast (`_setup_environment` in `main.gd`), plus a soft vignette. Rain greys it down.
 - **UI:** bordered panels and buttons are felt patches with a running stitch sewn round the edge, drawn in code (`_stitched` in `hud.gd`), so there are no image files to keep in sync.
 

@@ -26,13 +26,14 @@ Every change must keep the autotest green. It opens a real game window (the rend
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path . --resolution 1280x800 -- --autotest=/tmp/ke_shots > /tmp/ke_autotest.log 2>&1
-grep -c '^PASS' /tmp/ke_autotest.log   # expect 114 at the time of writing
+grep -c '^PASS' /tmp/ke_autotest.log   # expect 119 at the time of writing
 grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 ```
 
 - The log must end with `AUTOTEST DONE`. If it doesn't, the script crashed: look for `SCRIPT ERROR` in the log.
 - The checks are in `scripts/main.gd`. `_autotest()` calls `_story_checks`, `_act1_checks`, `_romance_checks`, `_polish_checks` and others. When you add a feature, add a check for it there.
 - Only run one autotest at a time. Two Godot windows at once slow the machine down, and the time-based checks then fail at random.
+- The test window ignores the real mouse (clicks pass through to whatever is behind it), so you can keep working while it runs. Don't type into it: real key presses still reach it.
 - The autotest mutes all sound, never touches the network (AI chat uses a stand-in), and doesn't write the player's settings.
 
 ## GDScript gotchas

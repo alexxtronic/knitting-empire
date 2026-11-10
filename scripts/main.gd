@@ -131,6 +131,10 @@ func _ready() -> void:
 			if FileAccess.file_exists(Game.save_path):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
 			Game.reset()
+	if _autotest_dir != "":
+		# the test window opens over whatever you're doing: let your mouse pass through it, so a
+		# stray click or hover can't send Nora somewhere else or move a piece being placed
+		get_window().mouse_passthrough = true
 	_setup_environment()
 	_fit_3d_resolution()
 	get_viewport().size_changed.connect(_fit_3d_resolution)
@@ -256,6 +260,7 @@ func _connect_hud() -> void:
 	hud.title_new_game.connect(_title_new_game)
 	hud.title_quit.connect(func(): get_tree().quit())
 	hud.volumes_changed.connect(audio.set_volumes)
+	hud.music_slider.get_parent().visible = GameAudio.MUSIC_ON
 	hud.fullscreen_toggled.connect(set_fullscreen)
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
@@ -835,7 +840,7 @@ func _update_needs(delta: float) -> void:
 		if Game.time_running:
 			Game.add_need("fitness", player.walked * 0.06)
 		player.walked = 0.0
-	player.walk_speed = 1.05 + 0.15 * Game.fitness / 100.0
+	player.walk_speed = 1.47 + 0.21 * Game.fitness / 100.0 # a brisk walk; the Walk loop speeds up to match
 	player.run_speed = 2.75 + 0.6 * Game.fitness / 100.0
 	player.running = autotest_jog or _held(KEY_SHIFT)
 	var head := player.head_point()
@@ -955,6 +960,8 @@ func _pan_camera(v: Vector2) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if sleeping or story.is_playing() or title_on:
 		return
+	if _autotest_dir != "" and e is InputEventMouse:
+		return # the autotest calls _live_click and friends itself; a real mouse would only disturb it
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
 		match mb.button_index:
@@ -1218,7 +1225,7 @@ func _seat_point(f) -> Vector3:
 	var y := 0.3
 	match f.item_id:
 		"bed":
-			y = 0.45
+			y = 0.6 # on top of the quilt of assets/props/gran_bed.glb
 		"rocking_chair":
 			y = 0.32
 	return f.global_position + Vector3(0, y, 0) + f.front() * 0.05
@@ -1800,7 +1807,7 @@ func _graphics_checks() -> void:
 	var lamps: Array = find_children("*", "OmniLight3D", true, false)
 	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (High %d%%)" % [grass.drawn_blades(), blades_hi, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_hi * 100)],
 		gfx == 0 and not env.ssao_enabled and not env.ssil_enabled and not env.ssr_enabled and not env.volumetric_fog_enabled
-		and lamps.all(func(l): return not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
 		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
 	_cycle_graphics() # High
 	await _wait(0.3)
@@ -1809,7 +1816,7 @@ func _graphics_checks() -> void:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
 	_check("back on High: every effect and all the grass return; settings file untouched",
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return l.shadow_enabled)
+		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return not is_instance_valid(l) or l.shadow_enabled)
 		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
 
 
@@ -2518,6 +2525,17 @@ func _autotest() -> void:
 	_do_action(sheep_list[0], "shear")
 	await _wait(15.0)
 	_check("sheared sheep (wool=%d)" % Game.count("wool"), Game.count("wool") == 2)
+	var shorn: String = sheep_list[0].coat()
+	var woolly_other: String = sheep_list[1].coat()
+	var wool_keep: float = sheep_list[0].wool
+	sheep_list[0].wool = 0.7 # half grown: the woolly model is back, a little smaller
+	var regrown: String = sheep_list[0].coat()
+	sheep_list[0].wool = wool_keep
+	_check("a shorn sheep shows the shorn model and gets her coat back as it regrows (%s, others %s, at 70%% %s)" % [shorn, woolly_other, regrown],
+		shorn == "sheared" and woolly_other == "woolly" and regrown == "woolly" and sheep_list[0].coat() == "sheared")
+	var table = furniture.filter(func(f): return f.item_id == "coffee_table")
+	_check("the coffee table in her living room is the Woolcore model (%d meshes)" % (table[0].find_children("*", "MeshInstance3D", true, false).size() if table.size() > 0 else 0),
+		table.size() == 1 and table[0].find_children("model", "MeshInstance3D", true, false).size() == 1)
 	_live_click(cam.unproject_position(sheep_list[0].global_position + Vector3(0, 0.5, 0)))
 	await _wait(0.5)
 	var shear_pill: Dictionary = hud.pie._items[0] if hud.is_menu_open() else {}
@@ -2704,8 +2722,8 @@ func _character_checks() -> void:
 	player.running = false # now, not on main's next frame: a slow frame here would start her off jogging
 	player.walk(_find_path(player.position, home + Vector3(2.5, 0, 0)))
 	await _wait(0.45)
-	_check("heroine plays the Walk animation (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
-		player.body.current() == "Walk" and player.speed < 2.0 and absf(player.body.anim.speed_scale - 1.0) < 0.5)
+	_check("heroine walks briskly, the Walk stride matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
+		player.body.current() == "Walk" and player.speed > 1.4 and player.speed < 2.0 and absf(player.body.anim.speed_scale * player.body.walk_anim_speed - player.speed) < 0.15)
 	autotest_jog = true
 	player.running = true
 	await _wait(0.4)
@@ -3591,6 +3609,8 @@ func _town_checks() -> void:
 	var bad := cam.unproject_position(Vector3(53.0, 0, 3.0))
 	_update_ghost(bad)
 	_check("can't build in the town plaza", ghost != null and not ghost_valid)
+	var stall_mesh := find_children("model", "MeshInstance3D", true, false).filter(func(m): return m.global_position.distance_to(Town.STALL) < 0.5)
+	_check("Rosa's market stall is the new model, one mesh (%d)" % stall_mesh.size(), stall_mesh.size() == 1)
 	_cancel_ghost()
 	set_mode(Mode.LIVE)
 	player.position = Vector3(61.0, 0, 9.3)

@@ -1,0 +1,38 @@
+{
+  "name": "gran_bed",
+  "triangles": 5144,
+  "materials": [
+    "WoodGrain_bed",
+    "wool_wood_light",
+    "wool_brass",
+    "wool_milk",
+    "Quilt_patchwork",
+    "wool_cream",
+    "wool_berry",
+    "wool_gold",
+    "wool_plaid",
+    "wool_plaid_dark",
+    "wool_sage",
+    "wool_leaf"
+  ],
+  "size_m": [
+    1.572,
+    2.066,
+    1.3
+  ],
+  "min_m": [
+    -0.786,
+    -1.033,
+    0.0
+  ],
+  "max_m": [
+    0.786,
+    1.033,
+    1.3
+  ],
+  "images": [
+    "gran_bed_quilt",
+    "gran_bed_wood"
+  ],
+  "glb_bytes": 1791100
+}

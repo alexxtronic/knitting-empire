@@ -10,6 +10,8 @@ const ROAD := Rect2(26.0, 2.2, 11.0, 1.6) # farm gate → town, along z ≈ 3
 const TOWN := Rect2(36.0, -16.0, 34.0, 30.0) # walkable town area: x 36..70, z -16..14
 const PLAZA := Rect2(45.0, -6.0, 16.0, 10.0)
 const FOUNTAIN := Vector3(53.0, 0, -1.0)
+const FOUNTAIN_MODEL := "res://assets/props/plaza_fountain.glb"
+const STALL_MODEL := "res://assets/props/market_stall.glb"
 const STALL := Vector3(48.5, 0, -7.2)
 const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # Woolly Goods, door on the south side
 const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Land Office
@@ -86,16 +88,70 @@ static func cobble(root: Node3D, r: Rect2) -> MeshInstance3D:
 	return mi
 
 
+## The plaza fountain (assets/props/plaza_fountain.glb: an eight-sided block basin, a bowl on a
+## baluster, a jet and eight spills). The model's water is still; here its two water surfaces get
+## the moving-ring shader and droplets fly from the jet and fall from the bowl's rim.
 static func _fountain(root: Node3D, c: Vector3) -> Rect2:
-	Catalog.cyl(root, 1.55, 1.65, 0.5, c + Vector3(0, 0.25, 0), Catalog.STONE, Vector3.ZERO, 28)
-	var water := Catalog.cyl(root, 1.38, 1.38, 0.06, c + Vector3(0, 0.47, 0), Color(0.36, 0.58, 0.7), Vector3.ZERO, 28)
-	water.material_override = Catalog.mat(Color(0.36, 0.58, 0.7), 0.05)
-	Catalog.cyl(root, 0.18, 0.24, 1.3, c + Vector3(0, 0.95, 0), Catalog.STONE_DARK)
-	Catalog.cyl(root, 0.62, 0.32, 0.22, c + Vector3(0, 1.6, 0), Catalog.STONE, Vector3.ZERO, 20)
-	var top := Catalog.cyl(root, 0.52, 0.52, 0.04, c + Vector3(0, 1.69, 0), Color(0.45, 0.68, 0.8), Vector3.ZERO, 20)
-	Catalog.glow(top, Color(0.45, 0.68, 0.8), 0.3)
-	Catalog.ball(root, 0.14, c + Vector3(0, 1.85, 0), Color(0.6, 0.8, 0.9))
+	var f := Node3D.new()
+	f.name = "fountain"
+	f.position = c
+	root.add_child(f)
+	var inst := Catalog.model(FOUNTAIN_MODEL, f)
+	if inst == null:
+		Catalog.cyl(f, 1.55, 1.65, 0.5, Vector3(0, 0.25, 0), Catalog.STONE, Vector3.ZERO, 28)
+		Catalog.cyl(f, 0.18, 0.24, 1.3, Vector3(0, 0.95, 0), Catalog.STONE_DARK)
+		return Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)
+	var water := ShaderMaterial.new()
+	water.shader = preload("res://shaders/fountain_water.gdshader")
+	water.set_shader_parameter("centre", c)
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		for i in m.mesh.get_surface_count():
+			var sm := m.mesh.surface_get_material(i)
+			if sm and sm.resource_name == "Water_fountain":
+				m.set_surface_override_material(i, water)
+	# the jet: droplets thrown up from the nozzle that fall back into the bowl
+	var jet := _droplets(f, Vector3(0, 1.95, 0), 70, 0.75)
+	jet.direction = Vector3.UP
+	jet.spread = 9.0
+	jet.initial_velocity_min = 2.6
+	jet.initial_velocity_max = 3.1
+	# the spills: droplets leaving the bowl's rim all the way round and dropping into the basin
+	var spill := _droplets(f, Vector3(0, 1.8, 0), 90, 0.5)
+	spill.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	spill.emission_ring_axis = Vector3.UP
+	spill.emission_ring_radius = 0.8
+	spill.emission_ring_inner_radius = 0.77
+	spill.emission_ring_height = 0.02
+	spill.direction = Vector3.DOWN
+	spill.spread = 6.0
+	spill.initial_velocity_min = 0.1
+	spill.initial_velocity_max = 0.4
 	return Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)
+
+
+static func _droplets(parent: Node3D, pos: Vector3, amount: int, life: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.position = pos
+	p.amount = amount
+	p.lifetime = life
+	p.gravity = Vector3(0, -9.8, 0)
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.2
+	var drop := SphereMesh.new()
+	drop.radius = 0.014
+	drop.height = 0.04
+	drop.radial_segments = 6
+	drop.rings = 3
+	var dm := StandardMaterial3D.new()
+	dm.albedo_color = Color(0.93, 0.98, 0.97, 0.75)
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	drop.material = dm
+	p.mesh = drop
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(p)
+	return p
 
 
 ## Rosa's market stall: counter, striped awning, goods and a daily price board.
@@ -103,19 +159,11 @@ static func _stall(root: Node3D, pos: Vector3) -> Dictionary:
 	var s := Node3D.new()
 	s.position = pos
 	root.add_child(s)
-	Catalog.box(s, Vector3(3.0, 0.88, 0.8), Vector3(0, 0.44, 0), Catalog.WOOD)
-	Catalog.box(s, Vector3(3.1, 0.06, 0.9), Vector3(0, 0.91, 0), Catalog.WOOD_LIGHT)
-	for x in [-1.45, 1.45]:
-		Catalog.box(s, Vector3(0.1, 2.45, 0.1), Vector3(x, 1.22, 0.3), Catalog.WOOD_DARK)
-		Catalog.box(s, Vector3(0.1, 2.75, 0.1), Vector3(x, 1.37, -1.55), Catalog.WOOD_DARK)
-	for i in 6:
-		var c := Catalog.PLAID if i % 2 == 0 else Catalog.CREAM
-		Catalog.box(s, Vector3(0.52, 0.05, 2.2), Vector3(-1.3 + i * 0.52, 2.62, -0.62), c, Vector3(-11, 0, 0))
-	# folded sweaters and a crate of pumpkins on the counter
-	var cols := [Color(0.75, 0.2, 0.18), Catalog.CREAM, Color(0.35, 0.5, 0.35), Color(0.3, 0.4, 0.6)]
-	for i in 4:
-		for k in 2:
-			Catalog.box(s, Vector3(0.42, 0.09, 0.32), Vector3(-1.0 + i * 0.48, 0.99 + k * 0.095, 0.05), cols[(i + k) % 4], Vector3(0, (i * 13 + k * 7) % 9 - 4, 0))
+	# Rosa's stall: counter, striped canopy, folded sweaters and the "Sweaters 4 Sale" plaque
+	# (assets/props/market_stall.glb, about 3.1 x 1.5 m and 2.6 m tall, front towards the plaza)
+	if Catalog.model(STALL_MODEL, s) == null:
+		Catalog.box(s, Vector3(3.0, 0.88, 0.8), Vector3(0, 0.44, 0), Catalog.WOOD)
+	# a crate of pumpkins beside it
 	Catalog.box(s, Vector3(0.7, 0.35, 0.55), Vector3(1.9, 0.18, 0.4), Catalog.WOOD_LIGHT)
 	for i in 3:
 		Catalog.ball(s, 0.16, Vector3(1.72 + i * 0.18, 0.42, 0.4 + (i % 2) * 0.08), Color(0.95, 0.5, 0.12), Vector3(1, 0.8, 1))
@@ -130,8 +178,8 @@ static func _stall(root: Node3D, pos: Vector3) -> Dictionary:
 	board.modulate = Color(0.96, 0.94, 0.86)
 	board.position = Vector3(-2.15, 1.55, 0.43)
 	s.add_child(board)
-	var r := Rect2(pos.x - 1.55, pos.z - 0.45, 3.1, 0.9)
-	return {"board": board, "blockers": [r, Rect2(pos.x - 1.5, pos.z - 1.6, 0.2, 0.2), Rect2(pos.x + 1.3, pos.z - 1.6, 0.2, 0.2), Rect2(pos.x - 2.25, pos.z + 0.25, 0.2, 0.2), Rect2(pos.x + 1.5, pos.z - 0.05, 0.8, 0.7)]}
+	var r := Rect2(pos.x - 1.56, pos.z - 0.76, 3.12, 1.5) # the stall's whole footprint, posts included
+	return {"board": board, "blockers": [r, Rect2(pos.x - 2.25, pos.z + 0.25, 0.2, 0.2), Rect2(pos.x + 1.5, pos.z - 0.05, 0.8, 0.7)]}
 
 
 ## A shop front: walls, gable roof, door, windows and a sign. Door on the south (+z) side at door_x.
