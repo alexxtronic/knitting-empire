@@ -26,20 +26,22 @@ const PATH := Color(0.62, 0.50, 0.34)
 const PATHS := [Rect2(16.8, 2.35, 28.4, 1.3), Rect2(41.2, -8.8, 1.1, 11.0), Rect2(55.95, -9.2, 1.1, 3.2),
 	Rect2(63.7, -8.5, 1.1, 2.6), Rect2(60.85, 3.9, 1.3, 3.2)]
 const COBBLE := Color(0.5, 0.47, 0.42) # real stone is darker than it looks; the sun does the rest
+## Cobblestones (assets/textures/cobblestone.png, a seamless painted tile, with a bump map made
+## from it) cover the plaza and the town lanes; the farm road stays worn earth.
+const COBBLE_TILE := 2.2 # metres of ground one repeat of the texture covers (about 40 cm a stone)
+const COBBLE_PATHS := [1, 2, 3, 4] # which of PATHS are cobbled: bakery lane, shop, office, cottage walk
+static var _cobble_mat: StandardMaterial3D
 
 
 ## Builds everything static. Returns {"blockers": Array[Rect2], "board": Label3D,
 ## "sign_to_town": Landmark, "sign_to_farm": Landmark}.
 static func build(root: Node3D) -> Dictionary:
 	var blockers := []
-	# the road from the farm and the town paths are worn earth in the ground shader (PATHS)
-	# cobbled plaza with a checker of slightly different stones
-	Catalog.box(root, Vector3(PLAZA.size.x, 0.012, PLAZA.size.y), Vector3(PLAZA.get_center().x, -0.001, PLAZA.get_center().y), COBBLE)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 21
-	for i in 70:
-		var p := Vector3(rng.randf_range(PLAZA.position.x + 0.4, PLAZA.end.x - 0.4), 0.004, rng.randf_range(PLAZA.position.y + 0.4, PLAZA.end.y - 0.4))
-		Catalog.box(root, Vector3(0.5, 0.01, 0.5), p, COBBLE.darkened(rng.randf_range(0.05, 0.2)), Vector3(0, rng.randf() * 90.0, 0))
+	# the road from the farm is worn earth in the ground shader (PATHS); the plaza and the
+	# lanes off it are cobbled, all with one world-mapped texture so the stones line up
+	cobble(root, PLAZA)
+	for i in COBBLE_PATHS:
+		cobble(root, PATHS[i])
 	# the cottage yard reads as a tidy lawn
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
@@ -52,6 +54,36 @@ static func build(root: Node3D) -> Dictionary:
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))
 	blockers.append(Rect2(38.05, 1.6, 0.3, 0.3))
 	return {"blockers": blockers, "board": stall["board"], "sign_to_town": to_town, "sign_to_farm": to_farm}
+
+
+static func cobble_material() -> StandardMaterial3D:
+	if _cobble_mat == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = preload("res://assets/textures/cobblestone.png")
+		m.albedo_color = Color(0.86, 0.84, 0.82)
+		m.normal_enabled = true
+		m.normal_texture = preload("res://assets/textures/cobblestone_normal.png")
+		m.normal_scale = 0.9
+		m.roughness = 0.92
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE / COBBLE_TILE
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_cobble_mat = m
+	return _cobble_mat
+
+
+## A flat patch of cobblestones over a ground rectangle (x, z).
+static func cobble(root: Node3D, r: Rect2) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = r.size
+	mi.mesh = pm
+	mi.position = Vector3(r.get_center().x, 0.006, r.get_center().y)
+	mi.material_override = cobble_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	return mi
 
 
 static func _fountain(root: Node3D, c: Vector3) -> Rect2:
