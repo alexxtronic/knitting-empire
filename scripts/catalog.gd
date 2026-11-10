@@ -35,6 +35,10 @@ static var _mats := {}
 
 # --- primitive helpers ---------------------------------------------------------
 
+## Knit stitches (the "V" overlay) are switched off for now: every surface is plain felt. Set this
+## to true to bring back the stitches on the colours in KNIT and the palette entries with a "knit" width.
+const KNIT_STITCHES := false
+
 ## Woolcore (shaders/woolcore.gdshader): solid surfaces are felt, and the colours below are knitted,
 ## with this stitch width in metres. Glass, water and glowing things stay plain.
 static var woolcore := true
@@ -61,7 +65,7 @@ static func mat(c: Color, rough: float = 0.85, glow: float = 0.0) -> Material:
 		sm.shader = WOOL_SHADER
 		sm.set_shader_parameter("albedo", c)
 		sm.set_shader_parameter("roughness", clampf(rough + 0.1, 0.0, 1.0))
-		sm.set_shader_parameter("pattern", 1 if stitch > 0.0 else 0)
+		sm.set_shader_parameter("pattern", 1 if KNIT_STITCHES and stitch > 0.0 else 0)
 		sm.set_shader_parameter("stitch", maxf(stitch, 0.05))
 		sm.set_shader_parameter("contrast", 0.86 if stitch > 0.2 else 0.72) # big ground stitches stay gentle
 		_mats[key] = sm
@@ -194,7 +198,7 @@ static func wool(pid: String) -> Material:
 	sm.shader = WOOL_SHADER
 	sm.set_shader_parameter("albedo", c)
 	sm.set_shader_parameter("roughness", 0.95)
-	sm.set_shader_parameter("pattern", 1 if stitch > 0.0 else 0)
+	sm.set_shader_parameter("pattern", 1 if KNIT_STITCHES and stitch > 0.0 else 0)
 	sm.set_shader_parameter("stitch", maxf(stitch, 0.05))
 	sm.set_shader_parameter("contrast", 0.86 if stitch > 0.2 else 0.72)
 	_mats[key] = sm

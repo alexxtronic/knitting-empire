@@ -8,8 +8,8 @@ const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
 const Body = preload("res://scripts/body.gd")
 
-var speed := 1.1 # ground speed right now: walk_speed, or run_speed while she jogs
-var walk_speed := 1.1 # m/s; main.gd raises both with fitness
+var speed := 1.5 # ground speed right now: walk_speed, or run_speed while she jogs
+var walk_speed := 1.5 # m/s; main.gd raises both with fitness
 var run_speed := 3.0
 var running := false # Shift held (main.gd sets it every frame; the autotest can hold it too)
 var path: Array = []

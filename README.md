@@ -86,6 +86,8 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `tools/retarget_anims.py` | motion-capture loops (Quaternius's CC0 library) onto a character's rig; see `AGENTS.md` for the command |
 | `tools/rigid_head.py` | re-skins a rigged character so the head turns as one piece on a short band of neck (`rig_sculpt.py` runs it; can also fix an existing `.blend`) |
 | `tools/import_asset.py` | brings any generated model (Tripo, etc.) into the Woolcore look: `assets/props/<id>.glb` |
+| `tools/import_textured.py` | brings a textured model in looking like the original (its own texture and normal map, decimated and game-sized): the sheep |
+| `tools/join_meshes.py` | joins a many-part model into one mesh (one draw call per material): the market stall and coffee table |
 | `data/palette.json` | the 31 Woolcore colours every surface uses |
 | `docs/STYLE_GUIDE.md` | the art rules: palette, materials, shapes, polygon budgets, UI, asset pipeline |
 
@@ -149,8 +151,8 @@ The full rules (palette, materials, shapes, polygon budgets, UI and how to bring
 
 ![The farm](docs/woolcore/style_01_farm.png)
 
-- **Shader:** `shaders/woolcore.gdshader`. Every solid surface is felt, with soft mottling, fine fibres and a fuzzy rim. The grass, the house walls, rugs and plaid fabrics are knitted in stockinette stitches. Textures are projected in world space, so stitches stay the same size on any shape.
-- **Which surfaces are knitted:** the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width). Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
+- **Shader:** `shaders/woolcore.gdshader`. Every solid surface is felt, with soft mottling, fine fibres and a fuzzy rim. The shader can also knit surfaces in stockinette stitches, but that overlay is switched off for now (`KNIT_STITCHES` in `scripts/catalog.gd`), so everything is plain felt. Textures are projected in world space, so the felt grain stays the same size on any shape.
+- **Which surfaces would be knitted** (with `KNIT_STITCHES` on): the `KNIT` list in `scripts/catalog.gd` (a colour and a stitch width) and the `knit` widths in `data/palette.json`. Glass, water and glowing things stay plain. Set `Catalog.woolcore = false` to compare with the old look.
 - **Grade:** plum-tinted shadows, warm cream highlights and a little extra contrast (`_setup_environment` in `main.gd`), plus a soft vignette. Rain greys it down.
 - **UI:** bordered panels and buttons are felt patches with a running stitch sewn round the edge, drawn in code (`_stitched` in `hud.gd`), so there are no image files to keep in sync.
 
