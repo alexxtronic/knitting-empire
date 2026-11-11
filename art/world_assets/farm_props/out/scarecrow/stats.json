@@ -1,0 +1,60 @@
+{
+  "name": "scarecrow",
+  "triangles": 6976,
+  "materials": [
+    "scarecrow_wood",
+    "fence_endgrain",
+    "scarecrow_plaid",
+    "scarecrow_burlap",
+    "scarecrow_rope",
+    "scarecrow_denim",
+    "scarecrow_pocket",
+    "scarecrow_button",
+    "scarecrow_thread",
+    "scarecrow_patch_green",
+    "scarecrow_patch_orange",
+    "scarecrow_face",
+    "scarecrow_hat",
+    "scarecrow_band",
+    "sunflower_disc",
+    "sunflower_petal",
+    "sunflower_leaf",
+    "hay_straw"
+  ],
+  "size_m": [
+    1.352,
+    0.62,
+    1.687
+  ],
+  "min_m": [
+    -0.674,
+    -0.31,
+    0.0
+  ],
+  "max_m": [
+    0.678,
+    0.31,
+    1.687
+  ],
+  "images": [
+    "fence_endgrain",
+    "fence_endgrain_n",
+    "hay_rope",
+    "hay_rope_n",
+    "hay_straw",
+    "hay_straw_n",
+    "scarecrow_burlap",
+    "scarecrow_burlap_n",
+    "scarecrow_denim",
+    "scarecrow_denim_n",
+    "scarecrow_face",
+    "scarecrow_face_n",
+    "scarecrow_hat",
+    "scarecrow_hat_n",
+    "scarecrow_plaid",
+    "scarecrow_plaid_n",
+    "scarecrow_wood",
+    "scarecrow_wood_n"
+  ],
+  "glb_bytes": 1246084
+}

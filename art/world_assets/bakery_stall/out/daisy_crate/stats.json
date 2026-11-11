@@ -1,0 +1,34 @@
+{
+  "name": "daisy_crate",
+  "triangles": 14110,
+  "materials": [
+    "crate_slats",
+    "crate_soil",
+    "ivy_mid",
+    "ivy_light",
+    "ivy_dark",
+    "daisy_stem",
+    "daisy_eye",
+    "daisy_petal"
+  ],
+  "size_m": [
+    0.598,
+    0.449,
+    0.369
+  ],
+  "min_m": [
+    -0.283,
+    -0.222,
+    -0.012
+  ],
+  "max_m": [
+    0.315,
+    0.227,
+    0.357
+  ],
+  "images": [
+    "crate_slats",
+    "crate_slats_n"
+  ],
+  "glb_bytes": 661992
+}

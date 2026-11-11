@@ -386,6 +386,10 @@ static func build_pond(world: Node3D, pos: Vector3, r: float) -> Rect2:
 	return Rect2(at.x - r - 0.45, at.z - r - 0.45, 2 * r + 0.9, 2 * r + 0.9)
 
 
+const PEN_POST := "res://assets/props/fence_post.glb"
+const PEN_RAILS := "res://assets/props/fence_rails.glb"
+
+
 ## Fence around `rect` with a gap on the left (west) side between gate.x and gate.y.
 ## Returns thin rects for each fence run (used as walking obstacles). The pen is one node at the
 ## middle of `rect` (fence, trough), so god mode can pick it up.
@@ -405,19 +409,37 @@ static func build_pen(world: Node3D, rect: Rect2, gate: Vector2) -> Array:
 	]
 	var wood := Color(0.62, 0.48, 0.32)
 	var rects := []
+	# the fence models (art/world_assets/farm_props): a post at every metre or so, and a pair of
+	# rails 1 m long from x = 0 stretched along each span; the boxes stand in if they're missing
+	var modelled := ResourceLoader.exists(PEN_POST) and ResourceLoader.exists(PEN_RAILS)
+	var posts := {} # corners are shared by two runs: one post each
 	for run in runs:
 		var a: Vector2 = run[0]
 		var b: Vector2 = run[1]
 		var length := a.distance_to(b)
 		var n := maxi(1, int(round(length)))
+		var yaw := atan2(-(b.y - a.y), b.x - a.x)
 		for i in n + 1:
 			var p := a.lerp(b, float(i) / n)
-			Catalog.box(root, Vector3(0.12, 0.9, 0.12), Vector3(p.x - mid.x, 0.45, p.y - mid.y), wood.darkened(0.2))
-		var half := (a + b) * 0.5
-		var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
-		for y in [0.35, 0.7]:
-			var size := Vector3(length, 0.07, 0.05) if horizontal else Vector3(0.05, 0.07, length)
-			Catalog.box(root, size, Vector3(half.x - mid.x, y, half.y - mid.y), wood)
+			var key := Vector2i(roundi(p.x * 100.0), roundi(p.y * 100.0))
+			if modelled and not posts.has(key):
+				posts[key] = true
+				var post := Catalog.model(PEN_POST, root)
+				post.position = Vector3(p.x - mid.x, 0, p.y - mid.y)
+				post.rotation.y = yaw + PI * (i % 2) # bolts face across the run; flip every other for variety
+			elif not modelled:
+				Catalog.box(root, Vector3(0.12, 0.9, 0.12), Vector3(p.x - mid.x, 0.45, p.y - mid.y), wood.darkened(0.2))
+			if modelled and i < n:
+				var rails := Catalog.model(PEN_RAILS, root)
+				rails.position = Vector3(p.x - mid.x, 0, p.y - mid.y)
+				rails.rotation.y = yaw
+				rails.scale = Vector3(length / n, 1, 1)
+		if not modelled:
+			var half := (a + b) * 0.5
+			var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
+			for y in [0.35, 0.7]:
+				var size := Vector3(length, 0.07, 0.05) if horizontal else Vector3(0.05, 0.07, length)
+				Catalog.box(root, size, Vector3(half.x - mid.x, y, half.y - mid.y), wood)
 		rects.append(Rect2(minf(a.x, b.x) - 0.08, minf(a.y, b.y) - 0.08, absf(b.x - a.x) + 0.16, absf(b.y - a.y) + 0.16))
 	# water trough + hay inside the pen
 	var tp := Vector2(rect.end.x - 0.7, rect.position.y + 0.8)

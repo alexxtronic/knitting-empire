@@ -233,7 +233,8 @@
       "where": "out",
       "height": 1.9,
       "id": "scarecrow",
-      "shop": "yard"
+      "shop": "yard",
+      "model": "res://assets/props/scarecrow.glb"
     },
     {
       "name": "Lantern Post",
@@ -252,7 +253,46 @@
       "where": "out",
       "height": 0.5,
       "id": "hay_bale",
-      "shop": "yard"
+      "shop": "yard",
+      "model": "res://assets/props/hay_bale.glb"
+    },
+    {
+      "name": "Pen Fence",
+      "price": 25,
+      "size": [1.0, 0.5],
+      "where": "out",
+      "height": 1.0,
+      "id": "pen_fence",
+      "shop": "yard",
+      "model": "res://assets/props/fence_section.glb"
+    },
+    {
+      "name": "Bakery Stall",
+      "price": 400,
+      "size": [2.0, 1.0],
+      "where": "out",
+      "height": 2.3,
+      "id": "bakery_stall",
+      "model": "res://assets/props/bakery_stall.glb"
+    },
+    {
+      "name": "Chalkboard Sign",
+      "price": 40,
+      "size": [0.5, 0.5],
+      "where": "out",
+      "height": 0.86,
+      "id": "chalkboard_sign",
+      "model": "res://assets/props/chalkboard_sign.glb"
+    },
+    {
+      "name": "Daisy Crate",
+      "price": 45,
+      "size": [0.5, 0.5],
+      "where": "any",
+      "height": 0.4,
+      "id": "daisy_crate",
+      "shop": "yard",
+      "model": "res://assets/props/daisy_crate.glb"
     },
     {
       "name": "Milk Churn",

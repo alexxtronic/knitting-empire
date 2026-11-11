@@ -1,0 +1,44 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://dpva4c00snir"
+path.s3tc="res://.godot/imported/fence_section_fence_rail_wood_n.png-d578a954e2aba6334e253f74cc664f53.s3tc.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "4bf2eb568708bb633591775b5df31d45"
+}
+
+[deps]
+
+source_file="res://assets/props/fence_section_fence_rail_wood_n.png"
+dest_files=["res://.godot/imported/fence_section_fence_rail_wood_n.png-d578a954e2aba6334e253f74cc664f53.s3tc.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/uastc_level=0
+compress/rdo_quality_loss=0.0
+compress/hdr_compression=1
+compress/normal_map=1
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=1
+roughness/src_normal="res://assets/props/fence_section_fence_rail_wood_n.png"
+process/channel_remap/red=0
+process/channel_remap/green=1
+process/channel_remap/blue=2
+process/channel_remap/alpha=3
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=0

@@ -1,0 +1,53 @@
+{
+  "name": "bakery_stall",
+  "triangles": 9094,
+  "materials": [
+    "stall_planks",
+    "stall_trim",
+    "stall_top",
+    "awning_stripes",
+    "lantern_iron",
+    "lantern_glow",
+    "stall_wicker",
+    "croissant",
+    "cake_board",
+    "cake_glass",
+    "jug_ceramic",
+    "jug_blue",
+    "lavender_stem",
+    "lavender_bud",
+    "tea_towel"
+  ],
+  "size_m": [
+    2.201,
+    1.198,
+    2.32
+  ],
+  "min_m": [
+    -1.011,
+    -0.698,
+    0.0
+  ],
+  "max_m": [
+    1.19,
+    0.5,
+    2.32
+  ],
+  "images": [
+    "awning_stripes",
+    "awning_stripes_n",
+    "cake_board",
+    "cake_board_n",
+    "croissant",
+    "stall_planks",
+    "stall_planks_n",
+    "stall_top",
+    "stall_top_n",
+    "stall_trim",
+    "stall_trim_n",
+    "stall_wicker",
+    "stall_wicker_n",
+    "tea_towel"
+  ],
+  "glb_bytes": 848156
+}

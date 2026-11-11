@@ -1,0 +1,35 @@
+{
+  "name": "chalkboard_sign",
+  "triangles": 3297,
+  "materials": [
+    "chalk_frame",
+    "chalk_slate",
+    "chalk",
+    "chalk_fill",
+    "hinge_iron",
+    "chalk_cord"
+  ],
+  "size_m": [
+    0.58,
+    0.516,
+    0.829
+  ],
+  "min_m": [
+    -0.29,
+    -0.258,
+    -0.005
+  ],
+  "max_m": [
+    0.29,
+    0.258,
+    0.824
+  ],
+  "images": [
+    "chalk_fill",
+    "chalk_frame",
+    "chalk_frame_n",
+    "chalk_slate",
+    "chalk_strokes"
+  ],
+  "glb_bytes": 450840
+}

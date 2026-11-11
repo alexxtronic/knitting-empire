@@ -1,0 +1,31 @@
+{
+  "name": "fence_post",
+  "triangles": 592,
+  "materials": [
+    "fence_wood",
+    "fence_endgrain",
+    "bolt_steel"
+  ],
+  "size_m": [
+    0.149,
+    0.178,
+    0.993
+  ],
+  "min_m": [
+    -0.075,
+    -0.089,
+    0.0
+  ],
+  "max_m": [
+    0.075,
+    0.089,
+    0.993
+  ],
+  "images": [
+    "fence_endgrain",
+    "fence_endgrain_n",
+    "fence_wood",
+    "fence_wood_n"
+  ],
+  "glb_bytes": 207912
+}

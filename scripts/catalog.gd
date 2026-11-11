@@ -251,6 +251,10 @@ static func build(id: String, r: Node3D) -> void:
 	if inst != null:
 		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here
 			_lantern_candle(r, inst)
+		elif id == "bakery_stall": # its lantern hangs off the right front post (art/world_assets/bakery_stall)
+			var l := omni(r, Vector3(1.1, 1.52, 0.38), Color(1.0, 0.7, 0.38), 4.5, 0.1, 1.4)
+			l.shadow_enabled = false # it sits inside the lantern's glass
+			l.set_meta("candle", true)
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)

@@ -1,0 +1,33 @@
+{
+  "name": "hay_bale",
+  "triangles": 10824,
+  "materials": [
+    "hay_core",
+    "hay_bale_straw",
+    "hay_rope"
+  ],
+  "size_m": [
+    1.018,
+    0.534,
+    0.417
+  ],
+  "min_m": [
+    -0.509,
+    -0.267,
+    -0.004
+  ],
+  "max_m": [
+    0.509,
+    0.267,
+    0.413
+  ],
+  "images": [
+    "hay_bale_straw",
+    "hay_bale_straw_n",
+    "hay_core",
+    "hay_core_n",
+    "hay_rope",
+    "hay_rope_n"
+  ],
+  "glb_bytes": 769536
+}

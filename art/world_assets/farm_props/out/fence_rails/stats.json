@@ -1,0 +1,27 @@
+{
+  "name": "fence_rails",
+  "triangles": 624,
+  "materials": [
+    "fence_rail_wood"
+  ],
+  "size_m": [
+    1.003,
+    0.054,
+    0.465
+  ],
+  "min_m": [
+    -0.002,
+    -0.029,
+    0.348
+  ],
+  "max_m": [
+    1.002,
+    0.025,
+    0.813
+  ],
+  "images": [
+    "fence_rail_wood",
+    "fence_rail_wood_n"
+  ],
+  "glb_bytes": 85832
+}

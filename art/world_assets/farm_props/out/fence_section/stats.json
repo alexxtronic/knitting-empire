@@ -1,0 +1,34 @@
+{
+  "name": "fence_section",
+  "triangles": 1808,
+  "materials": [
+    "fence_wood",
+    "fence_endgrain",
+    "bolt_steel",
+    "fence_rail_wood"
+  ],
+  "size_m": [
+    1.149,
+    0.178,
+    0.993
+  ],
+  "min_m": [
+    -0.575,
+    -0.089,
+    0.0
+  ],
+  "max_m": [
+    0.575,
+    0.089,
+    0.993
+  ],
+  "images": [
+    "fence_endgrain",
+    "fence_endgrain_n",
+    "fence_rail_wood",
+    "fence_rail_wood_n",
+    "fence_wood",
+    "fence_wood_n"
+  ],
+  "glb_bytes": 329636
+}

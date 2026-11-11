@@ -78,12 +78,15 @@ def tube(name, pts, radii, mat, sides=8, v_scale=1.0, u_rep=1.0, caps=True, flat
             c = len(verts)
             verts.append(pts[i])
             for j in range(sides):
+                # planar UVs across the cap at the side's density (a one-row fan collapses)
+                r_ = radii[i] * v_scale
+                cu = [(0.5 + r_ * math.cos(2 * math.pi * k / sides), 0.5 + r_ * flat * math.sin(2 * math.pi * k / sides)) for k in (j, j + 1)]
                 if end == 0:
                     faces.append((c, i * ring + j + 1, i * ring + j))
-                    uvs += [(0.5, lens[i] * v_scale), ((j + 1) / sides * u_rep, lens[i] * v_scale), (j / sides * u_rep, lens[i] * v_scale)]
+                    uvs += [(0.5, 0.5), cu[1], cu[0]]
                 else:
                     faces.append((c, i * ring + j, i * ring + j + 1))
-                    uvs += [(0.5, lens[i] * v_scale), (j / sides * u_rep, lens[i] * v_scale), ((j + 1) / sides * u_rep, lens[i] * v_scale)]
+                    uvs += [(0.5, 0.5), cu[0], cu[1]]
     return _finish_mesh(name, verts, faces, uvs, mat, recalc=False)
 
 
@@ -419,7 +422,8 @@ def beam(name, pts, w, h, mat, sides=12, v_scale=1.0, wave=0.0, seed=0, square=0
         rng = np.random.default_rng(seed)
         ph = rng.uniform(0, 6.28, 2)
         n = len(pts)
-        pts = [p + Vector((0, wave * math.sin(3.1 * i / n + ph[0]) * 0.5, wave * math.sin(4.3 * i / n + ph[1]))) for i, p in enumerate(pts)]
+        # the wave dies out at both ends, so a rail meets its posts (and their bolts) level
+        pts = [p + Vector((0, wave * math.sin(3.1 * i / n + ph[0]) * 0.5, wave * math.sin(4.3 * i / n + ph[1]))) * math.sin(math.pi * i / max(1, n - 1)) for i, p in enumerate(pts)]
     T, N, B = frames(pts)
     verts, faces, uvs = [], [], []
     lens = [0.0]
@@ -454,11 +458,43 @@ def beam(name, pts, w, h, mat, sides=12, v_scale=1.0, wave=0.0, seed=0, square=0
                 faces.append((c, i * ring + j, i * ring + j + 1))
             else:
                 faces.append((c, i * ring + j + 1, i * ring + j))
-            uvs += [(0.5, 0.5), (0.5, 0.5), (0.5, 0.5)]
+            # the cap's own planar UVs, at the side's texel density (a fan of one point collapses)
+            def cuv(k):
+                a = 2 * math.pi * k / sides + math.pi / sides
+                c_, s_ = math.cos(a), math.sin(a)
+                return (0.5 + math.copysign(abs(c_) ** square, c_) * w / 2 * v_scale, 0.5 + math.copysign(abs(s_) ** square, s_) * h / 2 * v_scale)
+            if end == 0:
+                uvs += [(0.5, 0.5), cuv(j), cuv(j + 1)]
+            else:
+                uvs += [(0.5, 0.5), cuv(j + 1), cuv(j)]
     ob = _finish_mesh(name, verts, faces, uvs, mat, recalc=True)
     es = ob.modifiers.new("edges", "EDGE_SPLIT")
     es.split_angle = math.radians(60)
     return K.apply_mods(ob)
+
+
+def round_cap(name, centre, w, h, mat, square=0.35, sides=24, turn=0.0):
+    """A flat cap cut to a beam's own rounded-square outline (see beam), facing up, with the whole
+    texture across it once: the sawn end grain on a post top."""
+    c = Vector(centre)
+    verts, faces, uvs = [c], [], []
+    ring = []
+    for j in range(sides):
+        a = 2 * math.pi * j / sides + math.pi / sides
+        cs, sn = math.cos(a), math.sin(a)
+        x = math.copysign(abs(cs) ** square, cs) * w / 2
+        y = math.copysign(abs(sn) ** square, sn) * h / 2
+        verts.append(c + Vector((x, y, 0)))
+        ring.append((x, y))
+    ct, st = math.cos(turn), math.sin(turn)
+
+    def uv(x, y):
+        return (0.5 + (x * ct - y * st) / w, 0.5 + (x * st + y * ct) / h)
+    for j in range(sides):
+        k = (j + 1) % sides
+        faces.append((0, 1 + j, 1 + k))
+        uvs += [(0.5, 0.5), uv(*ring[j]), uv(*ring[k])]
+    return _finish_mesh(name, verts, faces, uvs, mat, recalc=False, smooth=False)
 
 
 def quad_cap(name, centre, size, mat, normal=(0, 0, 1), turn=0.0):
@@ -540,15 +576,18 @@ def endgrain_maps(name, folder, base="#d38a48", light="#eaa766", dark="#9c5a2a",
     y = ((1 - yy / n) - 0.5) * 2
     r = np.hypot(x, y)
     th = np.arctan2(y, x)
-    ring = 0.5 + 0.5 * np.cos(2 * np.pi * (r * 4.2 + th / (2 * np.pi)))
+    ph = (r * 4.2 + th / (2 * np.pi)) % 1.0
+    ring = 0.5 + 0.5 * np.cos(2 * np.pi * ph)
+    line = np.exp(-((ph - 0.5) / 0.1) ** 2)  # a painted dark line along the spiral (bolder: kiln fence round 2)
     rgb = mix(C(base), C(light), np.clip(ring ** 2, 0, 1)[..., None] * 0.7)
-    rgb = mix(rgb, C(dark), np.clip(0.15 - ring, 0, 1)[..., None] * 4)
+    rgb = mix(rgb, C(dark), line[..., None] * 0.85)
+    rgb = mix(rgb, C(dark), np.exp(-(r / 0.06) ** 2)[..., None] * 0.7)  # the pith
     edge = np.clip((np.maximum(np.abs(x), np.abs(y)) - 0.85) * 6, 0, 1)[..., None]
     rgb = mix(rgb, C(dark), edge * 0.6)
     return K.save_image(name, rgb, folder), K.save_image(name + "_n", K.normal_from_height(0.2 * ring, 1.5), folder)
 
 
-def straw_maps(name, folder, base="#f0b22a", light="#ffd968", dark="#b8780c", n=256, strands=40, seed=101):
+def straw_maps(name, folder, base="#f0b22a", light="#ffd968", dark="#b8780c", n=256, strands=56, seed=101):
     """Straw: many fine strands running along v, each its own shade of gold, with dark gaps between
     them, darker at the root (v = 0) and sunlit toward the tip."""
     rng = np.random.default_rng(seed)
@@ -556,10 +595,14 @@ def straw_maps(name, folder, base="#f0b22a", light="#ffd968", dark="#b8780c", n=
     u = xx / n
     v = 1 - yy / n
     wob = K.tile_noise(n, 2.2, seed)
-    x = (u * strands + 0.7 * (wob - 0.5)) % strands
+    x = (u * strands + 0.15 * (wob - 0.5)) % strands  # nearly straight: a wavy one read as wood grain
     idx = np.floor(x).astype(int) % strands
     f = x - np.floor(x)
     tone = rng.uniform(0, 1, strands)[idx]
+    # each stalk brightens and dims along its length, with its own rhythm: fibres, not grain
+    freq = rng.uniform(1.0, 4.0, strands)[idx].round()
+    phase = rng.uniform(0, 1, strands)[idx]
+    tone = np.clip(tone + 0.25 * np.sin(2 * np.pi * (v * freq + phase)), 0, 1)
     rgb = mix(C(base), C(light), np.clip(tone * 1.6 - 0.6, 0, 1)[..., None])
     rgb = mix(rgb, C(dark), np.clip(0.6 - tone * 1.6, 0, 1)[..., None])
     ridge = np.sin(np.pi * f) ** 0.5

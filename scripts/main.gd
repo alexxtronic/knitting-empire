@@ -20,6 +20,7 @@ const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
+const Fireflies = preload("res://scripts/fireflies.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 
 const CELL := 0.5
@@ -87,6 +88,7 @@ var ai: AiChat # typed chat with villagers, voiced by Claude
 var chat_v = null # the villager you're chatting with
 var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
+var fireflies # fireflies.gd: glowing orbs round things near her at night
 var decor_root: Node3D
 var sign_to_town: Landmark
 var sign_to_farm: Landmark
@@ -227,6 +229,9 @@ func _ready() -> void:
 	player = Player.new()
 	player.position = Vector3(4.6, 0, 4.9)
 	add_child(player)
+	fireflies = Fireflies.new() # after the layout, so they gather round things where they now stand
+	add_child(fireflies)
+	fireflies.setup(self)
 	hud = Hud.new()
 	add_child(hud)
 	audio = GameAudio.new()
@@ -931,7 +936,7 @@ func _update_needs(delta: float) -> void:
 		if Game.time_running:
 			Game.add_need("fitness", player.walked * 0.06)
 		player.walked = 0.0
-	player.walk_speed = 1.47 + 0.21 * Game.fitness / 100.0 # a brisk walk; the Walk loop speeds up to match
+	player.walk_speed = (1.47 + 0.21 * Game.fitness / 100.0) * 1.25 # a brisk walk; the Walk loop speeds up to match
 	player.run_speed = 2.75 + 0.6 * Game.fitness / 100.0
 	player.running = autotest_jog or _held(KEY_SHIFT)
 	var head := player.head_point()
@@ -2487,6 +2492,14 @@ func _take_asset_frames() -> void:
 		["asset_yarn_basket.png", Vector3(2.55, -0.4, 1.95), 2.0, 35.0, 10.5, 36.0],
 		["asset_yarn_balls.png", Vector3(2.0, -0.45, 4.35), 1.6, 80.0, 10.5, 32.0],
 		["asset_needles.png", Vector3(2.85, -0.45, 1.55), 1.3, 20.0, 10.5, 55.0],
+		# the farm props and the bakery stall (art/world_assets/farm_props, bakery_stall); fireflies at night
+		["asset_bakery_stall.png", Vector3(44.2, 0.6, -7.6), 6.5, 20.0, 10.5, 14.0],
+		["asset_bakery_stall_night.png", Vector3(44.2, 0.6, -7.6), 6.5, 20.0, 21.5, 14.0],
+		["asset_chalkboard.png", Vector3(42.85, 0.1, -7.0), 2.6, 20.0, 10.5, 14.0],
+		["asset_pen.png", Vector3(20.0, 0.0, -1.0), 11.0, 25.0, 10.5, 30.0],
+		["asset_barn_hay.png", Vector3(21.5, 0.2, -7.5), 12.0, 15.0, 10.5, 22.0],
+		["asset_scarecrow.png", Vector3(13.0, 0.5, -2.6), 4.5, 15.0, 10.5, 10.0],
+		["asset_fireflies.png", Vector3(13.5, 0.0, 0.5), 9.0, 20.0, 22.5, 20.0],
 	]
 	# pumpkins at each stage on the back row, turnips on the next (Plot.stage(): 0, 1/3, 2/3, ripe)
 	for k in 4:
@@ -2496,6 +2509,13 @@ func _take_asset_frames() -> void:
 			pl.growth = pl.hours_needed() * [0.0, 0.4, 0.75, 1.0][k]
 			pl.water()
 	spawn_prop("bus", "asset_bus", Vector3(31.0, 0, 3.0))
+	# the stall stands wherever Alex set it in the world editor: frame it there, from its front
+	var stall_el = god.by_key.get("decor_bakery_stall@44.25,-7.70") if god else null
+	if stall_el:
+		for v in views:
+			if str(v[0]).begins_with("asset_bakery_stall"):
+				v[1] = stall_el.xf.origin + Vector3(0, 0.6, 0)
+				v[3] = 20.0 + rad_to_deg(GodMode._yaw(stall_el.xf))
 	for v in views:
 		player.position = v[1] + Vector3(1.5, 0, 2.0)
 		cam_yaw = deg_to_rad(v[3])
@@ -2508,6 +2528,11 @@ func _take_asset_frames() -> void:
 			cam_pitch = float(v[5])
 			cam_glide = {"pos": v[1], "dist": v[2], "pitch": v[5]}
 		await _wait(1.2)
+		if str(v[0]).begins_with("asset_fireflies"): # give them time to gather round here and fade in
+			fireflies._gather_anchors()
+			for i in Fireflies.COUNT:
+				fireflies._reset(i)
+			await _wait(4.0)
 		await _shot(v[0])
 		cam_glide = {}
 	print("ASSET FRAMES DONE")
@@ -2723,6 +2748,7 @@ func _polish_checks() -> void:
 	await _wait(5.0)
 	var day_g := [audio.gain("day"), audio.gain("night"), audio.gain("rain")]
 	var lamp_dry := _candle_energy()
+	var flies_day: int = fireflies.lit_count()
 	Game.set_flag("weather", "rain")
 	await _wait(4.0)
 	var lamp_wet := _candle_energy()
@@ -2746,6 +2772,12 @@ func _polish_checks() -> void:
 	var night_g := [audio.gain("day"), audio.gain("night"), audio.gain("rain")]
 	_check("ambience: birds by day, crickets and rain at a wet midnight (day %s, night %s)" % [str(day_g), str(night_g)],
 		day_g[0] > 0.6 and day_g[1] < 0.2 and day_g[2] < 0.1 and night_g[1] > 0.3 and night_g[2] > 0.6 and night_g[0] < 0.1)
+	var flies_rain: int = fireflies.lit_count()
+	Game.set_flag("weather", "clear")
+	await _wait(4.5)
+	var flies_night: int = fireflies.lit_count()
+	_check("fireflies glow round the farm on a clear night, not by day or in the rain (day %d, rain %d, clear night %d of %d)" % [flies_day, flies_rain, flies_night, Fireflies.COUNT],
+		flies_day == 0 and flies_rain < 5 and flies_night >= 20)
 	Game.set_flag("weather", w0)
 	Game.hour = h0
 	player.position = p0
@@ -3693,10 +3725,18 @@ func _build_town_decor() -> void:
 	# trash cans (art/world_assets/trash_can) at the end of two plaza benches, where Alex's layout has them
 	_decor("trash_can", Vector3(54.5, 0, 2.0), 0)
 	_decor("trash_can", Vector3(56.05, 0, -2.45), 1)
-	for p in [Vector3(55.0, 0, -8.3), Vector3(58.2, 0, -8.3), Vector3(62.3, 0, -7.9), Vector3(44.9, 0, -7.9)]:
+	for p in [Vector3(55.0, 0, -8.3), Vector3(58.2, 0, -8.3), Vector3(62.3, 0, -7.9)]:
 		_decor("flower_pot", p, 0)
 	_decor("sunflowers", Vector3(45.2, 0, -12.0), 0)
 	_decor("hay_bale", Vector3(51.6, 0, -8.6), 0)
+	# the bakery's street stall right of its door, the chalkboard by the door, daisies beside it
+	# (art/world_assets/bakery_stall; the bakery stands where Alex moved it, front at about z = -9)
+	_decor("bakery_stall", Vector3(44.25, 0, -7.7), 0)
+	_decor("chalkboard_sign", Vector3(42.85, 0, -7.0), 0)
+	_decor("daisy_crate", Vector3(45.7, 0, -7.95), 0)
+	# hay bales round the barn and the sheep pen (art/world_assets/farm_props)
+	for b in [[Vector3(17.9, 0, -8.4), 1], [Vector3(17.75, 0, -7.15), 0], [Vector3(25.0, 0, -9.1), 1], [Vector3(25.0, 0, -10.35), 1], [Vector3(23.8, 0, -2.7), 1], [Vector3(16.3, 0, -3.6), 1]]:
+		_decor("hay_bale", b[0], b[1])
 
 
 func _decor(id: String, pos: Vector3, r: int) -> void:
@@ -4442,7 +4482,10 @@ func _town_checks() -> void:
 	var bad := cam.unproject_position(Vector3(53.0, 0, 3.0))
 	_update_ghost(bad)
 	_check("can't build in the town plaza", ghost != null and not ghost_valid)
-	var stall_mesh := find_children("model", "MeshInstance3D", true, false).filter(func(m): return m.global_position.distance_to(Town.STALL) < 0.5)
+	# where the stall stands now: Alex's layout moved it off Town.STALL
+	var stall_el = god.by_key.get("market_stall@%.2f,%.2f" % [Town.STALL.x, Town.STALL.z]) if god else null
+	var stall_at: Vector3 = stall_el.xf.origin if stall_el else Town.STALL
+	var stall_mesh := find_children("model", "MeshInstance3D", true, false).filter(func(m): return m.global_position.distance_to(stall_at) < 0.5)
 	_check("Rosa's market stall is the new model, one mesh (%d)" % stall_mesh.size(), stall_mesh.size() == 1)
 	_cancel_ghost()
 	set_mode(Mode.LIVE)
