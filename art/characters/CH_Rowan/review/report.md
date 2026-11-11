@@ -39,7 +39,7 @@ Validation (`gate/validate.json`): 0 failures, 49,936 triangles.
 - Beard is one soft shell with a fur texture, not short individual hairs; it is still a little wide at the chin.
 - Eyes sit a touch wide and the whites show more than in the reference; no lower lash line.
 - Sweater has no raglan seam lines and no cable pattern; one stocking-stitch knit plus the ribs.
-- Jeans have no belt loops in denim colour contrast, rivets or hem stitching. Boots: plain laces (no bow),
+- Jeans have no rivets or hem stitching. Boots: plain laces (no bow),
   no stitching, a flat sole with no heel step.
 - The body is still a smooth mannequin: no anatomical detail, no separate toes.
 - Triangles: 49,936 at LOD0 against the style guide's 24-30k (hair 11.5k, body 9.6k, sweater 6.9k, head 5.8k,
