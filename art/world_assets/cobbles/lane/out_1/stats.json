@@ -1,0 +1,30 @@
+{
+  "name": "cobble_lane_1",
+  "triangles": 962,
+  "materials": [
+    "Cobble_stone",
+    "Cobble_mortar"
+  ],
+  "size_m": [
+    1.006,
+    0.801,
+    0.088
+  ],
+  "min_m": [
+    -0.5,
+    -0.4,
+    -0.017
+  ],
+  "max_m": [
+    0.506,
+    0.401,
+    0.072
+  ],
+  "images": [
+    "cobble_cement.png",
+    "cobble_cement_normal.png",
+    "cobble_stone.png",
+    "cobble_stone_normal.png"
+  ],
+  "glb_bytes": 1799476
+}

@@ -1,0 +1,30 @@
+{
+  "name": "cobble_plaza_0",
+  "triangles": 8530,
+  "materials": [
+    "Cobble_stone",
+    "Cobble_mortar"
+  ],
+  "size_m": [
+    4.008,
+    2.003,
+    0.105
+  ],
+  "min_m": [
+    -2.006,
+    -1.003,
+    -0.028
+  ],
+  "max_m": [
+    2.002,
+    1.001,
+    0.077
+  ],
+  "images": [
+    "cobble_cement.png",
+    "cobble_cement_normal.png",
+    "cobble_stone",
+    "cobble_stone_normal"
+  ],
+  "glb_bytes": 1995804
+}

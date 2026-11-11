@@ -41,9 +41,10 @@ static func build(root: Node3D) -> Dictionary:
 	var blockers := []
 	# the road from the farm is worn earth in the ground shader (PATHS); the plaza and the
 	# lanes off it are cobbled, all with one world-mapped texture so the stones line up
-	cobble(root, PLAZA)
+	var paved: Array[Rect2] = [PLAZA]
 	for i in COBBLE_PATHS:
-		cobble(root, PATHS[i])
+		paved.append(PATHS[i])
+	cobble_tiles(root, paved)
 	# the cottage yard reads as a tidy lawn
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
@@ -75,7 +76,83 @@ static func cobble_material() -> StandardMaterial3D:
 	return _cobble_mat
 
 
-## A flat patch of cobblestones over a ground rectangle (x, z).
+## 3D cobblestones (art/world_assets/cobbles): an even sett pattern in white cement, laid as a
+## grid of seamless tiles over each rectangle. Wide areas get 4 x 2 m plaza tiles; narrow lanes
+## get 1 x 0.8 m lane tiles in a row along their length (turned for an east-west lane), each row
+## stretched a little to end exactly at the rect. Each tile kind comes in variants that join each
+## other; every cell picks one at random, so the paving never visibly repeats. Falls back to the
+## flat painted texture if the models are missing.
+const COBBLE_TILES := {
+	"plaza": ["res://assets/props/cobble_plaza_0.glb", "res://assets/props/cobble_plaza_1.glb",
+		"res://assets/props/cobble_plaza_2.glb", "res://assets/props/cobble_plaza_3.glb"],
+	"lane": ["res://assets/props/cobble_lane_0.glb", "res://assets/props/cobble_lane_1.glb"],
+}
+const COBBLE_PLAZA_TILE := Vector2(4.0, 2.0)
+const COBBLE_LANE_TILE := Vector2(1.0, 0.8)
+
+
+static func cobble_tiles(root: Node3D, rects: Array[Rect2]) -> void:
+	var meshes := {} # "plaza_0" -> Mesh
+	for kind in COBBLE_TILES:
+		var paths: Array = COBBLE_TILES[kind]
+		for v in paths.size():
+			var path: String = paths[v]
+			if not ResourceLoader.exists(path):
+				for r in rects:
+					cobble(root, r)
+				return
+			var inst := (load(path) as PackedScene).instantiate()
+			for mi in inst.find_children("*", "MeshInstance3D", true, false):
+				meshes["%s_%d" % [kind, v]] = (mi as MeshInstance3D).mesh
+				break
+			inst.free()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var spots := {} # "plaza_0" -> [Transform3D, ...]
+	for key in meshes:
+		spots[key] = []
+	for r in rects:
+		if minf(r.size.x, r.size.y) >= 2.0:
+			var t := COBBLE_PLAZA_TILE
+			var nx := maxi(1, roundi(r.size.x / t.x))
+			var nz := maxi(1, roundi(r.size.y / t.y))
+			var sx := r.size.x / (nx * t.x)
+			var sz := r.size.y / (nz * t.y)
+			for i in nx:
+				for j in nz:
+					var c := Vector3(r.position.x + (i + 0.5) * t.x * sx, 0, r.position.y + (j + 0.5) * t.y * sz)
+					spots["plaza_%d" % rng.randi_range(0, 3)].append(Transform3D(Basis.from_scale(Vector3(sx, 1, sz)), c))
+		else:
+			var along_z := r.size.y >= r.size.x
+			var length := r.size.y if along_z else r.size.x
+			var width := r.size.x if along_z else r.size.y
+			var n := maxi(1, roundi(length / COBBLE_LANE_TILE.y))
+			var step := length / n
+			for k in n:
+				var d := (k + 0.5) * step
+				var c := Vector3(r.position.x + width * 0.5, 0, r.position.y + d) if along_z else Vector3(r.position.x + d, 0, r.position.y + width * 0.5)
+				var b := Basis.from_scale(Vector3(width / COBBLE_LANE_TILE.x, 1, step / COBBLE_LANE_TILE.y))
+				if not along_z:
+					b = Basis(Vector3.UP, PI / 2) * b
+				spots["lane_%d" % rng.randi_range(0, 1)].append(Transform3D(b, c))
+	for key in spots:
+		var list: Array = spots[key]
+		if list.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = meshes[key]
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, list[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "Cobbles_" + key
+		mmi.multimesh = mm
+		root.add_child(mmi)
+
+
+## A flat patch of cobblestones over a ground rectangle (x, z): the old painted texture, used
+## only if the cobble models are missing.
 static func cobble(root: Node3D, r: Rect2) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
