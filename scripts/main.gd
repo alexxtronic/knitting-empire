@@ -3458,8 +3458,8 @@ func _character_checks() -> void:
 	await _wait(0.4)
 	_check("she eases into her walk rather than snapping to full speed (%.2f m/s at the first step, then %.2f)" % [early, player.speed],
 		early > 0.0 and early < player.speed - 0.3)
-	_check("heroine walks briskly, the Walk stride matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
-		player.body.current() == "Walk" and player.speed > 1.4 and player.speed < 2.0 and absf(player.body.anim.speed_scale * player.body.walk_anim_speed - player.speed) < 0.15)
+	_check("heroine walks briskly on the longer Brisk stride, matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
+		player.body.current() == "Brisk" and player.speed > 1.4 and player.speed < 2.0 and player.body.anim.speed_scale < 1.75 and absf(player.body.anim.speed_scale * player.body.brisk_anim_speed - player.speed) < 0.15)
 	autotest_jog = true
 	player.running = true
 	await _wait(0.4)

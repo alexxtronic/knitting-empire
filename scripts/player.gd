@@ -442,7 +442,7 @@ func _animate(delta: float, walking: bool) -> void:
 ## quarters through it, see a_walk in tools/build_character.py); needles click while she knits.
 func _sound_cues(delta: float) -> void:
 	var cur := body.current()
-	if cur in ["Walk", "Run"] and body.anim.current_animation_length > 0.0:
+	if body.striding() and body.anim.current_animation_length > 0.0:
 		var ph := fmod(body.anim.current_animation_position / body.anim.current_animation_length + 0.75, 1.0)
 		if _walk_phase >= 0.0 and (ph < _walk_phase or (_walk_phase < 0.5 and ph >= 0.5)):
 			footstep.emit()

@@ -26,15 +26,17 @@ rig doesn't have yet (Run) gets a new action set up like the others.
 A --map entry is Loop=Clip, with two optional extras: "Clip:a-b" loops only frames a..b and blends
 the seam ("Fixing_Kneeling:30-118" stays kneeling), and "Clip*s" scales the stride (the library's
 walk is a slow stroll and its jog a fast one: "Walk_Loop*1.3" and "Jog_Fwd_Loop*0.7" suit a 1.3 m/s
-walk and a 3 m/s jog). For Walk and Run it prints the stride speed, the ground speed the planted foot
-implies; put those in data/characters.json as walk_anim_speed and run_anim_speed.
+walk and a 3 m/s jog). Brisk is the same walk with a longer stride, for the player's 2 m/s walk: the
+stroll played fast enough to cover that ground has her legs scurrying. For Walk, Brisk and Run it
+prints the stride speed, the ground speed the planted foot implies; put those in
+data/characters.json as walk_anim_speed, brisk_anim_speed and run_anim_speed.
 """
 import bpy, math, os, sys
 from mathutils import Matrix, Quaternion, Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 PROJECT, LIB, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[2]
-DEFAULT_MAP = ("Idle=Idle_Loop,Walk=Walk_Loop*1.3,Run=Jog_Fwd_Loop*0.7,Talk=Idle_Talking_Loop,"
+DEFAULT_MAP = ("Idle=Idle_Loop,Walk=Walk_Loop*1.3,Brisk=Walk_Loop*1.4,Run=Jog_Fwd_Loop*0.7,Talk=Idle_Talking_Loop,"
                "SitIdle=Sitting_Idle_Loop,Work=Fixing_Kneeling:30-118")
 MAP = dict(kv.split("=") for kv in (argv[argv.index("--map") + 1] if "--map" in argv else DEFAULT_MAP).split(","))
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
@@ -287,7 +289,7 @@ for name, spec in MAP.items():
         loc = [l + rest_rot["Hips"].inverted() @ Vector((0, 0, dz)) for l in loc]
         write(rig_act, rot_keys, loc)
         note = f"feet {dz:+.3f} m"
-    if name in ("Walk", "Run"):
+    if name in ("Walk", "Brisk", "Run"):
         note += f" stride speed {stride_speed(rig_act, n):.2f} m/s"
     print("LOOP", name, "<-", spec, "x", stride, "frames", n, "seam", seam, "drift", round(drift.length, 3), note)
 

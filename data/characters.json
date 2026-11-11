@@ -1,5 +1,5 @@
 {
-  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Nora and Rowan play with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
+  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed', 'brisk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk, Brisk (the Walk with a longer stride, used above a stroll) and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Nora and Rowan play with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
   "player": "nora",
   "characters": [
     {
@@ -9,6 +9,7 @@
       "model_procedural": "res://assets/nora.glb",
       "model_triposr": "res://assets/nora_tsr.glb",
       "walk_anim_speed": 1.01,
+      "brisk_anim_speed": 1.18,
       "run_anim_speed": 3.04,
       "label_height": 2.05,
       "model_sculpt": "res://assets/nora_sculpt.glb"
@@ -19,6 +20,7 @@
       "model": "res://assets/rowan_tripo.glb",
       "model_procedural": "res://assets/rowan.glb",
       "walk_anim_speed": 1.06,
+      "brisk_anim_speed": 1.21,
       "run_anim_speed": 3.51,
       "label_height": 2.15
     }
