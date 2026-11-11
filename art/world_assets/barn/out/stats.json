@@ -1,0 +1,147 @@
+{
+  "name": "barn",
+  "parts": {
+    "base": {
+      "triangles": 2404,
+      "materials": [
+        "barn_floor",
+        "barn_straw",
+        "barn_stone"
+      ]
+    },
+    "wall_front": {
+      "triangles": 2216,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim",
+        "barn_glow",
+        "barn_muntin"
+      ]
+    },
+    "wall_front_low": {
+      "triangles": 392,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim"
+      ]
+    },
+    "wall_back": {
+      "triangles": 1276,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_glow",
+        "barn_muntin",
+        "barn_trim"
+      ]
+    },
+    "wall_back_low": {
+      "triangles": 88,
+      "materials": [
+        "barn_siding",
+        "barn_boards"
+      ]
+    },
+    "wall_left": {
+      "triangles": 1476,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim",
+        "barn_glow",
+        "barn_muntin"
+      ]
+    },
+    "wall_left_low": {
+      "triangles": 304,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim"
+      ]
+    },
+    "wall_right": {
+      "triangles": 1476,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim",
+        "barn_glow",
+        "barn_muntin"
+      ]
+    },
+    "wall_right_low": {
+      "triangles": 304,
+      "materials": [
+        "barn_siding",
+        "barn_boards",
+        "barn_trim"
+      ]
+    },
+    "door_l": {
+      "triangles": 1368,
+      "materials": [
+        "barn_siding",
+        "barn_trim",
+        "barn_iron"
+      ]
+    },
+    "door_r": {
+      "triangles": 1368,
+      "materials": [
+        "barn_siding",
+        "barn_trim",
+        "barn_iron"
+      ]
+    },
+    "roof": {
+      "triangles": 6166,
+      "materials": [
+        "barn_boards",
+        "barn_shake",
+        "barn_beam",
+        "barn_siding",
+        "barn_trim",
+        "barn_dark",
+        "barn_iron",
+        "barn_gold"
+      ]
+    },
+    "interior": {
+      "triangles": 8078,
+      "materials": [
+        "barn_stall",
+        "barn_iron",
+        "barn_straw",
+        "barn_water",
+        "barn_dark",
+        "barn_sack",
+        "barn_glow"
+      ]
+    }
+  },
+  "triangles": 26916,
+  "images": [
+    "barn_beam",
+    "barn_beam_n",
+    "barn_boards",
+    "barn_boards_n",
+    "barn_floor",
+    "barn_floor_n",
+    "barn_shake",
+    "barn_shake_n",
+    "barn_siding",
+    "barn_siding_n",
+    "barn_stall",
+    "barn_stall_n",
+    "barn_stone",
+    "barn_stone_n",
+    "barn_straw",
+    "barn_straw_n",
+    "barn_trim",
+    "barn_trim_n"
+  ],
+  "glb_bytes": 2328340
+}
