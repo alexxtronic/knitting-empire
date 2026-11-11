@@ -3,14 +3,21 @@ extends Node3D
 ##
 ## Two models from tripo.ai, brought into the Woolcore look by tools/import_asset.py: a woolly sheep
 ## (assets/props/sheep_woolly.glb) and a freshly shorn one (assets/props/sheep_sheared.glb). Her coat
-## comes back once the wool is half grown and fills out as it finishes. The models have no rig, so
-## walking is a little waddle of the whole body and grazing a slow nod.
+## comes back once the wool is half grown and fills out as it finishes. Both are rigged by
+## tools/rig_sheep.py with the same loops: Walk (a four-beat walk), Graze (head down, chewing) and
+## Idle (breathing, looking about). She wanders, and at each stop mostly grazes.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const REGROW_HOURS := 10.0
 const WOOLLY_MODEL := "res://assets/props/sheep_woolly.glb"
 const SHEARED_MODEL := "res://assets/props/sheep_sheared.glb"
 const COAT_BACK := 0.5 # wool level at which the woolly model shows again
+const WALK_SPEED := 0.55 # metres per second
+## Each model's Walk loop covers this much ground per second at speed 1 (rig_sheep.py prints it),
+## so the loop is sped up or slowed to keep the hooves planted.
+const STRIDE := {"woolly": 0.506, "sheared": 0.742}
+const BLEND := 0.35 # seconds to cross-fade between loops
+const GRAZE_CHANCE := 0.7 # at each stop: graze, or just stand and look about
 
 var pen := Rect2()
 ## 0..1, shearable at 1. Setting it (shearing, loading a save, overnight growth) updates the look.
@@ -21,22 +28,25 @@ var wool := 1.0:
 var hold_time := 0.0
 var _target := Vector3.ZERO
 var _wait := 0.0
-var _walk := 0.0
-var _pivot: Node3D # carries both models; tilts for grazing and sways for walking
+var _grazing := false
+var _pivot: Node3D # carries both models
 var _woolly: Node3D
 var _sheared: Node3D
 
 
 func _ready() -> void:
-	# pivot on the hind feet, so grazing dips the head and the back legs stay planted
 	_pivot = Node3D.new()
-	_pivot.position.z = -0.3
 	add_child(_pivot)
 	_woolly = Catalog.model(WOOLLY_MODEL, _pivot)
 	_sheared = Catalog.model(SHEARED_MODEL, _pivot)
 	for m in [_woolly, _sheared]:
-		if m:
-			m.position.z = 0.3
+		var ap := _player_of(m)
+		if ap:
+			for n in ["Walk", "Graze", "Idle"]:
+				if ap.has_animation(n):
+					ap.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+			ap.play("Idle")
+			ap.seek(randf() * 3.0, true) # sheep don't breathe in step
 	if _woolly == null:
 		_woolly = Node3D.new()
 		_pivot.add_child(_woolly)
@@ -98,33 +108,44 @@ func _process(delta: float) -> void:
 		wool = wool + delta / (Game.HOUR_SECONDS * REGROW_HOURS)
 	if hold_time > 0.0:
 		hold_time -= delta
-		_settle(delta)
+		_play("Idle")
 		return
 	if _wait > 0.0:
 		_wait -= delta
-		# grazing: head down, with a slow chewing nod
-		_pivot.rotation.x = lerpf(_pivot.rotation.x, deg_to_rad(5.0 + 1.5 * sin(_wait * 2.5)), 1.0 - exp(-delta * 4.0))
-		_pivot.rotation.z = lerpf(_pivot.rotation.z, 0.0, 1.0 - exp(-delta * 6.0))
-		_pivot.position.y = 0.0
+		_play("Graze" if _grazing else "Idle")
 		return
 	var to := _target - position
 	to.y = 0
 	if to.length() < 0.1:
-		_wait = randf_range(2.0, 6.0)
+		_wait = randf_range(3.0, 8.0)
+		_grazing = randf() < GRAZE_CHANCE
 		_pick_target()
 		return
-	position += to.normalized() * 0.55 * delta
-	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.1)
-	# walking: a small side-to-side waddle and a bob with each step
-	_walk += delta * 9.0
-	_pivot.rotation.x = lerpf(_pivot.rotation.x, 0.0, 1.0 - exp(-delta * 6.0))
-	_pivot.rotation.z = deg_to_rad(2.5) * sin(_walk)
-	_pivot.position.y = 0.015 * absf(sin(_walk))
+	position += to.normalized() * WALK_SPEED * delta
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 5.0))
+	_play("Walk", WALK_SPEED)
 
 
-## Standing still (being sheared or petted): ease back to level.
-func _settle(delta: float) -> void:
-	var k := 1.0 - exp(-delta * 6.0)
-	_pivot.rotation.x = lerpf(_pivot.rotation.x, 0.0, k)
-	_pivot.rotation.z = lerpf(_pivot.rotation.z, 0.0, k)
-	_pivot.position.y = lerpf(_pivot.position.y, 0.0, k)
+## Whether a loop is playing right now on the coat that's showing (for the autotest).
+func current_loop() -> String:
+	var ap := _player_of(_sheared if coat() == "sheared" else _woolly)
+	return ap.current_animation if ap else ""
+
+
+func _player_of(m: Node) -> AnimationPlayer:
+	if m == null:
+		return null
+	var found := m.find_children("*", "AnimationPlayer", true, false)
+	return found[0] if found.size() > 0 else null
+
+
+## Plays a loop on both coats (the hidden one stays in step for when the wool grows back). With a
+## ground speed, Walk runs at the pace that keeps that coat's hooves from sliding.
+func _play(loop_name: String, ground_speed := 0.0) -> void:
+	for key in ["woolly", "sheared"]:
+		var ap := _player_of(_woolly if key == "woolly" else _sheared)
+		if ap == null or not ap.has_animation(loop_name):
+			continue
+		if ap.current_animation != loop_name:
+			ap.play(loop_name, BLEND)
+		ap.speed_scale = ground_speed / float(STRIDE[key]) if ground_speed > 0.0 else 1.0

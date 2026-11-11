@@ -113,6 +113,8 @@ var _style_frames := false # --styleframes=DIR: take the Woolcore style frames a
 var _capture := false # --capture: play the opening at a person's pace (record it with --write-movie)
 var _fps_probe := false # --fpsprobe: measure frame cost in town with each effect switched off in turn
 var _asset_frames := false # --assetframes=DIR: picture the world props (plots, trees, bus) and quit
+var _photo_frames := false # --photoframes=DIR: night photos by lamplight with strong bokeh, no HUD
+var _photo_dof := {} # photo mode's depth of field: {"focus": m, "near": m, "far": m, "amount": x}
 
 
 func _ready() -> void:
@@ -125,6 +127,9 @@ func _ready() -> void:
 			a = "--autotest=" + OS.get_user_data_dir()
 		if a.begins_with("--assetframes="):
 			_asset_frames = true
+			a = "--autotest=" + a.substr(14)
+		if a.begins_with("--photoframes="):
+			_photo_frames = true
 			a = "--autotest=" + a.substr(14)
 		if a.begins_with("--styleframes="):
 			_style_frames = true
@@ -247,6 +252,8 @@ func _ready() -> void:
 		_take_style_frames()
 	elif _asset_frames:
 		_take_asset_frames()
+	elif _photo_frames:
+		_take_photo_frames()
 	elif _autotest_dir != "":
 		_autotest()
 	else:
@@ -271,7 +278,11 @@ func _connect_hud() -> void:
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
-			hud.sound_slider.set_value_no_signal(audio.sound_volume))
+			hud.sound_slider.set_value_no_signal(audio.sound_volume)
+			hud.show_god_state(Game.hour, str(Game.flag("weather", "clear")), Game.clock_frozen))
+	hud.god_time.connect(func(h: float): Game.hour = h)
+	hud.god_weather.connect(func(w: String): Game.set_flag("weather", w))
+	hud.god_freeze.connect(func(on: bool): Game.clock_frozen = on)
 	hud.item_chosen.connect(_begin_place)
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
@@ -913,12 +924,15 @@ func warmth_target() -> float:
 
 
 func _update_camera(delta: float) -> void:
+	if not _photo_dof.is_empty():
+		_apply_photo_dof()
 	# close-ups get a soft background
-	var near := cam_dist < 9.0
-	cam_attr.dof_blur_far_enabled = near
+	var near := cam_dist < 9.0 and _photo_dof.is_empty()
+	if _photo_dof.is_empty():
+		cam_attr.dof_blur_far_enabled = near
 	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
 	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, [40.0, 55.0, 70.0][gfx])
-	if near:
+	if near and _photo_dof.is_empty():
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
 	var pan := hud.cam_pad_pan if not story.is_playing() else Vector2.ZERO
@@ -2356,6 +2370,12 @@ func _take_asset_frames() -> void:
 		["asset_plaza.png", Vector3(49.0, 0, 1.0), 9.0, 30.0],
 		["asset_plaza_wide.png", Vector3(53.0, 0, -1.0), 20.0, 10.0],
 		["asset_lane.png", Vector3(41.7, 0, -5.0), 6.0, 70.0],
+		# lamp posts at night: one close up (the candle behind clear glass), then the road to town
+		["asset_lamp_close.png", Vector3(12.85, 1.2, 4.0), 2.6, 25.0, 22.0],
+		["asset_lamps_night.png", Vector3(16.0, 0, 4.0), 11.0, 15.0, 22.0],
+		# the sheep in their pen, close: rigged, walking and grazing (tools/rig_sheep.py)
+		["asset_sheep.png", Vector3(20.0, 0, -2.0), 5.0, 30.0],
+		["asset_sheep_low.png", Vector3(20.0, 0.3, -1.0), 3.2, 160.0],
 	]
 	plots[0].plant("pumpkin")
 	plots[1].plant("turnip")
@@ -2368,10 +2388,68 @@ func _take_asset_frames() -> void:
 		cam_yaw_goal = cam_yaw
 		cam_target = v[1]
 		cam_dist = v[2]
+		Game.hour = float(v[4]) if v.size() > 4 else 10.5
 		await _wait(1.2)
 		await _shot(v[0])
 	print("ASSET FRAMES DONE")
 	get_tree().quit()
+
+
+## Photo frames (run with -- --photoframes=/abs/dir): night shots by lamplight to show the game
+## off, with the HUD hidden, a low camera and strong round bokeh. Each view is
+## [file, camera target, distance, yaw, pitch, hour, focus distance, blur amount, Nora's spot].
+func _take_photo_frames() -> void:
+	Game.time_running = false
+	_set_cam_lock(false)
+	hud.visible = false
+	cam_follow = false
+	RenderingServer.camera_attributes_set_dof_blur_quality(RenderingServer.DOF_BLUR_QUALITY_HIGH, true)
+	RenderingServer.camera_attributes_set_dof_blur_bokeh_shape(RenderingServer.DOF_BOKEH_CIRCLE)
+	await _wait(1.0)
+	for l in find_children("*", "Label3D", true, false):
+		(l as Label3D).visible = false # no name tags in the photos
+	var views := [
+		# the lantern close up from its open side, the farmhouse and lamps melting into bokeh
+		["photo_lantern.png", Vector3(12.85, 0.8, 4.0), 1.6, 70.0, 6.0, 21.5, 1.6, 0.3, Vector3(30, 0, 30)],
+		# Nora under the lamp by the bench, lamps and plots soft behind her
+		["photo_nora_lamp.png", Vector3(13.6, 0.55, 4.6), 3.2, -60.0, 8.0, 21.0, 3.2, 0.25, Vector3(13.6, 0, 4.6)],
+		# down the farm path at dusk: a lamp in focus, the next ones glowing beyond
+		["photo_path_dusk.png", Vector3(19.85, 0.8, 4.6), 2.2, 70.0, 8.0, 19.4, 2.2, 0.3, Vector3(30, 0, 30)],
+		# the bench from low in the grass, its lamp a glow behind it
+		["photo_bench.png", Vector3(14.6, 0.35, 5.0), 2.6, 63.0, 6.0, 21.8, 2.6, 0.3, Vector3(30, 0, 30)],
+		# the pond lamp at night
+		["photo_pond_lamp.png", Vector3(7.05, 0.8, -13.4), 1.8, 60.0, 6.0, 22.0, 1.8, 0.3, Vector3(30, 0, 30)],
+		# the road lamp, the town's lamps a blur beyond
+		["photo_road.png", Vector3(29.75, 0.8, 1.8), 1.8, -130.0, 5.0, 21.2, 1.8, 0.3, Vector3(30, 0, 30)],
+		# Nora walking home past the lamps, close and low
+		["photo_nora_walk.png", Vector3(16.5, 0.7, 4.3), 2.4, 30.0, 6.0, 20.6, 2.4, 0.28, Vector3(16.5, 0, 4.3)],
+	]
+	for v in views:
+		player.position = v[8]
+		player.face_point(v[1] + Vector3(sin(deg_to_rad(v[3])), 0, cos(deg_to_rad(v[3]))) * 5.0)
+		Game.hour = float(v[5])
+		cam_yaw = deg_to_rad(v[3])
+		cam_yaw_goal = cam_yaw
+		cam_target = v[1]
+		cam_dist = v[2]
+		cam_pitch = v[4]
+		cam_glide = {"pos": v[1], "dist": v[2], "pitch": v[4]}
+		_photo_dof = {"focus": v[6], "amount": v[7]}
+		await _wait(2.0)
+		await _shot(v[0])
+	print("PHOTO FRAMES DONE")
+	get_tree().quit()
+
+
+func _apply_photo_dof() -> void:
+	var f: float = _photo_dof["focus"]
+	cam_attr.dof_blur_amount = float(_photo_dof["amount"])
+	cam_attr.dof_blur_far_enabled = true
+	cam_attr.dof_blur_far_distance = f + 0.35
+	cam_attr.dof_blur_far_transition = maxf(1.0, f * 0.8)
+	cam_attr.dof_blur_near_enabled = true
+	cam_attr.dof_blur_near_distance = maxf(0.3, f - 0.9)
+	cam_attr.dof_blur_near_transition = 0.8
 
 
 ## Woolcore style frames (run with -- --styleframes=/abs/dir): the farm at golden hour, the
@@ -2467,6 +2545,14 @@ func _act1_until_done(timeout: float) -> void:
 func _polish_checks() -> void:
 	story.auto = false
 	hud.hide_dialogue()
+	# lamp posts: clear glass with a lit candle inside, and the candle's light flickers
+	var candle_lights: Array = find_children("*", "OmniLight3D", true, false).filter(func(l): return l.has_meta("candle"))
+	var flick: Array[float] = []
+	for k in 8:
+		flick.append(Furniture.candle_flicker(k * 0.37))
+	var clear_glass := Catalog.lamp_glass().transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and Catalog.lamp_glass().albedo_color.a < 0.5
+	_check("lamp posts: clear glass and a flickering candle in each (%d candles, brightness %.2f to %.2f)" % [candle_lights.size(), flick.min(), flick.max()],
+		candle_lights.size() >= 1 and clear_glass and flick.max() - flick.min() > 0.08 and flick.min() > 0.4)
 	var steps_g := int(audio.played.get("step_grass", 0))
 	var steps_w := int(audio.played.get("step_wood", 0))
 	var needles := int(audio.played.get("needle", 0))
@@ -2484,6 +2570,24 @@ func _polish_checks() -> void:
 	Game.set_flag("weather", "clear")
 	await _wait(5.0)
 	var day_g := [audio.gain("day"), audio.gain("night"), audio.gain("rain")]
+	var lamp_dry := _candle_energy()
+	Game.set_flag("weather", "rain")
+	await _wait(4.0)
+	var lamp_wet := _candle_energy()
+	_check("lamps come on in a daytime downpour (1 PM: dry %.2f, raining %.2f)" % [lamp_dry, lamp_wet], lamp_wet > 0.8 and lamp_dry < 0.4)
+	# god mode in settings: set the time and weather, stop the clock
+	hud.open_settings()
+	hud.god_time_slider.value = 17.5
+	(hud.god_weather_btns["clear"] as Button).pressed.emit()
+	hud.god_freeze_check.button_pressed = true
+	var clock0 := Game.time_running
+	Game.time_running = true
+	await _wait(1.5)
+	_check("god mode: the settings set the clock to %s, clear skies, and stop the clock (hour %.2f, %s)" % [hud.god_time_label.text, Game.hour, str(Game.flag("weather"))],
+		absf(Game.hour - 17.5) < 0.001 and str(Game.flag("weather")) == "clear" and hud.god_time_label.text == "5:30 PM")
+	hud.god_freeze_check.button_pressed = false
+	Game.time_running = clock0
+	hud.settings_panel.visible = false
 	Game.hour = 23.0
 	Game.set_flag("weather", "rain") # rain eases in over two seconds
 	await _wait(5.0)
@@ -2532,6 +2636,17 @@ func _polish_checks() -> void:
 	_check("a first-time tip appears after Act 1 and is remembered ('%s')" % hud.tip_label.text.left(40),
 		hud.tip_panel.visible and Game.flag("tip_click") == true)
 	tips_enabled = false
+
+
+## The brightest lamp candle's light right now (lamp posts and lanterns), without its flicker.
+func _candle_energy() -> float:
+	var e := 0.0
+	for l in find_children("*", "OmniLight3D", true, false):
+		if l.has_meta("candle"):
+			var f: Node = l.get_parent()
+			var flick: float = Furniture.candle_flicker(f.get("_t")) if f.get("_t") != null else 1.0
+			e = maxf(e, l.light_energy / maxf(flick, 0.01))
+	return e
 
 
 func _check(label: String, ok: bool) -> void:
@@ -2584,6 +2699,9 @@ func _autotest() -> void:
 	_live_click(cam.unproject_position(sheep_list[0].global_position + Vector3(0, 0.5, 0)))
 	await _wait(0.5)
 	var shear_pill: Dictionary = hud.pie._items[0] if hud.is_menu_open() else {}
+	var loops: Array = sheep_list.map(func(sh): return sh.current_loop())
+	_check("sheep are rigged and play their loops: walking, grazing or looking about (%s)" % str(loops),
+		loops.all(func(l): return l in ["Walk", "Graze", "Idle"]))
 	_check("a sheared sheep's menu shows wool regrowing as a bar (%s)" % str(hud.pie.labels()), shear_pill.has("progress") and not bool(shear_pill.get("enabled", true)))
 	await _shot("02d_menu_sheep.png")
 	hud.hide_menu()
@@ -3019,6 +3137,7 @@ func _begin_new_story() -> void:
 func _update_story_staging(delta: float) -> void:
 	var raining := str(Game.flag("weather", "clear")) == "rain"
 	rain = move_toward(rain, 1.0 if raining else 0.0, delta * 0.5)
+	Furniture.gloom = rain
 	var indoors := interior_rect().has_point(Vector2(cam_target.x, cam_target.z)) and cam_dist < 16.0
 	rain_fx.emitting = raining and not indoors
 	rain_fx.position = cam_target + Vector3(0, 13, 0)

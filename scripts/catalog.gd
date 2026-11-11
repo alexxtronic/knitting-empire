@@ -234,7 +234,10 @@ static func has_builder(id: String) -> bool:
 
 static func build(id: String, r: Node3D) -> void:
 	var path := str(ITEMS.get(id, {}).get("model", ""))
-	if path != "" and model(path, r) != null:
+	var inst := model(path, r) if path != "" else null
+	if inst != null:
+		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here
+			_lantern_candle(r, inst)
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)
@@ -553,9 +556,60 @@ static func _lantern(r: Node3D) -> void:
 	var dark := Color(0.15, 0.15, 0.15)
 	cyl(r, 0.04, 0.05, 1.6, Vector3(0, 0.8, 0), dark)
 	box(r, Vector3(0.3, 0.03, 0.03), Vector3(0.12, 1.55, 0), dark)
-	glow(box(r, Vector3(0.16, 0.22, 0.16), Vector3(0.25, 1.4, 0), Color(1.0, 0.8, 0.5)), Color(1.0, 0.78, 0.45), 2.0)
+	box(r, Vector3(0.16, 0.22, 0.16), Vector3(0.25, 1.4, 0), Color.WHITE).material_override = lamp_glass()
 	cyl(r, 0.02, 0.12, 0.06, Vector3(0.25, 1.54, 0), dark)
-	omni(r, Vector3(0.25, 1.35, 0), Color(1.0, 0.7, 0.4), 5.0, 0.0, 1.5)
+	cyl(r, 0.1, 0.02, 0.03, Vector3(0.25, 1.275, 0), dark) # the cup the candle stands in
+	_lantern_candle(r, null)
+
+
+## Clear glass for the lamp post's lantern: a faint warm tint and a sharp sheen, see-through so the
+## candle inside shows. Transparent surfaces cast no shadow, so the candle's light gets out.
+static var _lamp_glass: StandardMaterial3D
+const CANDLE_LAYER := 2 # render layer for candle wax, which the candle's own light leaves out
+
+
+static func lamp_glass() -> StandardMaterial3D:
+	if _lamp_glass == null:
+		var g := StandardMaterial3D.new()
+		g.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		g.albedo_color = Color(1.0, 0.94, 0.82, 0.16)
+		g.roughness = 0.04
+		g.metallic_specular = 0.9
+		g.rim_enabled = true # the panes' edges catch the light, so the glass still reads as glass
+		g.rim = 0.35
+		g.rim_tint = 0.2
+		_lamp_glass = g
+	return _lamp_glass
+
+
+## The lamp post model (art/world_assets/street): swaps its glowing "lamp_glass" for clear glass and
+## stands a lit candle in the lantern's cup, with a flickering light (furniture.gd animates both).
+static func _lantern_candle(r: Node3D, inst: Node3D) -> void:
+	var meshes: Array = inst.find_children("*", "MeshInstance3D", true, false) if inst else []
+	for mi in meshes:
+		var m := mi as MeshInstance3D
+		for i in m.mesh.get_surface_count():
+			var sm := m.mesh.surface_get_material(i)
+			if sm and sm.resource_name == "lamp_glass":
+				m.set_surface_override_material(i, lamp_glass())
+	# the lantern hangs at x = 0.25: its cup tops out at about 1.285 m, the glass runs 1.28 to 1.48 m
+	var c := Vector3(0.25, 0, 0)
+	# the wax and wick sit on render layer 2, which the candle's own light skips: a light a few
+	# centimetres away would blow the wax out to white. The wax glows faintly from within instead.
+	var wax := cyl(r, 0.021, 0.023, 0.085, c + Vector3(0, 1.327, 0), Color(0.93, 0.87, 0.74), Vector3.ZERO, 10)
+	wax.material_override = mat(Color(0.93, 0.87, 0.74), 0.7, 0.25)
+	var wick := cyl(r, 0.0025, 0.0025, 0.012, c + Vector3(0, 1.375, 0), Color(0.1, 0.08, 0.06), Vector3.ZERO, 4)
+	for m in [wax, wick]:
+		(m as MeshInstance3D).layers = CANDLE_LAYER
+	var flame := glow(ball(r, 0.014, c + Vector3(0, 1.398, 0), Color(1.0, 0.68, 0.26), Vector3(0.7, 1.8, 0.7)), Color(1.0, 0.66, 0.24), 6.0)
+	flame.set_meta("flame", true)
+	flame.set_meta("candle", true)
+	var core := glow(ball(r, 0.006, c + Vector3(0, 1.39, 0), Color(1.0, 0.95, 0.8)), Color(1.0, 0.95, 0.8), 9.0)
+	core.set_meta("flame", true)
+	core.set_meta("candle", true)
+	var l := omni(r, c + Vector3(0, 1.41, 0), Color(1.0, 0.66, 0.34), 5.5, 0.15, 1.6)
+	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	l.set_meta("candle", true)
 
 
 static func _hay_bale(r: Node3D) -> void:

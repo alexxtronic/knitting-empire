@@ -52,6 +52,7 @@ var worn_quality: int = 1
 const NEEDS := ["energy", "fullness", "happiness", "love", "warmth", "fitness"]
 var day: int = 1
 var hour: float = 8.0
+var clock_frozen := false # god mode (settings): the hour stands still, everything else carries on
 var house_level: int = 0
 var time_running := true
 var friends := {} # villager id -> {"familiarity", "trust", "romance", "talk" (last day talked), "gift" (last day gifted), "n" (chats)}
@@ -111,7 +112,8 @@ func reset() -> void:
 func _process(delta: float) -> void:
 	if not time_running:
 		return
-	hour += delta / HOUR_SECONDS
+	if not clock_frozen:
+		hour += delta / HOUR_SECONDS
 	fullness = maxf(0.0, fullness - delta * 0.22)
 	if fullness <= 0.0:
 		energy = maxf(0.0, energy - delta * 0.4)

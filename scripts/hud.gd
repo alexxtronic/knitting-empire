@@ -13,6 +13,9 @@ signal title_new_game
 signal title_quit
 signal volumes_changed(music: float, sound: float)
 signal fullscreen_toggled(on: bool)
+signal god_time(hour: float) # god mode (settings): jump the clock
+signal god_weather(weather: String) # "clear" or "rain"
+signal god_freeze(on: bool) # stop the clock
 signal item_chosen(id: String)
 signal rotate_pressed
 signal sell_pressed
@@ -192,6 +195,10 @@ var build_btn: Button
 var expand_btn: Button
 var graphics_btn: Button
 var settings_panel: PanelContainer
+var god_time_slider: HSlider
+var god_time_label: Label
+var god_weather_btns := {} # "clear" / "rain" -> Button
+var god_freeze_check: CheckButton
 var fps_label: Label
 var _fps_t := 0.0
 var music_slider: HSlider
@@ -1505,6 +1512,7 @@ func _build_settings() -> void:
 	fullscreen_check.toggled.connect(func(on): click(); fullscreen_toggled.emit(on))
 	vb.add_child(fullscreen_check)
 	vb.add_child(_label("Music and sounds are placeholders made in code (tools/make_audio.py).", 12, Color(TEXT, 0.55)))
+	_build_god_mode(vb)
 	var close := _button("Close", func(): settings_panel.visible = false)
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.custom_minimum_size = Vector2(140, 36)
@@ -1513,6 +1521,71 @@ func _build_settings() -> void:
 	settings_panel.visible = false
 	root.add_child(settings_panel)
 	_place(settings_panel, 0.5, 0.5, Vector2.ZERO)
+
+
+## God mode: set the time of day and the weather by hand, and stop the clock.
+func _build_god_mode(vb: VBoxContainer) -> void:
+	vb.add_child(HSeparator.new())
+	vb.add_child(_label("God mode", 18, GOLD))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var l := _label("Time", 16)
+	l.custom_minimum_size = Vector2(120, 0)
+	row.add_child(l)
+	god_time_slider = HSlider.new()
+	god_time_slider.min_value = 6.0
+	god_time_slider.max_value = 23.75 # midnight is bedtime: past it she passes out
+	god_time_slider.step = 0.25
+	god_time_slider.custom_minimum_size = Vector2(170, 24)
+	god_time_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	god_time_slider.focus_mode = Control.FOCUS_NONE
+	row.add_child(god_time_slider)
+	god_time_label = _label("8:00 AM", 16)
+	god_time_label.custom_minimum_size = Vector2(80, 0)
+	row.add_child(god_time_label)
+	god_time_slider.value_changed.connect(func(v: float):
+		god_time_label.text = clock_text(v)
+		god_time.emit(v))
+	vb.add_child(row)
+	var wrow := HBoxContainer.new()
+	wrow.add_theme_constant_override("separation", 14)
+	var wl := _label("Weather", 16)
+	wl.custom_minimum_size = Vector2(120, 0)
+	wrow.add_child(wl)
+	for w in ["clear", "rain"]:
+		var b := _button("Clear" if w == "clear" else "Rain", func():
+			click()
+			god_weather.emit(w)
+			show_god_weather(w))
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(100, 34)
+		god_weather_btns[w] = b
+		wrow.add_child(b)
+	vb.add_child(wrow)
+	god_freeze_check = CheckButton.new()
+	god_freeze_check.text = "Stop the clock"
+	god_freeze_check.focus_mode = Control.FOCUS_NONE
+	god_freeze_check.toggled.connect(func(on): click(); god_freeze.emit(on))
+	vb.add_child(god_freeze_check)
+
+
+## Shows the god mode controls at the game's current time and weather (main.gd, when settings open).
+func show_god_state(hour: float, weather: String, frozen: bool) -> void:
+	god_time_slider.set_value_no_signal(clampf(hour, god_time_slider.min_value, god_time_slider.max_value))
+	god_time_label.text = clock_text(hour)
+	show_god_weather(weather)
+	god_freeze_check.set_pressed_no_signal(frozen)
+
+
+func show_god_weather(weather: String) -> void:
+	for k in god_weather_btns:
+		(god_weather_btns[k] as Button).set_pressed_no_signal(k == weather)
+
+
+static func clock_text(hour: float) -> String:
+	var h := int(hour) % 24
+	var m := int(round((hour - floorf(hour)) * 60.0)) % 60
+	return "%d:%02d %s" % [12 if h % 12 == 0 else h % 12, m, "AM" if h < 12 else "PM"]
 
 
 func open_settings(music_v := -1.0, sound_v := -1.0, fullscreen := false) -> void:

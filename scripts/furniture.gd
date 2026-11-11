@@ -9,6 +9,9 @@ var body: StaticBody3D
 var lights: Array[OmniLight3D] = []
 var flames: Array[MeshInstance3D] = []
 var is_ghost := false
+## 0..1, how gloomy the weather is (main.gd sets it from the rain). Lamps come on in a daytime
+## downpour as they would at dusk.
+static var gloom := 0.0
 var _t := 0.0
 
 
@@ -84,12 +87,34 @@ func _process(delta: float) -> void:
 	if lights.is_empty() and flames.is_empty():
 		return
 	_t += delta
-	var dark := 1.0 - Game.daylight()
+	var dark := maxf(1.0 - Game.daylight(), gloom * 0.8)
+	var candle := candle_flicker(_t)
 	for l in lights:
 		var e := lerpf(float(l.get_meta("day_energy")), float(l.get_meta("night_energy")), dark)
 		if l.has_meta("fire"):
 			e *= 0.85 + 0.15 * sin(_t * 9.0) * sin(_t * 5.3 + 1.0)
+		elif l.has_meta("candle"):
+			e *= candle
 		l.light_energy = e
 	for i in flames.size():
+		var f := flames[i]
+		if f.has_meta("candle"):
+			# the flame stretches and shrinks with its light and leans a little in the draught
+			if not f.has_meta("base_scale"):
+				f.set_meta("base_scale", f.scale)
+			var b: Vector3 = f.get_meta("base_scale")
+			f.scale = Vector3(b.x * (0.9 + 0.1 * candle), b.y * (0.55 + 0.5 * candle), b.z * (0.9 + 0.1 * candle))
+			f.rotation = Vector3(0.08 * sin(_t * 2.1 + 0.7), 0, 0.1 * sin(_t * 1.7) * sin(_t * 4.3 + 2.0))
+			continue
 		var s := 1.0 + 0.12 * sin(_t * (8.0 + i * 2.3) + i)
-		flames[i].scale = Vector3(1.0, 1.5 * s, 0.6) if i == 0 else Vector3(s, s, s)
+		f.scale = Vector3(1.0, 1.5 * s, 0.6) if i == 0 else Vector3(s, s, s)
+
+
+## A candle's brightness (about 0.6 to 1.05): a soft quick waver, a faster shimmer, and now and
+## then a gutter when a draught gets into the lantern. Each lamp starts at a random _t, so a
+## street of lamps never flickers in step.
+static func candle_flicker(t: float) -> float:
+	var waver := 0.09 * sin(t * 6.3) * sin(t * 2.9 + 2.0)
+	var shimmer := 0.05 * sin(t * 17.0 + 1.3) * sin(t * 11.7)
+	var gutter := 0.3 * pow(maxf(0.0, sin(t * 0.61 + 1.1) * sin(t * 0.23)), 6.0)
+	return 0.95 + waver + shimmer - gutter
