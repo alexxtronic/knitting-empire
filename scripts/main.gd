@@ -2376,6 +2376,13 @@ func _take_asset_frames() -> void:
 		# the sheep in their pen, close: rigged, walking and grazing (tools/rig_sheep.py)
 		["asset_sheep.png", Vector3(20.0, 0, -2.0), 5.0, 30.0],
 		["asset_sheep_low.png", Vector3(20.0, 0.3, -1.0), 3.2, 160.0],
+		# the town buildings (art/world_assets/town_buildings): the row from the plaza, each front,
+		# and the shop at dusk with its windows lit. The 6th element is the camera pitch.
+		["asset_town_row.png", Vector3(52.5, 1.5, -10.0), 25.0, 0.0, 10.5, 20.0],
+		["asset_shop.png", Vector3(56.5, 2.0, -11.5), 11.0, 18.0, 10.5, 16.0],
+		["asset_bakery.png", Vector3(41.75, 2.0, -10.75), 10.5, 22.0, 10.5, 16.0],
+		["asset_office.png", Vector3(64.25, 2.0, -11.0), 10.5, -20.0, 10.5, 16.0],
+		["asset_shop_dusk.png", Vector3(56.5, 2.0, -11.5), 11.0, -12.0, 19.6, 16.0],
 	]
 	plots[0].plant("pumpkin")
 	plots[1].plant("turnip")
@@ -2389,8 +2396,13 @@ func _take_asset_frames() -> void:
 		cam_target = v[1]
 		cam_dist = v[2]
 		Game.hour = float(v[4]) if v.size() > 4 else 10.5
+		if v.size() > 5:
+			player.position = v[1] + Vector3(4.0, 0, 6.0) # out of the way
+			cam_pitch = float(v[5])
+			cam_glide = {"pos": v[1], "dist": v[2], "pitch": v[5]}
 		await _wait(1.2)
 		await _shot(v[0])
+		cam_glide = {}
 	print("ASSET FRAMES DONE")
 	get_tree().quit()
 
@@ -2553,6 +2565,19 @@ func _polish_checks() -> void:
 	var clear_glass := Catalog.lamp_glass().transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and Catalog.lamp_glass().albedo_color.a < 0.5
 	_check("lamp posts: clear glass and a flickering candle in each (%d candles, brightness %.2f to %.2f)" % [candle_lights.size(), flick.min(), flick.max()],
 		candle_lights.size() >= 1 and clear_glass and flick.max() - flick.min() > 0.08 and flick.min() > 0.4)
+	# the town's shop fronts are the modelled buildings (art/world_assets/town_buildings), each with its name
+	var built: Array[String] = []
+	for b in find_children("Building_*", "Node3D", true, false):
+		var meshes := b.find_children("*", "MeshInstance3D", true, false).size()
+		var named := false
+		for l in b.find_children("*", "Label3D", false, false):
+			named = named or (l as Label3D).text != ""
+		if meshes > 0 and named:
+			built.append(str(b.get_meta("building_model", "")))
+	built.sort()
+	var want: Array[String] = ["bakery", "office", "shop"]
+	_check("town buildings are the modelled shop, bakery and land office, each with its sign (%s)" % ", ".join(built),
+		built == want)
 	var steps_g := int(audio.played.get("step_grass", 0))
 	var steps_w := int(audio.played.get("step_wood", 0))
 	var needles := int(audio.played.get("needle", 0))

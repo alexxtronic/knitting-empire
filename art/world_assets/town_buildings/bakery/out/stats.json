@@ -1,0 +1,55 @@
+{
+  "name": "building_bakery",
+  "triangles": 12436,
+  "materials": [
+    "stone_bakery",
+    "walls_bakery",
+    "interior_bakery",
+    "frame_bakery",
+    "trim_bakery",
+    "soil",
+    "leaf",
+    "bloom_a",
+    "bloom_b",
+    "bloom_c",
+    "awning_bakery",
+    "iron",
+    "door_bakery",
+    "timber_bakery",
+    "brass",
+    "roof_bakery",
+    "pot",
+    "sign_bakery",
+    "loaf",
+    "chalk",
+    "pretzel"
+  ],
+  "size_m": [
+    6.41,
+    5.603,
+    5.537
+  ],
+  "min_m": [
+    -3.205,
+    -3.028,
+    0.0
+  ],
+  "max_m": [
+    3.205,
+    2.575,
+    5.537
+  ],
+  "images": [
+    "awning_bakery",
+    "door_bakery",
+    "interior_bakery",
+    "plaster_bakery",
+    "plaster_bakery_n",
+    "roof_bakery",
+    "roof_bakery_n",
+    "stone_bakery",
+    "stone_bakery_n",
+    "timber_bakery"
+  ],
+  "glb_bytes": 3375180
+}

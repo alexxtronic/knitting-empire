@@ -1,0 +1,52 @@
+{
+  "name": "building_office",
+  "triangles": 13696,
+  "materials": [
+    "stone_office",
+    "walls_office",
+    "interior_office",
+    "frame_office",
+    "trim_office",
+    "soil",
+    "leaf",
+    "bloom_a",
+    "bloom_b",
+    "bloom_c",
+    "door_office",
+    "timber_office",
+    "brass",
+    "roof_office",
+    "pot",
+    "sign_office",
+    "column",
+    "paper",
+    "postbox"
+  ],
+  "size_m": [
+    6.41,
+    6.405,
+    5.537
+  ],
+  "min_m": [
+    -3.205,
+    -3.58,
+    -0.0
+  ],
+  "max_m": [
+    3.205,
+    2.825,
+    5.537
+  ],
+  "images": [
+    "brick_office",
+    "brick_office_n",
+    "door_office",
+    "interior_office",
+    "roof_office",
+    "roof_office_n",
+    "stone_office",
+    "stone_office_n",
+    "timber_office"
+  ],
+  "glb_bytes": 3268544
+}

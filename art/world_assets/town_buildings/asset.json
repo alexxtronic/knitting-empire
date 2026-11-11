@@ -1,0 +1,79 @@
+{
+  "title": "Maplewood shop front",
+  "subject": "Maplewood shop front",
+  "render_as": "a stylised game prop",
+  "collection_prefix": "KE_",
+  "hdri": "",
+  "hdri_strength": 0.07,
+  "hdri_rotation_deg": 215.0,
+  "ground": "asphalt",
+  "ground_z": -0.001,
+  "cameras": {
+    "hero": [
+      [
+        7.5,
+        -9.5,
+        4.2
+      ],
+      [
+        0,
+        0,
+        2.3
+      ],
+      45
+    ],
+    "game": [
+      [
+        9,
+        -9,
+        11
+      ],
+      [
+        0,
+        0,
+        1.8
+      ],
+      60
+    ],
+    "side": [
+      [
+        -9.5,
+        -4.5,
+        2.6
+      ],
+      [
+        0,
+        0,
+        2.4
+      ],
+      45
+    ],
+    "detail": [
+      [
+        2.2,
+        -4.6,
+        1.8
+      ],
+      [
+        0,
+        -2.4,
+        1.6
+      ],
+      50
+    ]
+  },
+  "final": {
+    "res": [
+      1600,
+      1066
+    ],
+    "samples": 128
+  },
+  "preview": {
+    "res": [
+      960,
+      640
+    ],
+    "samples": 48
+  }
+}

@@ -16,6 +16,8 @@ const STALL := Vector3(48.5, 0, -7.2)
 const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # Woolly Goods, door on the south side
 const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Land Office
 const BAKERY := Rect2(39.0, -13.0, 5.5, 4.5)
+const MODEL_DIR := "res://assets/props/"
+const BUILDING_SIGN_Y := 3.02 # the modelled sign board's centre (SIGN_Z in the build script)
 const COTTAGE_LOT := Rect2(56.0, 4.6, 12.0, 9.0) # x 56..68, z 4.6..13.6
 const COTTAGE := Rect2(58.0, 7.0, 7.0, 5.0) # wall lines: x 58..65, z 7..12
 const COTTAGE_DOOR := Vector2(60.8, 62.2) # gap in the north wall (x range)
@@ -49,9 +51,9 @@ static func build(root: Node3D) -> Dictionary:
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
 	blockers.append_array(stall["blockers"])
-	blockers.append(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "WOOLLY GOODS", 56.5, Color(0.55, 0.65, 0.8)))
-	blockers.append(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "LAND OFFICE", 64.25, Color(0.85, 0.75, 0.45)))
-	blockers.append(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "BAKERY", 41.75, Color(0.95, 0.65, 0.4)))
+	blockers.append(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "WOOLLY GOODS", 56.5, Color(0.55, 0.65, 0.8), "shop"))
+	blockers.append(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "LAND OFFICE", 64.25, Color(0.85, 0.75, 0.45), "office"))
+	blockers.append(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "BAKERY", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
 	var to_town := signpost(root, Vector3(25.6, 0, 1.75), "MAPLEWOOD  →", "travel_town", "Signpost: Maplewood")
 	var to_farm := signpost(root, Vector3(38.2, 0, 1.75), "←  BIRCHFIELD FARM", "travel_farm", "Signpost: Birchfield Farm")
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))
@@ -260,13 +262,23 @@ static func _stall(root: Node3D, pos: Vector3) -> Dictionary:
 
 
 ## A shop front: walls, gable roof, door, windows and a sign. Door on the south (+z) side at door_x.
-static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text: String, door_x: float, trim: Color) -> Rect2:
+## A shop front on rect r, door facing +Z (south). With a model id it uses the modelled building
+## assets/props/building_<id>.glb (made by art/world_assets/town_buildings/build.py, sized to the
+## rect, door centred) and writes the name on its sign board; without one it builds simple boxes.
+static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text: String, door_x: float, trim: Color, model_id := "") -> Rect2:
 	var b := Node3D.new()
 	var c := r.get_center()
 	b.position = Vector3(c.x, 0, c.y)
 	root.add_child(b)
 	var w := r.size.x
 	var d := r.size.y
+	var path := MODEL_DIR + "building_%s.glb" % model_id
+	if model_id != "" and ResourceLoader.exists(path) and Catalog.model(path, b) != null:
+		b.name = "Building_" + model_id
+		b.set_meta("building_model", model_id)
+		b.add_child(_sign_label(sign_text, Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095)))
+		# the steps and porch stand a little proud of the front wall
+		return Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
 	var h := 3.0
 	var gable := 1.6
 	Catalog.box(b, Vector3(w, h, d), Vector3(0, h * 0.5, 0), wall)
@@ -304,15 +316,19 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 		Catalog.box(b, Vector3(1.2, 0.18, 0.3), Vector3(wx, 0.92, front + 0.15), trim) # flower box
 	Catalog.box(b, Vector3(minf(w - 0.6, 3.4), 0.5, 0.06), Vector3(0, h - 0.4, front + 0.05), Catalog.CREAM)
 	Catalog.box(b, Vector3(minf(w - 0.6, 3.4) + 0.1, 0.6, 0.04), Vector3(0, h - 0.4, front + 0.03), Catalog.WOOD_DARK)
+	b.add_child(_sign_label(sign_text, Vector3(0, h - 0.4, front + 0.085)))
+	return Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.4)
+
+
+static func _sign_label(text: String, pos: Vector3) -> Label3D:
 	var l := Label3D.new()
-	l.text = sign_text
+	l.text = text
 	l.font_size = 60
 	l.pixel_size = 0.005
 	l.outline_size = 0
 	l.modulate = Color(0.3, 0.18, 0.1)
-	l.position = Vector3(0, h - 0.4, front + 0.085)
-	b.add_child(l)
-	return Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.4)
+	l.position = pos
+	return l
 
 
 static func signpost(root: Node3D, pos: Vector3, text: String, kind: String, title: String) -> Landmark:
