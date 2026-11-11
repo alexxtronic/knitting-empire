@@ -287,6 +287,7 @@ func _lamps_and_benches() -> void:
 	# somewhere to sit: facing the pond, looking over the beds, and on the cottage lawn
 	for b in [[2.5, -12.5, 2], [14.6, 5.0, 2], [63.5, 5.9, 0]]:
 		_furniture(Catalog.world_bench(b[0], b[1]), b[0], b[1], b[2]) # one bench in five is the short one
+	_furniture("trash_can", 17.0, 5.1, 0) # by the bench on the road to town, past its lamp
 
 
 # --- bushes ------------------------------------------------------------------------

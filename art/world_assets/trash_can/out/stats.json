@@ -1,0 +1,30 @@
+{
+  "name": "trash_can",
+  "triangles": 4432,
+  "materials": [
+    "bin_wood_mat",
+    "bin_iron_mat"
+  ],
+  "size_m": [
+    0.94,
+    0.597,
+    0.744
+  ],
+  "min_m": [
+    -0.47,
+    -0.303,
+    0.0
+  ],
+  "max_m": [
+    0.47,
+    0.294,
+    0.744
+  ],
+  "images": [
+    "bin_iron",
+    "bin_iron_n",
+    "bin_wood",
+    "bin_wood_n"
+  ],
+  "glb_bytes": 970688
+}

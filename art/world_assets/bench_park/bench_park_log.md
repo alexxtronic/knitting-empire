@@ -78,13 +78,28 @@ its own bake (wood at 512 px, iron at 1024 px). Rendered and looked at from six 
 
 - `assets/props/bench_park.glb` and `bench_park_short.glb` (both now centred on their footprint in depth).
   The old slatted bench, its textures and its build code in `art/world_assets/street/` are gone.
-- `data/furniture.json`: `bench` is 2.0 x 1.0 m (was 1.5 x 0.5); `bench_short` is 1.0 x 1.0 m and is not
-  sold in the Build menu.
+- `data/furniture.json`: `bench` takes 2.0 x 1.0 m of ground (was 1.5 x 0.5); `bench_short` 1.0 x 1.0 m,
+  and is not sold in the Build menu.
 - `Catalog.world_bench(x, z)` picks the bench for a place on the map: the short one for one place in
   five, decided by the position alone so the map never changes. Of today's six benches one is short
   (the plaza's west bench).
 - She sits 12 cm forward of the bench's centre, on the boards. The autotest checks all of this
   (`_bench_checks`).
+
+## Resized for the game (2026-11-11)
+
+Alex, on the first in-game picture: "why is she sinking into it, also it's much larger than she is?"
+
+- Sinking: her seat height in `main.gd` was still the old bench's 0.25 m, so she sat 19 cm inside
+  boards whose top was at 0.44 m. The seated loops put the seat at her origin, so the right height is
+  the top of the boards.
+- Oversized: measured on `assets/nora_tripo.glb` in SitIdle, her soles are 0.39 m under the seat, her
+  shoulders 0.57 m above it, her knees 0.36 m forward. The bench (seat 0.44 m, back 1.01 m, 0.83 m deep)
+  was built to the reference's proportions with a real-world seat height, too big for her.
+- Fix: `GAME_SCALE = 0.85` in `build.py`, applied to the finished model (same textures). Now 1.71 m long
+  (short: 0.86 m), 0.70 m deep, 0.86 m tall, seat at 0.374 m. She sits at 0.374 m, 3 cm forward of the
+  bench's centre, back against the slats, feet on the ground (`review/in_game/sitting_*.png`).
+- `Godot ... -- --autotest=DIR --only=bench` runs just the bench checks and their two pictures.
 
 ## Licences
 

@@ -4,7 +4,8 @@ views in plain clay (how it is built, with the paint off). White studio, no grou
     Blender -b art/world_assets/bench_park/out/bench_park.blend --python art/world_assets/bench_park/review.py -- <out_dir> [view ...]
 
 REVIEW_END_X (default 0.9) is the end casting's distance from the centre: 0.4 for the short bench, so the
-close-ups land on its arm.
+close-ups land on its arm. Other props use this script too: REVIEW_Z (default 0.47) is the height the
+cameras look at, REVIEW_SIZE (default 1) scales every camera distance.
 """
 import math
 import os
@@ -59,7 +60,8 @@ sc.camera = cam
 
 # name: (azimuth from the front towards +X, elevation, distance, look-at, size)
 EX = float(os.environ.get("REVIEW_END_X", 0.9))
-C = Vector((0, 0.0, 0.47))
+SIZE = float(os.environ.get("REVIEW_SIZE", 1.0))
+C = Vector((0, 0.0, float(os.environ.get("REVIEW_Z", 0.47))))
 VIEWS = {
     "ref": (38, 22, 3.7, C, (1280, 720)),
     "front_left": (-40, 16, 4.6, C, (960, 640)),
@@ -75,7 +77,7 @@ for name, (az, el, dist, ctr, size) in VIEWS.items():
     if only and name not in only:
         continue
     a, e = math.radians(az), math.radians(el)
-    cam.location = ctr + Vector((math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))) * dist
+    cam.location = ctr + Vector((math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))) * dist * SIZE
     cam.rotation_euler = (ctr - cam.location).to_track_quat("-Z", "Y").to_euler()
     sc.render.resolution_x, sc.render.resolution_y = size
     cam.data.lens = 36 if name == "ref" else 50

@@ -1331,8 +1331,8 @@ func _seat_point(f) -> Vector3:
 		"rocking_chair":
 			y = 0.32
 		"bench", "bench_short":
-			y = 0.25 # the boards of assets/props/bench_park.glb are 0.44 up; the seat sits forward of the back slats
-			fwd = 0.12
+			y = 0.374 # the top of the boards of assets/props/bench_park.glb: the seated loops put the seat at her origin
+			fwd = 0.03 # her back against the slats
 	return f.global_position + Vector3(0, y, 0) + f.front() * fwd
 
 
@@ -2804,6 +2804,12 @@ func _check(label: String, ok: bool) -> void:
 
 
 func _autotest() -> void:
+	if "--only=bench" in OS.get_cmdline_user_args(): # just the bench checks and their two pictures, in seconds
+		await _wait(1.5)
+		await _bench_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -2977,7 +2983,25 @@ func _bench_checks() -> void:
 		if Catalog.world_bench(float(i % 100) * 0.7, float(i / 100) * 0.7) == "bench_short":
 			picked += 1
 	_check("one bench place in five gets the short bench (%.1f%% of 5000 places)" % (picked / 50.0), picked > 850 and picked < 1150)
+	# the trash can is a model too; the ones out in the world stand by benches (Alex can move them in the editor)
+	var can := Furniture.new()
+	add_child(can)
+	can.setup("trash_can", 0)
+	var can_model: bool = can.find_children("model", "MeshInstance3D", true, false).size() == 1
+	can.queue_free()
+	var cans: Array = []
+	for n in find_children("*", "Node3D", true, false):
+		if n is Furniture and n != can and not n.is_ghost and n.item_id == "trash_can":
+			cans.append(n)
+	var by_bench: Array = cans.filter(func(c): return benches.any(func(b): return b.global_position.distance_to(c.global_position) < 3.0))
+	_check("the trash can is the barrel model (%d out in the world, %d of them by a bench)" % [cans.size(), by_bench.size()], can_model)
 	_set_cam_lock(false)
+	for i in mini(by_bench.size(), 3):
+		player.position = by_bench[i].global_position + Vector3(2.5, 0, 2.5)
+		cam_target = by_bench[i].global_position
+		cam_dist = 7.5
+		await _wait(1.6)
+		await _shot("43_trash_can_%d.png" % i)
 	for id in Catalog.BENCH_IDS:
 		var of_kind: Array = benches.filter(func(f): return f.item_id == id)
 		if of_kind.is_empty():
@@ -3606,6 +3630,9 @@ func _build_town_decor() -> void:
 		_decor("lantern", p, 0)
 	for b in [[Vector3(53.0, 0, 2.0), 2], [Vector3(53.0, 0, -4.0), 0], [Vector3(49.5, 0, -1.0), 1]]:
 		_decor(Catalog.world_bench(b[0].x, b[0].z), b[0], b[1]) # one bench in five is the short one
+	# trash cans (art/world_assets/trash_can) at the end of two plaza benches, where Alex's layout has them
+	_decor("trash_can", Vector3(54.5, 0, 2.0), 0)
+	_decor("trash_can", Vector3(56.05, 0, -2.45), 1)
 	for p in [Vector3(55.0, 0, -8.3), Vector3(58.2, 0, -8.3), Vector3(62.3, 0, -7.9), Vector3(44.9, 0, -7.9)]:
 		_decor("flower_pot", p, 0)
 	_decor("sunflowers", Vector3(45.2, 0, -12.0), 0)

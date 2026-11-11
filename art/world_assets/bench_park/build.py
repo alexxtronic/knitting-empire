@@ -10,7 +10,11 @@ glTF carries textures, not node trees. out/bench_park_shaders.blend keeps the sh
     Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/bench_park/build.py [-- name ...]
 
 BENCH_TEX (default 1024) sets the texture size, BENCH_SAMPLES (default 36) the bake samples.
-Front faces -Y here (+Z in Godot); 0.83 m deep, 1.0 m tall, seat at 0.44 m, centred on its footprint.
+The measures below are the reference's proportions with the seat at 0.44 m. The finished model is then
+scaled by GAME_SCALE to fit the game's people: Nora's feet reach the ground from a seat 0.39 m up (her
+SitIdle loop: soles 0.39 m under the seat), and at full size the bench dwarfed her. In the game: 1.71 m
+long (the short one 0.86 m), 0.70 m deep, 0.86 m tall, seat at 0.374 m, front facing -Y here (+Z in
+Godot), centred on its footprint.
 Then copy out*/<name>.glb to assets/props/ and import (see AGENTS.md).
 """
 import math
@@ -26,6 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import kelib as K  # noqa: E402
 
+GAME_SCALE = 0.85
 RES = int(os.environ.get("BENCH_TEX", 1024))
 SAMPLES = int(os.environ.get("BENCH_SAMPLES", 36))
 # end_x: centre plane of each end casting. wood_res: the boards' share of the texture size (half the
@@ -149,9 +154,9 @@ def extrude_yz(name, pts, x0, x1, mat, bevel=0.014, seg=3):
     return K.apply_mods(ob)
 
 
-def foot(x, y, mat, hx=0.088, hy=0.118):
+def foot(x, y, mat, hx=0.088, hy=0.118, h=0.08, top=0.126, inset=(0.028, 0.034)):
     """A plinth foot: a block whose top edge is chamfered up to where the leg leaves it."""
-    lv = [(hx, hy, 0.0), (hx, hy, 0.08), (hx - 0.028, hy - 0.034, 0.126)]
+    lv = [(hx, hy, 0.0), (hx, hy, h), (hx - inset[0], hy - inset[1], top)]
     verts = []
     for sx_, sy_, z in lv:
         verts += [(x - sx_, y - sy_, z), (x + sx_, y - sy_, z), (x + sx_, y + sy_, z), (x - sx_, y + sy_, z)]
@@ -171,10 +176,11 @@ def foot(x, y, mat, hx=0.088, hy=0.118):
     return K.apply_mods(ob)
 
 
-def plank(name, length, width, thick, mat, rng, radii=(0.012, 0.012, 0.012, 0.012), seg=2, stations=6):
+def plank(name, length, width, thick, mat, rng, radii=(0.012, 0.012, 0.012, 0.012), seg=2, stations=6, taper=1.0):
     """A hand-cut board along X, `width` along local Y (front is -Y), `thick` along local Z. radii are
     the corner radii: front-top, front-bottom, back-bottom, back-top. The section wanders by a
-    millimetre or two along its length and the ends are cut a touch off square."""
+    millimetre or two along its length and the ends are cut a touch off square. taper: how wide the
+    +X end is against the -X end (a barrel stave is wider at the top)."""
     hw, ht = width / 2, thick / 2
     corners = ((-1, 1, radii[0], 90), (-1, -1, radii[1], 180), (1, -1, radii[2], 270), (1, 1, radii[3], 0))
     prof = []
@@ -196,7 +202,7 @@ def plank(name, length, width, thick, mat, rng, radii=(0.012, 0.012, 0.012, 0.01
         t = (x + length / 2) / length
         k = skew[0] * (1 - t) ** 6 + skew[1] * t ** 6
         for py, pz in prof:
-            verts.append((x + py * k, py * s[0] * sc + dy, pz * s[1] + dz))
+            verts.append((x + py * k, py * s[0] * sc * (1.0 + (taper - 1.0) * t) + dy, pz * s[1] + dz))
     for i in range(len(xs) - 1):
         for j in range(ring):
             a, b = i * ring + j, i * ring + (j + 1) % ring
@@ -482,13 +488,26 @@ def shared_fields(g, edge_radius):
     return pos, edge, up, face_up, ao.outputs["AO"]
 
 
-def wood_shader(mat):
+def wood_shader(mat, grain="x", staves=0):
     """Painted orange wood: long flowing grain lines, broad lighter streaks, a pale upper edge and a
-    darker lower edge on every board, soft shadow where boards meet iron. Returns (colour, height)."""
+    darker lower edge on every board, soft shadow where boards meet iron. Returns (colour, height).
+    grain: "x" for boards lying along X (the bench), "z" for staves standing round the Z axis (a barrel:
+    the grain runs up, and `across` is the way round; with `staves`, each of that many boards, the first
+    centred on -Y, gets its own stretch of grain instead of sharing one sheet)."""
     g = Nodes(mat)
     (px, py, pz), edge, up, face_up, ao = shared_fields(g, 0.012)
-    across = g.math("ADD", g.math("MULTIPLY", py, 0.92), g.math("MULTIPLY", pz, 1.0))
-    other = g.math("SUBTRACT", g.math("MULTIPLY", py, 0.4), g.math("MULTIPLY", pz, 0.4))
+    if grain == "z":
+        ang = g.math("ARCTAN2", py, px)
+        across = g.math("MULTIPLY", ang, 0.26)
+        if staves:
+            step = 2 * math.pi / staves
+            board = g.math("FLOOR", g.math("DIVIDE", g.math("ADD", ang, math.pi / 2 + step / 2), step))
+            across = g.math("ADD", across, g.math("MULTIPLY", board, 0.37))
+        other = g.math("SQRT", g.math("ADD", g.math("MULTIPLY", px, px), g.math("MULTIPLY", py, py)))
+        px = pz
+    else:
+        across = g.math("ADD", g.math("MULTIPLY", py, 0.92), g.math("MULTIPLY", pz, 1.0))
+        other = g.math("SUBTRACT", g.math("MULTIPLY", py, 0.4), g.math("MULTIPLY", pz, 0.4))
     # grain lines: bands across the board, drawn out along it and bent by a slow noise
     wave = g.new("ShaderNodeTexWave", wave_type="BANDS", bands_direction="X", wave_profile="SIN")
     g.put(wave.inputs["Vector"], g.xyz(across, g.math("MULTIPLY", px, 0.085), other))
@@ -591,35 +610,39 @@ def to_srgb(a):
     return np.where(a <= 0.0031308, a * 12.92, 1.055 * np.power(a, 1 / 2.4) - 0.055)
 
 
-def main(name):
-    global END_X, CENTRE_LEGS
-    v = VARIANTS[name]
-    END_X, CENTRE_LEGS = v["end_x"], v["centre_legs"]
-    tex = os.path.join(HERE, "tex" + v["dir"])
-    out = os.path.join(HERE, "out" + v["dir"])
-    K.reset(name)
-    sc = bpy.context.scene
-    sc.render.engine = "CYCLES"
-    sc.cycles.samples = SAMPLES
-    sc.cycles.device = "CPU"
+def bake_materials():
+    """The two procedural materials every part is modelled with; paint_and_export fills them in."""
     wood_bake = bpy.data.materials.new("bench_wood_shader")
     iron_bake = bpy.data.materials.new("bench_iron_shader")
     for m in (wood_bake, iron_bake):
         m.use_nodes = True
-    pw, pm, steel = build_geometry(wood_bake, iron_bake, v["seed"])
-    for o in pm:
+    return wood_bake, iron_bake
+
+
+def paint_and_export(name, parts_wood, parts_metal, steel, mats, out, tex, wood_res, iron_res, grain="x",
+                     staves=0, prefix="bench", scale=1.0, centre_depth=True):
+    """Joins the parts into a wood and a metal object, unwraps them, bakes the wood and iron shaders to a
+    colour and a normal map each (images <prefix>_wood, <prefix>_iron and their _n), saves the shaders'
+    .blend and exports <name>.glb. steel: the metal parts painted as pale steel (bolt heads). Other prop
+    scripts in art/world_assets use this too, so their wood and iron match the bench's."""
+    wood_bake, iron_bake = mats
+    sc = bpy.context.scene
+    sc.render.engine = "CYCLES"
+    sc.cycles.samples = SAMPLES
+    sc.cycles.device = "CPU"
+    for o in parts_metal:
         K.apply_mods(o)
         at = o.data.attributes.new("steel", "FLOAT", "POINT")
         at.data.foreach_set("value", [1.0 if o in steel else 0.0] * len(o.data.vertices))
-    wood = join(pw, "wood")
-    metal = join(pm, "metal")
+    wood = join(parts_wood, "wood")
+    metal = join(parts_metal, "metal")
     unwrap(wood)
     unwrap(metal)
 
     done = {}
-    for ob, mat, make, label, bump, res in ((wood, wood_bake, wood_shader, "bench_wood", 0.35, int(RES * v["wood_res"])),
-                                            (metal, iron_bake, iron_shader, "bench_iron", 0.22, RES)):
-        g, col, height = make(mat)
+    for ob, mat, label, bump, res in ((wood, wood_bake, prefix + "_wood", 0.35, wood_res),
+                                      (metal, iron_bake, prefix + "_iron", 0.22, iron_res)):
+        g, col, height = wood_shader(mat, grain, staves) if ob is wood else iron_shader(mat)
         ic = bpy.data.images.new(label + "_bake", res, res, alpha=False, float_buffer=True)
         inn = bpy.data.images.new(label + "_bake_n", res, res, alpha=False, float_buffer=True)
         inn.colorspace_settings.name = "Non-Color"
@@ -635,7 +658,7 @@ def main(name):
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, name + "_shaders.blend"), copy=True)
 
-    for label, rough, spec in (("bench_wood", 0.62, 0.35), ("bench_iron", 0.52, 0.45)):
+    for label, rough, spec in ((prefix + "_wood", 0.62, 0.35), (prefix + "_iron", 0.52, 0.45)):
         ob, colour, normal = done[label]
         alb = K.save_image(label, colour, tex)
         nrm = K.save_image(label + "_n", normal, tex)
@@ -647,14 +670,28 @@ def main(name):
     for img in list(bpy.data.images):
         if img.name.endswith("_bake") or img.name.endswith("_bake_n"):
             bpy.data.images.remove(img)
-    # centre the bench on its footprint in depth (the back curls overhang more than the seat front),
-    # after the bake: the shaders paint in the model's own space
+    # centre the model on its footprint in depth (the bench's back curls overhang more than the seat
+    # front) and bring it to its size in the game, after the bake: the shaders paint in the model's own space
     ys = [(o.matrix_world @ p.co).y for o in (wood, metal) for p in o.data.vertices]
     for o in (wood, metal):
-        o.location.y -= (min(ys) + max(ys)) / 2
+        if centre_depth:
+            o.location.y = -(min(ys) + max(ys)) / 2 * scale
+        o.scale = (scale, scale, scale)
     K.finish(name, out)
 
 
-names = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(VARIANTS)
-for n in names:
-    main(n)
+def main(name):
+    global END_X, CENTRE_LEGS
+    v = VARIANTS[name]
+    END_X, CENTRE_LEGS = v["end_x"], v["centre_legs"]
+    K.reset(name)
+    mats = bake_materials()
+    pw, pm, steel = build_geometry(mats[0], mats[1], v["seed"])
+    paint_and_export(name, pw, pm, steel, mats, os.path.join(HERE, "out" + v["dir"]), os.path.join(HERE, "tex" + v["dir"]),
+                     int(RES * v["wood_res"]), RES, scale=GAME_SCALE)
+
+
+if __name__ == "__main__":
+    names = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(VARIANTS)
+    for n in names:
+        main(n)
