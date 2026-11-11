@@ -174,7 +174,8 @@
       "where": "out",
       "height": 0.9,
       "id": "fence",
-      "shop": "yard"
+      "shop": "yard",
+      "model": "res://assets/props/fence_picket.glb"
     },
     {
       "name": "Garden Bench",
@@ -211,7 +212,8 @@
       "where": "out",
       "height": 1.7,
       "id": "lantern",
-      "shop": "yard"
+      "shop": "yard",
+      "model": "res://assets/props/lamp_post.glb"
     },
     {
       "name": "Hay Bale",

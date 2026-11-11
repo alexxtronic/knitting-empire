@@ -19,6 +19,7 @@ const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
+const Nature = preload("res://scripts/nature.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -68,6 +69,7 @@ var furniture: Array = []
 var plots: Array = []
 var sheep_list: Array = []
 var grass # grass.gd: the ground and the blades
+var nature # nature.gd: rocks, plants, hedges, fences, lamp posts and benches
 var pond_rect := Rect2()
 var bin: Node3D
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
@@ -159,6 +161,9 @@ func _ready() -> void:
 	add_child(grass)
 	World.build_ground(self, LOT)
 	World.build_trees(self, [LOT, Town.ROAD.grow(0.8), Town.TOWN])
+	nature = Nature.new()
+	add_child(nature)
+	grid_blockers.append_array(nature.build(self, _nature_keep()))
 	var town := Town.build(self)
 	grid_blockers.append_array(town["blockers"])
 	price_board = town["board"]
@@ -557,6 +562,23 @@ func interior_rect() -> Rect2:
 func house_rect() -> Rect2:
 	var z0 := _zmin()
 	return Rect2(-WALL_T * 0.5, z0 - WALL_T * 0.5, HOUSE_W + WALL_T, HOUSE_FRONT - z0 + WALL_T)
+
+
+## Rock, plant and fence placement (scripts/nature.gd) keeps clear of these: the house and its
+## doorway, the beds, the pen, the pond, the barn, every path and building in town, the story's
+## named places.
+func _nature_keep() -> Array:
+	var keep: Array = [Rect2(-0.8, -13.0, 10.0, 20.0), Rect2(10.0, -2.4, 6.0, 5.0), PEN.grow(0.6), Rect2(0.0, -18.5, 5.0, 5.0),
+		Rect2(18.9, -11.6, 5.2, 4.2), Rect2(9.7, 4.2, 1.2, 0.9), Town.ROAD, Town.PLAZA, Town.SHOP, Town.OFFICE, Town.BAKERY,
+		Town.COTTAGE.grow(0.6), Rect2(56.0, 4.4, 2.0, 1.4)]
+	keep.append_array(World.PATHS)
+	keep.append_array(Town.PATHS)
+	var d := Data.load_json("areas")
+	for k in d.get("areas", {}):
+		var a: Array = d["areas"][k]
+		if k != "cottage_inside":
+			keep.append(Rect2(float(a[0]), float(a[1]), float(a[2]), float(a[3])))
+	return keep
 
 
 ## Where grass grows: not on paths, in the beds, under buildings and the house, or in the pond.
