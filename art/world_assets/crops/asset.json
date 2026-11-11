@@ -1,0 +1,18 @@
+{
+  "title": "Crops",
+  "subject": "stylised painterly farm crops in a 1 m plot: pumpkins or turnips, cozy game prop",
+  "collection_prefix": "KE_",
+  "hdri": "",
+  "hdri_strength": 0.07,
+  "hdri_rotation_deg": 215.0,
+  "ground": "asphalt",
+  "ground_z": -0.001,
+  "cameras": {
+    "hero": [[1.15, -1.15, 0.85], [0.0, 0.0, 0.14], 50],
+    "game": [[1.6, -1.6, 2.6], [0.0, 0.0, 0.05], 50],
+    "side": [[0.0, -1.9, 0.3], [0.0, 0.0, 0.14], 50],
+    "detail": [[0.5, -0.62, 0.42], [0.05, -0.08, 0.16], 50]
+  },
+  "final": {"res": [1600, 1066], "samples": 128},
+  "preview": {"res": [960, 640], "samples": 48}
+}

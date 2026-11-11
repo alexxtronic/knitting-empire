@@ -1734,6 +1734,8 @@ func _new_world() -> void:
 	_spawn_furniture("rocking_chair", Vector3(2.4, 0, 3.6), 3)
 	_spawn_furniture("coffee_table", Vector3(3.6, 0, 3.0), 0)
 	_spawn_furniture("yarn_basket", Vector3(2.25, 0, 2.25), 0)
+	_spawn_furniture("yarn_balls", Vector3(2.0, 0, 4.4), 0)
+	_spawn_furniture("knitting_needles", Vector3(2.85, 0, 1.55), 0)
 	_spawn_furniture("lamp", Vector3(1.45, 0, 4.55), 0)
 	_spawn_furniture("bed", Vector3(6.85, 0, 1.1), 0)
 	_spawn_furniture("kitchen", Vector3(1.2, 0, 0.6), 0)
@@ -2468,11 +2470,23 @@ func _take_asset_frames() -> void:
 		["asset_bakery.png", Vector3(41.75, 2.0, -10.75), 10.5, 22.0, 10.5, 16.0],
 		["asset_office.png", Vector3(64.25, 2.0, -11.0), 10.5, -20.0, 10.5, 16.0],
 		["asset_shop_dusk.png", Vector3(56.5, 2.0, -11.5), 11.0, -12.0, 19.6, 16.0],
+		# the crops (art/world_assets/crops): pumpkins growing along the back row, turnips the next,
+		# then the ripe ones close up; and the yarn and needles by the rocking chair (art/world_assets/yarn)
+		["asset_crops.png", Vector3(12.8, 0.2, -0.4), 6.0, 15.0, 10.5, 34.0],
+		["asset_crops_low.png", Vector3(13.4, 0.25, -0.4), 3.6, 25.0, 10.5, 18.0],
+		["asset_crops_ripe.png", Vector3(14.6, 0.25, -0.5), 2.4, 20.0, 10.5, 24.0],
+		# (the camera looks 0.6 m above its target, so floor-level things get a target below the floor)
+		["asset_yarn_basket.png", Vector3(2.55, -0.4, 1.95), 2.0, 35.0, 10.5, 36.0],
+		["asset_yarn_balls.png", Vector3(2.0, -0.45, 4.35), 1.6, 80.0, 10.5, 32.0],
+		["asset_needles.png", Vector3(2.85, -0.45, 1.55), 1.3, 20.0, 10.5, 55.0],
 	]
-	plots[0].plant("pumpkin")
-	plots[1].plant("turnip")
-	plots[1].water()
-	plots[2].water()
+	# pumpkins at each stage on the back row, turnips on the next (Plot.stage(): 0, 1/3, 2/3, ripe)
+	for k in 4:
+		for row in 2:
+			var pl = plots[row * 4 + k]
+			pl.plant("pumpkin" if row == 0 else "turnip")
+			pl.growth = pl.hours_needed() * [0.0, 0.4, 0.75, 1.0][k]
+			pl.water()
 	spawn_prop("bus", "asset_bus", Vector3(31.0, 0, 3.0))
 	for v in views:
 		player.position = v[1] + Vector3(1.5, 0, 2.0)
@@ -2663,6 +2677,26 @@ func _polish_checks() -> void:
 	var want: Array[String] = ["bakery", "office", "shop"]
 	_check("town buildings are the modelled shop, bakery and land office, each with its sign (%s)" % ", ".join(built),
 		built == want)
+	# crops show their modelled growth stages (art/world_assets/crops); the yarn set is modelled too
+	var pl = plots[plots.size() - 1]
+	var saved: Dictionary = pl.to_dict()
+	var staged: Array[String] = []
+	for c in ["turnip", "pumpkin"]:
+		for k in 4:
+			pl.plant(c)
+			pl.growth = pl.hours_needed() * [0.0, 0.4, 0.75, 1.0][k]
+			pl.refresh()
+			for n in pl.crop_root.get_children():
+				if not n.is_queued_for_deletion() and str(n.name).begins_with("CropModel"):
+					staged.append("%s %d" % [c, k])
+	pl.from_dict(saved)
+	var yarn_models := 0
+	for id in ["yarn_basket", "yarn_balls", "knitting_needles"]:
+		var path := str(Catalog.ITEMS.get(id, {}).get("model", ""))
+		if path != "" and ResourceLoader.exists(path):
+			yarn_models += 1
+	_check("crops grow through four modelled stages and the yarn basket, yarn balls and needles are models (%d of 8 stages, %d of 3 yarn models)" % [staged.size(), yarn_models],
+		staged.size() == 8 and yarn_models == 3)
 	var steps_g := int(audio.played.get("step_grass", 0))
 	var steps_w := int(audio.played.get("step_wood", 0))
 	var needles := int(audio.played.get("needle", 0))

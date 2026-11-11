@@ -1,0 +1,40 @@
+{
+  "name": "crop_turnip_0",
+  "triangles": 1212,
+  "materials": [
+    "turnip_stalk",
+    "turnip_leaf"
+  ],
+  "size_m": [
+    0.692,
+    0.558,
+    0.078
+  ],
+  "min_m": [
+    -0.349,
+    -0.261,
+    0.069
+  ],
+  "max_m": [
+    0.343,
+    0.296,
+    0.148
+  ],
+  "images": [
+    "pumpkin_green",
+    "pumpkin_green_n",
+    "pumpkin_leaf",
+    "pumpkin_leaf_n",
+    "pumpkin_skin",
+    "pumpkin_skin_n",
+    "pumpkin_small",
+    "pumpkin_small_n",
+    "pumpkin_stem",
+    "pumpkin_stem_n",
+    "turnip_bulb",
+    "turnip_bulb_n",
+    "turnip_leaf",
+    "turnip_leaf_n"
+  ],
+  "glb_bytes": 219072
+}

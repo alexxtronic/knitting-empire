@@ -118,7 +118,28 @@
       "where": "in",
       "height": 0.45,
       "id": "yarn_basket",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/yarn_basket.glb"
+    },
+    {
+      "name": "Yarn Balls",
+      "price": 45,
+      "size": [0.5, 0.5],
+      "where": "in",
+      "height": 0.2,
+      "id": "yarn_balls",
+      "shop": "indoors",
+      "model": "res://assets/props/yarn_balls.glb"
+    },
+    {
+      "name": "Knitting Needles",
+      "price": 25,
+      "size": [0.5, 0.5],
+      "where": "in",
+      "height": 0.06,
+      "id": "knitting_needles",
+      "shop": "indoors",
+      "model": "res://assets/props/knitting_needles.glb"
     },
     {
       "name": "Wool Rug",

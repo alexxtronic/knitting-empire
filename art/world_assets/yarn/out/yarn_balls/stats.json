@@ -1,0 +1,39 @@
+{
+  "name": "yarn_balls",
+  "triangles": 20364,
+  "materials": [
+    "yarn_sage",
+    "yarn_mustard",
+    "yarn_rose",
+    "yarn_cream",
+    "yarn_blue"
+  ],
+  "size_m": [
+    0.654,
+    0.512,
+    0.213
+  ],
+  "min_m": [
+    -0.307,
+    -0.343,
+    0.005
+  ],
+  "max_m": [
+    0.347,
+    0.169,
+    0.219
+  ],
+  "images": [
+    "yarn_blue",
+    "yarn_blue_n",
+    "yarn_cream",
+    "yarn_cream_n",
+    "yarn_mustard",
+    "yarn_mustard_n",
+    "yarn_rose",
+    "yarn_rose_n",
+    "yarn_sage",
+    "yarn_sage_n"
+  ],
+  "glb_bytes": 764408
+}

@@ -1,0 +1,27 @@
+{
+  "name": "knitting_needles",
+  "triangles": 840,
+  "materials": [
+    "needle_wood"
+  ],
+  "size_m": [
+    0.363,
+    0.229,
+    0.067
+  ],
+  "min_m": [
+    -0.182,
+    -0.12,
+    0.006
+  ],
+  "max_m": [
+    0.182,
+    0.109,
+    0.073
+  ],
+  "images": [
+    "needle_wood",
+    "needle_wood_n"
+  ],
+  "glb_bytes": 83400
+}

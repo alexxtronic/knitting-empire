@@ -12,6 +12,9 @@ const WET := Color(0.30, 0.20, 0.13)
 ## rim. Its tilled soil uses the material "Soil_plot", which gets darker while the plot is watered.
 const MODEL := "res://assets/props/dirt_plot.glb"
 const CROP_LIFT := 0.07 # crops stand on the furrows, which are higher than the old flat soil
+## The crop models (art/world_assets/crops): crop_<id>_<stage>.glb, one per growth stage, sized to
+## the plot with their plants on the furrows. Without one a crop falls back to simple shapes.
+const CROP_MODEL := "res://assets/props/crop_%s_%d.glb"
 
 var crop := ""
 var growth := 0.0 # in-game hours of growth
@@ -136,6 +139,16 @@ func refresh() -> void:
 	for c in crop_root.get_children():
 		c.queue_free()
 	crop_root.position.y = 0
+	if _stage >= 0 and ResourceLoader.exists(CROP_MODEL % [crop, _stage]):
+		var inst := Catalog.model(CROP_MODEL % [crop, _stage], crop_root)
+		if inst:
+			inst.name = "CropModel"
+			# half the plots turn their crop round, so a field of them doesn't repeat exactly
+			if int(absf(position.x * 3.1 + position.z * 1.7)) % 2 == 1:
+				inst.rotation.y = PI
+			if _stage == 3:
+				Catalog.glow(Catalog.ball(crop_root, 0.05, Vector3(0, 0.85, 0), Color(1.0, 0.9, 0.4)), Color(1.0, 0.9, 0.4), 3.0)
+			return
 	var leaf := Catalog.LEAF
 	match _stage:
 		0:

@@ -1,0 +1,46 @@
+{
+  "name": "crop_pumpkin_2",
+  "triangles": 6112,
+  "materials": [
+    "pumpkin_vine",
+    "pumpkin_leaf",
+    "pumpkin_tendril",
+    "pumpkin_flower",
+    "pumpkin_flower_in",
+    "pumpkin_green",
+    "pumpkin_stem",
+    "pumpkin_stem_tip"
+  ],
+  "size_m": [
+    1.078,
+    1.001,
+    0.277
+  ],
+  "min_m": [
+    -0.507,
+    -0.456,
+    0.04
+  ],
+  "max_m": [
+    0.57,
+    0.545,
+    0.317
+  ],
+  "images": [
+    "pumpkin_green",
+    "pumpkin_green_n",
+    "pumpkin_leaf",
+    "pumpkin_leaf_n",
+    "pumpkin_skin",
+    "pumpkin_skin_n",
+    "pumpkin_small",
+    "pumpkin_small_n",
+    "pumpkin_stem",
+    "pumpkin_stem_n",
+    "turnip_bulb",
+    "turnip_bulb_n",
+    "turnip_leaf",
+    "turnip_leaf_n"
+  ],
+  "glb_bytes": 1516092
+}

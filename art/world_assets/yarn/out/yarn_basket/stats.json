@@ -1,0 +1,45 @@
+{
+  "name": "yarn_basket",
+  "triangles": 21360,
+  "materials": [
+    "wicker",
+    "yarn_sage",
+    "yarn_mustard",
+    "yarn_rose",
+    "yarn_cream",
+    "yarn_blue",
+    "needle_wood"
+  ],
+  "size_m": [
+    0.48,
+    0.48,
+    0.422
+  ],
+  "min_m": [
+    -0.24,
+    -0.24,
+    0.0
+  ],
+  "max_m": [
+    0.24,
+    0.24,
+    0.422
+  ],
+  "images": [
+    "needle_wood",
+    "needle_wood_n",
+    "wicker",
+    "wicker_n",
+    "yarn_blue",
+    "yarn_blue_n",
+    "yarn_cream",
+    "yarn_cream_n",
+    "yarn_mustard",
+    "yarn_mustard_n",
+    "yarn_rose",
+    "yarn_rose_n",
+    "yarn_sage",
+    "yarn_sage_n"
+  ],
+  "glb_bytes": 922132
+}
