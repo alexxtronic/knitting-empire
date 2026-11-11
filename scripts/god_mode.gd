@@ -18,8 +18,13 @@ extends Node3D
 ##   "roads"    the painted road map (a PNG, base64): red = dirt, green = gravel, blue = cobbles
 ## With no file, or a part missing from it, that part of the world is exactly what the code builds.
 ##
-## Not editable here: Nora's house, Rosewood Cottage, the sheep pen and the pond (the game's rules
-## are tied to where they stand), the villagers and the sheep.
+## The Place tool's drop-down lists everything that can be set down one at a time: every kind of
+## scenery, every model in assets/props (a kind that the code never scatters, such as the single
+## maple leaves, becomes scenery of its own the first time one is placed) and every catalog piece.
+##
+## Not editable here: Nora's house and Rosewood Cottage (the game's rules are tied to where they
+## stand), the villagers and the sheep. The sheep pen moves as one piece and turns in quarter
+## turns; the sheep and their field go with it.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const World = preload("res://scripts/world.gd")
@@ -32,7 +37,14 @@ const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
 const ROAD_PX := 8 # pixels of the painted road map per metre
 const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1)}
-const TOOLS := [["select", "Select & move"], ["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["erase", "Erase road"]]
+const TOOLS := [["select", "Select & move"], ["place", "Place"], ["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["erase", "Erase road"]]
+const BRUSH_MAX := 15.0 # metres (radius)
+## Scenery that is set down turned and sized a little at random, as the code scatters it.
+const NATURAL := ["tree_", "rock_", "bush_", "tuft_", "flowers_", "clover", "leaf_", "maple_"]
+## Scenery you walk through: it never blocks the way.
+const SOFT := ["bush_", "tuft_", "flowers_", "clover", "leaf_", "crop_"]
+## Models the Place list leaves out: paving (painted instead), rigged animals, the working crop plot.
+const NOT_PLACED := ["cobble_", "sheep_", "dirt_plot"]
 ## Painted cobbles are the 4 x 2 m plaza tiles on a fixed grid (it lines up with the plaza the code
 ## builds), each drawn only where it was painted (shaders/cobble_painted.gdshader).
 const TILE := Vector2(4.0, 2.0)
@@ -47,7 +59,9 @@ const TITLES := {
 	"bush_round": "Round bush", "bush_tall": "Tall bush", "bush_berry": "Berry bush", "bush_autumn": "Autumn bush",
 	"tuft_small": "Grass tuft (small)", "tuft_mid": "Grass tuft", "tuft_tall": "Grass tuft (tall)", "flowers_daisy": "Daisies",
 	"flowers_buttercup": "Buttercups", "flowers_wild": "Wild flowers", "flowers_poppy": "Poppies", "clover_patch": "Clover",
-	"barn": "Barn", "bin": "Shipping bin", "plot": "Crop plot",
+	"barn": "Barn", "bin": "Shipping bin", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
+	"leaf_yellow": "Maple leaf (gold)", "leaf_red": "Maple leaf (red)", "leaf_green": "Maple leaf (green)",
+	"maple_tree": "Maple tree (large)", "maplewood_bus": "Maplewood bus",
 }
 
 
@@ -87,10 +101,13 @@ var orphans := {} # saved node edits that match nothing the code builds now (kep
 var unknown_scenery := {} # saved scenery lists for kinds the game no longer has (kept in the file)
 var plots_edited := false
 var unsaved := false
+var loaded := false # a layout file was read and applied at launch
 var selected: El
 var hover: El
 var tool := "select"
-var brush := 1.2 # metres (radius)
+var brush := 1.2 # metres (radius, or half the side of the square brush)
+var brush_square := false
+var place_id := "" # what the Place tool sets down: "scenery:<model>" or "decor:<catalog id>"
 var small_on := true
 var roads_on := false # the layout has painted roads: the code's own paths and cobbles are replaced by the map
 var road_img: Image
@@ -107,6 +124,14 @@ var _painting := false
 var _stroke_rect := Rect2()
 var _stroke_before := PackedByteArray()
 var _last_dab := Vector3.ZERO
+var _line_on := false # Shift held while painting: a straight line from _line_from
+var _line_from := Vector3.ZERO
+var _line_base := PackedByteArray() # the road map as it was when the line began
+var _pen_at := Vector3.ZERO
+var _pen_place := Rect2()
+var _pond: El
+var _place_pick: OptionButton
+var _shape_btn: Button
 var _mask_dirty := false
 var _mask_t := 0.0
 var _mouse := Vector2.ZERO
@@ -158,6 +183,13 @@ func collect() -> void:
 	_collect_node(main.bin, "bin", "Shipping bin", [Rect2(bp.x - 0.5, bp.z - 0.35, 1.0, 0.7)])
 	for p in main.plots:
 		_collect_node(p, "plot", "Crop plot", [])
+	if World.pen != null and is_instance_valid(World.pen):
+		_collect_node(World.pen, "pen", "Sheep pen", World.pen_blocks)
+		_pen_at = World.pen.position
+		_pen_place = (main.PEN as Rect2).grow(0.3) # main.gd keeps furniture out of the pen
+	_pond = null
+	if World.pond != null and is_instance_valid(World.pond):
+		_pond = _collect_node(World.pond, "pond", "Pond", [main.pond_rect])
 
 
 func _collect_mmi(mmi: MultiMeshInstance3D, kind: String) -> void:
@@ -298,6 +330,18 @@ func _apply(el: El) -> void:
 		(n.get_meta("water") as ShaderMaterial).set_shader_parameter("centre", el.xf.origin)
 	if el.kind == "plot" and (el.deleted or not el.xf.is_equal_approx(el.base)):
 		plots_edited = true
+	if el.kind == "pond" and World.water_mat != null:
+		World.water_mat.set_shader_parameter("centre", el.xf.origin)
+	if el.kind == "pen":
+		# the sheep and the field they wander go with the fence
+		var d: Vector3 = el.xf.origin - _pen_at
+		if d.length() > 0.0001:
+			_pen_at = el.xf.origin
+			main.pen_rect.position += Vector2(d.x, d.z)
+			for s in main.sheep_list:
+				s.pen.position += Vector2(d.x, d.z)
+				s.position += d
+				s._target += d
 
 
 func _apply_leaves(el: El) -> void:
@@ -402,15 +446,26 @@ func _block_rects(el: El) -> Array:
 			out.append(_turned(Rect2(-1.0 * s.x, -0.45, 2.0 * s.x, 0.9), _yaw(el.xf), o))
 		elif el.kind == "fence_picket":
 			out.append(_turned(Rect2(-0.5 * s.x, -0.12, 1.0 * s.x, 0.24), _yaw(el.xf), o))
-		else:
+		elif el.kind.begins_with("rock_"):
 			for k in Nature.ROCKS.values():
 				if k[0] == el.kind:
 					out.append(Rect2(o.x - float(k[2]) * s.x, o.y - float(k[3]) * s.x, float(k[2]) * s.x * 2.0, float(k[3]) * s.x * 2.0))
+		elif not _starts(el.kind, SOFT) and el.bounds.size.y * s.y > 0.5:
+			# any other solid model: the box round its footprint
+			var b := el.bounds
+			out.append(_turned(Rect2(b.position.x * s.x, b.position.z * s.z, b.size.x * s.x, b.size.z * s.z), _yaw(el.xf), o))
 		return out
 	var turn := _yaw(el.xf) - _yaw(el.base)
 	for r in el.block_local:
 		out.append(_turned(r, turn, o))
 	return out
+
+
+static func _starts(kind: String, prefixes: Array) -> bool:
+	for p in prefixes:
+		if kind.begins_with(p):
+			return true
+	return false
 
 
 ## A ground rect (x, z) turned about the origin by `yaw`, then moved to `o`: the box around it.
@@ -441,6 +496,13 @@ func _reblock(el: El) -> Array:
 			main.grid_blockers.append(r)
 			main.place_blockers.append(r)
 			changed.append(r)
+	if el.kind == "pen":
+		main.place_blockers.erase(_pen_place)
+		_pen_place = (main.pen_rect as Rect2).grow(0.3)
+		if not el.deleted:
+			main.place_blockers.append(_pen_place)
+	if el.kind == "pond":
+		main.pond_rect = el.block_world[0] if not el.block_world.is_empty() else Rect2()
 	if el.kind == "plot" and plots_edited:
 		changed.append_array(_bed_blocks)
 		changed.append(BEDS)
@@ -460,6 +522,13 @@ func _sync_beds() -> void:
 			var r := Rect2(el.xf.origin.x - 0.6, el.xf.origin.z - 0.6, 1.2, 1.2)
 			_bed_blocks.append(r)
 			main.place_blockers.append(r)
+
+
+## Where no grass grows because of the pond: (x, z, radius). main.gd's grass mask asks for this.
+func pond_circles() -> Array:
+	if _pond == null:
+		return [Vector3(2.5, -16.0, 2.55)]
+	return [] if _pond.deleted else [Vector3(_pond.xf.origin.x, _pond.xf.origin.z, 2.55)]
 
 
 ## Worn earth under the crop plots (main.gd's grass mask asks for this).
@@ -506,10 +575,11 @@ func load_layout() -> void:
 	if typeof(d) != TYPE_DICTIONARY:
 		push_warning("world layout: %s isn't valid JSON, so the world is as the code builds it" % layout_path)
 		return
+	loaded = true
 	var sc: Dictionary = d.get("scenery", {})
 	var trees_changed := false
 	for kind in sc:
-		if not templates.has(kind):
+		if not _ensure_kind(str(kind)):
 			unknown_scenery[kind] = sc[kind]
 			continue
 		for old in scenery[kind]:
@@ -706,6 +776,8 @@ func set_tool(t: String) -> void:
 	tool = t
 	for k in _tool_btns:
 		(_tool_btns[k] as Button).set_pressed_no_signal(k == t)
+	if t == "place" and place_id == "":
+		place_id = str(place_options()[0][0])
 	if t != "select":
 		select(null)
 		hover = null
@@ -803,6 +875,11 @@ func press(mpos: Vector2) -> void:
 	_mouse = mpos
 	_end_stroke()
 	_drag = {}
+	if tool == "place":
+		var spot = main._ground_point(mpos)
+		if spot != null:
+			place(spot)
+		return
 	if tool != "select":
 		_begin_stroke(mpos)
 		return
@@ -819,7 +896,7 @@ func move(mpos: Vector2, snap := false) -> void:
 	if _painting:
 		var g = main._ground_point(mpos)
 		if g != null:
-			_stroke_to(g)
+			_stroke_to(g, snap)
 	elif not _drag.is_empty():
 		var g = main._ground_point(mpos)
 		if g == null:
@@ -865,6 +942,8 @@ func rotate_selected(degrees: float) -> void:
 	if selected == null or selected.deleted:
 		return
 	var from := selected.xf
+	if selected.kind == "pen":
+		degrees = signf(degrees) * 90.0 # the sheep's field is square to the map, so the pen turns in quarter turns
 	selected.xf.basis = Basis(Vector3.UP, deg_to_rad(degrees)) * selected.xf.basis
 	_edited(selected, from, false)
 
@@ -889,28 +968,106 @@ func duplicate_selected() -> El:
 	var at := src.xf.origin + right * clampf(src.radius * 0.8, 0.6, 3.0)
 	var el: El
 	if src.scenery:
-		el = El.new()
-		el.kind = src.kind
-		el.title = src.title
-		el.scenery = true
-		el.tint = src.tint
-		el.bounds = src.bounds
-		el.base = Transform3D(src.xf.basis, at)
-		el.xf = el.base
-		_measure(el)
-		els.append(el)
-		scenery[el.kind].append(el)
-		baked[el.kind] = true
-		if el.kind.begins_with("tree_"):
-			_new_leaves(el)
-		_rebuild_kind(el.kind)
-		if el.kind.begins_with("tree_"):
-			_rebuild_litter()
+		el = _add_scenery(src.kind, Transform3D(src.xf.basis, at), src.tint)
 	elif src.node is Furniture:
 		el = _add_decor(str(src.node.get("item_id")), at, _yaw(src.xf))
 	else:
 		main.hud.show_toast("The %s is one of a kind: it can be moved, turned or deleted, not copied." % src.title.to_lower())
 		return null
+	undo_stack.append(["add", el])
+	_refresh(_reblock(el))
+	select(el)
+	return el
+
+
+## One more of a kind of scenery, where `xf` says.
+func _add_scenery(kind: String, xf: Transform3D, tint := Color.WHITE) -> El:
+	var el := El.new()
+	el.kind = kind
+	el.title = TITLES.get(kind, kind.capitalize())
+	el.scenery = true
+	el.tint = tint
+	el.bounds = (templates[kind]["mesh"] as Mesh).get_aabb()
+	el.base = xf
+	el.xf = xf
+	_measure(el)
+	els.append(el)
+	scenery[kind].append(el)
+	baked[kind] = true
+	if kind.begins_with("tree_"):
+		_new_leaves(el)
+	_rebuild_kind(kind)
+	if kind.begins_with("tree_"):
+		_rebuild_litter()
+	return el
+
+
+## Makes sure a kind of scenery can be drawn: the ones the code scatters already can; any other
+## model in assets/props gets its own MultiMeshes the first time it's needed.
+func _ensure_kind(kind: String) -> bool:
+	if templates.has(kind):
+		return true
+	var mesh: ArrayMesh = main.nature._mesh(kind)
+	if mesh == null:
+		return false
+	templates[kind] = {"parent": main.nature, "mesh": mesh, "shadow": GeometryInstance3D.SHADOW_CASTING_SETTING_ON, "view": 90.0,
+		"margin": 6.0, "seasonal": false, "tree": false, "mmis": []}
+	scenery[kind] = []
+	return true
+
+
+## Everything the Place tool can set down, as [id, name, group]: every kind of scenery and every
+## model in assets/props ("scenery:<model>"), and every catalog piece ("decor:<id>").
+func place_options() -> Array:
+	var models := {}
+	for kind in templates:
+		models[kind] = true
+	var in_catalog := {}
+	for id in Catalog.ITEMS:
+		in_catalog[str(Catalog.ITEMS[id].get("model", "")).get_file().get_basename()] = true
+	for f in DirAccess.get_files_at(Nature.P):
+		var m := f.get_basename()
+		if f.ends_with(".glb") and not _starts(m, NOT_PLACED) and not in_catalog.has(m):
+			models[m] = true
+	var out: Array = []
+	var names: Array = models.keys()
+	names.sort()
+	for group in [["Trees", ["tree_", "maple_"]], ["Rocks", ["rock_"]], ["Plants", ["bush_", "tuft_", "flowers_", "clover"]], ["Leaves", ["leaf_"]], ["Hedges and fences", ["hedge", "fence_"]]]:
+		for m in names:
+			if _starts(m, group[1]):
+				out.append(["scenery:" + m, TITLES.get(m, str(m).capitalize()), group[0]])
+				models.erase(m)
+	var decor: Array = []
+	for id in Catalog.ITEMS:
+		if Catalog.has_builder(id):
+			decor.append(["decor:" + str(id), str(Catalog.ITEMS[id]["name"]), "Furniture and decor"])
+	decor.sort_custom(func(a, b): return str(a[1]) < str(b[1]))
+	out.append_array(decor)
+	for m in names:
+		if models.has(m):
+			out.append(["scenery:" + m, TITLES.get(m, str(m).capitalize()), "Other models"])
+	return out
+
+
+## Sets one of the chosen thing down at a spot on the ground (the Place tool), and selects it.
+func place(at: Vector3) -> El:
+	if place_id == "":
+		place_id = str(place_options()[0][0])
+	var what := place_id.get_slice(":", 1)
+	var el: El
+	if place_id.begins_with("decor:"):
+		if not Catalog.ITEMS.has(what):
+			return null
+		el = _add_decor(what, Vector3(at.x, 0, at.z), 0.0)
+	else:
+		if not _ensure_kind(what):
+			main.hud.show_toast("There's no model for that.")
+			return null
+		var natural := _starts(what, NATURAL)
+		var s := randf_range(0.9, 1.15) if natural else 1.0
+		var yaw := randf() * TAU if natural else 0.0
+		var y := -0.03 * s if what.begins_with("rock_") else 0.0
+		el = _add_scenery(what, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), Vector3(at.x, y, at.z)))
 	undo_stack.append(["add", el])
 	_refresh(_reblock(el))
 	select(el)
@@ -970,9 +1127,9 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 			if save_layout():
 				main.hud.show_toast("World layout saved.")
 		KEY_BRACKETLEFT:
-			set_brush(brush - 0.2)
+			set_brush(brush - maxf(0.2, brush * 0.15))
 		KEY_BRACKETRIGHT:
-			set_brush(brush + 0.2)
+			set_brush(brush + maxf(0.2, brush * 0.15))
 		KEY_ESCAPE:
 			if tool != "select":
 				set_tool("select")
@@ -986,10 +1143,17 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 
 
 func set_brush(r: float) -> void:
-	brush = clampf(r, 0.3, 6.0)
+	brush = clampf(r, 0.3, BRUSH_MAX)
 	if _brush_slider != null:
 		_brush_slider.set_value_no_signal(brush)
 		_brush_label.text = "%.1f m" % (brush * 2.0)
+	_draw_ring()
+
+
+func set_brush_square(on: bool) -> void:
+	brush_square = on
+	if _shape_btn != null:
+		_shape_btn.text = "Square brush" if on else "Round brush"
 	_draw_ring()
 
 
@@ -1111,15 +1275,20 @@ func _dab(p: Vector3) -> void:
 	var col: Color = ROAD_COLOURS.get(tool, Color(0, 0, 0))
 	var w := road_img.get_width()
 	var h := road_img.get_height()
-	for y in range(maxi(0, floori(c.y - r)), mini(h, ceili(c.y + r))):
-		var dy := y + 0.5 - c.y
-		if absf(dy) > r:
-			continue
-		var half := sqrt(r * r - dy * dy)
-		var x0 := maxi(0, roundi(c.x - half))
-		var x1 := mini(w, roundi(c.x + half))
-		if x1 > x0:
-			road_img.fill_rect(Rect2i(x0, y, x1 - x0, 1), col)
+	if brush_square:
+		var px := Rect2i(roundi(c.x - r), roundi(c.y - r), roundi(r * 2.0), roundi(r * 2.0)).intersection(Rect2i(0, 0, w, h))
+		if px.size.x > 0 and px.size.y > 0:
+			road_img.fill_rect(px, col)
+	else:
+		for y in range(maxi(0, floori(c.y - r)), mini(h, ceili(c.y + r))):
+			var dy := y + 0.5 - c.y
+			if absf(dy) > r:
+				continue
+			var half := sqrt(r * r - dy * dy)
+			var x0 := maxi(0, roundi(c.x - half))
+			var x1 := mini(w, roundi(c.x + half))
+			if x1 > x0:
+				road_img.fill_rect(Rect2i(x0, y, x1 - x0, 1), col)
 	var touched := Rect2(p.x - brush, p.z - brush, brush * 2.0, brush * 2.0)
 	_stroke_rect = touched if _stroke_rect.size == Vector2.ZERO else _stroke_rect.merge(touched)
 
@@ -1130,6 +1299,7 @@ func _begin_stroke(mpos: Vector2) -> void:
 		return
 	_enable_roads(true)
 	_painting = true
+	_line_on = false
 	_stroke_before = road_img.get_data()
 	_stroke_rect = Rect2()
 	_last_dab = g
@@ -1137,8 +1307,29 @@ func _begin_stroke(mpos: Vector2) -> void:
 	_stroke_shown(Rect2(g.x - brush, g.z - brush, brush * 2.0, brush * 2.0))
 
 
-func _stroke_to(g: Vector3) -> void:
+## Carries the stroke on to `g`. With `straight` (Shift held) the stroke is one straight line
+## from where Shift went down, along the nearest of the eight compass directions: each move
+## takes the line back off the map and draws it again to the new end.
+func _stroke_to(g: Vector3, straight := false) -> void:
 	var step := maxf(brush * 0.35, 0.08)
+	if straight:
+		if not _line_on:
+			_line_on = true
+			_line_from = _last_dab
+			_line_base = road_img.get_data()
+		var d := Vector2(g.x - _line_from.x, g.z - _line_from.z)
+		var end := _line_from
+		if d.length() > 0.05:
+			var dir := Vector2.from_angle(snappedf(d.angle(), PI / 4.0))
+			end = _line_from + Vector3(dir.x, 0, dir.y) * maxf(d.dot(dir), 0.0)
+		road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, _line_base)
+		var count := maxi(1, ceili(_line_from.distance_to(end) / step))
+		for i in range(0, count + 1):
+			_dab(_line_from.lerp(end, float(i) / count))
+		_last_dab = end
+		_stroke_shown(_stroke_rect)
+		return
+	_line_on = false
 	var dist := _last_dab.distance_to(g)
 	if dist < step:
 		return
@@ -1161,6 +1352,8 @@ func _end_stroke() -> void:
 	if not _painting:
 		return
 	_painting = false
+	_line_on = false
+	_line_base = PackedByteArray()
 	# a new road clears the grass tufts, flowers and clover it was painted over
 	var cleared: Array = []
 	if tool != "erase":
@@ -1285,12 +1478,19 @@ func _draw_ring() -> void:
 	var g = main._ground_point(_mouse)
 	if g == null:
 		return
+	if _painting and _line_on:
+		g = _last_dab # a straight line: the brush is at the line's end, not under the pointer
 	var im := _ring.mesh as ImmediateMesh
 	im.clear_surfaces()
 	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-	for i in 49:
-		var a := TAU * i / 48.0
-		im.surface_add_vertex(Vector3(g.x + cos(a) * brush, 0.08, g.z + sin(a) * brush))
+	if tool != "place" and brush_square:
+		for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1)]:
+			im.surface_add_vertex(Vector3(g.x + c.x * brush, 0.08, g.z + c.y * brush))
+	else:
+		var r := 0.35 if tool == "place" else brush
+		for i in 49:
+			var a := TAU * i / 48.0
+			im.surface_add_vertex(Vector3(g.x + cos(a) * r, 0.08, g.z + sin(a) * r))
 	im.surface_end()
 
 
@@ -1303,10 +1503,12 @@ func _show_status() -> void:
 			s = "%s selected. Drag to move (Shift snaps to 25 cm), R / Shift+R to turn, Delete to remove, Ctrl/Cmd+D to copy." % selected.title
 		else:
 			s = "Click anything to select it, then drag it. Right-drag or WASD moves the camera, the wheel zooms."
+	elif tool == "place":
+		s = "Click to set one down. Pick what from the list. The last one placed stays selected: R turns it, Delete removes it."
 	elif tool == "erase":
-		s = "Drag over a road or the paving to rub it out. [ and ] change the brush size."
+		s = "Drag over a road or the paving to rub it out. Hold Shift for a straight line. [ and ] change the brush size."
 	else:
-		s = "Drag to paint. A single click leaves a round patch: a wide brush makes a cul-de-sac. [ and ] change the brush size."
+		s = "Drag to paint; one click leaves a single patch. Hold Shift for a straight line (it snaps to 45 degrees). [ and ] change the brush size."
 	if unsaved:
 		s += "   (unsaved changes)"
 	_status.text = s
@@ -1342,28 +1544,55 @@ func _build_ui() -> void:
 		b.toggle_mode = true
 		_tool_btns[id] = b
 		row.add_child(b)
-	row.add_child(hud._label("  Brush", 14))
+		if id == "place":
+			# what the Place tool sets down: everything in the world, grouped
+			_place_pick = OptionButton.new()
+			_place_pick.focus_mode = Control.FOCUS_NONE
+			_place_pick.custom_minimum_size = Vector2(190, 0)
+			_place_pick.fit_to_longest_item = false
+			_place_pick.clip_text = true
+			var group := ""
+			for o in place_options():
+				if str(o[2]) != group:
+					group = str(o[2])
+					_place_pick.add_separator(group)
+				_place_pick.add_item(str(o[1]))
+				_place_pick.set_item_metadata(_place_pick.item_count - 1, str(o[0]))
+			_place_pick.get_popup().max_size = Vector2i(320, 520)
+			_place_pick.item_selected.connect(func(i: int):
+				place_id = str(_place_pick.get_item_metadata(i))
+				set_tool("place"))
+			row.add_child(_place_pick)
+	vb.add_child(row)
+	var brush_row := HBoxContainer.new()
+	brush_row.add_theme_constant_override("separation", 8)
+	brush_row.add_child(hud._label("Brush", 14))
 	_brush_slider = HSlider.new()
 	_brush_slider.min_value = 0.3
-	_brush_slider.max_value = 6.0
+	_brush_slider.max_value = BRUSH_MAX
 	_brush_slider.step = 0.1
 	_brush_slider.value = brush
-	_brush_slider.custom_minimum_size = Vector2(130, 24)
+	_brush_slider.custom_minimum_size = Vector2(220, 24)
 	_brush_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_brush_slider.focus_mode = Control.FOCUS_NONE
 	_brush_slider.value_changed.connect(func(v: float): set_brush(v))
-	row.add_child(_brush_slider)
+	brush_row.add_child(_brush_slider)
 	_brush_label = hud._label("%.1f m" % (brush * 2.0), 14)
-	_brush_label.custom_minimum_size = Vector2(52, 0)
-	row.add_child(_brush_label)
-	vb.add_child(row)
-	var row2 := HBoxContainer.new()
-	row2.add_theme_constant_override("separation", 8)
+	_brush_label.custom_minimum_size = Vector2(56, 0)
+	brush_row.add_child(_brush_label)
+	_shape_btn = hud._button("Round brush", func(): set_brush_square(not brush_square))
+	_shape_btn.tooltip_text = "Switch between a round and a square brush."
+	_shape_btn.custom_minimum_size = Vector2(120, 0)
+	brush_row.add_child(_shape_btn)
+	brush_row.add_child(VSeparator.new())
+	var row2 := brush_row
 	row2.add_child(hud._button("Turn left", func(): rotate_selected(TURN_STEP)))
 	row2.add_child(hud._button("Turn right", func(): rotate_selected(-TURN_STEP)))
 	row2.add_child(hud._button("Copy", func(): duplicate_selected()))
 	row2.add_child(hud._button("Delete", func(): delete_selected()))
-	row2.add_child(VSeparator.new())
+	vb.add_child(row2)
+	row2 = HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 8)
 	_small_check = CheckBox.new()
 	_small_check.text = "Pick small plants"
 	_small_check.button_pressed = small_on

@@ -33,9 +33,10 @@ grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 - The log must end with `AUTOTEST DONE`. If it doesn't, the script crashed: look for `SCRIPT ERROR` in the log.
 - The checks are in `scripts/main.gd`. `_autotest()` calls `_story_checks`, `_act1_checks`, `_romance_checks`, `_polish_checks` and others. When you add a feature, add a check for it there.
 - Only run one autotest at a time. Two Godot windows at once slow the machine down, and the time-based checks then fail at random.
-- The test window ignores the real mouse (clicks pass through to whatever is behind it), so you can keep working while it runs. Don't type into it: real key presses still reach it.
+- The test window ignores the real mouse (clicks pass through to whatever is behind it) and the real keyboard (the game only acts on the keys the test presses itself), so you can keep working while it runs.
+- macOS stops drawing a window that is completely covered, and the test then waits forever at its next screenshot. If Alex has the game open, start the test where a strip of it stays visible and without taking focus: `open -g -n -a /Applications/Godot.app --stdout /tmp/ke_autotest.log --stderr /tmp/ke_autotest.log --args --path "$PWD" --resolution 1280x800 --position 0,30 -- --autotest=/tmp/ke_shots`, then wait for `AUTOTEST DONE` in the log.
 - The autotest mutes all sound, never touches the network (AI chat uses a stand-in), and doesn't write the player's settings.
-- The autotest's last step is the world editor (`_god_checks`): it edits the world, saves a layout to its own file in Godot's user folder (never `data/world_layout.json`), then loads the scene again from that file. To run only that step (about a minute): `-- --godcheck=/tmp/ke_god`.
+- The autotest's last step is the world editor (`_god_checks`): it builds the world again without the saved layout, edits it, saves a layout to its own file in Godot's user folder (never `data/world_layout.json`), then loads the scene again from that file. To run only that step (about a minute): `-- --godcheck=/tmp/ke_god`.
 
 ## The world layout: `data/world_layout.json`
 
@@ -44,7 +45,8 @@ Alex arranges the map himself in the game: Settings > God mode > "Edit the world
 - Don't hand-edit or delete `data/world_layout.json`, and commit it when it changes. It is Alex's work.
 - The autotest runs with the layout applied, because that's the game players get. If a check fails only because of where something now stands (a bench the test sits on was moved, say), fix the check to find the thing rather than the layout. `-- --nolayout` runs the game as the code builds it, to tell the two apart.
 - Once a kind of scenery (a tree kind, rocks, a bush kind, tufts) has been edited, its full list is in the file and replaces what `world.gd` and `nature.gd` scatter. Changing their random placement no longer moves that kind. Single things (shop fronts, fountain, stall, signposts, barn, bin, plots, lamp posts, benches) are stored as changes named by kind and original position (`decor_lantern@46.00,-5.40`). If you move one in code, its saved change no longer matches: the game prints a `world layout:` warning and keeps the entry in the file.
-- Anything new you add to the world should be editable too: build it as its own node and register it in `GodMode.collect()`, or scatter it as a MultiMesh under `nature` (those are picked up automatically).
+- Anything new you add to the world should be editable too: build it as its own node and register it in `GodMode.collect()`, or scatter it as a MultiMesh under `nature` (those are picked up automatically). Loose boxes added straight to the world root can't be selected (the sheep pen and the pond were built that way at first). Every model in `assets/props` shows up in the editor's Place list by itself.
+- The sheep pen can be moved: use `main.pen_rect`, not the `PEN` constant, for where it is now.
 - Painted roads replace `World.PATHS`, `Town.PATHS` and the plaza cobbles as soon as the file has a `roads` entry. Read `god.road_at(x, z)` rather than those constants if you need to know what's underfoot.
 
 ## GDScript gotchas

@@ -59,6 +59,9 @@ static var litter_mat: ShaderMaterial
 ## For god mode (scripts/god_mode.gd): the barn, the leaves lying under the trees, and which of
 ## those leaves belong to which tree ("kind:index in its MultiMesh" -> Vector2i(first leaf, count)).
 static var barn: Node3D
+static var pond: Node3D
+static var pen: Node3D
+static var pen_blocks: Array = [] # the obstacle rects build_pen() made
 static var tree_litter: MultiMeshInstance3D
 static var tree_leaf_ranges := {}
 
@@ -262,12 +265,19 @@ static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
 	return Rect2(pos.x - 2.6, pos.z - 2.1, 5.2, 4.2)
 
 
-static func build_pond(root: Node3D, pos: Vector3, r: float) -> Rect2:
+## The pond is one node (water, rim, lily pads, reeds), so god mode can pick it up.
+static func build_pond(world: Node3D, pos: Vector3, r: float) -> Rect2:
+	var root := Node3D.new()
+	root.name = "Pond"
+	root.position = pos
+	world.add_child(root)
+	pond = root
+	pos = Vector3.ZERO # everything below is placed relative to the pond's node
 	Catalog.cyl(root, r + 0.35, r + 0.45, 0.06, pos + Vector3(0, 0.0, 0), Color(0.55, 0.52, 0.46), Vector3.ZERO, 32)
 	var w := Catalog.cyl(root, r, r, 0.07, pos + Vector3(0, 0.01, 0), Color(0.32, 0.52, 0.62), Vector3.ZERO, 32)
 	water_mat = ShaderMaterial.new()
 	water_mat.shader = preload("res://shaders/water.gdshader")
-	water_mat.set_shader_parameter("centre", pos)
+	water_mat.set_shader_parameter("centre", root.position)
 	water_mat.set_shader_parameter("radius", r)
 	w.material_override = water_mat
 	var rng := RandomNumberGenerator.new()
@@ -280,12 +290,20 @@ static func build_pond(root: Node3D, pos: Vector3, r: float) -> Rect2:
 		var a := rng.randf() * TAU
 		var p := pos + Vector3(cos(a) * (r + 0.3), 0.4, sin(a) * (r + 0.3))
 		Catalog.cyl(root, 0.015, 0.02, 0.8, p, Color(0.45, 0.5, 0.25))
-	return Rect2(pos.x - r - 0.45, pos.z - r - 0.45, 2 * r + 0.9, 2 * r + 0.9)
+	var at := root.position
+	return Rect2(at.x - r - 0.45, at.z - r - 0.45, 2 * r + 0.9, 2 * r + 0.9)
 
 
 ## Fence around `rect` with a gap on the left (west) side between gate.x and gate.y.
-## Returns thin rects for each fence run (used as walking obstacles).
-static func build_pen(root: Node3D, rect: Rect2, gate: Vector2) -> Array:
+## Returns thin rects for each fence run (used as walking obstacles). The pen is one node at the
+## middle of `rect` (fence, trough), so god mode can pick it up.
+static func build_pen(world: Node3D, rect: Rect2, gate: Vector2) -> Array:
+	var root := Node3D.new()
+	root.name = "SheepPen"
+	var mid := rect.get_center()
+	root.position = Vector3(mid.x, 0, mid.y)
+	world.add_child(root)
+	pen = root
 	var runs := [
 		[Vector2(rect.position.x, rect.position.y), Vector2(rect.end.x, rect.position.y)],
 		[Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y)],
@@ -302,18 +320,19 @@ static func build_pen(root: Node3D, rect: Rect2, gate: Vector2) -> Array:
 		var n := maxi(1, int(round(length)))
 		for i in n + 1:
 			var p := a.lerp(b, float(i) / n)
-			Catalog.box(root, Vector3(0.12, 0.9, 0.12), Vector3(p.x, 0.45, p.y), wood.darkened(0.2))
-		var mid := (a + b) * 0.5
+			Catalog.box(root, Vector3(0.12, 0.9, 0.12), Vector3(p.x - mid.x, 0.45, p.y - mid.y), wood.darkened(0.2))
+		var half := (a + b) * 0.5
 		var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 		for y in [0.35, 0.7]:
 			var size := Vector3(length, 0.07, 0.05) if horizontal else Vector3(0.05, 0.07, length)
-			Catalog.box(root, size, Vector3(mid.x, y, mid.y), wood)
+			Catalog.box(root, size, Vector3(half.x - mid.x, y, half.y - mid.y), wood)
 		rects.append(Rect2(minf(a.x, b.x) - 0.08, minf(a.y, b.y) - 0.08, absf(b.x - a.x) + 0.16, absf(b.y - a.y) + 0.16))
 	# water trough + hay inside the pen
 	var tp := Vector2(rect.end.x - 0.7, rect.position.y + 0.8)
-	Catalog.box(root, Vector3(0.6, 0.35, 1.2), Vector3(tp.x, 0.175, tp.y), Catalog.WOOD)
-	Catalog.box(root, Vector3(0.5, 0.02, 1.1), Vector3(tp.x, 0.34, tp.y), Color(0.35, 0.55, 0.65))
+	Catalog.box(root, Vector3(0.6, 0.35, 1.2), Vector3(tp.x - mid.x, 0.175, tp.y - mid.y), Catalog.WOOD)
+	Catalog.box(root, Vector3(0.5, 0.02, 1.1), Vector3(tp.x - mid.x, 0.34, tp.y - mid.y), Color(0.35, 0.55, 0.65))
 	rects.append(Rect2(tp.x - 0.35, tp.y - 0.65, 0.7, 1.3))
+	pen_blocks = rects
 	return rects
 
 

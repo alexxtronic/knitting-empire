@@ -73,6 +73,7 @@ var grass # grass.gd: the ground and the blades
 var nature # nature.gd: rocks, plants, hedges, fences, lamp posts and benches
 var god: GodMode # god_mode.gd: the admin's world editor, and the saved layout it applies at launch
 var pond_rect := Rect2()
+var pen_rect := PEN # where the sheep pen stands now (god mode can move it)
 var bin: Node3D
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
@@ -219,7 +220,7 @@ func _ready() -> void:
 	god.collect()
 	if Engine.has_meta("ke_god_reload"):
 		god.layout_path = GOD_TEST_LAYOUT # the autotest's last step: the world again, from the layout it saved
-	if not OS.get_cmdline_user_args().has("--nolayout"):
+	if not OS.get_cmdline_user_args().has("--nolayout") and not Engine.has_meta("ke_god_stock"):
 		god.load_layout()
 	if _autotest_dir != "":
 		god.layout_path = GOD_TEST_LAYOUT # the test saves here, never over the real layout
@@ -278,6 +279,9 @@ func _ready() -> void:
 		_take_photo_frames()
 	elif Engine.has_meta("ke_god_reload"):
 		_god_reload_checks()
+	elif Engine.has_meta("ke_god_stock"):
+		Engine.remove_meta("ke_god_stock")
+		_god_checks()
 	elif _god_only:
 		_god_checks()
 	elif _autotest_dir != "":
@@ -626,10 +630,11 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Town.COTTAGE.grow(0.3))
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	var roads: Image = god.road_img if painted else null
+	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
-		grass.build(dirt, clear, [Vector3(2.5, -16.0, 2.55)], roads)
+		grass.build(dirt, clear, pond, roads)
 	else:
-		grass.remask(dirt, clear, [Vector3(2.5, -16.0, 2.55)], roads)
+		grass.remask(dirt, clear, pond, roads)
 
 
 func _rebuild_house() -> void:
@@ -1114,6 +1119,9 @@ func _is_repeat_gesture(g: InputEventGesture) -> bool:
 func _input(e: InputEvent) -> void:
 	if sleeping or title_on or not (e is InputEventKey):
 		return
+	if _autotest_dir != "" and not e.has_meta("ke_test"):
+		get_viewport().set_input_as_handled()
+		return # the autotest presses its own keys (_key_tap); a real keyboard would only disturb it
 	var k := e as InputEventKey
 	if not k.pressed or k.echo:
 		return
@@ -1913,7 +1921,17 @@ func _graphics_checks() -> void:
 
 
 func _shot(fname: String) -> void:
-	await RenderingServer.frame_post_draw
+	# macOS doesn't draw a window that is completely covered, and the frame never comes: after a
+	# few seconds go on without the picture rather than wait forever
+	var drawn := [false]
+	RenderingServer.frame_post_draw.connect(func(): drawn[0] = true, CONNECT_ONE_SHOT)
+	var waited := 0.0
+	while not drawn[0] and waited < 6.0:
+		await get_tree().create_timer(0.05).timeout
+		waited += 0.05
+	if not drawn[0]:
+		print("SHOT skipped (the window is covered, so nothing was drawn): ", fname)
+		return
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(_autotest_dir.path_join(fname))
 	print("SHOT ", fname)
@@ -2082,7 +2100,7 @@ func _act1_checks() -> void:
 		not hud.memory_on() and Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory")
 	var loose := 0
 	for i in 3:
-		if not PEN.has_point(Vector2(sheep_list[i].position.x, sheep_list[i].position.z)):
+		if not pen_rect.has_point(Vector2(sheep_list[i].position.x, sheep_list[i].position.z)):
 			loose += 1
 	_check("three sheep are out of the pen (%d)" % loose, loose == 3)
 	await _act1_shot("You alright?", "25_act1_rowan_fence.png")
@@ -2090,7 +2108,7 @@ func _act1_checks() -> void:
 	await _act1_until_done(60.0)
 	var in_pen := 0
 	for s in sheep_list:
-		if PEN.has_point(Vector2(s.position.x, s.position.z)):
+		if pen_rect.has_point(Vector2(s.position.x, s.position.z)):
 			in_pen += 1
 	var rowan := _villager("rowan")
 	_check("the fence: met Rowan, opened up (trust %d→%d), sheep home (%d/%d), Rowan back in town, sky clear, off to market ('%s')" % [trust0, Game.stat("rowan", "trust"), in_pen, sheep_list.size(), hud.goal_label.text],
@@ -2952,6 +2970,13 @@ func _god_look(p: Vector3, dist := 16.0) -> void:
 ## clicking them, drag, turn, delete, copy and undo, paint and rub out roads, then save. The last
 ## step loads the whole scene again from the saved layout (_god_reload_checks).
 func _god_checks() -> void:
+	if god.loaded:
+		# the checks edit a known world: build it again as the code makes it, without the saved layout
+		# (the rest of the autotest has just played the game with the layout on, as players get it)
+		await get_tree().process_frame # not from inside _ready (--godcheck starts here)
+		Engine.set_meta("ke_god_stock", true)
+		get_tree().reload_current_scene()
+		return
 	autotest_jog = true
 	if FileAccess.file_exists(GOD_TEST_LAYOUT):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(GOD_TEST_LAYOUT))
@@ -3072,6 +3097,80 @@ func _god_checks() -> void:
 	var rubbed: bool = god.road_at(47.0, 2.0) == ""
 	god.undo()
 	_check("god mode: the eraser rubs paving out, and Undo puts it back (%s)" % god.road_at(47.0, 2.0), rubbed and god.road_at(47.0, 2.0) == "cobble")
+
+	# Shift paints a straight line that snaps to 45 degrees and follows the pointer
+	await _god_look(Vector3(31.0, 0, 9.5), 24.0)
+	god.set_tool("gravel")
+	god.set_brush(0.5)
+	var line_a := Vector3(29.0, 0, 8.0)
+	god.press(cam.unproject_position(line_a))
+	god.move(cam.unproject_position(Vector3(34.0, 0, 9.2)), true) # 13 degrees off east: snaps to due east
+	var east: bool = god.road_at(33.5, 8.0) == "gravel" and god.road_at(33.5, 9.2) == ""
+	god.move(cam.unproject_position(Vector3(33.0, 0, 12.0)), true) # now south-east: the line swings round
+	god.release()
+	await _wait(0.2)
+	_check("god mode: holding Shift paints a straight line that snaps to 45 degrees and swings with the pointer (due east first %s; then south-east: %s on the diagonal, %s where the east line was)" % [east, god.road_at(31.0, 10.0), god.road_at(33.5, 8.0)],
+		east and god.road_at(31.0, 10.0) == "gravel" and god.road_at(32.5, 11.5) == "gravel" and god.road_at(33.5, 8.0) == "" and god.road_at(29.0, 8.0) == "gravel")
+	# a square brush, and a brush 2.5 times the old largest
+	god.set_brush_square(true)
+	god.set_brush(1.0)
+	var sq := Vector3(33.0, 0, 16.0)
+	await _god_look(sq, 20.0)
+	god.press(cam.unproject_position(sq))
+	god.release()
+	god.set_brush(99.0)
+	var widest: float = god.brush
+	god.set_brush_square(false)
+	god.set_brush(1.0)
+	_check("god mode: the square brush fills its corners, and the brush goes up to %.0f m across (corner %s, just outside %s)" % [widest * 2.0, god.road_at(sq.x + 0.9, sq.z + 0.9), god.road_at(sq.x + 1.2, sq.z)],
+		god.road_at(sq.x + 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x - 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x + 1.2, sq.z) == "" and absf(widest - 15.0) < 0.001)
+
+	# the Place tool: pick anything from the list and set it down one at a time
+	var options: Array = god.place_options()
+	var ids: Array = options.map(func(o): return o[0])
+	var leaf_item := -1
+	for i in god._place_pick.item_count:
+		if str(god._place_pick.get_item_metadata(i)) == "scenery:leaf_yellow":
+			leaf_item = i
+	god._place_pick.select(leaf_item)
+	god._place_pick.item_selected.emit(leaf_item)
+	var leaf_spot := Vector3(30.0, 0, 15.0)
+	god.press(cam.unproject_position(leaf_spot))
+	god.press(cam.unproject_position(leaf_spot + Vector3(0.6, 0, 0.3)))
+	var leaves_placed: int = god.scenery.get("leaf_yellow", []).size()
+	var last_leaf: GodMode.El = god.selected
+	god.place_id = "decor:milk_churn"
+	var churn: GodMode.El = god.place(Vector3(31.5, 0, 15.5))
+	god.place_id = "scenery:tree_spruce"
+	var spruces0: int = god.scenery["tree_spruce"].size()
+	var spruce: GodMode.El = god.place(Vector3(36.0, 0, 17.0))
+	_check("god mode: the Place list holds everything in the world (%d things), and a click sets one down: two gold leaves, a milk churn, a spruce" % options.size(),
+		options.size() > 50 and ids.has("scenery:rock_boulder") and ids.has("scenery:hedge") and ids.has("decor:lantern") and ids.has("scenery:maplewood_bus") and not ids.has("scenery:cobble_plaza_0")
+		and god.tool == "place" and leaves_placed == 2 and last_leaf != null and last_leaf.kind == "leaf_yellow" and last_leaf.xf.origin.distance_to(leaf_spot + Vector3(0.6, 0, 0.3)) < 0.2
+		and churn != null and churn.added and decor.has(churn.node) and spruce != null and god.scenery["tree_spruce"].size() == spruces0 + 1 and not spruce.leaves.is_empty())
+
+	# the sheep pen is one piece: click a fence post, drag it, and the sheep come too
+	god.set_tool("select")
+	var pen: GodMode.El = god.by_key.get("pen@20.00,-1.00")
+	var pen_from: Vector3 = pen.xf.origin
+	await _god_look(pen_from, 20.0)
+	var sheep_from: Vector3 = sheep_list[0].position
+	god.press(cam.unproject_position(pen_from + Vector3(3.0, 0.45, 3.0))) # its south-east corner post
+	var picked_pen: bool = god.selected == pen
+	god.move(cam.unproject_position(pen_from + Vector3(4.0, 0.45, 4.5)))
+	var sheep_moved: Vector3 = sheep_list[0].position - sheep_from # measured at once: sheep wander
+	god.release()
+	await _wait(0.2)
+	var pen_moved: Vector3 = pen.xf.origin - pen_from
+	var sheep_in := sheep_list.all(func(sh): return pen_rect.has_point(Vector2(sh.position.x, sh.position.z)))
+	_check("god mode: the sheep pen's fence can be picked up, and the pen moves with its sheep (moved %.2f m, a sheep %.2f m, all inside %s; old fence line free %s, new one blocked %s)" % [pen_moved.length(), sheep_moved.length(), sheep_in, _walkable(_cell(pen_from + Vector3(-1.0, 0, -3.0))), not _walkable(_cell(pen.xf.origin + Vector3(-1.0, 0, -3.0)))],
+		picked_pen and pen_moved.length() > 1.0 and (sheep_moved - pen_moved).length() < 0.01 and sheep_in and pen_rect.get_center().distance_to(Vector2(pen.xf.origin.x, pen.xf.origin.z)) < 0.01
+		and _walkable(_cell(pen_from + Vector3(-1.0, 0, -3.0))) and not _walkable(_cell(pen.xf.origin + Vector3(-1.0, 0, -3.0))))
+	var pond: GodMode.El = god.by_key.get("pond@2.50,-16.00")
+	await _god_look(pond.xf.origin, 18.0)
+	god.press(cam.unproject_position(pond.xf.origin + Vector3(0.6, 0.05, 0.4)))
+	god.release()
+	_check("god mode: the pond can be picked up too", god.selected == pond)
 	god.set_tool("select")
 	god.select(lamp)
 	await _god_look(lamp.xf.origin, 16.0)
@@ -3090,7 +3189,7 @@ func _god_checks() -> void:
 	# the last step: the whole scene again, built from that layout
 	Engine.set_meta("ke_god_reload", {"lamp": lamp.key, "lamp_at": lamp.xf.origin, "lamp_turn": lamp_turn, "bale": bale.key, "copy_at": copy.xf.origin,
 		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": rocks0 + 1, "bushes": bushes0 - 1, "patch": patch,
-		"tiles": god.painted_tiles()})
+		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1})
 	get_tree().reload_current_scene()
 
 
@@ -3103,7 +3202,7 @@ func _god_reload_checks() -> void:
 	var lamp_at: Vector3 = want["lamp_at"]
 	var turn := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
 	var bale: GodMode.El = god.by_key.get(want["bale"])
-	var copies: Array = god.els.filter(func(e): return e.added)
+	var copies: Array = god.els.filter(func(e): return e.added and e.kind == "decor_lantern")
 	var copy_at: Vector3 = want["copy_at"]
 	_check("saved layout: the lamp post is where it was dragged and turned, its copy stands beside it and the hay bale is gone (lamp %.2f m off, turned %.1f, %d copy)" % [lamp.node.global_position.distance_to(lamp_at), turn, copies.size()],
 		lamp.node.global_position.distance_to(lamp_at) < 0.01 and absf(turn - float(want["lamp_turn"])) < 0.1 and not _walkable(_cell(lamp_at))
@@ -3124,9 +3223,18 @@ func _god_reload_checks() -> void:
 	_check("saved layout: the painted roads are back (round cobble patch %s, gravel track %s, plaza %s, %d tiles, grass %.2f on the patch)" % [god.road_at(patch.x, patch.z), god.road_at(14.0, 8.0), god.road_at(47.0, 0.0), god.painted_tiles(), grass.grass_at(patch.x, patch.z)],
 		god.road_at(patch.x, patch.z) == "cobble" and god.road_at(patch.x + 1.6, patch.z + 1.6) == "" and god.road_at(14.0, 8.0) == "gravel" and god.road_at(47.0, 0.0) == "cobble"
 		and god.painted_tiles() == int(want["tiles"]) and grass.grass_at(patch.x, patch.z) < 0.2)
+	var pen: GodMode.El = god.by_key.get("pen@20.00,-1.00")
+	var pen_at: Vector3 = want["pen_at"]
+	var sheep_in := sheep_list.all(func(sh): return pen_rect.has_point(Vector2(sh.position.x, sh.position.z)))
+	var churns: Array = god.els.filter(func(e): return e.added and e.kind == "decor_milk_churn")
+	_check("saved layout: the straight gravel line, the square patch, the placed gold leaves, spruce and milk churn, and the moved sheep pen are all back (line %s, square corner %s, %d leaves, %d spruces, pen %.2f m off, sheep inside %s)" % [god.road_at(31.0, 10.0), god.road_at(33.9, 16.9), god.scenery.get("leaf_yellow", []).size(), god.scenery["tree_spruce"].size(), pen.node.global_position.distance_to(pen_at), sheep_in],
+		god.road_at(31.0, 10.0) == "gravel" and god.road_at(33.9, 16.9) == "gravel" and god.scenery.get("leaf_yellow", []).size() == 2 and god.scenery["tree_spruce"].size() == int(want["spruces"])
+		and churns.size() == 1 and pen.node.global_position.distance_to(pen_at) < 0.01 and pen_rect.get_center().distance_to(Vector2(pen_at.x, pen_at.z)) < 0.01 and sheep_in)
 	cam_follow = false
 	await _god_look(Vector3(17.0, 0, 7.0), 24.0)
 	await _shot("62_god_reloaded.png")
+	await _god_look(Vector3(31.0, 0, 12.0), 22.0)
+	await _shot("63_god_line_and_placed.png")
 	print("AUTOTEST DONE")
 	get_tree().quit()
 
@@ -3290,10 +3398,12 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 	ev.keycode = kc
 	ev.physical_keycode = kc
 	ev.pressed = true
+	ev.set_meta("ke_test", true) # _input ignores every other key during the autotest
 	Input.parse_input_event(ev)
 	await _wait(maxf(hold, 0.05))
 	var up := ev.duplicate() as InputEventKey
 	up.pressed = false
+	up.set_meta("ke_test", true)
 	Input.parse_input_event(up)
 	await get_tree().process_frame
 
@@ -3373,9 +3483,9 @@ func _decor(id: String, pos: Vector3, r: int) -> void:
 
 func _add_sheep() -> void:
 	var s = Sheep.new()
-	s.pen = Rect2(PEN.position + Vector2(0.7, 0.7), PEN.size - Vector2(1.4, 1.4))
+	s.pen = Rect2(pen_rect.position + Vector2(0.7, 0.7), pen_rect.size - Vector2(1.4, 1.4))
 	var i := sheep_list.size()
-	s.position = Vector3(18.5 + (i % 3) * 1.5, 0, -2.5 + (i % 3) * 0.6 + (i / 3) * 1.8)
+	s.position = Vector3(pen_rect.position.x + 1.5 + (i % 3) * 1.5, 0, pen_rect.position.y + 1.5 + (i % 3) * 0.6 + (i / 3) * 1.8)
 	add_child(s)
 	sheep_list.append(s)
 
@@ -3592,12 +3702,12 @@ func remove_prop(prop_name: String) -> void:
 
 ## "out": the first three sheep slip the pen and mill about by the south fence. "home": back in.
 func sheep_out(out: bool) -> void:
-	var inside := Rect2(PEN.position + Vector2(0.7, 0.7), PEN.size - Vector2(1.4, 1.4))
+	var inside := Rect2(pen_rect.position + Vector2(0.7, 0.7), pen_rect.size - Vector2(1.4, 1.4))
 	var loose := Rect2(10.9, -1.3, 4.0, 3.0) # the vegetable beds
 	for i in mini(3, sheep_list.size()):
 		var s = sheep_list[i]
 		s.pen = loose if out else inside
-		s.position = Vector3(loose.position.x + 1.2 + i * 2.1, 0, loose.position.y + 0.6 + (i % 2) * 1.4) if out else Vector3(18.5 + i * 1.5, 0, -2.5 + i * 0.6)
+		s.position = Vector3(loose.position.x + 1.2 + i * 2.1, 0, loose.position.y + 0.6 + (i % 2) * 1.4) if out else Vector3(pen_rect.position.x + 1.5 + i * 1.5, 0, pen_rect.position.y + 1.5 + i * 0.6)
 		s._pick_target()
 
 

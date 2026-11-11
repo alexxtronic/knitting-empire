@@ -114,11 +114,12 @@ The map is laid out in the game itself. Run the game from the project, open **Se
 - **Select & move:** click anything (a tree, a rock, a hedge, a lamp post, a shop, the fountain, a crop plot) and drag it. Hold Shift to snap to 25 cm.
 - **Turn:** R turns the selected thing 15 degrees, Shift+R turns it back.
 - **Delete:** Delete, Backspace or X. **Copy:** Ctrl/Cmd+D (scenery, lamp posts, benches and other decor). **Undo:** Ctrl/Cmd+Z.
-- **Roads:** pick Dirt road, Gravel road or Cobblestones and drag to paint. The brush is round, so one click with a wide brush makes a round patch (a cul-de-sac). `[` and `]` change the brush size. Erase road rubs out any road, including the plaza and paths the game starts with. Painting a road clears the grass, tufts and flowers under it.
+- **Place:** choose anything from the drop-down next to Place (every kind of tree, rock, plant and leaf, every model in `assets/props`, every catalog piece) and click to set one down at a time. The last one placed stays selected, so R turns it and Delete removes it.
+- **Roads:** pick Dirt road, Gravel road or Cobblestones and drag to paint. One click with a wide round brush makes a round patch (a cul-de-sac). Hold **Shift** while dragging for a straight line; it snaps to the nearest 45 degrees and follows the pointer until you let go. The brush can be round or square and up to 30 m across; `[` and `]` change its size. Erase road rubs out any road, including the plaza and paths the game starts with. Painting a road clears the grass, tufts and flowers under it.
 - The camera works as usual (WASD, right-drag, wheel) and can go out to the far trees. The clock stops while you edit.
 - **Done** saves. The layout goes to `data/world_layout.json`, which the game applies every time it starts: it is the map every player gets, so commit it. **Reset world** throws the saved layout away.
 
-Nora's house, Rosewood Cottage, the sheep pen and the pond can't be moved (the game's rules are tied to where they stand), nor can villagers and sheep.
+The sheep pen moves as one piece and turns in quarter turns; the sheep go with it. Nora's house and Rosewood Cottage can't be moved (the game's rules are tied to where they stand), nor can villagers or single sheep.
 
 ## Writing story scenes
 
