@@ -14,7 +14,7 @@ const LIE_FEET := Vector3(0.0, 0.64, 0.66)
 const LIE_TILT := 8.0
 const LIE_COVER_LENGTH := 1.1 # metres of her, from the feet, that the quilt covers
 
-var speed := 1.5 # ground speed right now: walk_speed, or run_speed while she jogs
+var speed := 0.0 # ground speed right now: it eases toward walk_speed, or run_speed while she jogs
 var walk_speed := 1.5 # m/s; main.gd raises both with fitness
 var run_speed := 3.0
 var running := false # Shift held (main.gd sets it every frame; the autotest can hold it too)
@@ -39,6 +39,11 @@ var body: Body
 var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle"...)
 var _talk_t := 0.0
 var _ring: MeshInstance3D
+## How she gathers and sheds speed (m/s²) and how quickly she comes round to a new heading (per
+## second, eased): a person takes a moment over each, and without it the walk looks mechanical.
+const ACCEL := 9.0
+const BRAKE := 9.0
+const TURN := 11.0
 var walked := 0.0 # metres walked since main.gd last counted them (for fitness)
 signal footstep # a foot lands (from the Walk loop's timing)
 signal needle_click # a stitch while she knits
@@ -325,6 +330,16 @@ func _end_activity() -> void:
 		_return_pos = null
 
 
+## Metres of path still ahead of her.
+func _path_left() -> float:
+	var total := 0.0
+	var from := position
+	for p in path:
+		total += Vector2(p.x - from.x, p.z - from.z).length()
+		from = p
+	return total
+
+
 func _arrive() -> void:
 	var cb := _on_arrive
 	_on_arrive = Callable()
@@ -373,18 +388,27 @@ func _process(delta: float) -> void:
 		var to := next - position
 		to.y = 0.0
 		var d := to.length()
-		speed = run_speed if running else walk_speed
+		# She eases up to speed and slows into her last step, and takes a corner at the pace her
+		# turning allows, so she never snaps to full speed or pivots on the spot mid-stride.
+		var top := run_speed if running else walk_speed
+		var off := absf(angle_difference(rotation.y, atan2(to.x, to.z))) if d > 0.01 else 0.0
+		var want := top * clampf(1.15 - off / 1.6, 0.35, 1.0)
+		want = minf(want, maxf(0.5, sqrt(2.0 * BRAKE * _path_left())))
+		speed = move_toward(speed, want, (ACCEL if want > speed else BRAKE) * delta)
 		var step := speed * delta
 		if d <= step:
 			walked += d
 			position = Vector3(next.x, 0.0, next.z)
 			path.remove_at(0)
 			if path.is_empty():
+				speed = 0.0
 				_arrive()
 		else:
 			position += to / d * step
 			walked += step
-			rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.25)
+			rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * TURN))
+	else:
+		speed = 0.0
 	if detailed:
 		_animate(delta, walking)
 	else:

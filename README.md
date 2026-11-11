@@ -77,7 +77,7 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/god_mode.gd`, `data/world_layout.json` | the admin's world editor (Settings > God mode) and the map layout it saves |
 | `scripts/audio.gd` | music, ambience and sound effects on three buses (Music, Ambience, SFX) |
 | `tools/make_audio.py` | makes every sound in `assets/audio/` (footsteps, needles, UI, ambience loops, the music) |
-| `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, leaning into turns, breathing |
+| `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, idle glances and weight shifts, leaning into turns, breathing |
 | `scripts/grass.gd` | the ground and the grass blades |
 | `shaders/woolcore.gdshader` | the felt and knit look |
 | `shaders/ground`, `grass_blade`, `foliage`, `water`, `sky` | ground, grass, trees, pond and sky |

@@ -3453,7 +3453,11 @@ func _character_checks() -> void:
 	autotest_jog = false
 	player.running = false # now, not on main's next frame: a slow frame here would start her off jogging
 	player.walk(_find_path(player.position, home + Vector3(2.5, 0, 0)))
-	await _wait(0.45)
+	await _wait(0.05)
+	var early: float = player.speed
+	await _wait(0.4)
+	_check("she eases into her walk rather than snapping to full speed (%.2f m/s at the first step, then %.2f)" % [early, player.speed],
+		early > 0.0 and early < player.speed - 0.3)
 	_check("heroine walks briskly, the Walk stride matching her speed (%s at %.1f m/s, %.2fx)" % [player.body.current(), player.speed, player.body.anim.speed_scale],
 		player.body.current() == "Walk" and player.speed > 1.4 and player.speed < 2.0 and absf(player.body.anim.speed_scale * player.body.walk_anim_speed - player.speed) < 0.15)
 	autotest_jog = true

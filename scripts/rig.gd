@@ -6,13 +6,16 @@ extends SkeletonModifier3D
 ##   - lean: the spine leans into turns and lags when starting and stopping, on a damped spring
 ##     (a little overshoot reads as weight)
 ##   - breathing: a slow rise and fall of the chest and shoulders
-##   - weight shift: a lazy sway through the spine while standing
+##   - weight shift: a lazy, never-repeating sway and twist through the spine while standing
+##   - glances: with nobody to look at, a standing character now and then looks off to one side for
+##     a moment, at their own pace, so a crowd never stands like statues playing the same loop
 ## Added by body.gd under the character's Skeleton3D. body.gd feeds speed, turn rate and
 ## acceleration from how the character actually moved.
 
 var body: Node3D # the node that turns and moves with the character (body.gd)
 var look_target = null # Vector3 in world space, or null
 var look_strength := 1.0 # 0..1, how far the head may turn toward the target
+var glances := true # may look about when idle (body.gd: only standing upright in the Idle loop)
 var speed := 0.0 # metres per second
 var turn_rate := 0.0 # radians per second, + = turning left
 var accel := 0.0 # forward acceleration, m/s²
@@ -24,6 +27,9 @@ var _w := 0.0 # current look weight
 var _target := Vector3.ZERO # smoothed look point
 var _lean := Vector2.ZERO # x = roll (into turns), y = pitch (forward)
 var _lean_v := Vector2.ZERO
+var _glance := Vector3.ZERO # where an idle glance points, in skeleton space
+var _glance_on := false
+var _glance_t := 0.0 # seconds until the glance starts or ends
 var _bones := {}
 var _fwd_rest := {} # each bone's forward axis in its own space at rest
 var _ready_bones := false
@@ -75,7 +81,10 @@ func _process_modification_with_delta(delta: float) -> void:
 		want.x = clampf(-turn_rate * speed * 0.045, -0.14, 0.14) # into the turn
 		want.y = 0.035 + clampf(accel * 0.03, -0.08, 0.1) # a slight forward lean, more when speeding up
 	else:
-		want.x = sin((_t + seed_t) * 0.55) * 0.018 # idle weight shift
+		# idle weight shift: two slow waves that never line up, so it doesn't read as a loop
+		var ti := _t + seed_t
+		want.x = sin(ti * 0.55) * 0.02 + sin(ti * 0.23 + 1.3) * 0.016
+		want.y = sin(ti * 0.31 + 0.7) * 0.008
 	# stepped in small fixed slices: one big step on a slow frame would overshoot further each
 	# frame until the spine spun round (the arms-flying glitch at low frame rates)
 	var k := 70.0
@@ -95,6 +104,8 @@ func _process_modification_with_delta(delta: float) -> void:
 	_add_rot(sk, "Spine", fwd, _lean.x * 0.55)
 	_add_rot(sk, "Chest", right, _lean.y * 0.5 + breath * 0.016)
 	_add_rot(sk, "Chest", fwd, _lean.x * 0.45)
+	if not moving:
+		_add_rot(sk, "Chest", up, sin((_t + seed_t) * 0.19 + 2.1) * 0.03) # a slow twist at the waist
 	_add_rot(sk, "LeftShoulder", fwd, -breath * 0.012)
 	_add_rot(sk, "RightShoulder", fwd, breath * 0.012)
 
@@ -106,6 +117,9 @@ func _process_modification_with_delta(delta: float) -> void:
 			tl = _target
 		_target = tl if _w < 0.01 else _target.lerp(tl, clampf(delta * 6.0, 0.0, 1.0))
 		target_w = look_strength
+	elif _idle_glance(delta, sk, fwd, up, right):
+		_target = _glance if _w < 0.01 else _target.lerp(_glance, clampf(delta * 3.0, 0.0, 1.0))
+		target_w = 0.8
 	_w = move_toward(_w, target_w, delta * (2.2 if target_w > _w else 1.6))
 	if _w <= 0.001:
 		return
@@ -121,6 +135,24 @@ func _process_modification_with_delta(delta: float) -> void:
 		var q := _aim(cur, desired, up)
 		q = Quaternion.IDENTITY.slerp(q, share * _w)
 		_set_global_basis(sk, bi, Basis(q) * gp.basis)
+
+
+## Standing with nobody to look at: every few seconds, look off to one side for a moment. Returns
+## true while a glance is on (`_glance` is then the point to look at, in skeleton space).
+func _idle_glance(delta: float, sk: Skeleton3D, fwd: Vector3, up: Vector3, right: Vector3) -> bool:
+	if moving or not glances:
+		_glance_on = false
+		_glance_t = randf_range(2.0, 5.0)
+		return false
+	_glance_t -= delta
+	if _glance_t <= 0.0:
+		_glance_on = not _glance_on
+		_glance_t = randf_range(1.2, 3.0) if _glance_on else randf_range(3.5, 9.0)
+		if _glance_on:
+			var yaw := randf_range(0.3, 0.75) * (1.0 if randf() < 0.5 else -1.0)
+			var head := sk.get_bone_global_pose(_bones["Head"]).origin
+			_glance = head + (fwd * cos(yaw) + right * sin(yaw) + up * randf_range(-0.25, 0.1)) * 3.0
+	return _glance_on
 
 
 ## The rotation that turns `cur` to `desired` as a person turns their head: a turn about the vertical,

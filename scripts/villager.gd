@@ -21,6 +21,7 @@ var talk_spot = null # where you stand to talk to them (e.g. in front of a count
 var _look = null
 var _target := Vector3.ZERO
 var _wait := 0.0
+var _speed := 0.0 # ground speed right now (skinned villagers ease in and out of a walk)
 var _t := 0.0
 var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
@@ -194,6 +195,8 @@ func _process(delta: float) -> void:
 
 ## Skinned villagers: talk while held in a conversation, idle while waiting, walk between spots.
 func _process_body(delta: float) -> void:
+	if anim_override != "" or listening or hold_time > 0.0 or _wait > 0.0:
+		_speed = 0.0
 	# on the spot (ignoring height: a scene may have seated them up on a rock)
 	if anim_override != "" and Vector2(position.x - _target.x, position.z - _target.z).length() < 0.05:
 		hold_time = maxf(0.0, hold_time - delta)
@@ -213,12 +216,17 @@ func _process_body(delta: float) -> void:
 	var to := _target - position
 	to.y = 0.0
 	var d := to.length()
-	var step := WALK_SPEED * delta
+	# ease up to a stroll and slow into the last step, turning toward the way they're going first
+	var off := absf(angle_difference(rotation.y, atan2(to.x, to.z))) if d > 0.01 else 0.0
+	var want := minf(WALK_SPEED * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
+	_speed = move_toward(_speed, want, 2.5 * delta)
+	var step := _speed * delta
 	if d <= step:
 		position = Vector3(_target.x, 0.0, _target.z)
+		_speed = 0.0
 		_wait = randf_range(2.0, 6.0)
 		_target = home + Vector3(randf_range(-roam.x, roam.x), 0, randf_range(-roam.y, roam.y))
 		return
 	position += to / d * step
-	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.2)
-	body.play("Walk", WALK_SPEED)
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 7.0))
+	body.play("Walk", _speed)

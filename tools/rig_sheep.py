@@ -13,9 +13,11 @@ What it does:
   4. builds a quadruped skeleton (Hips, Spine, Neck, Head, Tail, and an upper and lower bone per leg)
      and skins the mesh to it by region, with the head bound rigidly to the Head bone so the face
      never shears;
-  5. keyframes three loops: Idle (breathing, a slow look about, a tail flick), Walk (a sheep's
-     four-beat walk: left hind, left fore, right hind, right fore) and Graze (head down in the
-     grass, chewing);
+  5. keyframes three loops, the legs solved so every hoof on the ground stays exactly where it was
+     put: Walk (a sheep's four-beat walk: left hind, left fore, right hind, right fore, each hoof
+     down two thirds of the stride, the body sinking onto each foreleg and the head nodding), Idle
+     (breathing, shifting her weight, two looks with the head held between them, tail flicks) and
+     Graze (head down, sweeping the grass, tugging mouthfuls and chewing);
   6. shrinks the colour and normal textures to --tex and exports assets/props/<id>.glb.
 
 It prints the Walk loop's ground speed (STRIDE), which scripts/sheep.gd uses so the hooves don't slide.
@@ -247,40 +249,107 @@ def make_action(name, frames, pose_at):
 
 
 TAU = math.tau
-WALK_T = 0.9  # seconds per stride
-SWING = 26.0  # degrees fore and aft at the shoulder and hip
+WALK_T = 0.75  # seconds per stride (short legs: quick little steps)
+DUTY = 0.66  # share of the stride each hoof spends on the ground (a walk always has 2 or 3 down)
 PHASE = {"HL": 0.0, "FL": 0.25, "HR": 0.5, "FR": 0.75}  # a sheep's lateral-sequence walk
+L1 = ZB + 0.06 - KNEE  # upper leg
+L2 = KNEE - 0.02  # lower leg
+LEG = L1 + L2
+STEP = 0.6 * LEG  # how far a hoof travels along the ground while it's down
+STAND = 0.004  # standing, her legs are a hair off straight (a locked leg can't give)
+# walking she rides lower by what it takes for a hoof to reach the front and back of its step
+CROUCH = LEG - math.sqrt(LEG * LEG - (STEP / 2) ** 2) + 0.003
+HIP = {k: Vector((c.x, c.y, ZB + 0.06)) for k, c in cols.items()}
+
+
+def ease(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3.0 - 2.0 * x)
+
+
+def wloc(name, v):
+    """A world-space offset as the bone's local location."""
+    return rest[name].inverted() @ Vector(v)
+
+
+def leg_ik(p, k, hoof, body):
+    """Bends one leg so its hoof lands on `hoof` (a world offset from its rest spot: back, up) while
+    the body has moved by `body` (a world offset). Forelegs bend at the knee, forward; hind legs at
+    the hock, backward, as a sheep's do."""
+    ty = hoof[0] - body.y  # backward of the hip (+Y is toward the tail)
+    tz = -(LEG - hoof[1]) - body.z  # below the hip
+    d = min(math.hypot(ty, tz), LEG * 0.9995)
+    phi = math.atan2(ty, -tz)
+    al = math.acos(max(-1.0, min(1.0, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))))
+    be = math.acos(max(-1.0, min(1.0, (L2 * L2 + d * d - L1 * L1) / (2 * L2 * d))))
+    s = 1.0 if k[0] == "F" else -1.0
+    # +X rotation swings a hanging leg back
+    p["Leg%s_upper" % k] = rq("Leg%s_upper" % k, X, math.degrees(phi - s * al))
+    p["Leg%s_lower" % k] = rq("Leg%s_lower" % k, X, math.degrees(s * (al + be)))
+
+
+def planted(p, body):
+    for k in PHASE:
+        leg_ik(p, k, (0.0, 0.0), body)
+
+
+def hoof_path(u):
+    """Where a hoof is at stride phase u: (back of its rest spot, height). On the ground it slides
+    back at a steady pace; then it peels off, swings forward in an arc and sets down softly."""
+    if u < DUTY:
+        return (STEP * (u / DUTY - 0.5), 0.0)
+    w = (u - DUTY) / (1.0 - DUTY)
+    return (STEP * (0.5 - ease(w)), 0.075 * LEG * 2.0 * math.sin(math.pi * w) ** 1.5 * (1.0 - 0.35 * w))
 
 
 def walk(t):
     p = {}
+    # the body: it sinks as weight comes onto each foreleg, rocks toward the side that's carrying
+    # her, and the head nods against the forelegs' rhythm the way a walking sheep's does
+    dip = math.cos(TAU * (t * 2 + 0.08))
+    sway = math.sin(TAU * (t + 0.1))
+    body = Vector((0.006 * sway, 0.0, -CROUCH + 0.004 * dip))
+    p["Hips:loc"] = wloc("Hips", body)
+    p["Hips"] = compose(rq("Hips", Y, 1.6 * sway), rq("Hips", Z, 1.4 * math.sin(TAU * t)))
+    p["Spine"] = compose(rq("Spine", Y, -2.2 * sway), rq("Spine", Z, -2.4 * math.sin(TAU * t)), rq("Spine", X, 0.8 * dip))
+    nod = math.sin(TAU * (t * 2 - 0.12))
+    p["Neck"] = compose(rq("Neck", X, 2.0 + 4.0 * nod), rq("Neck", Z, 1.2 * math.sin(TAU * t)))
+    p["Head"] = compose(rq("Head", X, -2.6 * nod), rq("Head", Y, 1.5 * sway))
+    p["Tail"] = compose(rq("Tail", Z, 9.0 * math.sin(TAU * (t - 0.15))), rq("Tail", X, 3.0 * dip))
     for k, ph in PHASE.items():
-        a = TAU * (t + ph)
-        # +X rotation swings a hanging leg back, so forward is negative
-        swing = -SWING * math.sin(a)
-        lift = max(0.0, math.cos(a))  # the leg is coming forward: fold the lower leg up
-        fold = (38.0 if k[0] == "F" else 30.0) * lift
-        p["Leg%s_upper" % k] = rq("Leg%s_upper" % k, X, swing - fold * 0.35)
-        p["Leg%s_lower" % k] = rq("Leg%s_lower" % k, X, fold)
-    bob = math.sin(TAU * t * 2)
-    p["Hips"] = compose(rq("Hips", Y, 2.0 * math.sin(TAU * t)), rq("Hips", X, 0.6 * bob))
-    p["Hips:loc"] = Vector((0, 0.008 * bob, 0))
-    p["Spine"] = rq("Spine", Y, -1.5 * math.sin(TAU * t))
-    p["Neck"] = rq("Neck", X, 3.0 * math.sin(TAU * t * 2 + 0.6))
-    p["Head"] = rq("Head", X, -2.0 * math.sin(TAU * t * 2 + 0.6))
-    p["Tail"] = rq("Tail", Z, 8.0 * math.sin(TAU * t))
+        leg_ik(p, k, hoof_path((t + ph) % 1.0), body)
     return p
 
 
+def bump(t, at, rise, hold, fall):
+    """0 -> 1 -> 0: eases up from `at` over `rise`, holds, eases back (loop time 0..1)."""
+    x = (t - at) % 1.0
+    if x < rise:
+        return ease(x / rise)
+    if x < rise + hold:
+        return 1.0
+    return 1.0 - ease((x - rise - hold) / fall)
+
+
 def idle(t):
+    """Eight seconds standing: breathing, a shift of weight from one side to the other, two looks
+    (one long, one a quick glance the other way) with the head held still between them, an ear-side
+    head tilt, and the tail flicking in two short bursts."""
     p = {}
-    br = math.sin(TAU * t * 2)  # two breaths a loop
-    p["Spine"] = rq("Spine", X, 0.8 * br)
-    look = math.sin(TAU * t)
-    p["Neck"] = compose(rq("Neck", Z, 9.0 * look), rq("Neck", X, 2.0 * br))
-    p["Head"] = compose(rq("Head", Z, 6.0 * look), rq("Head", Y, 3.0 * math.sin(TAU * t + 1.0)))
-    flick = max(0.0, math.sin(TAU * t * 3)) ** 6
-    p["Tail"] = rq("Tail", Z, 25.0 * flick * math.sin(TAU * t * 9))
+    br = math.sin(TAU * t * 3)
+    shift = ease(0.5 + 0.5 * math.sin(TAU * (t - 0.1))) - 0.5  # dwells on each side
+    body = Vector((0.012 * shift, 0.0, -STAND + 0.002 * br))
+    p["Hips:loc"] = wloc("Hips", body)
+    p["Hips"] = rq("Hips", Y, 2.0 * shift)
+    p["Spine"] = compose(rq("Spine", X, 0.9 * br), rq("Spine", Y, -1.5 * shift))
+    look = bump(t, 0.08, 0.07, 0.2, 0.09) - 0.75 * bump(t, 0.58, 0.04, 0.09, 0.07)
+    lift = bump(t, 0.06, 0.08, 0.24, 0.1)
+    tilt = bump(t, 0.2, 0.03, 0.07, 0.05)
+    p["Neck"] = compose(rq("Neck", Z, 16.0 * look), rq("Neck", X, 1.2 * br - 5.0 * lift))
+    p["Head"] = compose(rq("Head", Z, 13.0 * look), rq("Head", Y, 7.0 * tilt), rq("Head", X, -3.0 * lift))
+    flick = bump(t, 0.36, 0.01, 0.05, 0.02) + bump(t, 0.83, 0.01, 0.03, 0.02)
+    p["Tail"] = rq("Tail", Z, 24.0 * flick * math.sin(TAU * t * 26) + 3.0 * shift)
+    planted(p, body)
     return p
 
 
@@ -289,28 +358,34 @@ GRAZE_HEAD = 48.0  # ...and the head the rest of the way to the grass
 
 
 def graze(t):
+    """Six seconds head down: she sweeps slowly across the grass, tears a mouthful with a quick tug
+    of the head every second or so, and chews between tugs; her forequarters sink a little onto bent
+    forelegs."""
     p = {}
-    chew = math.sin(TAU * t * 4)
-    step = math.sin(TAU * t)
-    p["Neck"] = compose(rq("Neck", X, GRAZE_NECK + 2.0 * math.sin(TAU * t * 2)), rq("Neck", Z, 6.0 * step))
-    p["Head"] = compose(rq("Head", X, GRAZE_HEAD + 4.0 * chew), rq("Head", Z, 5.0 * step))
-    p["Spine"] = rq("Spine", X, 6.0)
-    # the forelegs splay a touch to reach down
+    sweep = math.sin(TAU * t) + 0.3 * math.sin(TAU * 2 * t + 1.0)
+    tug = sum(bump(t, a, 0.012, 0.01, 0.05) for a in (0.07, 0.24, 0.43, 0.62, 0.8, 0.93))
+    chew = math.sin(TAU * t * 15) * (1.0 - min(1.0, tug))
+    body = Vector((0.004 * sweep, -0.012, -STAND - 0.004))
+    p["Hips:loc"] = wloc("Hips", body)
+    p["Spine"] = compose(rq("Spine", X, 6.0), rq("Spine", Z, 2.0 * sweep))
+    p["Neck"] = compose(rq("Neck", X, GRAZE_NECK + 1.5 * math.sin(TAU * t * 2) - 5.0 * tug), rq("Neck", Z, 7.0 * sweep))
+    p["Head"] = compose(rq("Head", X, GRAZE_HEAD + 2.2 * chew - 9.0 * tug), rq("Head", Z, 6.0 * sweep), rq("Head", Y, 3.0 * tug))
+    p["Tail"] = rq("Tail", Z, 5.0 * math.sin(TAU * t * 2) + 14.0 * bump(t, 0.5, 0.01, 0.04, 0.02) * math.sin(TAU * t * 40))
+    planted(p, body)
+    # the spine's tilt lowers the shoulders: let the forelegs give by that much
     for k in ("FL", "FR"):
-        p["Leg%s_upper" % k] = rq("Leg%s_upper" % k, X, -6.0)
-    p["Tail"] = rq("Tail", Z, 6.0 * math.sin(TAU * t * 2))
+        leg_ik(p, k, (-0.02, 0.0), body + Vector((0.0, 0.0, -0.012)))
     return p
 
 
-make_action("Idle", int(4.0 * FPS), idle)
+make_action("Idle", int(8.0 * FPS), idle)
 make_action("Walk", int(WALK_T * FPS), walk)
-make_action("Graze", int(3.0 * FPS), graze)
+make_action("Graze", int(6.0 * FPS), graze)
 bpy.context.scene.render.fps = FPS
 
-# hoof travel per stride, measured: how far a planted hoof slides back while it's down
-leg_len = ZB + 0.06 - 0.02
-STRIDE = 2.0 * leg_len * math.sin(math.radians(SWING)) * 2.0 / WALK_T
-print("STRIDE %.3f m/s (Walk loop at speed 1)" % STRIDE)
+# the ground speed the Walk loop's planted hooves imply
+STRIDE = STEP / (DUTY * WALK_T)
+print("STRIDE %s: the Walk loop covers %.3f m/s (legs %.2f m, step %.2f m)" % (ID, STRIDE, LEG, STEP))
 
 # --- 6. textures and export ---------------------------------------------------------------------
 for i, mat in enumerate(ob.data.materials):

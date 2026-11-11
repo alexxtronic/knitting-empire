@@ -4,19 +4,20 @@ extends Node3D
 ## Two models from tripo.ai, brought into the Woolcore look by tools/import_asset.py: a woolly sheep
 ## (assets/props/sheep_woolly.glb) and a freshly shorn one (assets/props/sheep_sheared.glb). Her coat
 ## comes back once the wool is half grown and fills out as it finishes. Both are rigged by
-## tools/rig_sheep.py with the same loops: Walk (a four-beat walk), Graze (head down, chewing) and
-## Idle (breathing, looking about). She wanders, and at each stop mostly grazes.
+## tools/rig_sheep.py with the same loops: Walk (a four-beat walk), Graze (head down, tugging and
+## chewing) and Idle (breathing, shifting her weight, looking about). She grazes her way round the
+## pen a step or two at a time, crosses it now and then, and eases in and out of every walk.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const REGROW_HOURS := 10.0
 const WOOLLY_MODEL := "res://assets/props/sheep_woolly.glb"
 const SHEARED_MODEL := "res://assets/props/sheep_sheared.glb"
 const COAT_BACK := 0.5 # wool level at which the woolly model shows again
-const WALK_SPEED := 0.55 # metres per second
+const WALK_SPEED := 0.38 # metres per second, an amble (each sheep's own pace is a little either side)
 ## Each model's Walk loop covers this much ground per second at speed 1 (rig_sheep.py prints it),
 ## so the loop is sped up or slowed to keep the hooves planted.
-const STRIDE := {"woolly": 0.506, "sheared": 0.742}
-const BLEND := 0.35 # seconds to cross-fade between loops
+const STRIDE := {"woolly": 0.315, "sheared": 0.462}
+const BLEND := 0.6 # seconds to cross-fade between loops (her head takes a moment to come up)
 const GRAZE_CHANCE := 0.7 # at each stop: graze, or just stand and look about
 
 var pen := Rect2()
@@ -29,6 +30,9 @@ var hold_time := 0.0
 var _target := Vector3.ZERO
 var _wait := 0.0
 var _grazing := false
+var _speed := 0.0 # ground speed right now: she eases into a walk and out of it
+var _pace := 1.0 # this sheep's own pace
+var _nibbles := 0 # short steps left before her next proper wander
 var _pivot: Node3D # carries both models
 var _woolly: Node3D
 var _sheared: Node3D
@@ -46,7 +50,7 @@ func _ready() -> void:
 				if ap.has_animation(n):
 					ap.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 			ap.play("Idle")
-			ap.seek(randf() * 3.0, true) # sheep don't breathe in step
+			ap.seek(randf() * 6.0, true) # sheep don't breathe in step
 	if _woolly == null:
 		_woolly = Node3D.new()
 		_pivot.add_child(_woolly)
@@ -62,6 +66,9 @@ func _ready() -> void:
 	body.add_child(cs)
 	body.set_meta("target", self)
 	add_child(body)
+	_pace = randf_range(0.85, 1.15)
+	_wait = randf_range(0.0, 4.0) # the flock doesn't set off together
+	_grazing = randf() < GRAZE_CHANCE
 	_pick_target()
 	_update_look()
 
@@ -87,7 +94,16 @@ func hold(seconds: float) -> void:
 	hold_time = seconds
 
 
+## Where she heads next. Grazing sheep mostly shuffle a step or two to fresh grass, and only now
+## and then cross the pen.
 func _pick_target() -> void:
+	if _nibbles > 0:
+		_nibbles -= 1
+		var a := rotation.y + randf_range(-0.9, 0.9)
+		var p := position + Vector3(sin(a), 0, cos(a)) * randf_range(0.45, 1.1)
+		_target = Vector3(clampf(p.x, pen.position.x, pen.end.x), 0, clampf(p.z, pen.position.y, pen.end.y))
+		return
+	_nibbles = randi_range(1, 4)
 	_target = Vector3(randf_range(pen.position.x, pen.end.x), 0, randf_range(pen.position.y, pen.end.y))
 
 
@@ -108,22 +124,32 @@ func _process(delta: float) -> void:
 		wool = wool + delta / (Game.HOUR_SECONDS * REGROW_HOURS)
 	if hold_time > 0.0:
 		hold_time -= delta
+		_speed = 0.0
 		_play("Idle")
 		return
 	if _wait > 0.0:
 		_wait -= delta
+		_speed = 0.0
 		_play("Graze" if _grazing else "Idle")
 		return
 	var to := _target - position
 	to.y = 0
-	if to.length() < 0.1:
-		_wait = randf_range(3.0, 8.0)
+	var d := to.length()
+	if d < 0.08:
+		_speed = 0.0
 		_grazing = randf() < GRAZE_CHANCE
+		_wait = randf_range(4.0, 11.0) if _grazing else randf_range(2.0, 5.0)
 		_pick_target()
 		return
-	position += to.normalized() * WALK_SPEED * delta
-	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 5.0))
-	_play("Walk", WALK_SPEED)
+	# she turns toward where she's going as she sets off, gathers pace over a few steps and slows
+	# into her stop: a sheep that snaps to full speed in a straight line looks like a toy on rails
+	var off := absf(angle_difference(rotation.y, atan2(to.x, to.z)))
+	var top := WALK_SPEED * _pace
+	var want := minf(top * clampf(1.2 - off / 1.2, 0.25, 1.0), maxf(0.12, sqrt(2.0 * 0.5 * d)))
+	_speed = move_toward(_speed, want, 0.7 * delta)
+	position += Vector3(sin(rotation.y), 0, cos(rotation.y)).lerp(to / d, 0.5).normalized() * _speed * delta
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 2.6))
+	_play("Walk", _speed)
 
 
 ## Whether a loop is playing right now on the coat that's showing (for the autotest).
@@ -148,4 +174,4 @@ func _play(loop_name: String, ground_speed := 0.0) -> void:
 			continue
 		if ap.current_animation != loop_name:
 			ap.play(loop_name, BLEND)
-		ap.speed_scale = ground_speed / float(STRIDE[key]) if ground_speed > 0.0 else 1.0
+		ap.speed_scale = maxf(ground_speed / float(STRIDE[key]), 0.5) if loop_name == "Walk" else 1.0

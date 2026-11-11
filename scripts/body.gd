@@ -8,6 +8,9 @@ const Rig = preload("res://scripts/rig.gd")
 const ANIMS := ["Idle", "Walk", "SitKnit", "SitIdle", "Work", "Talk"]
 const OPTIONAL := ["Run"] # a jog, for the player holding Shift; bodies without it walk instead
 const BLEND := 0.22
+## While she's still gathering speed the stride plays no slower than this: a real first step is
+## short and quick, not a full stride in slow motion.
+const MIN_STRIDE_RATE := 0.55
 
 var id := ""
 var ok := false # true when the model loaded with every loop
@@ -73,6 +76,7 @@ func load_character(char_id: String) -> bool:
 	if props:
 		props.visible = false
 	anim.play("Idle")
+	anim.seek(randf() * anim.get_animation("Idle").length, true) # so no two people stand in step
 	ok = true
 	return true
 
@@ -87,9 +91,9 @@ func play(loop_name: String, ground_speed := 0.0) -> void:
 		anim.play(loop_name, BLEND)
 	anim.speed_scale = 1.0
 	if ground_speed > 0.0 and loop_name == "Walk":
-		anim.speed_scale = ground_speed / walk_anim_speed
+		anim.speed_scale = maxf(ground_speed / walk_anim_speed, MIN_STRIDE_RATE)
 	elif ground_speed > 0.0 and loop_name == "Run":
-		anim.speed_scale = ground_speed / run_anim_speed
+		anim.speed_scale = maxf(ground_speed / run_anim_speed, MIN_STRIDE_RATE)
 	if props:
 		props.visible = loop_name == "SitKnit"
 
@@ -110,6 +114,7 @@ func _process(delta: float) -> void:
 		rig.moving = spd > 0.4
 		# seated or working: the loops own the spine; keep the head free
 		rig.look_strength = 0.6 if current() in ["SitKnit", "Work"] else 1.0
+		rig.glances = current() == "Idle" and global_transform.basis.y.y > 0.9 # not asleep in bed
 	_last_pos = p
 	_last_yaw = yaw
 	_have_last = true
