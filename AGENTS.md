@@ -49,7 +49,9 @@ grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 | `assets/nora.glb`, `assets/rowan.glb` (procedural bodies, shared 22-bone rig and animation loops) | `tools/build_character.py` (Blender) | `Blender -b -P tools/build_character.py -- "$PWD" --character all` |
 | `assets/nora_tripo.glb`, `assets/rowan_tripo.glb` (the models the game uses, from tripo.ai) | `tools/rig_sculpt.py` (Blender), then `tools/retarget_anims.py` for the mocap loops | the command in the README's Characters section (it needs the source export, which isn't in the repo), then the retarget command below |
 | `assets/audio/*` (every sound and the music) | `tools/make_audio.py` | `uv run --no-project --with numpy --with scipy python tools/make_audio.py "$PWD"` |
-| `assets/props/*.glb` | `tools/import_asset.py` | see `docs/STYLE_GUIDE.md` |
+| `assets/props/*.glb` (Woolcore palette props, e.g. `milk_churn`) | `tools/import_asset.py` | see `docs/STYLE_GUIDE.md` |
+| `assets/props/sheep_woolly.glb`, `sheep_sheared.glb` (keep their own Tripo texture) | `tools/import_textured.py` | `Blender -b --factory-startup -P tools/import_textured.py -- "$PWD" <tripo.glb> sheep_woolly --height 0.95 --yaw 90 --faces 20000 --tex 1024`; the source exports are in Alex's Downloads, not the repo |
+| `assets/props/market_stall.glb`, `coffee_table.glb` (made by Codex, parts joined) | `tools/join_meshes.py` | `Blender -b --factory-startup -P tools/join_meshes.py -- <in.glb> assets/props/<id>.glb` |
 
 Animation loops: the procedural bodies get theirs (Idle, Walk, SitKnit, SitIdle, Work, Talk) from Python pose functions in `build_character.py`. The Tripo models the game uses get motion-captured loops instead: `tools/retarget_anims.py` copies Idle, Walk, Run (the Shift jog), Talk, SitIdle and Work from Quaternius's Universal Animation Library (CC0, free on itch.io, not in the repo) onto their rigs, and keeps their SitKnit. The order matters. Re-rigging a Tripo model with `rig_sculpt.py` brings back the procedural loops, so run the retarget after it:
 
