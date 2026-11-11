@@ -1,0 +1,30 @@
+{
+  "name": "bench_park",
+  "triangles": 10298,
+  "materials": [
+    "bench_iron_mat",
+    "bench_wood_mat"
+  ],
+  "size_m": [
+    2.015,
+    0.829,
+    1.014
+  ],
+  "min_m": [
+    -1.005,
+    -0.361,
+    0.0
+  ],
+  "max_m": [
+    1.01,
+    0.468,
+    1.014
+  ],
+  "images": [
+    "bench_iron",
+    "bench_iron_n",
+    "bench_wood",
+    "bench_wood_n"
+  ],
+  "glb_bytes": 3328192
+}
