@@ -5,6 +5,7 @@ extends RefCounted
 
 const Catalog = preload("res://scripts/catalog.gd")
 const Landmark = preload("res://scripts/landmark.gd")
+const Interiors = preload("res://scripts/interiors.gd")
 
 const ROAD := Rect2(26.0, 2.2, 11.0, 1.6) # farm gate → town, along z ≈ 3
 const TOWN := Rect2(36.0, -16.0, 34.0, 30.0) # walkable town area: x 36..70, z -16..14
@@ -54,9 +55,9 @@ static func build(root: Node3D) -> Dictionary:
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
 	blockers.append_array(stall["blockers"])
-	blockers.append(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "WOOLLY GOODS", 56.5, Color(0.55, 0.65, 0.8), "shop"))
-	blockers.append(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "LAND OFFICE", 64.25, Color(0.85, 0.75, 0.45), "office"))
-	blockers.append(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "BAKERY", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
+	blockers.append_array(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "WOOLLY GOODS", 56.5, Color(0.55, 0.65, 0.8), "shop"))
+	blockers.append_array(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "LAND OFFICE", 64.25, Color(0.85, 0.75, 0.45), "office"))
+	blockers.append_array(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "BAKERY", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
 	var to_town := signpost(root, Vector3(25.6, 0, 1.75), "MAPLEWOOD  →", "travel_town", "Signpost: Maplewood")
 	var to_farm := signpost(root, Vector3(38.2, 0, 1.75), "←  BIRCHFIELD FARM", "travel_farm", "Signpost: Birchfield Farm")
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))
@@ -275,7 +276,9 @@ static func _stall(root: Node3D, pos: Vector3) -> Dictionary:
 ## A shop front on rect r, door facing +Z (south). With a model id it uses the modelled building
 ## assets/props/building_<id>.glb (made by art/world_assets/town_buildings/build.py, sized to the
 ## rect, door centred) and writes the name on its sign board; without one it builds simple boxes.
-static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text: String, door_x: float, trim: Color, model_id := "") -> Rect2:
+## A shop front. With its model (art/world_assets/town_buildings) it is a walk-in shop, furnished
+## inside (scripts/interiors.gd); returns what blocks the way (Rect2s on the ground).
+static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text: String, door_x: float, trim: Color, model_id := "") -> Array:
 	var b := Node3D.new()
 	var c := r.get_center()
 	b.position = Vector3(c.x, 0, c.y)
@@ -286,11 +289,21 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 	if model_id != "" and ResourceLoader.exists(path) and Catalog.model(path, b) != null:
 		b.name = "Building_" + model_id
 		b.set_meta("building_model", model_id)
-		b.add_child(_sign_label(sign_text, Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095)))
-		# the steps and porch stand a little proud of the front wall
-		var porch := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
-		built.append([b, "building_" + model_id, sign_text.capitalize(), [porch]])
-		return porch
+		var label := _sign_label(sign_text, Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095))
+		var rooms := Interiors.furnish(b, model_id, r.size)
+		if rooms.is_empty():
+			b.add_child(label)
+			# the steps and porch stand a little proud of the front wall
+			var porch := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
+			built.append([b, "building_" + model_id, sign_text.capitalize(), [porch]])
+			return [porch]
+		# the name goes with the front wall, so it isn't left hanging when the wall is cut down
+		(Interiors.shops[model_id].parts["wall_front"] as Node3D).add_child(label)
+		var rects := []
+		for q in rooms:
+			rects.append(Rect2((q as Rect2).position + c, (q as Rect2).size))
+		built.append([b, "building_" + model_id, sign_text.capitalize(), rects])
+		return rects
 	var h := 3.0
 	var gable := 1.6
 	Catalog.box(b, Vector3(w, h, d), Vector3(0, h * 0.5, 0), wall)
@@ -331,7 +344,7 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 	b.add_child(_sign_label(sign_text, Vector3(0, h - 0.4, front + 0.085)))
 	var around := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.4)
 	built.append([b, "building_" + sign_text.to_snake_case(), sign_text.capitalize(), [around]])
-	return around
+	return [around]
 
 
 static func _sign_label(text: String, pos: Vector3) -> Label3D:

@@ -11,6 +11,7 @@ const Player = preload("res://scripts/player.gd")
 const Data = preload("res://scripts/data.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Town = preload("res://scripts/town.gd")
+const Interiors = preload("res://scripts/interiors.gd")
 const Grass = preload("res://scripts/grass.gd")
 const Villager = preload("res://scripts/villager.gd")
 const Story = preload("res://scripts/story.gd")
@@ -229,6 +230,8 @@ func _ready() -> void:
 		god.layout_path = GOD_TEST_LAYOUT # the autotest's last step: the world again, from the layout it saved
 	if not OS.get_cmdline_user_args().has("--nolayout") and not Engine.has_meta("ke_god_stock"):
 		god.load_layout()
+	_place_shopkeepers() # behind their counters, wherever the layout put their shops
+	god.reapply_scenery() # nothing grows on the shops' floors where they stand now
 	if _autotest_dir != "":
 		god.layout_path = GOD_TEST_LAYOUT # the test saves here, never over the real layout
 	player = Player.new()
@@ -641,6 +644,7 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Town.COTTAGE.grow(0.3))
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
+	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
 	var roads: Image = god.road_img if painted else null
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
@@ -917,6 +921,7 @@ func _process(delta: float) -> void:
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
+	Interiors.update(player.position, cam_yaw, walls_up, delta, villagers.map(func(v): return v.position))
 	_update_lighting()
 	_update_story_staging(delta)
 	_update_needs(delta)
@@ -1321,7 +1326,8 @@ func _actions_for(t) -> Array:
 
 
 func _stand_point(t) -> Vector3:
-	if t is Villager and t.talk_spot != null:
+	# a shopkeeper's spot in front of the counter, while they are at work (a scene may take them out)
+	if t is Villager and t.talk_spot != null and t.position.distance_to(t.talk_spot) < 3.0:
 		return t.talk_spot
 	var p: Vector3 = t.global_position
 	if t is Furniture:
@@ -2106,7 +2112,8 @@ func _act1_checks() -> void:
 	_check("read Gran's letter and got her yarn (wool %d→%d)" % [wool0, Game.count("wool")],
 		Game.flag("read_gran_letter") == true and Game.count("wool") == wool0 + 3 and Game.flag("act1_basket") == true)
 	var mabel := _villager("mabel")
-	_check("Mabel went back to the Land Office (%.1f away)" % mabel.position.distance_to(Vector3(64.2, 0, -7.2)), mabel.position.distance_to(Vector3(64.2, 0, -7.2)) < 1.5)
+	var desk := _villager_post("mabel")
+	_check("Mabel went back to the Land Office (%.1f away)" % mabel.position.distance_to(desk), mabel.position.distance_to(desk) < 1.5)
 	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
 	t0 = Time.get_ticks_msec()
 	_do_action(chair, "knit")
@@ -2710,7 +2717,7 @@ func _polish_checks() -> void:
 	for b in find_children("Building_*", "Node3D", true, false):
 		var meshes := b.find_children("*", "MeshInstance3D", true, false).size()
 		var named := false
-		for l in b.find_children("*", "Label3D", false, false):
+		for l in b.find_children("*", "Label3D", true, false):
 			named = named or (l as Label3D).text != ""
 		if meshes > 0 and named:
 			built.append(str(b.get_meta("building_model", "")))
@@ -2855,6 +2862,12 @@ func _autotest() -> void:
 	if "--only=house" in OS.get_cmdline_user_args(): # just the house furniture checks, with every piece set out for a picture
 		await _wait(1.5)
 		await _house_checks(true)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=shops" in OS.get_cmdline_user_args(): # just the walk-in shops and their pictures
+		await _wait(1.5)
+		await _shop_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -3017,6 +3030,7 @@ func _autotest() -> void:
 	await _house_checks(false)
 	await _bench_checks()
 	await _barn_checks()
+	await _shop_checks()
 	await _flock_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
 
@@ -3121,6 +3135,80 @@ func _barn_checks() -> void:
 	var whole: bool = World.BARN_WALLS.keys().all(func(s): return (parts["wall_" + s] as Node3D).visible and not (parts["wall_%s_low" % s] as Node3D).visible)
 	_check("the barn closes up again when she leaves (doors %.0f%% open, roof %s)" % [World.barn_open * 100.0, "shown" if (parts["roof"] as Node3D).visible else "hidden"],
 		not World.barn_inside and World.barn_open < 0.05 and (parts["roof"] as Node3D).visible and whole and player.position.distance_to(out_front) < 0.8)
+	_set_cam_lock(true)
+
+
+## The shops (scripts/interiors.gd): she walks in through each door and it opens up round her
+## (door swung in, roof hidden, the walls toward the camera cut down); its shopkeeper is behind
+## the counter, and she talks to them from across it (Hazel sells her a warm croissant). Each
+## closes up again when she leaves.
+func _shop_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var furnished: bool = Interiors.shops.size() == 3
+	for sh in Interiors.shops.values():
+		var room: Node = sh.node.find_child("Furnishings", false, false)
+		furnished = furnished and sh.parts.size() == 11 and room != null and room.get_child_count() >= 6
+	_check("the three shops are walk-in models, in their parts and furnished (%s)" % ", ".join(Interiors.shops.keys()), furnished)
+	var keepers := {}
+	for d in _villager_defs():
+		if d.has("works_in"):
+			keepers[str(d["works_in"])] = str(d["id"])
+			set_home(str(d["id"])) # back behind their counters, wherever earlier scenes sent them
+	Game.coins = maxi(Game.coins, 200)
+	for id in ["shop", "bakery", "office"]:
+		var s = Interiors.shops.get(id)
+		var v := _villager(str(keepers.get(id, "")))
+		if s == null or v == null or not s.node.visible:
+			_check("%s has its shopkeeper" % id, false)
+			continue
+		var xf: Transform3D = s.node.global_transform
+		var out_front: Vector3 = xf * Vector3(0, 0, s.size.y * 0.5 + 2.4)
+		out_front.y = 0.0
+		hud.hide_dialogue()
+		player.walk([])
+		player.position = out_front
+		_set_cam_lock(false)
+		cam_target = xf.origin + Vector3(0, 1.5, 0)
+		cam_dist = 16.0
+		await _wait(1.6)
+		var shut: bool = s.open < 0.05 and (s.parts["roof"] as Node3D).visible and not s.inside
+		await _shot("46_%s.png" % id)
+		var k: Dictionary = Interiors.keeper(id)
+		var at_post: bool = v.position.distance_to(k["pos"]) < 0.8 and Interiors.inside_of(v.position) == id
+		var price := _hazel_price()
+		var c0 := Game.coins
+		if id == "bakery":
+			Game.fullness = 40.0
+			_do_action(v, "buy_pastry")
+		else:
+			_do_action(v, "talk")
+		await _walk_wait(30.0)
+		cam_target = player.position + Vector3(0, 1.0, 0)
+		cam_dist = 11.0
+		await _wait(1.4)
+		var cut := 0
+		for side in Interiors.WALLS:
+			if (s.parts["wall_%s_low" % side] as Node3D).visible and not (s.parts["wall_" + side] as Node3D).visible:
+				cut += 1
+		_check("she walks into the %s through its door and it opens up round her (%.1f m from the counter, door %.0f%% open, roof %s, %d walls cut down)" % [id, player.position.distance_to(k["talk"]), s.open * 100.0, "hidden" if not (s.parts["roof"] as Node3D).visible else "shown", cut],
+			shut and s.inside and player.position.distance_to(k["talk"]) < 0.8 and s.open > 0.95 and not (s.parts["roof"] as Node3D).visible and cut >= 1 and cut <= 2)
+		_check("%s is behind the counter inside, and talks to her across it (%.1f m from their post)" % [v.title, v.position.distance_to(k["pos"])],
+			at_post and v.position.distance_to(k["pos"]) < 1.0 and hud.dlg_panel.visible)
+		if id == "bakery":
+			_check("Hazel sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
+				Game.coins == c0 - price and Game.fullness > 40.0 + PASTRY_FOOD - 3.0) # less what she burned walking over
+		await _shot("46_%s_inside.png" % id)
+		hud.hide_dialogue()
+		player.walk(_find_path(player.position, out_front))
+		await _walk_wait(25.0)
+		cam_target = xf.origin + Vector3(0, 1.5, 0)
+		cam_dist = 16.0
+		await _wait(1.6)
+		var whole: bool = Interiors.WALLS.keys().all(func(w): return (s.parts["wall_" + w] as Node3D).visible and not (s.parts["wall_%s_low" % w] as Node3D).visible)
+		_check("the %s closes up again when she leaves (door %.0f%% open, roof %s)" % [id, s.open * 100.0, "shown" if (s.parts["roof"] as Node3D).visible else "hidden"],
+			not s.inside and s.open < 0.05 and (s.parts["roof"] as Node3D).visible and whole and player.position.distance_to(out_front) < 0.8)
 	_set_cam_lock(true)
 
 
@@ -4155,8 +4243,39 @@ func set_home(vid: String, p = null) -> void:
 		Game.flags.erase("home_" + vid)
 		for d in _villager_defs():
 			if d["id"] == vid:
-				v.settle_at(d["pos"])
-				v.roam = d["roam"]
+				var k: Dictionary = Interiors.keeper(str(d["works_in"])) if d.has("works_in") else {}
+				v.settle_at(k.get("pos", d["pos"]))
+				v.roam = k.get("roam", d["roam"])
+				if k.has("yaw"):
+					v.rotation.y = float(k["yaw"])
+
+
+## Shopkeepers (villagers.json "works_in") work inside their shops (scripts/interiors.gd): they
+## stand behind the counter facing the door, and you talk to them from across it. A scene that
+## has sent one somewhere else (a "home_" flag) keeps them there.
+func _place_shopkeepers() -> void:
+	for d in _villager_defs():
+		var v := _villager(str(d["id"]))
+		if v == null or not d.has("works_in"):
+			continue
+		var k: Dictionary = Interiors.keeper(str(d["works_in"]))
+		if k.is_empty():
+			continue
+		v.talk_spot = k["talk"]
+		v.rest_yaw = k["yaw"]
+		if Game.flag("home_" + v.vid, null) == null:
+			v.settle_at(k["pos"])
+			v.roam = k["roam"]
+			v.rotation.y = float(k["yaw"])
+
+
+## Where villager `vid` stands when nobody has sent them anywhere: their counter, or their spot.
+func _villager_post(vid: String) -> Vector3:
+	for d in _villager_defs():
+		if d["id"] == vid:
+			var k: Dictionary = Interiors.keeper(str(d["works_in"])) if d.has("works_in") else {}
+			return k.get("pos", d["pos"])
+	return Vector3.ZERO
 
 
 ## Who lives in Maplewood: res://data/villagers.json.
@@ -4181,6 +4300,14 @@ func _crop_value() -> int:
 
 func _theo_price(base: int) -> int:
 	return int(round(base * (1.0 - 0.05 * Game.hearts("theo"))))
+
+
+const PASTRY_PRICE := 12 # Hazel's croissants, before her friendship discount
+const PASTRY_FOOD := 25.0
+
+
+func _hazel_price() -> int:
+	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("hazel"))))
 
 
 func _cottage_price() -> int:
@@ -4210,6 +4337,9 @@ func _villager_actions(v) -> Array:
 				acts.append(_act("buy_sheep", "Buy a sheep  (%dc · you have %d)" % [sp, Game.sheep_count], Game.coins >= sp))
 			else:
 				acts.append(_act("noop", "Your pen is full (%d sheep)" % Game.MAX_SHEEP, false))
+		"hazel":
+			var pp := _hazel_price()
+			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
 		"mabel":
 			if Game.owns_cottage:
 				acts.append(_act("noop", "Rosewood Cottage rent: %dc a day" % _cottage_rent(), false))
@@ -4289,6 +4419,13 @@ func _villager_action(v, id: String) -> void:
 				_add_sheep()
 				_say(v, "Her name is %s. I walked her over to your pen myself. Be nice to her!" % sheep_name)
 				hud.show_toast("%s the sheep joined your flock! (%d sheep)" % [sheep_name, Game.sheep_count])
+		"buy_pastry":
+			if Game.spend(_hazel_price()):
+				Game.fullness = minf(100.0, Game.fullness + PASTRY_FOOD)
+				Game.add_need("happiness", 4.0)
+				var said: Array = ["Still warm. Eat it here, crumbs and all.", "Ten minutes out of the oven. Mind, it's hot.", "Take the window seat if you like. Nobody's in a hurry in here."]
+				_say(v, said[(Game.day + int(f["n"])) % said.size()])
+				hud.show_toast("A warm croissant. (+%d food)" % int(PASTRY_FOOD))
 		"buy_cottage":
 			if not Game.owns_cottage and Game.spend(_cottage_price()):
 				Game.owns_cottage = true

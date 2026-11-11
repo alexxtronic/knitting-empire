@@ -1,0 +1,42 @@
+{
+  "name": "brick_oven",
+  "triangles": 1784,
+  "materials": [
+    "int_brick",
+    "int_stone",
+    "int_soot",
+    "int_walnut",
+    "int_pine",
+    "int_fire",
+    "int_ember"
+  ],
+  "size_m": [
+    1.494,
+    1.075,
+    1.955
+  ],
+  "min_m": [
+    -0.68,
+    -0.555,
+    0.0
+  ],
+  "max_m": [
+    0.814,
+    0.52,
+    1.955
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 365056
+}

@@ -1,0 +1,45 @@
+{
+  "name": "bakery_counter",
+  "triangles": 4140,
+  "materials": [
+    "int_oak",
+    "int_walnut",
+    "int_pine",
+    "int_glass",
+    "int_brass",
+    "int_cream",
+    "int_dough",
+    "int_crust",
+    "int_jam",
+    "int_paper_bag"
+  ],
+  "size_m": [
+    1.88,
+    0.71,
+    1.253
+  ],
+  "min_m": [
+    -0.94,
+    -0.355,
+    0.0
+  ],
+  "max_m": [
+    0.94,
+    0.355,
+    1.253
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 360500
+}

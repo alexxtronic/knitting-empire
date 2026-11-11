@@ -1,0 +1,47 @@
+{
+  "name": "yarn_shelf",
+  "triangles": 11596,
+  "materials": [
+    "int_oak",
+    "int_pine",
+    "wool_plaid",
+    "wool_clay",
+    "wool_sage",
+    "wool_sunflower",
+    "wool_cream",
+    "wool_rug_wine",
+    "wool_sky",
+    "wool_denim",
+    "wool_rug_oat",
+    "wool_berry"
+  ],
+  "size_m": [
+    1.48,
+    0.46,
+    1.96
+  ],
+  "min_m": [
+    -0.74,
+    -0.24,
+    0.0
+  ],
+  "max_m": [
+    0.74,
+    0.22,
+    1.96
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 522696
+}

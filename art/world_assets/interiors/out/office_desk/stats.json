@@ -1,0 +1,43 @@
+{
+  "name": "office_desk",
+  "triangles": 1700,
+  "materials": [
+    "int_walnut",
+    "int_leather",
+    "int_oak",
+    "int_brass",
+    "int_paper",
+    "int_ink",
+    "int_lampshade",
+    "int_cream"
+  ],
+  "size_m": [
+    1.4,
+    0.71,
+    1.2
+  ],
+  "min_m": [
+    -0.7,
+    -0.35,
+    0.0
+  ],
+  "max_m": [
+    0.7,
+    0.36,
+    1.2
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 213828
+}

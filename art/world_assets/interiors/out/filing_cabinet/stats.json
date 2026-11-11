@@ -1,0 +1,40 @@
+{
+  "name": "filing_cabinet",
+  "triangles": 796,
+  "materials": [
+    "int_oak",
+    "int_walnut",
+    "int_brass",
+    "int_paper",
+    "int_cream"
+  ],
+  "size_m": [
+    0.59,
+    0.56,
+    1.55
+  ],
+  "min_m": [
+    -0.295,
+    -0.29,
+    0.0
+  ],
+  "max_m": [
+    0.295,
+    0.27,
+    1.55
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 174088
+}

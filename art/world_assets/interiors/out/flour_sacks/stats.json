@@ -1,0 +1,40 @@
+{
+  "name": "flour_sacks",
+  "triangles": 3144,
+  "materials": [
+    "int_burlap",
+    "int_leather",
+    "int_flour",
+    "int_pine",
+    "int_oak"
+  ],
+  "size_m": [
+    0.917,
+    0.603,
+    0.634
+  ],
+  "min_m": [
+    -0.36,
+    -0.354,
+    -0.025
+  ],
+  "max_m": [
+    0.557,
+    0.248,
+    0.609
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 322960
+}

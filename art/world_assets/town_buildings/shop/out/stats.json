@@ -1,62 +1,136 @@
 {
   "name": "building_shop",
-  "triangles": 12368,
-  "materials": [
-    "stone_shop",
-    "walls_shop",
-    "interior_shop",
-    "frame_shop",
-    "trim_shop",
-    "soil",
-    "leaf",
-    "bloom_a",
-    "bloom_b",
-    "bloom_c",
-    "awning_shop",
-    "iron",
-    "door_shop",
-    "timber_shop",
-    "brass",
-    "roof_shop",
-    "pot",
-    "sign_shop",
-    "wicker",
-    "yarn0",
-    "yarn1",
-    "yarn2",
-    "yarn3",
-    "yarn4",
-    "yarn5",
-    "yarn6",
-    "needle"
-  ],
-  "size_m": [
-    6.91,
-    6.102,
-    5.537
-  ],
-  "min_m": [
-    -3.455,
-    -3.277,
-    0.0
-  ],
-  "max_m": [
-    3.455,
-    2.825,
-    5.537
-  ],
-  "images": [
-    "awning_shop",
-    "door_shop",
-    "interior_shop",
-    "plaster_shop",
-    "plaster_shop_n",
-    "roof_shop",
-    "roof_shop_n",
-    "stone_shop",
-    "stone_shop_n",
-    "timber_shop",
-    "wicker"
-  ],
-  "glb_bytes": 3619936
+  "parts": {
+    "base": {
+      "triangles": 1248,
+      "materials": [
+        "floor_shop",
+        "stone_shop",
+        "wicker",
+        "yarn0",
+        "yarn1",
+        "yarn2",
+        "yarn3",
+        "yarn4",
+        "yarn5",
+        "yarn6"
+      ]
+    },
+    "wall_front": {
+      "triangles": 5178,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "glass_shop",
+        "frame_shop",
+        "trim_shop",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "awning_shop",
+        "iron",
+        "timber_shop",
+        "sign_shop",
+        "yarn1",
+        "needle"
+      ]
+    },
+    "wall_front_low": {
+      "triangles": 268,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "timber_shop"
+      ]
+    },
+    "wall_back": {
+      "triangles": 1198,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "glass_shop",
+        "frame_shop",
+        "trim_shop",
+        "timber_shop"
+      ]
+    },
+    "wall_back_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "timber_shop"
+      ]
+    },
+    "wall_left": {
+      "triangles": 1806,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "glass_shop",
+        "frame_shop",
+        "trim_shop",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "timber_shop"
+      ]
+    },
+    "wall_left_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "timber_shop"
+      ]
+    },
+    "wall_right": {
+      "triangles": 1806,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "glass_shop",
+        "frame_shop",
+        "trim_shop",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "timber_shop"
+      ]
+    },
+    "wall_right_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_shop",
+        "stone_shop",
+        "timber_shop"
+      ]
+    },
+    "door": {
+      "triangles": 1192,
+      "materials": [
+        "door_shop",
+        "glass_shop",
+        "timber_shop",
+        "brass"
+      ]
+    },
+    "roof": {
+      "triangles": 676,
+      "materials": [
+        "roof_shop",
+        "timber_shop",
+        "stone_shop",
+        "pot"
+      ]
+    }
+  },
+  "triangles": 13840,
+  "glb_bytes": 3942008
 }

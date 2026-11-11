@@ -1,0 +1,41 @@
+{
+  "name": "bread_rack",
+  "triangles": 7760,
+  "materials": [
+    "int_pine",
+    "int_oak",
+    "int_crust",
+    "int_dough",
+    "int_wicker",
+    "int_baguette"
+  ],
+  "size_m": [
+    1.76,
+    0.49,
+    1.977
+  ],
+  "min_m": [
+    -0.73,
+    -0.245,
+    0.0
+  ],
+  "max_m": [
+    1.03,
+    0.245,
+    1.977
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 471740
+}

@@ -97,7 +97,8 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 Prices, furniture, crops, villagers and their lines all live in `data/`. Edit the JSON and run the game.
 
 - **A new price or limit:** change it in `economy.json`.
-- **A new villager:** add an entry to `villagers.json`, then give them an intro, three tiers of lines and a loved-gift line in `dialogue.json`.
+- **A new villager:** add an entry to `villagers.json`, then give them an intro, three tiers of lines and a loved-gift line in `dialogue.json`. Give them `"works_in": "shop"` (or `bakery`, `office`) to put them behind that shop's counter.
+- **A shop's furniture:** `interiors.json` lists what stands in each shop you can walk into (Woolly Goods, the bakery, the land office), where the shopkeeper stands and where you stand to talk to them, all in the building's own space, so it all moves with the building in the world editor.
 - **A new crop:** add it to `crops.json` and give it a sell price in `economy.json`.
 - **Furniture:** add it to `furniture.json`. Either give it a `"model"` (a glb made with `tools/import_asset.py`, see [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)) or write a builder in `catalog.gd`.
 

@@ -31,6 +31,7 @@ extends Node3D
 const Catalog = preload("res://scripts/catalog.gd")
 const World = preload("res://scripts/world.gd")
 const Town = preload("res://scripts/town.gd")
+const Interiors = preload("res://scripts/interiors.gd")
 const Grass = preload("res://scripts/grass.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Furniture = preload("res://scripts/furniture.gd")
@@ -321,11 +322,12 @@ static func _rigid(t: Transform3D) -> Transform3D:
 
 # --- showing a change in the world --------------------------------------------------------
 
-## Puts the thing where its `xf` says (or hides it, if deleted).
+## Puts the thing where its `xf` says (or hides it, if deleted). Scenery standing on a walk-in
+## shop's floor isn't drawn (it would grow through the boards), but stays in the layout.
 func _apply(el: El) -> void:
 	if el.scenery:
 		var t := el.xf
-		if el.deleted:
+		if el.deleted or Interiors.inside_of(el.xf.origin) != "":
 			t = Transform3D(Basis.from_scale(Vector3.ZERO), el.xf.origin)
 		el.mmi.multimesh.set_instance_transform(el.idx, el.mmi.transform.affine_inverse() * t)
 		_apply_leaves(el)
@@ -394,6 +396,29 @@ func _rebuild_litter() -> void:
 			mm.set_instance_custom_data(at + j, el.leaves[j][2])
 		at += el.leaves.size()
 		_apply_leaves(el)
+
+
+## Draws every piece of scenery again where it stands (after the layout has moved the buildings,
+## so whatever is now on a shop's floor is hidden).
+func reapply_scenery() -> void:
+	for kind in scenery:
+		for el in scenery[kind]:
+			if (el as El).mmi != null:
+				_apply(el)
+	_road_holes()
+
+
+## The painted cobbles leave the shops' floors alone (shaders/cobble_painted.gdshader).
+func _road_holes() -> void:
+	var holes := PackedVector4Array()
+	for r in Interiors.floors().slice(0, 4):
+		holes.append(Vector4((r as Rect2).position.x, (r as Rect2).position.y, (r as Rect2).size.x, (r as Rect2).size.y))
+	for mesh in _tile_meshes:
+		for i in (mesh as ArrayMesh).get_surface_count():
+			var m := (mesh as ArrayMesh).surface_get_material(i) as ShaderMaterial
+			if m != null:
+				m.set_shader_parameter("holes", holes)
+				m.set_shader_parameter("hole_count", holes.size())
 
 
 ## Builds the MultiMeshes of one kind of scenery again from its list (after the list changed).

@@ -314,6 +314,87 @@
       "id": "milk_churn",
       "shop": "yard",
       "model": "res://assets/props/milk_churn.glb"
+    },
+    {
+      "name": "Shop Counter",
+      "price": 0,
+      "size": [1.6, 0.6],
+      "where": "in",
+      "height": 1.0,
+      "id": "shop_counter",
+      "model": "res://assets/props/shop_counter.glb"
+    },
+    {
+      "name": "Yarn Shelf",
+      "price": 0,
+      "size": [1.4, 0.4],
+      "where": "in",
+      "height": 1.9,
+      "id": "yarn_shelf",
+      "model": "res://assets/props/yarn_shelf.glb"
+    },
+    {
+      "name": "Sweater Rack",
+      "price": 0,
+      "size": [1.2, 0.5],
+      "where": "in",
+      "height": 1.55,
+      "id": "sweater_rack",
+      "model": "res://assets/props/sweater_rack.glb"
+    },
+    {
+      "name": "Bakery Counter",
+      "price": 0,
+      "size": [1.8, 0.65],
+      "where": "in",
+      "height": 1.25,
+      "id": "bakery_counter",
+      "model": "res://assets/props/bakery_counter.glb"
+    },
+    {
+      "name": "Bread Rack",
+      "price": 0,
+      "size": [1.4, 0.45],
+      "where": "in",
+      "height": 1.75,
+      "id": "bread_rack",
+      "model": "res://assets/props/bread_rack.glb"
+    },
+    {
+      "name": "Brick Oven",
+      "price": 0,
+      "size": [1.3, 1.0],
+      "where": "in",
+      "height": 1.95,
+      "id": "brick_oven",
+      "model": "res://assets/props/brick_oven.glb"
+    },
+    {
+      "name": "Flour Sacks",
+      "price": 0,
+      "size": [0.8, 0.6],
+      "where": "in",
+      "height": 0.6,
+      "id": "flour_sacks",
+      "model": "res://assets/props/flour_sacks.glb"
+    },
+    {
+      "name": "Office Desk",
+      "price": 0,
+      "size": [1.4, 0.7],
+      "where": "in",
+      "height": 1.2,
+      "id": "office_desk",
+      "model": "res://assets/props/office_desk.glb"
+    },
+    {
+      "name": "Filing Cabinet",
+      "price": 0,
+      "size": [0.55, 0.5],
+      "where": "in",
+      "height": 1.55,
+      "id": "filing_cabinet",
+      "model": "res://assets/props/filing_cabinet.glb"
     }
   ]
 }

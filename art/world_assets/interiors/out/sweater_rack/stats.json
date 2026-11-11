@@ -1,0 +1,43 @@
+{
+  "name": "sweater_rack",
+  "triangles": 3296,
+  "materials": [
+    "int_iron",
+    "int_brass",
+    "wool_plaid",
+    "wool_cream",
+    "int_oak",
+    "wool_denim",
+    "wool_clay",
+    "wool_rug_oat"
+  ],
+  "size_m": [
+    1.283,
+    0.48,
+    1.55
+  ],
+  "min_m": [
+    -0.641,
+    -0.24,
+    0.0
+  ],
+  "max_m": [
+    0.641,
+    0.24,
+    1.55
+  ],
+  "images": [
+    "int_brick",
+    "int_brick_n",
+    "int_burlap",
+    "int_burlap_n",
+    "int_oak",
+    "int_oak_n",
+    "int_pine",
+    "int_pine_n",
+    "int_walnut",
+    "int_walnut_n",
+    "int_wicker"
+  ],
+  "glb_bytes": 205796
+}

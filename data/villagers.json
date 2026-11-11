@@ -1,5 +1,5 @@
 {
-  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
+  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
@@ -24,6 +24,7 @@
       "role": "Woolly Goods",
       "loves": "sweater",
       "likes": ["pumpkin"],
+      "works_in": "shop",
       "pos": [57.2, 0.0, -7.3],
       "roam": [1.1, 0.35],
       "look": {
@@ -40,6 +41,7 @@
       "role": "Land Office",
       "loves": "turnip",
       "likes": ["pumpkin"],
+      "works_in": "office",
       "pos": [64.2, 0.0, -7.2],
       "roam": [1.0, 0.35],
       "look": {
@@ -48,6 +50,23 @@
         "top": "#52477a",
         "bottom": "#333342",
         "extra": "hat"
+      }
+    },
+    {
+      "id": "hazel",
+      "name": "Hazel",
+      "role": "Bakery",
+      "loves": "pumpkin",
+      "likes": ["turnip", "sweater"],
+      "works_in": "bakery",
+      "pos": [42.3, 0.0, -7.6],
+      "roam": [0.45, 0.0],
+      "look": {
+        "skin": "#c98f6b",
+        "hair": "#3b2a20",
+        "top": "#c7745a",
+        "bottom": "#5a4a3c",
+        "extra": "apron"
       }
     },
     {

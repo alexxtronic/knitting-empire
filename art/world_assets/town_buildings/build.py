@@ -9,15 +9,27 @@ chalkboard, a porch and a notice board).
 
 The sign board sits where town.gd puts its lettering (a Label3D, so the names stay editable text).
 
+You can walk in, so the model is exported in parts, like the barn (scripts/interiors.gd opens it up):
+
+    base                      plank floor, threshold, and the things standing outside: always shown
+    wall_front|back|left|right    each wall at full height, hollow, with its windows, timbers and trim
+                              (the gables go with front and back, the sign with the front)
+    wall_*_low                the same wall cut down to a stub, shown instead when it faces the camera
+    door                      the door leaf, its origin on the hinge line (left jamb) so it can swing in
+    roof                      roof, barge boards, ridge and chimney: hidden while she is inside
+
     Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/town_buildings/build.py -- shop|bakery|office
 
 Writes art/world_assets/town_buildings/<kind>/out/building_<kind>.glb and copies it to assets/props.
+Front (the door) faces -Y here (+Z in Godot).
 """
+import json
 import math
 import os
 import shutil
 import sys
 
+import bpy
 import numpy as np
 from mathutils import Vector
 
@@ -132,33 +144,6 @@ def stripes_image(a, b, n=256, k=8):
     return K.save_image("awning_" + KIND, np.broadcast_to(c, (n, n, 3)).copy(), TEX)
 
 
-def interior_image(kind, n=256):
-    """What you see through the windows: a warm lit room with shelves of the shop's goods."""
-    yy, xx = np.mgrid[0:n, 0:n] / n
-    warm = rgb("#f2c98a") * (1.0 - 0.45 * yy[..., None]) + rgb("#7a4a28") * 0.35 * yy[..., None]
-    c = warm * (0.75 + 0.35 * np.exp(-((xx - 0.5) ** 2) * 6))[..., None]
-    shelf_z = [0.3, 0.55, 0.8]
-    for s in shelf_z:
-        band = np.abs(yy - s) < 0.018
-        c[band] = rgb("#5a3920")
-    r = np.random.default_rng(2)
-    goods = {"yarn": ["#a12b26", "#596b8c", "#9eae8f", "#edddbd", "#9a2a44", "#b88a57", "#8fb3c7"],
-             "bread": ["#c98b4a", "#b06e35", "#e0b276", "#8a5428"],
-             "office": ["#efe6d2", "#d8cfb8", "#6b665e", "#9a2a44"]}[kind]
-    for s in shelf_z:
-        x = 0.06
-        while x < 0.94:
-            w = r.uniform(0.05, 0.09) if kind != "office" else r.uniform(0.02, 0.05)
-            h = w * (0.9 if kind == "yarn" else 0.55 if kind == "bread" else 3.0)
-            col = rgb(goods[r.integers(len(goods))])
-            m = ((xx - x - w / 2) / (w / 2)) ** 2 + ((yy - (s - h / 2 - 0.02)) / (h / 2)) ** 2 < 1
-            if kind == "office":
-                m = (np.abs(xx - x - w / 2) < w / 2) & (yy > s - h - 0.02) & (yy < s - 0.02)
-            c[m] = col * (0.85 + 0.25 * (1 - yy[m] / max(s, 0.01)))[..., None]
-            x += w + r.uniform(0.005, 0.03)
-    return K.save_image("interior_" + KIND, c, TEX)
-
-
 def uv_roof(ob, side, ridge_z, ang, scale=0.9):
     """Roof UVs: u along the ridge, v down the slope from the ridge, so shingle rows run level."""
     me = ob.data
@@ -186,8 +171,8 @@ TIMBER = K.textured("timber_" + KIND, timber_image(S["timber"]), 0.85)
 DOOR = K.textured("door_" + KIND, K.wood_image("door_" + KIND, TEX, seed=8, planks=5), 0.8)
 TRIM = K.plain("trim_" + KIND, S["trim"], 0.7)
 FRAME = K.plain("frame_" + KIND, "#efe6d2", 0.7)
-INTERIOR = K.textured("interior_" + KIND, interior_image(S["interior"]), 0.4, emit=0.55)
-GLASS = K.plain("glass_" + KIND, "#2c3a40", 0.08)
+GLASS = K.plain("glass_" + KIND, "#cfe0e4", 0.05, alpha=0.3)
+FLOOR = K.textured("floor_" + KIND, K.wood_image("floor_" + KIND, TEX, seed=12, planks=8), 0.75)
 BRASS = K.plain("brass", "#c9a24a", 0.35)
 IRON = K.plain("iron", "#2b2826", 0.6)
 SIGN = K.plain("sign_" + KIND, "#efe2c4", 0.8)
@@ -207,7 +192,15 @@ WALLS = {
 
 
 def wbox(name, wall, a, out, z, sa, so, sz, mat, bevel=0.012):
-    """A box placed on a wall: a along it, out from its face, z up; sizes along/out/up."""
+    """A box placed on a wall: a along it, out from its face, z up; sizes along/out/up. In a cut-down
+    wall (CAP set) it is clipped to the stub's height, or left out if it starts above it."""
+    if CAP is not None:
+        z0 = z - sz / 2
+        if z0 >= CAP - 0.01:
+            return None
+        if z + sz / 2 > CAP:
+            sz = CAP - z0
+            z = z0 + sz / 2
     al, ou, c, _ = WALLS[wall]
     pos = c + al * a + ou * out + Vector((0, 0, z))
     size = (abs(al.x) * sa + abs(ou.x) * so, abs(al.y) * sa + abs(ou.y) * so, sz)
@@ -224,12 +217,15 @@ def wpane(name, wall, a, out, z0, z1, width, mat):
 
 
 CUTTERS = []
+CAP = None  # the height of the wall being built, when it is the cut-down stub
+T = 0.2  # wall thickness: the walls are hollow, so she can walk in
 
 
-def cut(wall, a, z0, z1, width, depth=0.22):
+def cut(wall, a, z0, z1, width):
+    """An opening right through the wall (and its plinth and gable)."""
     al, ou, c, _ = WALLS[wall]
     pos = c + al * a + Vector((0, 0, (z0 + z1) / 2))
-    size = (abs(al.x) * width + abs(ou.x) * depth * 2, abs(al.y) * width + abs(ou.y) * depth * 2, z1 - z0)
+    size = (abs(al.x) * width + abs(ou.x) * 1.0, abs(al.y) * width + abs(ou.y) * 1.0, z1 - z0)
     ob = K.box("cut", size, tuple(pos), WALL, bevel=0)
     CUTTERS.append(ob)
 
@@ -238,8 +234,10 @@ REVEAL = 0.16  # how deep windows and the door sit in the wall
 
 
 def window(wall, a, z0, z1, width, flowers=True, shutters=True, awning=False):
-    cut(wall, a, z0, z1, width, REVEAL)
-    wpane("interior", wall, a, -REVEAL + 0.005, z0, z1, width, INTERIOR)
+    if CAP is not None and z0 - 0.3 >= CAP:
+        return  # all of it is above the stub
+    cut(wall, a, z0, z1, width)
+    wpane("glass", wall, a, -REVEAL + 0.005, z0, z1, width, GLASS)
     t = 0.06
     # frame and mullions (a cross)
     for zz in (z0 + t / 2, z1 - t / 2):
@@ -287,192 +285,324 @@ def awning_over(wall, a, z, width, reach=0.75, drop=0.4):
         K.cyl("rod", 0.012, 0.012, slope, tuple(p0), IRON, verts=6, rot=(90 - ang if wall == "front" else -(90 - ang), 0, 0))
 
 
-# --- shell ---------------------------------------------------------------------------------------
+# --- parts ---------------------------------------------------------------------------------------
 
-plinth = K.box("plinth", (W + 0.3, D + 0.3, PL), (0, 0, PL / 2), STONE, bevel=0.03)
-K.uv_box(plinth, 1.0)
-walls = K.box("walls", (W, D, H - PL), (0, 0, PL + (H - PL) / 2), WALL, bevel=0)
-gable = K.extrude_xz("gable", [(-W / 2, H), (W / 2, H), (0, H + G)], -D / 2, D / 2, WALL, bevel=0)
+PARTS = {}
+HINGES = {}  # part name -> where its origin goes, so the game can swing it
 
-# openings: the door in the middle of the front, a window either side, one on each other wall,
-# a small window up in the front gable
+
+class part:
+    """Everything built inside `with part("name"):` is joined into one exported object of that name."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        self.before = set(K.COLL.objects)
+
+    def __exit__(self, *a):
+        PARTS.setdefault(self.name, []).extend(o for o in K.COLL.objects if o not in self.before)
+
+
+LOW = 0.62  # height of a cut-down wall
 DOOR_W, DOOR_H = 1.1, 2.15
+DOOR_TOP = PL + DOOR_H  # the doorway runs from the floor: she walks in on the level
 front_win = (W / 2 - 0.5) * 0.62
-cut("front", 0, PL, PL + DOOR_H, DOOR_W, REVEAL)
-for s in (-1, 1):
-    window("front", s * front_win, 0.95, 2.05, 1.15 if KIND != "shop" else 1.35, awning=bool(S["awning"]))
-for wl in ("left", "right", "back"):
-    window(wl, 0, 1.0, 2.0, 0.95, flowers=(wl != "back"), shutters=True)
+gw = 0.62  # the little window up in the front gable
+TOP_Z = 0.03  # the floor boards' top
 
-# cut every opening out of the walls (and the gable window out of the gable)
-gw = 0.62
-cut("front", 0, H + 0.35, H + 0.35 + gw, gw, REVEAL)
-for target in (walls, gable):
+
+# --- walls ---------------------------------------------------------------------------------------
+
+def shell(side):
+    """The wall itself (hollow, T thick, outer face where the old solid block's was), its share of
+    the stone plinth band, and for the front and back the gable above it. Returns what openings
+    are cut out of."""
+    al, ou, c, span = WALLS[side]
+    top = H if CAP is None else CAP
+    length = span if side in ("front", "back") else span - 2 * T  # front and back own the corners
+    pos = c - ou * (T / 2) + Vector((0, 0, top / 2))
+    size = (abs(al.x) * length + abs(ou.x) * T, abs(al.y) * length + abs(ou.y) * T, top)
+    targets = [K.box("wall", size, tuple(pos), WALL, bevel=0)]
+    plen = span + 0.3 if side in ("front", "back") else span
+    ppos = c + ou * 0.075 + Vector((0, 0, PL / 2))
+    psize = (abs(al.x) * plen + abs(ou.x) * 0.15, abs(al.y) * plen + abs(ou.y) * 0.15, PL)
+    targets.append(K.box("plinth", psize, tuple(ppos), STONE, bevel=0))
+    if CAP is None and side in ("front", "back"):
+        y0, y1 = (-D / 2, -D / 2 + T) if side == "front" else (D / 2 - T, D / 2)
+        targets.append(K.extrude_xz("gable", [(-W / 2, H), (W / 2, H), (0, H + G)], y0, y1, WALL, bevel=0))
+    return targets
+
+
+def apply_cuts(targets):
+    for target in targets:
+        for cobj in CUTTERS:
+            m = target.modifiers.new("cut", "BOOLEAN")
+            m.operation = "DIFFERENCE"
+            m.solver = "EXACT"
+            m.object = cobj
+        K.apply_mods(target)
     for cobj in CUTTERS:
-        m = target.modifiers.new("cut", "BOOLEAN")
-        m.operation = "DIFFERENCE"
-        m.solver = "EXACT"
-        m.object = cobj
-    K.apply_mods(target)
-for cobj in CUTTERS:
-    K.bpy.data.objects.remove(cobj)
-K.uv_box(walls, 0.5 if S["walls"] != "brick" else 0.7)
-K.uv_box(gable, 0.5 if S["walls"] != "brick" else 0.7)
+        bpy.data.objects.remove(cobj)
+    CUTTERS.clear()
+    for target in targets:
+        K.uv_box(target, 1.0 if target.name.startswith("plinth") else (0.5 if S["walls"] != "brick" else 0.7))
 
-# gable window: a little four-pane window
-wpane("interior", "front", 0, -REVEAL + 0.005, H + 0.35, H + 0.35 + gw, gw, INTERIOR)
-for zz in (H + 0.35 + 0.03, H + 0.35 + gw - 0.03, H + 0.35 + gw / 2):
-    wbox("wf", "front", 0, -REVEAL + 0.03, zz, gw, 0.05, 0.05, FRAME)
-for aa in (-gw / 2 + 0.03, gw / 2 - 0.03, 0):
-    wbox("wf", "front", aa, -REVEAL + 0.03, H + 0.35 + gw / 2, 0.05, 0.05, gw, FRAME)
 
-# --- door ----------------------------------------------------------------------------------------
-dz = PL + DOOR_H / 2
-door = wbox("door", "front", 0, -REVEAL + 0.04, dz, DOOR_W - 0.06, 0.06, DOOR_H - 0.03, DOOR)
-K.uv_box(door, 1.0)
-wpane("doorglass", "front", 0, -REVEAL + 0.075, PL + 1.35, PL + 1.95, 0.6, INTERIOR)
-for zz in (PL + 1.35, PL + 1.95, PL + 1.65):
-    wbox("df", "front", 0, -REVEAL + 0.085, zz, 0.62, 0.03, 0.04, TIMBER)
-wbox("df", "front", 0, -REVEAL + 0.085, PL + 1.65, 0.04, 0.03, 0.6, TIMBER)
-for zz in (PL + 0.35, PL + 0.95):
-    wbox("panel", "front", 0, -REVEAL + 0.08, zz, 0.7, 0.02, 0.42, DOOR)
-K.ball("knob", 0.035, (0.36, FRONT + REVEAL - 0.1, PL + 1.0), BRASS)
-# door case and step
-for s in (-1, 1):
-    wbox("doorcase", "front", s * (DOOR_W / 2 + 0.06), 0.03, dz, 0.14, 0.08, DOOR_H + 0.06, TIMBER if S["walls"] != "brick" else STONE)
-wbox("lintel", "front", 0, 0.035, PL + DOOR_H + 0.08, DOOR_W + 0.4, 0.09, 0.16, TIMBER if S["walls"] != "brick" else STONE)
-step = K.box("step", (1.6, 0.5, 0.2), (0, FRONT - 0.15 - 0.25, 0.1), STONE, bevel=0.03)
-K.uv_box(step, 1.0)
-
-# --- timbers or quoins ----------------------------------------------------------------------------
-if S["walls"] != "brick":
-    T = 0.16
-    for wl, (al, ou, c, span) in WALLS.items():
-        for a in (-span / 2 + T / 2, span / 2 - T / 2):
-            wbox("post", wl, a, 0.025, (PL + H) / 2, T, 0.06, H - PL, TIMBER)
-        wbox("sillbeam", wl, 0, 0.03, PL + 0.07, span, 0.07, 0.14, TIMBER)
-        wbox("eavebeam", wl, 0, 0.03, H - 0.08, span + 0.02, 0.08, 0.16, TIMBER)
-        wbox("band", wl, 0, 0.025, BAND, span, 0.06, 0.12, TIMBER)
-        if wl in ("left", "right"):
+def timbers(side):
+    al, ou, c, span = WALLS[side]
+    if S["walls"] != "brick":
+        tt = 0.16
+        for a in (-span / 2 + tt / 2, span / 2 - tt / 2):
+            wbox("post", side, a, 0.025, (PL + H) / 2, tt, 0.06, H - PL, TIMBER)
+        wbox("sillbeam", side, 0, 0.03, PL + 0.07, span, 0.07, 0.14, TIMBER)
+        wbox("eavebeam", side, 0, 0.03, H - 0.08, span + 0.02, 0.08, 0.16, TIMBER)
+        wbox("band", side, 0, 0.025, BAND, span, 0.06, 0.12, TIMBER)
+        if side in ("left", "right"):
             for a in (-span / 4, span / 4):
-                wbox("post", wl, a, 0.025, (BAND + H) / 2, T * 0.8, 0.05, H - BAND, TIMBER)
-    # gable timbers: braces up to a short king post over the gable window
-    for side_y, wl in ((FRONT - 0.03, "front"), (D / 2 + 0.03, "back")):
-        for s in (-1, 1):
-            x0, z0, x1, z1 = s * (W / 2 - 0.35), H + 0.05, s * 0.55, H + G * 0.62
-            L = math.hypot(x1 - x0, z1 - z0)
-            ang = math.degrees(math.atan2(z1 - z0, x1 - x0))
-            K.box("brace", (L, 0.07, 0.14), ((x0 + x1) / 2, side_y, (z0 + z1) / 2), TIMBER, bevel=0.01, seg=1, rot=(0, -ang, 0))
-        K.box("kingpost", (0.14, 0.07, G * 0.3), (0, side_y, H + G * 0.82), TIMBER, bevel=0.01, seg=1)
-        K.box("collar", (W * 0.5, 0.07, 0.12), (0, side_y, H + 0.12), TIMBER, bevel=0.01, seg=1)
-else:
-    # dressed stone quoins up the corners, a cornice under the eaves, a stone band
-    for wl, (al, ou, c, span) in WALLS.items():
+                wbox("post", side, a, 0.025, (BAND + H) / 2, tt * 0.8, 0.05, H - BAND, TIMBER)
+        if CAP is None and side in ("front", "back"):
+            # gable timbers: braces up to a short king post over the gable window
+            side_y = FRONT - 0.03 if side == "front" else D / 2 + 0.03
+            for s in (-1, 1):
+                x0, z0, x1, z1 = s * (W / 2 - 0.35), H + 0.05, s * 0.55, H + G * 0.62
+                L = math.hypot(x1 - x0, z1 - z0)
+                ang = math.degrees(math.atan2(z1 - z0, x1 - x0))
+                K.box("brace", (L, 0.07, 0.14), ((x0 + x1) / 2, side_y, (z0 + z1) / 2), TIMBER, bevel=0.01, seg=1, rot=(0, -ang, 0))
+            K.box("kingpost", (0.14, 0.07, G * 0.3), (0, side_y, H + G * 0.82), TIMBER, bevel=0.01, seg=1)
+            K.box("collar", (W * 0.5, 0.07, 0.12), (0, side_y, H + 0.12), TIMBER, bevel=0.01, seg=1)
+    else:
+        # dressed stone quoins up the corners, a cornice under the eaves, a stone band
         for a in (-span / 2 + 0.17, span / 2 - 0.17):
             for i, zz in enumerate(np.arange(PL + 0.15, H - 0.1, 0.3)):
-                q = wbox("quoin", wl, a + (0.06 if i % 2 else -0.0) * np.sign(a), 0.02, zz, 0.42 if i % 2 else 0.3, 0.05, 0.26, STONE)
-        wbox("cornice", wl, 0, 0.05, H - 0.06, span + 0.1, 0.12, 0.14, STONE)
-        wbox("band", wl, 0, 0.03, BAND, span, 0.06, 0.1, STONE)
-    for side_y in (FRONT - 0.04, D / 2 + 0.04):
-        K.box("gablecap", (0.3, 0.08, 0.2), (0, side_y, H + G - 0.1), STONE, bevel=0.01, seg=1)
+                wbox("quoin", side, a + (0.06 if i % 2 else -0.0) * np.sign(a), 0.02, zz, 0.42 if i % 2 else 0.3, 0.05, 0.26, STONE)
+        wbox("cornice", side, 0, 0.05, H - 0.06, span + 0.1, 0.12, 0.14, STONE)
+        wbox("band", side, 0, 0.03, BAND, span, 0.06, 0.1, STONE)
+        if CAP is None and side in ("front", "back"):
+            K.box("gablecap", (0.3, 0.08, 0.2), (0, FRONT - 0.04 if side == "front" else D / 2 + 0.04, H + G - 0.1), STONE, bevel=0.01, seg=1)
+
+
+def build_wall(side, low):
+    global CAP
+    CAP = LOW if low else None
+    targets = shell(side)
+    if side == "front":
+        cut("front", 0, -0.1, DOOR_TOP, DOOR_W)
+        for s in (-1, 1):
+            window("front", s * front_win, 0.95, 2.05, 1.15 if KIND != "shop" else 1.35, awning=bool(S["awning"]))
+        if CAP is None:
+            cut("front", 0, H + 0.35, H + 0.35 + gw, gw)
+            # the gable window: a little four-pane window
+            wpane("glass", "front", 0, -REVEAL + 0.005, H + 0.35, H + 0.35 + gw, gw, GLASS)
+            for zz in (H + 0.35 + 0.03, H + 0.35 + gw - 0.03, H + 0.35 + gw / 2):
+                wbox("wf", "front", 0, -REVEAL + 0.03, zz, gw, 0.05, 0.05, FRAME)
+            for aa in (-gw / 2 + 0.03, gw / 2 - 0.03, 0):
+                wbox("wf", "front", aa, -REVEAL + 0.03, H + 0.35 + gw / 2, 0.05, 0.05, gw, FRAME)
+        # door case: jambs either side of the opening, a lintel over it
+        for s in (-1, 1):
+            wbox("doorcase", "front", s * (DOOR_W / 2 + 0.06), 0.03, DOOR_TOP / 2, 0.14, 0.08, DOOR_TOP + 0.06, TIMBER if S["walls"] != "brick" else STONE)
+        wbox("lintel", "front", 0, 0.035, DOOR_TOP + 0.08, DOOR_W + 0.4, 0.09, 0.16, TIMBER if S["walls"] != "brick" else STONE)
+    else:
+        window(side, 0, 1.0, 2.0, 0.95, flowers=(side != "back"), shutters=True)
+    apply_cuts(targets)
+    timbers(side)
+    if side == "front" and CAP is None:
+        sign_board()
+        front_extras()
+    CAP = None
+
+
+def sign_board():
+    sw = min(W - 0.6, 3.4)
+    K.box("signframe", (sw + 0.12, 0.04, 0.56), (0, FRONT - 0.05, SIGN_Z), TIMBER, bevel=0.01, seg=1)
+    K.box("signboard", (sw, 0.06, 0.46), (0, FRONT - 0.06, SIGN_Z), SIGN, bevel=0.01, seg=1)
+
+
+def front_extras():
+    """What hangs off the front wall: the bracket signs, the office's porch canopy."""
+    ex = S["extras"]
+    if ex in ("yarn", "bread"):
+        bx, bz = W / 2 - 0.08, 3.12  # off the corner post, above the awnings
+        K.box("bracket", (0.05, 0.7, 0.05), (bx, FRONT - 0.35, bz), IRON, bevel=0.01, seg=1)
+    if ex == "yarn":
+        yarns = ["#a12b26", "#596b8c"]
+        K.cyl("chain", 0.008, 0.008, 0.16, (bx, FRONT - 0.6, bz - 0.09), IRON, verts=5)
+        K.ball("yarnsign", 0.17, (bx, FRONT - 0.6, bz - 0.34), K.plain("yarn1", yarns[1], 0.95), u=14, v=9)
+        K.cyl("needle", 0.012, 0.012, 0.5, (bx, FRONT - 0.6, bz - 0.32), K.plain("needle", "#b88a57", 0.6), verts=6, rot=(0, 55, 0))
+    elif ex == "bread":
+        K.cyl("chain", 0.008, 0.008, 0.12, (bx, FRONT - 0.6, bz - 0.07), IRON, verts=5)
+        pz = bz - 0.34
+        pm = K.plain("pretzel", "#b06e35", 0.75)
+        K.torus("pretzel", 0.14, 0.035, (bx, FRONT - 0.6, pz), pm, rot=(90, 0, 0))
+        K.torus("pretzel", 0.08, 0.03, (bx - 0.08, FRONT - 0.6, pz + 0.07), pm, rot=(90, 0, 0))
+        K.torus("pretzel", 0.08, 0.03, (bx + 0.08, FRONT - 0.6, pz + 0.07), pm, rot=(90, 0, 0))
+    elif ex == "office":
+        # a little porch: two columns carrying a flat stone canopy over the door, kept below the sign
+        for s in (-1, 1):
+            K.cyl("column", 0.09, 0.08, 2.5, (s * 0.85, FRONT - 0.55, 0.06 + 1.25), K.plain("column", "#e8dfcc", 0.8), verts=14)
+        K.box("porchroof", (2.2, 0.85, 0.12), (0, FRONT - 0.4, PL + 2.3), STONE, bevel=0.02)
+        K.box("porchcornice", (2.34, 0.95, 0.06), (0, FRONT - 0.43, PL + 2.39), STONE, bevel=0.015)
+
+
+# --- door ----------------------------------------------------------------------------------------
+
+def build_door():
+    """One plank leaf with a glazed top, hung on the left jamb, opening inward."""
+    leaf_h = DOOR_TOP - TOP_Z - 0.02
+    dz = TOP_Z + 0.01 + leaf_h / 2
+    door = wbox("door", "front", 0, -REVEAL + 0.04, dz, DOOR_W - 0.06, 0.06, leaf_h, DOOR)
+    K.uv_box(door, 1.0)
+    g0, g1 = DOOR_TOP - 1.15, DOOR_TOP - 0.55
+    wbox("doorglass", "front", 0, -REVEAL + 0.04, (g0 + g1) / 2, 0.6, 0.07, g1 - g0, GLASS)
+    for side_out in (-REVEAL + 0.085, -REVEAL - 0.005):  # glazing bars and panels on both faces
+        for zz in (g0, g1, (g0 + g1) / 2):
+            wbox("df", "front", 0, side_out, zz, 0.62, 0.02, 0.04, TIMBER)
+        wbox("df", "front", 0, side_out, (g0 + g1) / 2, 0.04, 0.02, 0.6, TIMBER)
+        for zz in (TOP_Z + 0.4, TOP_Z + 1.0):
+            wbox("panel", "front", 0, side_out - 0.003 * (1 if side_out > -REVEAL else -1), zz, 0.7, 0.015, 0.42, DOOR)
+    for y in (FRONT + REVEAL - 0.1, FRONT + REVEAL + 0.02):
+        K.ball("knob", 0.035, (DOOR_W / 2 - 0.19, y, TOP_Z + 1.0), BRASS)
+    HINGES["door"] = (-DOOR_W / 2 + 0.03, FRONT + REVEAL - 0.04, 0.0)
+
+
+# --- base: floor, threshold, and what stands outside ---------------------------------------------
+
+def build_base():
+    fl = K.box("floor", (W - 2 * T + 0.02, D - 2 * T + 0.02, 0.05), (0, 0, TOP_Z - 0.025), FLOOR, bevel=0)
+    K.uv_box(fl, 0.6, grain="y")
+    th = K.box("threshold", (DOOR_W + 0.1, T + 0.02, 0.05), (0, FRONT + T / 2, TOP_Z - 0.02), STONE, bevel=0.01)
+    K.uv_box(th, 1.0)
+    step = K.box("step", (1.6, 0.5, 0.05), (0, FRONT - 0.25, 0.015), STONE, bevel=0.015)
+    K.uv_box(step, 1.0)
+    ex = S["extras"]
+    if ex == "yarn":
+        bx = -(DOOR_W / 2 + 0.55)
+        K.cyl("basket", 0.26, 0.3, 0.3, (bx, FRONT - 0.45, 0.15), K.textured("wicker", K.wood_image("wicker", TEX, seed=3, planks=12), 0.9), verts=16)
+        yarns = ["#a12b26", "#596b8c", "#9eae8f", "#edddbd", "#9a2a44", "#b88a57", "#e3a66d"]
+        for i in range(7):
+            a = i / 7 * math.tau
+            p = (bx + 0.13 * math.cos(a), FRONT - 0.45 + 0.13 * math.sin(a), 0.33 + 0.04 * (i % 2))
+            K.ball("yarn", 0.1, p, K.plain("yarn%d" % i, yarns[i], 0.95), u=10, v=7)
+        K.ball("yarn", 0.1, (bx, FRONT - 0.45, 0.42), K.plain("yarn0", yarns[0], 0.95), u=10, v=7)
+    elif ex == "bread":
+        bx = DOOR_W / 2 + 0.6
+        crate = K.box("crate", (0.6, 0.45, 0.35), (bx, FRONT - 0.42, 0.18), DOOR, bevel=0.02)
+        K.uv_box(crate, 1.5)
+        loaf = K.plain("loaf", "#c98b4a", 0.8)
+        for i in range(5):
+            K.ball("loaf", 0.09, (bx - 0.2 + i * 0.1, FRONT - 0.42 + rng.uniform(-0.08, 0.08), 0.39), loaf, scale=(1.4, 0.8, 0.7), u=10, v=6)
+        cbx = -(DOOR_W / 2 + 0.7)
+        for s in (-1, 1):
+            K.box("aframe", (0.5, 0.04, 0.8), (cbx, FRONT - 0.55 + s * 0.12, 0.4), DOOR, bevel=0.01, seg=1, rot=(s * 12, 0, 0))
+        K.box("chalk", (0.42, 0.01, 0.6), (cbx, FRONT - 0.55 - 0.145, 0.42), K.plain("chalk", "#2f3530", 0.9), bevel=0, rot=(-12, 0, 0))
+    elif ex == "office":
+        for s in (-1, 1):
+            K.box("plinthblock", (0.26, 0.26, 0.12), (s * 0.85, FRONT - 0.55, 0.06), STONE, bevel=0.02)
+        K.box("porchfloor", (2.2, 0.9, 0.05), (0, FRONT - 0.45, 0.015), STONE, bevel=0.015)
+        nbx, nby, nbz = W / 2 - 0.35, FRONT - 1.0, 1.25
+        for s_ in (-1, 1):
+            K.box("noticepost", (0.07, 0.07, nbz + 0.38), (nbx + s_ * 0.45, nby, (nbz + 0.38) / 2), DOOR, bevel=0.01, seg=1)
+        nb = K.box("notice", (0.8, 0.05, 0.6), (nbx, nby, nbz), DOOR, bevel=0.01, seg=1)
+        K.uv_box(nb, 1.5)
+        K.box("noticecap", (1.02, 0.16, 0.05), (nbx, nby, nbz + 0.4), DOOR, bevel=0.01, seg=1)
+        paper = K.plain("paper", "#f1e8d6", 0.9)
+        for i, (px, pz) in enumerate(((-0.2, 0.08), (0.12, 0.12), (-0.05, -0.15), (0.22, -0.12))):
+            K.box("paper", (0.18, 0.006, 0.22), (nbx + px, nby - 0.03, nbz + pz), paper, bevel=0, rot=(0, rng.uniform(-6, 6), 0))
+        K.cyl("postbox", 0.16, 0.16, 0.9, (-(DOOR_W / 2 + 1.45), FRONT - 0.45, 0.45), K.plain("postbox", "#9a2a44", 0.6), verts=14)
+        K.ball("postboxtop", 0.16, (-(DOOR_W / 2 + 1.45), FRONT - 0.45, 0.9), K.plain("postbox", "#9a2a44", 0.6), scale=(1, 1, 0.5), u=14, v=6)
+
 
 # --- roof ----------------------------------------------------------------------------------------
-OVER_E, OVER_G, THK = 0.4, 0.3, 0.12
-half = W / 2 + OVER_E
-rise = G * half / (W / 2)
-ang = math.atan2(G, W / 2)
-slope = math.hypot(half, rise)
-ridge_z = H + G + 0.06
-for s in (-1, 1):
-    cx = s * half / 2
-    cz = ridge_z - rise / 2
-    ob = K.box("roof", (slope + 0.06, D + 2 * OVER_G, THK), (cx, 0, cz), ROOF, bevel=0.02, seg=1,
-               rot=(0, math.degrees(ang) * s, 0))
-    uv_roof(ob, s, ridge_z, ang)
-    # barge boards along the gable ends
-    for yy in (-(D / 2 + OVER_G), D / 2 + OVER_G):
-        K.box("barge", (slope, 0.05, 0.2), (cx, yy, cz - 0.06), TIMBER, bevel=0.01, seg=1, rot=(0, math.degrees(ang) * s, 0))
-    # fascia board along the eave, hiding the slab's edge
-    K.box("fascia", (0.05, D + 2 * OVER_G + 0.04, 0.2), (s * (half + 0.03), 0, ridge_z - rise - 0.04), TIMBER, bevel=0.01, seg=1)
-K.cyl("ridge", 0.09, 0.09, D + 2 * OVER_G + 0.04, (0, 0, ridge_z + 0.02), ROOF, verts=10, rot=(90, 0, 0))
 
-# chimney through the roof, on one slope toward the back
-cxs = S["chimney"] * W * 0.24
-roof_z_at = ridge_z - abs(cxs) * math.tan(ang)
-ch_h = roof_z_at + 0.9 - H
-ch = K.box("chimney", (0.6, 0.6, ch_h), (cxs, D * 0.2, H + ch_h / 2), STONE, bevel=0.02)
-K.uv_box(ch, 1.2)
-K.box("chimneycap", (0.75, 0.75, 0.1), (cxs, D * 0.2, H + ch_h + 0.05), STONE, bevel=0.02)
-for s in (-1, 1):
-    K.cyl("pot", 0.08, 0.07, 0.25, (cxs + s * 0.14, D * 0.2, H + ch_h + 0.22), K.plain("pot", "#b8663f", 0.85), verts=10)
-
-# --- sign board (town.gd writes the name on it) ----------------------------------------------------
-sw = min(W - 0.6, 3.4)
-K.box("signframe", (sw + 0.12, 0.04, 0.56), (0, FRONT - 0.05, SIGN_Z), TIMBER, bevel=0.01, seg=1)
-K.box("signboard", (sw, 0.06, 0.46), (0, FRONT - 0.06, SIGN_Z), SIGN, bevel=0.01, seg=1)
-
-# --- each shop's extras --------------------------------------------------------------------------
-ex = S["extras"]
-if ex == "yarn":
-    # a basket of yarn by the door and a hanging yarn-ball sign
-    bx = -(DOOR_W / 2 + 0.55)
-    K.cyl("basket", 0.26, 0.3, 0.3, (bx, FRONT - 0.45, 0.15), K.textured("wicker", K.wood_image("wicker", TEX, seed=3, planks=12), 0.9), verts=16)
-    yarns = ["#a12b26", "#596b8c", "#9eae8f", "#edddbd", "#9a2a44", "#b88a57", "#e3a66d"]
-    for i in range(7):
-        a = i / 7 * math.tau
-        p = (bx + 0.13 * math.cos(a), FRONT - 0.45 + 0.13 * math.sin(a), 0.33 + 0.04 * (i % 2))
-        K.ball("yarn", 0.1, p, K.plain("yarn%d" % i, yarns[i], 0.95), u=10, v=7)
-    K.ball("yarn", 0.1, (bx, FRONT - 0.45, 0.42), K.plain("yarn0", yarns[0], 0.95), u=10, v=7)
-    # wrought bracket sign with a ball of wool
-    bx, bz = W / 2 - 0.08, 3.12  # off the corner post, above the awnings
-    K.box("bracket", (0.05, 0.7, 0.05), (bx, FRONT - 0.35, bz), IRON, bevel=0.01, seg=1)
-    K.cyl("chain", 0.008, 0.008, 0.16, (bx, FRONT - 0.6, bz - 0.09), IRON, verts=5)
-    K.ball("yarnsign", 0.17, (bx, FRONT - 0.6, bz - 0.34), K.plain("yarn1", yarns[1], 0.95), u=14, v=9)
-    K.cyl("needle", 0.012, 0.012, 0.5, (bx, FRONT - 0.6, bz - 0.32), K.plain("needle", "#b88a57", 0.6), verts=6, rot=(0, 55, 0))
-elif ex == "bread":
-    bx = DOOR_W / 2 + 0.6
-    crate = K.box("crate", (0.6, 0.45, 0.35), (bx, FRONT - 0.42, 0.18), DOOR, bevel=0.02)
-    K.uv_box(crate, 1.5)
-    loaf = K.plain("loaf", "#c98b4a", 0.8)
-    for i in range(5):
-        K.ball("loaf", 0.09, (bx - 0.2 + i * 0.1, FRONT - 0.42 + rng.uniform(-0.08, 0.08), 0.39), loaf, scale=(1.4, 0.8, 0.7), u=10, v=6)
-    # chalkboard A-frame
-    cbx = -(DOOR_W / 2 + 0.7)
+def build_roof():
+    OVER_E, OVER_G, THK = 0.4, 0.3, 0.12
+    half = W / 2 + OVER_E
+    rise = G * half / (W / 2)
+    ang = math.atan2(G, W / 2)
+    slope = math.hypot(half, rise)
+    ridge_z = H + G + 0.06
     for s in (-1, 1):
-        K.box("aframe", (0.5, 0.04, 0.8), (cbx, FRONT - 0.55 + s * 0.12, 0.4), DOOR, bevel=0.01, seg=1, rot=(s * 12, 0, 0))
-    K.box("chalk", (0.42, 0.01, 0.6), (cbx, FRONT - 0.55 - 0.145, 0.42), K.plain("chalk", "#2f3530", 0.9), bevel=0, rot=(-12, 0, 0))
-    # pretzel sign on a bracket
-    bx, bz = W / 2 - 0.08, 3.12
-    K.box("bracket", (0.05, 0.7, 0.05), (bx, FRONT - 0.35, bz), IRON, bevel=0.01, seg=1)
-    K.cyl("chain", 0.008, 0.008, 0.12, (bx, FRONT - 0.6, bz - 0.07), IRON, verts=5)
-    pz = bz - 0.34
-    K.torus("pretzel", 0.14, 0.035, (bx, FRONT - 0.6, pz), K.plain("pretzel", "#b06e35", 0.75), rot=(90, 0, 0))
-    K.torus("pretzel", 0.08, 0.03, (bx - 0.08, FRONT - 0.6, pz + 0.07), K.plain("pretzel", "#b06e35", 0.75), rot=(90, 0, 0))
-    K.torus("pretzel", 0.08, 0.03, (bx + 0.08, FRONT - 0.6, pz + 0.07), K.plain("pretzel", "#b06e35", 0.75), rot=(90, 0, 0))
-elif ex == "office":
-    # a little porch: two columns carrying a stone canopy over the door
+        cx = s * half / 2
+        cz = ridge_z - rise / 2
+        ob = K.box("roof", (slope + 0.06, D + 2 * OVER_G, THK), (cx, 0, cz), ROOF, bevel=0.02, seg=1,
+                   rot=(0, math.degrees(ang) * s, 0))
+        uv_roof(ob, s, ridge_z, ang)
+        for yy in (-(D / 2 + OVER_G), D / 2 + OVER_G):
+            K.box("barge", (slope, 0.05, 0.2), (cx, yy, cz - 0.06), TIMBER, bevel=0.01, seg=1, rot=(0, math.degrees(ang) * s, 0))
+        K.box("fascia", (0.05, D + 2 * OVER_G + 0.04, 0.2), (s * (half + 0.03), 0, ridge_z - rise - 0.04), TIMBER, bevel=0.01, seg=1)
+    K.cyl("ridge", 0.09, 0.09, D + 2 * OVER_G + 0.04, (0, 0, ridge_z + 0.02), ROOF, verts=10, rot=(90, 0, 0))
+    # chimney through the roof, on one slope toward the back
+    cxs = S["chimney"] * W * 0.24
+    roof_z_at = ridge_z - abs(cxs) * math.tan(ang)
+    ch_h = roof_z_at + 0.9 - H
+    ch = K.box("chimney", (0.6, 0.6, ch_h), (cxs, D * 0.2, H + ch_h / 2), STONE, bevel=0.02)
+    K.uv_box(ch, 1.2)
+    K.box("chimneycap", (0.75, 0.75, 0.1), (cxs, D * 0.2, H + ch_h + 0.05), STONE, bevel=0.02)
     for s in (-1, 1):
-        K.cyl("column", 0.09, 0.08, 2.35, (s * 0.85, FRONT - 0.55, PL + 0.03 + 2.35 / 2 - 0.15), K.plain("column", "#e8dfcc", 0.8), verts=14)
-        K.box("plinthblock", (0.26, 0.26, 0.12), (s * 0.85, FRONT - 0.55, 0.26), STONE, bevel=0.02)
-    # a flat stone canopy with a cornice, kept below the sign board (no pediment to hide the name)
-    K.box("porchroof", (2.2, 0.85, 0.12), (0, FRONT - 0.4, PL + 2.3), STONE, bevel=0.02)
-    K.box("porchcornice", (2.34, 0.95, 0.06), (0, FRONT - 0.43, PL + 2.39), STONE, bevel=0.015)
-    K.box("porchfloor", (2.2, 0.9, PL), (0, FRONT - 0.45, PL / 2), STONE, bevel=0.02)
-    # a free-standing notice board on two posts by the corner, clear of the windows
-    nbx, nby, nbz = W / 2 - 0.35, FRONT - 1.0, 1.25
-    for s_ in (-1, 1):
-        K.box("noticepost", (0.07, 0.07, nbz + 0.38), (nbx + s_ * 0.45, nby, (nbz + 0.38) / 2), DOOR, bevel=0.01, seg=1)
-    nb = K.box("notice", (0.8, 0.05, 0.6), (nbx, nby, nbz), DOOR, bevel=0.01, seg=1)
-    K.uv_box(nb, 1.5)
-    K.box("noticecap", (1.02, 0.16, 0.05), (nbx, nby, nbz + 0.4), DOOR, bevel=0.01, seg=1)
-    paper = K.plain("paper", "#f1e8d6", 0.9)
-    for i, (px, pz) in enumerate(((-0.2, 0.08), (0.12, 0.12), (-0.05, -0.15), (0.22, -0.12))):
-        K.box("paper", (0.18, 0.006, 0.22), (nbx + px, nby - 0.03, nbz + pz), paper, bevel=0, rot=(0, rng.uniform(-6, 6), 0))
-    # a post box
-    K.cyl("postbox", 0.16, 0.16, 0.9, (-(DOOR_W / 2 + 1.45), FRONT - 0.45, 0.45), K.plain("postbox", "#9a2a44", 0.6), verts=14)
-    K.ball("postboxtop", 0.16, (-(DOOR_W / 2 + 1.45), FRONT - 0.45, 0.9), K.plain("postbox", "#9a2a44", 0.6), scale=(1, 1, 0.5), u=14, v=6)
+        K.cyl("pot", 0.08, 0.07, 0.25, (cxs + s * 0.14, D * 0.2, H + ch_h + 0.22), K.plain("pot", "#b8663f", 0.85), verts=10)
 
-K.finish(NAME, OUT, max_tris=15000)
-os.makedirs(os.path.join(K.PROJECT, "assets", "props"), exist_ok=True)
-shutil.copy(os.path.join(OUT, NAME + ".glb"), os.path.join(K.PROJECT, "assets", "props", NAME + ".glb"))
-print("COPIED", NAME)
+
+# --- export --------------------------------------------------------------------------------------
+
+def join_part(name, obs, origin=None):
+    for o in obs:
+        K.apply_mods(o)
+        if "UVMap" not in o.data.uv_layers:
+            if o.data.uv_layers:
+                o.data.uv_layers[0].name = "UVMap"
+            else:
+                o.data.uv_layers.new(name="UVMap")
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    for o in obs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = obs[0]
+    bpy.ops.object.join()
+    ob = bpy.context.view_layer.objects.active
+    ob.name = name
+    ob.data.name = NAME + "_" + name
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    if origin is not None:  # the door: put the object's origin on its hinge line
+        for v in ob.data.vertices:
+            v.co -= Vector(origin)
+        ob.location = origin
+    return ob
+
+
+def main():
+    with part("base"):
+        build_base()
+    for side in ("front", "back", "left", "right"):
+        with part("wall_" + side):
+            build_wall(side, False)
+        with part("wall_" + side + "_low"):
+            build_wall(side, True)
+    with part("door"):
+        build_door()
+    with part("roof"):
+        build_roof()
+    bpy.context.view_layer.update()
+    obs = [join_part(n, [o for o in o_ if o.name in bpy.data.objects], HINGES.get(n)) for n, o_ in PARTS.items() if o_]
+    stats = {"name": NAME, "parts": {}, "triangles": 0}
+    for o in obs:
+        t = K.tri_count(o)
+        stats["parts"][o.name] = {"triangles": t, "materials": [m.name for m in o.data.materials]}
+        stats["triangles"] += t
+    os.makedirs(OUT, exist_ok=True)
+    bpy.context.preferences.filepaths.save_version = 0
+    bpy.ops.file.pack_all()
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, NAME + ".blend"))
+    for o in bpy.context.view_layer.objects:
+        o.select_set(o in obs)
+    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, NAME + ".glb"), export_format="GLB", use_selection=True,
+                              export_apply=True, export_yup=True)
+    stats["glb_bytes"] = os.path.getsize(os.path.join(OUT, NAME + ".glb"))
+    with open(os.path.join(OUT, "stats.json"), "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2)
+    print("[ke] " + json.dumps(stats))
+    os.makedirs(os.path.join(K.PROJECT, "assets", "props"), exist_ok=True)
+    shutil.copy(os.path.join(OUT, NAME + ".glb"), os.path.join(K.PROJECT, "assets", "props", NAME + ".glb"))
+    print("COPIED", NAME)
+
+
+main()

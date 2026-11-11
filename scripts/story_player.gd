@@ -243,7 +243,7 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 				if n == main.player:
 					main.player.walk(main._find_path(main.player.position, dest))
 				else:
-					n.walk_to(dest)
+					n.walk_to(dest, main._find_path(n.position, dest)) # round walls, out through doors
 				var t := 0.0 if a.size() < 4 or str(a[3]) != "nowait" else 99.0
 				while t < 25.0 and (not main.player.path.is_empty() if n == main.player else n.position.distance_to(dest) > 0.15):
 					await get_tree().process_frame

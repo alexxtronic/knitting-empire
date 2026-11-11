@@ -4,7 +4,8 @@
     "rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
     "theo": "Welcome to Woolly Goods! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
     "mabel": "Mabel Finch, Maplewood Land Office. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
-    "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably."
+    "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably.",
+    "hazel": "Mind the flour, it gets everywhere. I'm Hazel. If it's warm and it came out of that oven, I made it. Croissants are best before nine and gone by ten."
   },
   "lines": {
     "rosa": [
@@ -74,6 +75,23 @@
         "If you ever want to see the hill at sunset, I know the best rock to sit on.",
         "You don't have to tell me what you left behind. But I'd listen, if you wanted."
       ]
+    ],
+    "hazel": [
+      [
+        "Cold butter, warm kitchen, up at four. That's the whole secret. Mostly the up-at-four part.",
+        "Theo buys a bun every morning and says it's for the sheep. The sheep never see that bun.",
+        "You look hungry. Everyone who walks in here looks hungry. That's the smell doing its job."
+      ],
+      [
+        "I've started saving you the corner pieces. Don't tell anyone or they'll all want corners.",
+        "Your gran liked her loaf dark. 'Burn it a little, Hazel.' I still bake one her way on Sundays.",
+        "Mabel pays in exact change. Every single time. I've never once seen that woman get change."
+      ],
+      [
+        "If you ever want to learn the croissants, come by at four. I'll have the kettle on.",
+        "I'm making a sheep-shaped loaf for the harvest fair. It looks like a cloud with legs. It's perfect.",
+        "Best part of my morning is the bell going and it being you."
+      ]
     ]
   },
   "gift_lines": {
@@ -92,13 +110,18 @@
     "rowan": {
       "pumpkin": "Soup, then. I'll make it badly and eat it anyway. Thanks.",
       "turnip": "A turnip. ... The ewes will think I've gone soft. Thank you."
+    },
+    "hazel": {
+      "turnip": "A turnip! That's soup. Thank you, love. It'll be on the counter by lunch.",
+      "sweater": "For me? It's so soft. I'm keeping it well away from the flour."
     }
   },
   "gift_loved": {
     "rosa": "A pumpkin! Oh, you remembered. I'm baking a pie tonight and you're getting the first slice.",
     "theo": "Is this... one of YOUR sweaters? For me? I'm wearing it every day. Every single day.",
     "mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy.",
-    "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill."
+    "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill.",
+    "hazel": "Pumpkin! Bread, scones, soup, a pie for the window... Come back tomorrow, there'll be something in it for you."
   },
   "new_sheep_names": [
     "Clover",

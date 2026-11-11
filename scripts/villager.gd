@@ -18,6 +18,8 @@ var home := Vector3.ZERO
 var roam := Vector2(0.8, 0.4) # how far they wander from home in x / z
 var hold_time := 0.0
 var talk_spot = null # where you stand to talk to them (e.g. in front of a counter); null = beside them
+var rest_yaw = null # the way they face while standing at their post (a shopkeeper faces the counter); null = any
+var _via: Array = [] # the rest of the route they are walking (walk_to)
 var _look = null
 var _target := Vector3.ZERO
 var _wait := 0.0
@@ -46,11 +48,15 @@ func setup(id: String, name_text: String, role_text: String, loved_item: String,
 	_build(look)
 
 
-## Story scenes: walk to a spot and stay there (no more wandering).
-func walk_to(p: Vector3) -> void:
+## Story scenes: walk to a spot and stay there (no more wandering). `via`: a route to follow on
+## the way (main._find_path), so a shopkeeper goes out through the door, not the wall.
+func walk_to(p: Vector3, via: Array = []) -> void:
 	home = p
 	roam = Vector2.ZERO
-	_target = p
+	_via = via.duplicate()
+	if _via.is_empty() or (_via[-1] as Vector3).distance_to(p) > 0.05:
+		_via.append(p)
+	_target = _via.pop_front()
 	_wait = 0.0
 	hold_time = 0.0
 
@@ -59,6 +65,7 @@ func walk_to(p: Vector3) -> void:
 func settle_at(p: Vector3) -> void:
 	home = Vector3(p.x, 0.0, p.z) # p may be up on a seat (a story's @place height); home is on the ground
 	roam = Vector2.ZERO
+	_via.clear()
 	_target = home
 	position = p
 	_wait = randf_range(1.0, 3.0)
@@ -173,6 +180,7 @@ func _process(delta: float) -> void:
 		return
 	if _wait > 0.0:
 		_wait -= delta
+		_turn_to_rest(delta)
 		_model.position.y = lerpf(_model.position.y, 0.0, 0.2)
 		for a in _arms:
 			a.rotation_degrees.x = lerpf(a.rotation_degrees.x, 0.0, 0.2)
@@ -181,6 +189,10 @@ func _process(delta: float) -> void:
 	to.y = 0.0
 	var d := to.length()
 	var step := 1.0 * delta
+	if d <= step and not _via.is_empty():
+		position = Vector3(_target.x, 0.0, _target.z)
+		_target = _via.pop_front()
+		return
 	if d <= step:
 		position = Vector3(_target.x, 0.0, _target.z)
 		_wait = randf_range(2.0, 6.0)
@@ -211,6 +223,7 @@ func _process_body(delta: float) -> void:
 		return
 	if _wait > 0.0:
 		_wait -= delta
+		_turn_to_rest(delta)
 		body.play("Idle")
 		return
 	var to := _target - position
@@ -221,6 +234,10 @@ func _process_body(delta: float) -> void:
 	var want := minf(WALK_SPEED * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
 	_speed = move_toward(_speed, want, 2.5 * delta)
 	var step := _speed * delta
+	if d <= step and not _via.is_empty():
+		position = Vector3(_target.x, 0.0, _target.z)
+		_target = _via.pop_front()
+		return
 	if d <= step:
 		position = Vector3(_target.x, 0.0, _target.z)
 		_speed = 0.0
@@ -230,3 +247,9 @@ func _process_body(delta: float) -> void:
 	position += to / d * step
 	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 7.0))
 	body.play("Walk", _speed)
+
+
+## Standing at their post, they turn back to face their way (rest_yaw) once nobody holds their eye.
+func _turn_to_rest(delta: float) -> void:
+	if rest_yaw != null and _via.is_empty() and Vector2(position.x - home.x, position.z - home.z).length() < maxf(roam.length(), 0.1) + 0.3:
+		rotation.y = lerp_angle(rotation.y, float(rest_yaw), 1.0 - exp(-delta * 3.0))
