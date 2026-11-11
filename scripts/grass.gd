@@ -16,6 +16,7 @@ var blade_mat: ShaderMaterial
 var mask_img: Image
 var _ground: MeshInstance3D
 var _chunks: Array[MultiMeshInstance3D] = []
+var _chunk_at := {} # Vector2i(chunk x, chunk z) -> its MultiMeshInstance3D
 var _blade_mesh: ArrayMesh
 var blade_count := 0
 var _frac := 1.0 # share of blades drawn (graphics setting)
@@ -38,16 +39,24 @@ func _ready() -> void:
 
 
 ## Bare-earth areas: `dirt` rects (paths, beds: worn earth, wide soft edges), `clear` rects and
-## `circles` (Vector3 x, z, radius) where nothing grows (buildings, the pond).
-func build(dirt: Array, clear: Array, circles: Array) -> void:
+## `circles` (Vector3 x, z, radius) where nothing grows (buildings, the pond). `roads` is god
+## mode's painted road map (an image covering REGION; any colour = a road, so no grass there).
+func build(dirt: Array, clear: Array, circles: Array, roads: Image = null) -> void:
 	for c in _chunks:
 		c.queue_free()
 	_chunks.clear()
-	_make_mask(dirt, clear, circles)
+	_chunk_at.clear()
+	_make_mask(dirt, clear, circles, roads)
 	_plant()
 
 
-func _make_mask(dirt: Array, clear: Array, circles: Array) -> void:
+## The same as build(), but only redraws the ground (the blades stay where they are). God mode
+## calls this while a road is being painted, then replant() when the stroke ends.
+func remask(dirt: Array, clear: Array, circles: Array, roads: Image = null) -> void:
+	_make_mask(dirt, clear, circles, roads)
+
+
+func _make_mask(dirt: Array, clear: Array, circles: Array, roads: Image = null) -> void:
 	var w := int(REGION.size.x * PX_PER_M)
 	var h := int(REGION.size.y * PX_PER_M)
 	mask_img = Image.create(w, h, false, Image.FORMAT_L8)
@@ -64,6 +73,14 @@ func _make_mask(dirt: Array, clear: Array, circles: Array) -> void:
 		for y in range(int(cz - rad) - 1, int(cz + rad) + 2):
 			for x in range(int(cx - rad) - 1, int(cx + rad) + 2):
 				if x >= 0 and y >= 0 and x < w and y < h and Vector2(x + 0.5 - cx, y + 0.5 - cz).length() <= rad:
+					mask_img.set_pixel(x, y, Color(0, 0, 0))
+	if roads != null:
+		var small := roads.duplicate() as Image
+		small.resize(w, h, Image.INTERPOLATE_BILINEAR)
+		for y in h:
+			for x in w:
+				var c := small.get_pixel(x, y)
+				if maxf(c.r, maxf(c.g, c.b)) > 0.4:
 					mask_img.set_pixel(x, y, Color(0, 0, 0))
 	# soften the edges: shrink and grow back
 	var soft := mask_img.duplicate() as Image
@@ -84,59 +101,91 @@ func grass_at(x: float, z: float) -> float:
 
 
 func _plant() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 2026
-	blade_count = 0
 	var nx := ceili(REGION.size.x / CHUNK)
 	var nz := ceili(REGION.size.y / CHUNK)
 	for cz in nz:
 		for cx in nx:
-			var x0 := REGION.position.x + cx * CHUNK
-			var z0 := REGION.position.y + cz * CHUNK
-			var buf := PackedFloat32Array()
-			var n := 0
-			var tries := int(CHUNK * CHUNK * DENSITY)
-			buf.resize(tries * 16)
-			for i in tries:
-				var x := x0 + rng.randf() * CHUNK
-				var z := z0 + rng.randf() * CHUNK
-				var g := grass_at(x, z)
-				if g < 0.55 or rng.randf() > (g - 0.45) * 1.8:
-					continue
-				# clumps: some patches grow taller
-				var tall := 0.5 + 0.5 * sin(x * 0.7 + sin(z * 0.45) * 2.0) * cos(z * 0.6)
-				var height := rng.randf_range(0.12, 0.24) + tall * 0.14
-				height *= clampf((g - 0.5) * 2.5, 0.35, 1.0) # shorter at the edges of paths
-				var yaw := rng.randf() * TAU
-				var c := cos(yaw)
-				var s := sin(yaw)
-				var o := n * 16
-				# Transform3D rows: basis x row, origin x; basis y row, origin y; basis z row, origin z
-				buf[o + 0] = c; buf[o + 1] = 0.0; buf[o + 2] = s; buf[o + 3] = x
-				buf[o + 4] = 0.0; buf[o + 5] = 1.0; buf[o + 6] = 0.0; buf[o + 7] = 0.0
-				buf[o + 8] = -s; buf[o + 9] = 0.0; buf[o + 10] = c; buf[o + 11] = z
-				buf[o + 12] = height; buf[o + 13] = rng.randf(); buf[o + 14] = 0.0; buf[o + 15] = 0.0
-				n += 1
-			if n == 0:
-				continue
-			buf.resize(n * 16)
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.use_custom_data = true
-			mm.mesh = _blade_mesh
-			mm.instance_count = n
-			mm.buffer = buf
-			mm.custom_aabb = AABB(Vector3(x0 - 0.5, -0.1, z0 - 0.5), Vector3(CHUNK + 1.0, 0.8, CHUNK + 1.0))
-			var mmi := MultiMeshInstance3D.new()
-			mmi.multimesh = mm
-			mmi.material_override = blade_mat
-			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mm.visible_instance_count = _visible(n)
-			mmi.visibility_range_end = _range
-			mmi.visibility_range_end_margin = 6.0
-			add_child(mmi)
-			_chunks.append(mmi)
-			blade_count += n
+			_plant_chunk(cx, cz)
+	_count_blades()
+
+
+## Plants the blades of one CHUNK-sized square again (after the mask changed under it).
+func _plant_chunk(cx: int, cz: int) -> void:
+	var key := Vector2i(cx, cz)
+	if _chunk_at.has(key):
+		var old: MultiMeshInstance3D = _chunk_at[key]
+		_chunks.erase(old)
+		_chunk_at.erase(key)
+		old.queue_free()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 2026 + cx * 7919 + cz * 104729 # the same blades in a square every time
+	var x0 := REGION.position.x + cx * CHUNK
+	var z0 := REGION.position.y + cz * CHUNK
+	var buf := PackedFloat32Array()
+	var n := 0
+	var tries := int(CHUNK * CHUNK * DENSITY)
+	buf.resize(tries * 16)
+	for i in tries:
+		var x := x0 + rng.randf() * CHUNK
+		var z := z0 + rng.randf() * CHUNK
+		var g := grass_at(x, z)
+		if g < 0.55 or rng.randf() > (g - 0.45) * 1.8:
+			continue
+		# clumps: some patches grow taller
+		var tall := 0.5 + 0.5 * sin(x * 0.7 + sin(z * 0.45) * 2.0) * cos(z * 0.6)
+		var height := rng.randf_range(0.12, 0.24) + tall * 0.14
+		height *= clampf((g - 0.5) * 2.5, 0.35, 1.0) # shorter at the edges of paths
+		var yaw := rng.randf() * TAU
+		var c := cos(yaw)
+		var s := sin(yaw)
+		var o := n * 16
+		# Transform3D rows: basis x row, origin x; basis y row, origin y; basis z row, origin z
+		buf[o + 0] = c; buf[o + 1] = 0.0; buf[o + 2] = s; buf[o + 3] = x
+		buf[o + 4] = 0.0; buf[o + 5] = 1.0; buf[o + 6] = 0.0; buf[o + 7] = 0.0
+		buf[o + 8] = -s; buf[o + 9] = 0.0; buf[o + 10] = c; buf[o + 11] = z
+		buf[o + 12] = height; buf[o + 13] = rng.randf(); buf[o + 14] = 0.0; buf[o + 15] = 0.0
+		n += 1
+	if n == 0:
+		return
+	buf.resize(n * 16)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = _blade_mesh
+	mm.instance_count = n
+	mm.buffer = buf
+	mm.custom_aabb = AABB(Vector3(x0 - 0.5, -0.1, z0 - 0.5), Vector3(CHUNK + 1.0, 0.8, CHUNK + 1.0))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = blade_mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mm.visible_instance_count = _visible(n)
+	mmi.visibility_range_end = _range
+	mmi.visibility_range_end_margin = 6.0
+	add_child(mmi)
+	_chunks.append(mmi)
+	_chunk_at[key] = mmi
+
+
+func _count_blades() -> void:
+	blade_count = 0
+	for c in _chunks:
+		blade_count += c.multimesh.instance_count
+
+
+## Plants the blades again in every square that touches `area` (x, z, width, depth in metres).
+func replant(area: Rect2) -> void:
+	var a := area.grow(1.5).intersection(REGION)
+	if a.size.x <= 0.0 or a.size.y <= 0.0:
+		return
+	var c0 := Vector2i(((a.position - REGION.position) / CHUNK).floor())
+	var c1 := Vector2i(((a.end - REGION.position) / CHUNK).floor())
+	var nx := ceili(REGION.size.x / CHUNK)
+	var nz := ceili(REGION.size.y / CHUNK)
+	for cz in range(c0.y, mini(c1.y, nz - 1) + 1):
+		for cx in range(c0.x, mini(c1.x, nx - 1) + 1):
+			_plant_chunk(cx, cz)
+	_count_blades()
 
 
 ## A blade 1 m tall (the shader scales it): a tapering, slightly curved strip, UV.y 0 → 1 root → tip.

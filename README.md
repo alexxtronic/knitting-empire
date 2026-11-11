@@ -74,6 +74,7 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/pie_menu.gd` | the ring of actions |
 | `scripts/thumbs.gd` | renders the Build mode picture cards |
 | `scripts/ai_chat.gd`, `chat_panel.gd`, `data/personas.json` | typed chat with villagers |
+| `scripts/god_mode.gd`, `data/world_layout.json` | the admin's world editor (Settings > God mode) and the map layout it saves |
 | `scripts/audio.gd` | music, ambience and sound effects on three buses (Music, Ambience, SFX) |
 | `tools/make_audio.py` | makes every sound in `assets/audio/` (footsteps, needles, UI, ambience loops, the music) |
 | `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, leaning into turns, breathing |
@@ -105,6 +106,19 @@ The autotest checks the files against each other and names anything missing.
 Story progress is kept as named flags (`Game.set_flag("met_rowan")`, `Game.flag("met_rowan")`) and saved with the game. Save files carry a version number. When the format changes, add a step to `Game.migrate()` so older saves still load.
 
 When exporting, add `data/*` to the export preset's non-resource include filter, so the JSON and scene files ship with the game.
+
+## God mode: arranging the world
+
+The map is laid out in the game itself. Run the game from the project, open **Settings**, and under **God mode** switch on **Edit the world**. (The switch is for the admin only: it appears when the game runs from the project with the Godot editor build, and never in an exported game.)
+
+- **Select & move:** click anything (a tree, a rock, a hedge, a lamp post, a shop, the fountain, a crop plot) and drag it. Hold Shift to snap to 25 cm.
+- **Turn:** R turns the selected thing 15 degrees, Shift+R turns it back.
+- **Delete:** Delete, Backspace or X. **Copy:** Ctrl/Cmd+D (scenery, lamp posts, benches and other decor). **Undo:** Ctrl/Cmd+Z.
+- **Roads:** pick Dirt road, Gravel road or Cobblestones and drag to paint. The brush is round, so one click with a wide brush makes a round patch (a cul-de-sac). `[` and `]` change the brush size. Erase road rubs out any road, including the plaza and paths the game starts with. Painting a road clears the grass, tufts and flowers under it.
+- The camera works as usual (WASD, right-drag, wheel) and can go out to the far trees. The clock stops while you edit.
+- **Done** saves. The layout goes to `data/world_layout.json`, which the game applies every time it starts: it is the map every player gets, so commit it. **Reset world** throws the saved layout away.
+
+Nora's house, Rosewood Cottage, the sheep pen and the pond can't be moved (the game's rules are tied to where they stand), nor can villagers and sheep.
 
 ## Writing story scenes
 

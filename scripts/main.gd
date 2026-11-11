@@ -20,6 +20,7 @@ const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
+const GodMode = preload("res://scripts/god_mode.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -70,6 +71,7 @@ var plots: Array = []
 var sheep_list: Array = []
 var grass # grass.gd: the ground and the blades
 var nature # nature.gd: rocks, plants, hedges, fences, lamp posts and benches
+var god: GodMode # god_mode.gd: the admin's world editor, and the saved layout it applies at launch
 var pond_rect := Rect2()
 var bin: Node3D
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
@@ -116,6 +118,7 @@ var _capture := false # --capture: play the opening at a person's pace (record i
 var _fps_probe := false # --fpsprobe: measure frame cost in town with each effect switched off in turn
 var _asset_frames := false # --assetframes=DIR: picture the world props (plots, trees, bus) and quit
 var _photo_frames := false # --photoframes=DIR: night photos by lamplight with strong bokeh, no HUD
+var _god_only := false # --godcheck=DIR: run only the world editor's checks (about a minute)
 var _photo_dof := {} # photo mode's depth of field: {"focus": m, "near": m, "far": m, "amount": x}
 
 
@@ -133,6 +136,9 @@ func _ready() -> void:
 		if a.begins_with("--photoframes="):
 			_photo_frames = true
 			a = "--autotest=" + a.substr(14)
+		if a.begins_with("--godcheck="):
+			_god_only = true
+			a = "--autotest=" + a.substr(11)
 		if a.begins_with("--styleframes="):
 			_style_frames = true
 			a = "--autotest=" + a.substr(14)
@@ -206,6 +212,17 @@ func _ready() -> void:
 	place_blockers.append(Rect2(HOUSE_W - 1.0, DOOR_Z0 - 0.1, 2.4, DOOR_Z1 - DOOR_Z0 + 0.2)) # doorway, both sides
 	place_blockers.append(Rect2(Town.COTTAGE_DOOR.x - 0.2, Town.COTTAGE.position.y - 1.2, Town.COTTAGE_DOOR.y - Town.COTTAGE_DOOR.x + 0.4, 2.5)) # cottage doorway
 	place_blockers.append(Rect2(56.6, 5.1, 1.4, 0.5)) # cottage sign
+	# the world as arranged in god mode (data/world_layout.json) goes on top of what was just built
+	god = GodMode.new()
+	god.main = self
+	add_child(god)
+	god.collect()
+	if Engine.has_meta("ke_god_reload"):
+		god.layout_path = GOD_TEST_LAYOUT # the autotest's last step: the world again, from the layout it saved
+	if not OS.get_cmdline_user_args().has("--nolayout"):
+		god.load_layout()
+	if _autotest_dir != "":
+		god.layout_path = GOD_TEST_LAYOUT # the test saves here, never over the real layout
 	player = Player.new()
 	player.position = Vector3(4.6, 0, 4.9)
 	add_child(player)
@@ -259,6 +276,10 @@ func _ready() -> void:
 		_take_asset_frames()
 	elif _photo_frames:
 		_take_photo_frames()
+	elif Engine.has_meta("ke_god_reload"):
+		_god_reload_checks()
+	elif _god_only:
+		_god_checks()
 	elif _autotest_dir != "":
 		_autotest()
 	else:
@@ -284,7 +305,14 @@ func _connect_hud() -> void:
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
 			hud.sound_slider.set_value_no_signal(audio.sound_volume)
-			hud.show_god_state(Game.hour, str(Game.flag("weather", "clear")), Game.clock_frozen))
+			hud.show_god_state(Game.hour, str(Game.flag("weather", "clear")), Game.clock_frozen)
+			hud.show_god_edit(GodMode.is_admin(), god.active))
+	hud.god_edit.connect(func(on: bool):
+		if on and title_on:
+			hud.show_god_edit(true, false)
+			hud.show_toast("Continue or start a game first, then edit the world.")
+		else:
+			god.set_active(on))
 	hud.god_time.connect(func(h: float): Game.hour = h)
 	hud.god_weather.connect(func(w: String): Game.set_flag("weather", w))
 	hud.god_freeze.connect(func(on: bool): Game.clock_frozen = on)
@@ -582,14 +610,26 @@ func _nature_keep() -> Array:
 
 
 ## Where grass grows: not on paths, in the beds, under buildings and the house, or in the pond.
-func _rebuild_grass() -> void:
-	var dirt: Array = World.PATHS + Town.PATHS + [Rect2(10.25, -1.75, 5.1, 3.9)]
+## Once roads have been painted in god mode, the painted map stands in for the paths and the plaza.
+## replant = false only redraws the ground (god mode, while a road is being painted).
+func _rebuild_grass(replant := true) -> void:
+	var painted: bool = god != null and god.roads_on
+	var dirt: Array = []
+	if not painted:
+		dirt.append_array(World.PATHS)
+		dirt.append_array(Town.PATHS)
+	dirt.append_array(god.bed_rects() if god != null else [GodMode.BEDS])
 	var clear: Array = grid_blockers.filter(func(r): return r != pond_rect)
 	clear.append(Rect2(-0.35, _zmin() - 0.35, HOUSE_W + 0.7, HOUSE_FRONT - _zmin() + 0.7))
-	clear.append(Town.PLAZA)
+	if not painted:
+		clear.append(Town.PLAZA)
 	clear.append(Town.COTTAGE.grow(0.3))
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
-	grass.build(dirt, clear, [Vector3(2.5, -16.0, 2.55)])
+	var roads: Image = god.road_img if painted else null
+	if replant:
+		grass.build(dirt, clear, [Vector3(2.5, -16.0, 2.55)], roads)
+	else:
+		grass.remask(dirt, clear, [Vector3(2.5, -16.0, 2.55)], roads)
 
 
 func _rebuild_house() -> void:
@@ -998,8 +1038,9 @@ func _pan_camera(v: Vector2) -> void:
 	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
 	var fwd := Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
 	cam_target += right * v.x - fwd * v.y
-	cam_target.x = clampf(cam_target.x, CAM_BOUNDS.position.x, CAM_BOUNDS.end.x)
-	cam_target.z = clampf(cam_target.z, CAM_BOUNDS.position.y, CAM_BOUNDS.end.y)
+	var bounds: Rect2 = god.cam_bounds() if god.active else CAM_BOUNDS # the world editor reaches the far trees
+	cam_target.x = clampf(cam_target.x, bounds.position.x, bounds.end.x)
+	cam_target.z = clampf(cam_target.z, bounds.position.y, bounds.end.y)
 
 
 # --- input ------------------------------------------------------------------------------
@@ -1009,6 +1050,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if _autotest_dir != "" and e is InputEventMouse:
 		return # the autotest calls _live_click and friends itself; a real mouse would only disturb it
+	if god.active and god.handle_mouse(e):
+		return # the world editor: clicks pick things up and paint roads instead of walking Nora
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
 		match mb.button_index:
@@ -1092,6 +1135,9 @@ func _input(e: InputEvent) -> void:
 		return
 	if hud.is_menu_open() and kc >= KEY_1 and kc <= KEY_9:
 		hud.pie.key(kc - KEY_0)
+		get_viewport().set_input_as_handled()
+		return
+	if god.active and god.handle_key(kc, k):
 		get_viewport().set_input_as_handled()
 		return
 	var handled := true
@@ -2849,8 +2895,7 @@ func _autotest() -> void:
 	await _romance_checks()
 	await _polish_checks()
 	await _bench_checks()
-	print("AUTOTEST DONE")
-	get_tree().quit()
+	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
 
 
 ## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
@@ -2891,6 +2936,199 @@ func _bench_checks() -> void:
 		await _shot("43_%s.png" % id)
 		await _wait(3.2)
 	_set_cam_lock(true)
+
+
+const GOD_TEST_LAYOUT := "user://autotest_layout.json"
+
+
+## Points the camera at a spot for the world editor's checks.
+func _god_look(p: Vector3, dist := 16.0) -> void:
+	cam_target = Vector3(p.x, 0, p.z)
+	cam_dist = dist
+	await _wait(0.5)
+
+
+## God mode's world editor (scripts/god_mode.gd), driven the way a mouse would: pick things up by
+## clicking them, drag, turn, delete, copy and undo, paint and rub out roads, then save. The last
+## step loads the whole scene again from the saved layout (_god_reload_checks).
+func _god_checks() -> void:
+	autotest_jog = true
+	if FileAccess.file_exists(GOD_TEST_LAYOUT):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(GOD_TEST_LAYOUT))
+	await _wait(0.5)
+	var kinds := {}
+	for el in god.els:
+		var group := "trees" if el.kind.begins_with("tree_") else ("buildings" if el.kind.begins_with("building_") else ("lamps" if el.kind == "decor_lantern" else "other"))
+		kinds[group] = int(kinds.get(group, 0)) + 1
+	_check("god mode: the world editor can pick up everything in the world (%d things: %s)" % [god.els.size(), str(kinds)],
+		god.els.size() > 400 and int(kinds.get("trees", 0)) > 50 and int(kinds.get("buildings", 0)) == 3 and int(kinds.get("lamps", 0)) >= 10)
+	hud.open_settings()
+	await _wait(0.3)
+	_check("god mode: 'Edit the world' is in the settings for the admin only (shown %s, admin %s)" % [hud.god_edit_check.visible, GodMode.is_admin()],
+		hud.god_edit_check.visible == GodMode.is_admin() and GodMode.is_admin())
+	var blades0: int = grass.blade_count
+	hud.god_edit_check.button_pressed = true
+	await _wait(0.4)
+	_check("god mode: switching it on opens the editor's toolbar, closes the settings and stops the clock",
+		god.active and god._ui.visible and not hud.settings_panel.visible and not Game.time_running)
+
+	# a lamp post on the plaza: click it, drag it, turn it with R
+	var lamp: GodMode.El = god.by_key.get("decor_lantern@46.00,-5.40")
+	var lamp_from: Vector3 = lamp.xf.origin
+	await _god_look(lamp_from, 14.0)
+	god.press(cam.unproject_position(lamp_from + Vector3(0, 0.2, 0)))
+	var picked_lamp: bool = god.selected == lamp
+	var lamp_to := lamp_from + Vector3(2.0, 0, 1.5)
+	god.move(cam.unproject_position(lamp_to + Vector3(0, 0.2, 0)))
+	god.release()
+	await _wait(0.2)
+	_check("god mode: a click picks up the lamp post and a drag moves it, obstacle and all (%.2f m from where it was dropped; old spot free %s, new spot blocked %s)" % [lamp.xf.origin.distance_to(lamp_to), _walkable(_cell(lamp_from)), not _walkable(_cell(lamp.xf.origin))],
+		picked_lamp and lamp.xf.origin.distance_to(lamp_to) < 0.3 and lamp.node.global_position.distance_to(lamp.xf.origin) < 0.001 and _walkable(_cell(lamp_from)) and not _walkable(_cell(lamp.xf.origin)))
+	await _key_tap(KEY_R)
+	await _key_tap(KEY_R)
+	var lamp_turn := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
+	_check("god mode: R turns the selected thing 15 degrees a press (%.1f degrees after two)" % lamp_turn, absf(lamp_turn - 30.0) < 0.1)
+	var copy: GodMode.El = god.duplicate_selected()
+	_check("god mode: Copy sets a second lamp post down beside it", copy != null and copy.added and copy.node.visible and god.selected == copy and decor.has(copy.node))
+
+	# the hay bale by the market: delete it, undo, delete it again
+	var bale: GodMode.El = god.by_key.get("decor_hay_bale@51.60,-8.60")
+	god.select(bale)
+	await _key_tap(KEY_DELETE)
+	var gone: bool = bale.deleted and not bale.node.visible and _walkable(_cell(bale.xf.origin)) and _ray_target(cam.unproject_position(bale.xf.origin + Vector3(0, 0.3, 0))) != bale.node
+	god.undo()
+	var back: bool = not bale.deleted and bale.node.visible and not _walkable(_cell(bale.xf.origin))
+	god.select(bale)
+	god.delete_selected()
+	_check("god mode: Delete removes the hay bale and frees its spot; Undo brings it back (gone %s, back %s)" % [gone, back], gone and back and bale.deleted)
+
+	# a tree: click its trunk, drag it; its fallen leaves come with it
+	var tree: GodMode.El = god.scenery["tree_maple_autumn"][0]
+	await _god_look(tree.xf.origin, 22.0)
+	god.press(cam.unproject_position(tree.xf.origin + Vector3(0, 0.7, 0)))
+	var picked_tree: bool = god.selected != null and god.selected.kind.begins_with("tree_")
+	if picked_tree:
+		tree = god.selected
+	var tree_from: Vector3 = tree.xf.origin
+	var leaf_from := Vector3.ZERO
+	if not tree.leaves.is_empty():
+		leaf_from = World.tree_litter.multimesh.get_instance_transform(tree.leaf0).origin
+	god.move(cam.unproject_position(tree_from + Vector3(1.5, 0, 2.0)))
+	god.release()
+	var tree_moved: Vector3 = tree.xf.origin - tree_from
+	var leaf_moved := tree_moved
+	if not tree.leaves.is_empty():
+		leaf_moved = World.tree_litter.multimesh.get_instance_transform(tree.leaf0).origin - leaf_from
+	var drawn_at: Vector3 = (tree.mmi.transform * tree.mmi.multimesh.get_instance_transform(tree.idx)).origin
+	_check("god mode: a tree is picked by its trunk and dragged, and its fallen leaves follow (moved %.2f m, leaves %.2f m)" % [tree_moved.length(), leaf_moved.length()],
+		picked_tree and tree_moved.length() > 1.5 and drawn_at.distance_to(tree.xf.origin) < 0.001 and (leaf_moved - tree_moved).length() < 0.01)
+	var tree_kind: String = tree.kind
+	var tree_spot: Vector3 = tree.xf.origin
+	# a rock: copy it; a bush: delete it
+	var rock: GodMode.El = god.scenery["rock_single"][0]
+	var rocks0: int = god.scenery["rock_single"].size()
+	god.select(rock)
+	var rock2: GodMode.El = god.duplicate_selected()
+	var bush: GodMode.El = god.scenery["bush_round"][0]
+	var bushes0: int = god.scenery["bush_round"].size()
+	god.select(bush)
+	god.delete_selected()
+	var bush_scale: float = bush.mmi.multimesh.get_instance_transform(bush.idx).basis.get_scale().length()
+	_check("god mode: scenery can be copied and deleted too (rocks %d to %d, the deleted bush is drawn at size %.2f)" % [rocks0, god.scenery["rock_single"].size(), bush_scale],
+		rock2 != null and god.scenery["rock_single"].size() == rocks0 + 1 and rock2.mmi != null and bush.deleted and bush_scale < 0.001)
+
+	# roads: one click of a wide cobble brush is a round patch; a drag paints a gravel track
+	var patch := Vector3(21.0, 0, 7.5)
+	await _god_look(patch, 20.0)
+	var in_patch := func(e) -> bool: return GodMode.SMALL.has(e.kind) and not e.deleted and Vector2(e.xf.origin.x - patch.x, e.xf.origin.z - patch.z).length() < 1.9
+	var plants0: int = god.els.filter(in_patch).size()
+	god.set_tool("cobble")
+	god.set_brush(2.0)
+	god.press(cam.unproject_position(patch))
+	god.release()
+	await _wait(0.3)
+	var plants1: int = god.els.filter(in_patch).size()
+	var round_ok: bool = god.road_at(patch.x, patch.z) == "cobble" and god.road_at(patch.x + 1.3, patch.z + 1.3) == "cobble" and god.road_at(patch.x + 1.6, patch.z + 1.6) == ""
+	var stock_gone: bool = find_children("Cobbles_*", "MultiMeshInstance3D", false, false).is_empty() and not find_children("PaintedCobbles_*", "MultiMeshInstance3D", false, false).is_empty()
+	_check("god mode: a click of the cobblestone brush lays a round patch of paving (4 m across, corners clear %s), and the plaza and paths are still there (plaza %s, farm path %s, %d tiles)" % [round_ok, god.road_at(47.0, 0.0), god.road_at(12.0, 3.0), god.painted_tiles()],
+		round_ok and stock_gone and god.road_at(47.0, 0.0) == "cobble" and god.road_at(12.0, 3.0) == "dirt" and god.painted_tiles() > 20)
+	_check("god mode: no grass grows through the new paving, and the tufts and flowers it covered are cleared (grass %.2f there, %d blades before, %d now; small plants on it %d to %d)" % [grass.grass_at(patch.x, patch.z), blades0, grass.blade_count, plants0, plants1],
+		grass.grass_at(patch.x, patch.z) < 0.2 and grass.blade_count < blades0 and plants1 == 0)
+	god.set_tool("gravel")
+	god.set_brush(0.6)
+	god.press(cam.unproject_position(Vector3(11.0, 0, 8.5)))
+	god.move(cam.unproject_position(Vector3(14.0, 0, 8.0)))
+	god.move(cam.unproject_position(Vector3(17.0, 0, 8.5)))
+	god.release()
+	await _wait(0.3)
+	await _shot("60_god_roads.png")
+	_check("god mode: dragging the gravel brush paints a track (%s at its middle, %s beside it)" % [god.road_at(14.0, 8.0), god.road_at(14.0, 9.5)],
+		god.road_at(14.0, 8.0) == "gravel" and god.road_at(12.5, 8.25) == "gravel" and god.road_at(14.0, 9.5) == "")
+	god.set_tool("erase")
+	god.set_brush(1.0)
+	await _god_look(Vector3(47.0, 0, 2.0), 18.0)
+	god.press(cam.unproject_position(Vector3(47.0, 0, 2.0)))
+	god.release()
+	var rubbed: bool = god.road_at(47.0, 2.0) == ""
+	god.undo()
+	_check("god mode: the eraser rubs paving out, and Undo puts it back (%s)" % god.road_at(47.0, 2.0), rubbed and god.road_at(47.0, 2.0) == "cobble")
+	god.set_tool("select")
+	god.select(lamp)
+	await _god_look(lamp.xf.origin, 16.0)
+	await _shot("61_god_editor.png")
+
+	# Done saves the layout (to the test's own file, never data/world_layout.json)
+	var real_before := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
+	god.set_active(false)
+	await _wait(0.3)
+	var saved = JSON.parse_string(FileAccess.get_file_as_string(GOD_TEST_LAYOUT)) if FileAccess.file_exists(GOD_TEST_LAYOUT) else null
+	var real_after := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
+	var saved_ok: bool = typeof(saved) == TYPE_DICTIONARY and saved["nodes"].has(lamp.key) and saved["nodes"][bale.key].get("del", false) == true \
+		and saved["added"].size() >= 1 and saved["scenery"].has(tree_kind) and saved["scenery"].has("rock_single") and saved["scenery"].has("bush_round") and saved.has("roads")
+	_check("god mode: Done closes the editor and saves the layout (lamp, hay bale, copy, trees, rocks, bushes and roads in the file; the real layout file untouched %s)" % (real_before == real_after),
+		not god.active and Game.time_running and saved_ok and real_before == real_after and hud.chrome.any(func(c): return c.visible))
+	# the last step: the whole scene again, built from that layout
+	Engine.set_meta("ke_god_reload", {"lamp": lamp.key, "lamp_at": lamp.xf.origin, "lamp_turn": lamp_turn, "bale": bale.key, "copy_at": copy.xf.origin,
+		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": rocks0 + 1, "bushes": bushes0 - 1, "patch": patch,
+		"tiles": god.painted_tiles()})
+	get_tree().reload_current_scene()
+
+
+## The world built again from the layout _god_checks saved: everything is where it was left.
+func _god_reload_checks() -> void:
+	var want: Dictionary = Engine.get_meta("ke_god_reload")
+	Engine.remove_meta("ke_god_reload")
+	await _wait(1.0)
+	var lamp: GodMode.El = god.by_key.get(want["lamp"])
+	var lamp_at: Vector3 = want["lamp_at"]
+	var turn := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
+	var bale: GodMode.El = god.by_key.get(want["bale"])
+	var copies: Array = god.els.filter(func(e): return e.added)
+	var copy_at: Vector3 = want["copy_at"]
+	_check("saved layout: the lamp post is where it was dragged and turned, its copy stands beside it and the hay bale is gone (lamp %.2f m off, turned %.1f, %d copy)" % [lamp.node.global_position.distance_to(lamp_at), turn, copies.size()],
+		lamp.node.global_position.distance_to(lamp_at) < 0.01 and absf(turn - float(want["lamp_turn"])) < 0.1 and not _walkable(_cell(lamp_at))
+		and copies.size() == 1 and copies[0].node.global_position.distance_to(copy_at) < 0.01 and not bale.node.visible and _walkable(_cell(bale.base.origin)))
+	var kind: String = want["tree_kind"]
+	var tree_at: Vector3 = want["tree_at"]
+	var tree_there: bool = god.scenery[kind].any(func(e): return e.xf.origin.distance_to(tree_at) < 0.01)
+	var drawn := 0
+	for m in find_children("Trees_" + kind.substr(5), "MultiMeshInstance3D", false, false):
+		drawn += (m as MultiMeshInstance3D).multimesh.instance_count
+	var leaves := 0
+	for e in god.scenery[kind]:
+		leaves += e.leaves.size()
+	_check("saved layout: the trees, rocks and bushes are the saved lists (%d trees drawn, the dragged one in place %s, %d leaves under them; %d rocks; %d bushes)" % [drawn, tree_there, leaves, god.scenery["rock_single"].size(), god.scenery["bush_round"].size()],
+		god.scenery[kind].size() == int(want["trees"]) and drawn == int(want["trees"]) and tree_there and leaves > 0 and World.tree_litter.multimesh.instance_count >= leaves
+		and god.scenery["rock_single"].size() == int(want["rocks"]) and god.scenery["bush_round"].size() == int(want["bushes"]))
+	var patch: Vector3 = want["patch"]
+	_check("saved layout: the painted roads are back (round cobble patch %s, gravel track %s, plaza %s, %d tiles, grass %.2f on the patch)" % [god.road_at(patch.x, patch.z), god.road_at(14.0, 8.0), god.road_at(47.0, 0.0), god.painted_tiles(), grass.grass_at(patch.x, patch.z)],
+		god.road_at(patch.x, patch.z) == "cobble" and god.road_at(patch.x + 1.6, patch.z + 1.6) == "" and god.road_at(14.0, 8.0) == "gravel" and god.road_at(47.0, 0.0) == "cobble"
+		and god.painted_tiles() == int(want["tiles"]) and grass.grass_at(patch.x, patch.z) < 0.2)
+	cam_follow = false
+	await _god_look(Vector3(17.0, 0, 7.0), 24.0)
+	await _shot("62_god_reloaded.png")
+	print("AUTOTEST DONE")
+	get_tree().quit()
 
 
 ## Typed chat, all offline: the request we'd send, reading replies and errors, and the chat

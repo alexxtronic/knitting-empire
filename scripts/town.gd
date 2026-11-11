@@ -35,12 +35,15 @@ const COBBLE := Color(0.5, 0.47, 0.42) # real stone is darker than it looks; the
 const COBBLE_TILE := 2.2 # metres of ground one repeat of the texture covers (about 40 cm a stone)
 const COBBLE_PATHS := [1, 2, 3, 4] # which of PATHS are cobbled: bakery lane, shop, office, cottage walk
 static var _cobble_mat: StandardMaterial3D
+## For god mode (scripts/god_mode.gd): every piece build() made, as [node, id, name, [obstacle Rect2s]].
+static var built: Array = []
 
 
 ## Builds everything static. Returns {"blockers": Array[Rect2], "board": Label3D,
 ## "sign_to_town": Landmark, "sign_to_farm": Landmark}.
 static func build(root: Node3D) -> Dictionary:
 	var blockers := []
+	built.clear()
 	# the road from the farm is worn earth in the ground shader (PATHS); the plaza and the
 	# lanes off it are cobbled, all with one world-mapped texture so the stones line up
 	var paved: Array[Rect2] = [PLAZA]
@@ -58,6 +61,8 @@ static func build(root: Node3D) -> Dictionary:
 	var to_farm := signpost(root, Vector3(38.2, 0, 1.75), "←  BIRCHFIELD FARM", "travel_farm", "Signpost: Birchfield Farm")
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))
 	blockers.append(Rect2(38.05, 1.6, 0.3, 0.3))
+	built.append([to_town, "signpost_town", "Signpost to Maplewood", [Rect2(25.45, 1.6, 0.3, 0.3)]])
+	built.append([to_farm, "signpost_farm", "Signpost to the farm", [Rect2(38.05, 1.6, 0.3, 0.3)]])
 	return {"blockers": blockers, "board": stall["board"], "sign_to_town": to_town, "sign_to_farm": to_farm}
 
 
@@ -179,6 +184,7 @@ static func _fountain(root: Node3D, c: Vector3) -> Rect2:
 	if inst == null:
 		Catalog.cyl(f, 1.55, 1.65, 0.5, Vector3(0, 0.25, 0), Catalog.STONE, Vector3.ZERO, 28)
 		Catalog.cyl(f, 0.18, 0.24, 1.3, Vector3(0, 0.95, 0), Catalog.STONE_DARK)
+		built.append([f, "fountain", "Plaza fountain", [Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)]])
 		return Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)
 	var water := ShaderMaterial.new()
 	water.shader = preload("res://shaders/fountain_water.gdshader")
@@ -206,6 +212,8 @@ static func _fountain(root: Node3D, c: Vector3) -> Rect2:
 	spill.spread = 6.0
 	spill.initial_velocity_min = 0.1
 	spill.initial_velocity_max = 0.4
+	f.set_meta("water", water) # god mode moves the ripples' centre with the fountain
+	built.append([f, "fountain", "Plaza fountain", [Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)]])
 	return Rect2(c.x - 1.75, c.z - 1.75, 3.5, 3.5)
 
 
@@ -258,7 +266,9 @@ static func _stall(root: Node3D, pos: Vector3) -> Dictionary:
 	board.position = Vector3(-2.15, 1.55, 0.43)
 	s.add_child(board)
 	var r := Rect2(pos.x - 1.56, pos.z - 0.76, 3.12, 1.5) # the stall's whole footprint, posts included
-	return {"board": board, "blockers": [r, Rect2(pos.x - 2.25, pos.z + 0.25, 0.2, 0.2), Rect2(pos.x + 1.5, pos.z - 0.05, 0.8, 0.7)]}
+	var rects := [r, Rect2(pos.x - 2.25, pos.z + 0.25, 0.2, 0.2), Rect2(pos.x + 1.5, pos.z - 0.05, 0.8, 0.7)]
+	built.append([s, "market_stall", "Rosa's market stall", rects])
+	return {"board": board, "blockers": rects}
 
 
 ## A shop front: walls, gable roof, door, windows and a sign. Door on the south (+z) side at door_x.
@@ -278,7 +288,9 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 		b.set_meta("building_model", model_id)
 		b.add_child(_sign_label(sign_text, Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095)))
 		# the steps and porch stand a little proud of the front wall
-		return Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
+		var porch := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
+		built.append([b, "building_" + model_id, sign_text.capitalize(), [porch]])
+		return porch
 	var h := 3.0
 	var gable := 1.6
 	Catalog.box(b, Vector3(w, h, d), Vector3(0, h * 0.5, 0), wall)
@@ -317,7 +329,9 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 	Catalog.box(b, Vector3(minf(w - 0.6, 3.4), 0.5, 0.06), Vector3(0, h - 0.4, front + 0.05), Catalog.CREAM)
 	Catalog.box(b, Vector3(minf(w - 0.6, 3.4) + 0.1, 0.6, 0.04), Vector3(0, h - 0.4, front + 0.03), Catalog.WOOD_DARK)
 	b.add_child(_sign_label(sign_text, Vector3(0, h - 0.4, front + 0.085)))
-	return Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.4)
+	var around := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.4)
+	built.append([b, "building_" + sign_text.to_snake_case(), sign_text.capitalize(), [around]])
+	return around
 
 
 static func _sign_label(text: String, pos: Vector3) -> Label3D:

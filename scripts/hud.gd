@@ -16,6 +16,7 @@ signal fullscreen_toggled(on: bool)
 signal god_time(hour: float) # god mode (settings): jump the clock
 signal god_weather(weather: String) # "clear" or "rain"
 signal god_freeze(on: bool) # stop the clock
+signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
 signal item_chosen(id: String)
 signal rotate_pressed
 signal sell_pressed
@@ -199,6 +200,8 @@ var god_time_slider: HSlider
 var god_time_label: Label
 var god_weather_btns := {} # "clear" / "rain" -> Button
 var god_freeze_check: CheckButton
+var god_edit_check: CheckButton
+var god_edit_note: Label
 var fps_label: Label
 var _fps_t := 0.0
 var music_slider: HSlider
@@ -1567,6 +1570,16 @@ func _build_god_mode(vb: VBoxContainer) -> void:
 	god_freeze_check.focus_mode = Control.FOCUS_NONE
 	god_freeze_check.toggled.connect(func(on): click(); god_freeze.emit(on))
 	vb.add_child(god_freeze_check)
+	# the world editor: only the admin sees this (main.gd shows it; see scripts/god_mode.gd)
+	god_edit_check = CheckButton.new()
+	god_edit_check.text = "Edit the world"
+	god_edit_check.focus_mode = Control.FOCUS_NONE
+	god_edit_check.toggled.connect(func(on): click(); god_edit.emit(on))
+	god_edit_check.visible = false
+	vb.add_child(god_edit_check)
+	god_edit_note = _label("Admin only. Move, turn, copy or delete anything and paint roads.\nSaved to data/world_layout.json: the map every player gets.", 12, Color(TEXT, 0.55))
+	god_edit_note.visible = false
+	vb.add_child(god_edit_note)
 
 
 ## Shows the god mode controls at the game's current time and weather (main.gd, when settings open).
@@ -1575,6 +1588,13 @@ func show_god_state(hour: float, weather: String, frozen: bool) -> void:
 	god_time_label.text = clock_text(hour)
 	show_god_weather(weather)
 	god_freeze_check.set_pressed_no_signal(frozen)
+
+
+## The world editor's switch: shown only to the admin, set to whether the editor is on.
+func show_god_edit(admin: bool, on: bool) -> void:
+	god_edit_check.visible = admin
+	god_edit_note.visible = admin
+	god_edit_check.set_pressed_no_signal(on)
 
 
 func show_god_weather(weather: String) -> void:

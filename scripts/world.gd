@@ -51,9 +51,16 @@ const LITTER := {
 }
 ## The map trees (art/world_assets/trees), with how often each one turns up.
 const TREE_KINDS := [["maple_autumn", 0.45], ["maple_green", 0.25], ["spruce", 0.3]]
+## How many leaves lie under each kind of tree.
+const LEAVES_PER_TREE := {"maple_autumn": 60, "maple_green": 20, "spruce": 6}
 ## The leaf materials on every tree, and the fallen leaves, so main.gd can set wind and rain.
 static var leaf_mats: Array[ShaderMaterial] = []
 static var litter_mat: ShaderMaterial
+## For god mode (scripts/god_mode.gd): the barn, the leaves lying under the trees, and which of
+## those leaves belong to which tree ("kind:index in its MultiMesh" -> Vector2i(first leaf, count)).
+static var barn: Node3D
+static var tree_litter: MultiMeshInstance3D
+static var tree_leaf_ranges := {}
 
 
 static func _add_leaf(pts: Array, p: Vector2, cols: Array, rng: RandomNumberGenerator) -> void:
@@ -64,9 +71,9 @@ static func _add_leaf(pts: Array, p: Vector2, cols: Array, rng: RandomNumberGene
 
 
 ## One MultiMesh of small flat leaf cards, each turned, tilted and tinted on its own.
-static func _litter(root: Node3D, pts: Array, rng: RandomNumberGenerator) -> void:
+static func _litter(root: Node3D, pts: Array, rng: RandomNumberGenerator) -> MultiMeshInstance3D:
 	if pts.is_empty() or not ResourceLoader.exists("res://assets/props/leaf_litter.png"):
-		return
+		return null
 	if litter_mat == null:
 		litter_mat = ShaderMaterial.new()
 		litter_mat.shader = preload("res://shaders/leaf_litter.gdshader")
@@ -92,6 +99,7 @@ static func _litter(root: Node3D, pts: Array, rng: RandomNumberGenerator) -> voi
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(mmi)
+	return mmi
 
 
 ## The tree model's mesh with its leaf surfaces switched to the wind-sway shader (the painted
@@ -127,6 +135,8 @@ static func build_trees(root: Node3D, keep_out: Array) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
 	leaf_mats.clear()
+	tree_leaf_ranges.clear()
+	tree_litter = null
 	var spots := {} # kind -> [[Transform3D, Color], ...]
 	var placed: Array[Vector2] = []
 	var leaves := []
@@ -169,11 +179,13 @@ static func build_trees(root: Node3D, keep_out: Array) -> void:
 		if not spots.has(kind):
 			spots[kind] = []
 		spots[kind].append([Transform3D(basis, Vector3(x, 0, z)), tint])
-		var n: int = {"maple_autumn": 60, "maple_green": 20, "spruce": 6}[kind]
+		var n: int = LEAVES_PER_TREE[kind]
+		var first_leaf := leaves.size()
 		for i in n:
 			var a := rng.randf() * TAU
 			var d := 0.4 + 3.4 * s * sqrt(rng.randf())
 			_add_leaf(leaves, at + Vector2(cos(a), sin(a)) * d, LITTER[kind], rng)
+		tree_leaf_ranges["%s:%d" % [kind, spots[kind].size() - 1]] = Vector2i(first_leaf, leaves.size() - first_leaf)
 	for kind in spots:
 		var list: Array = spots[kind]
 		var mesh := _tree_mesh(kind)
@@ -194,7 +206,7 @@ static func build_trees(root: Node3D, keep_out: Array) -> void:
 		mmi.name = "Trees_" + kind
 		mmi.multimesh = mm
 		root.add_child(mmi)
-	_litter(root, leaves, rng)
+	tree_litter = _litter(root, leaves, rng)
 
 
 ## The old procedural tree, used only if a tree model is missing.
@@ -224,6 +236,7 @@ static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
 	var b := Node3D.new()
 	b.position = pos
 	root.add_child(b)
+	barn = b
 	var red := Color(0.62, 0.17, 0.14)
 	var white := Color(0.95, 0.93, 0.88)
 	Catalog.box(b, Vector3(5, 3.2, 4), Vector3(0, 1.6, 0), red)

@@ -21,6 +21,9 @@ var rng := RandomNumberGenerator.new()
 var avoid: Array[Rect2] = []
 var taken: Array[Vector3] = [] # x, z, radius: trees and rocks already standing
 var blockers: Array = []
+## For god mode (scripts/god_mode.gd): the obstacle each rock, hedge and fence segment made, by
+## where it stands (Vector2i of its x and z in centimetres).
+var block_at := {}
 var _meshes := {}
 var _seasonal: Array[Node3D] = []
 var _season_shown := ""
@@ -140,7 +143,9 @@ func _reserve(x: float, z: float, r: float) -> void:
 
 func _block(x: float, z: float, hx: float, hz: float) -> void:
 	if WALK.has_point(Vector2(x, z)):
-		blockers.append(Rect2(x - hx, z - hz, hx * 2.0, hz * 2.0))
+		var r := Rect2(x - hx, z - hz, hx * 2.0, hz * 2.0)
+		blockers.append(r)
+		block_at[Vector2i(roundi(x * 100.0), roundi(z * 100.0))] = r
 
 
 # --- rocks -------------------------------------------------------------------------

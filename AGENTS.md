@@ -26,7 +26,7 @@ Every change must keep the autotest green. It opens a real game window (the rend
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path . --resolution 1280x800 -- --autotest=/tmp/ke_shots > /tmp/ke_autotest.log 2>&1
-grep -c '^PASS' /tmp/ke_autotest.log   # expect 119 at the time of writing
+grep -c '^PASS' /tmp/ke_autotest.log   # expect 145 at the time of writing
 grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 ```
 
@@ -35,6 +35,17 @@ grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 - Only run one autotest at a time. Two Godot windows at once slow the machine down, and the time-based checks then fail at random.
 - The test window ignores the real mouse (clicks pass through to whatever is behind it), so you can keep working while it runs. Don't type into it: real key presses still reach it.
 - The autotest mutes all sound, never touches the network (AI chat uses a stand-in), and doesn't write the player's settings.
+- The autotest's last step is the world editor (`_god_checks`): it edits the world, saves a layout to its own file in Godot's user folder (never `data/world_layout.json`), then loads the scene again from that file. To run only that step (about a minute): `-- --godcheck=/tmp/ke_god`.
+
+## The world layout: `data/world_layout.json`
+
+Alex arranges the map himself in the game: Settings > God mode > "Edit the world" (`scripts/god_mode.gd`; the switch only shows when the game runs from the project with the Godot editor build, never in an exported game). He can move, turn, copy and delete scenery and buildings, and paint dirt, gravel and cobblestone roads. It saves to `data/world_layout.json`, which every launch applies on top of what the code builds, so that file is the final map.
+
+- Don't hand-edit or delete `data/world_layout.json`, and commit it when it changes. It is Alex's work.
+- The autotest runs with the layout applied, because that's the game players get. If a check fails only because of where something now stands (a bench the test sits on was moved, say), fix the check to find the thing rather than the layout. `-- --nolayout` runs the game as the code builds it, to tell the two apart.
+- Once a kind of scenery (a tree kind, rocks, a bush kind, tufts) has been edited, its full list is in the file and replaces what `world.gd` and `nature.gd` scatter. Changing their random placement no longer moves that kind. Single things (shop fronts, fountain, stall, signposts, barn, bin, plots, lamp posts, benches) are stored as changes named by kind and original position (`decor_lantern@46.00,-5.40`). If you move one in code, its saved change no longer matches: the game prints a `world layout:` warning and keeps the entry in the file.
+- Anything new you add to the world should be editable too: build it as its own node and register it in `GodMode.collect()`, or scatter it as a MultiMesh under `nature` (those are picked up automatically).
+- Painted roads replace `World.PATHS`, `Town.PATHS` and the plaza cobbles as soon as the file has a `roads` entry. Read `god.road_at(x, z)` rather than those constants if you need to know what's underfoot.
 
 ## GDScript gotchas
 
