@@ -1,0 +1,31 @@
+{
+  "name": "tree_spruce",
+  "triangles": 2656,
+  "materials": [
+    "Bark_spruce",
+    "Leaves_spruce",
+    "LeafCore_spruce"
+  ],
+  "size_m": [
+    5.537,
+    5.554,
+    7.9
+  ],
+  "min_m": [
+    -2.856,
+    -2.771,
+    0.0
+  ],
+  "max_m": [
+    2.681,
+    2.783,
+    7.9
+  ],
+  "images": [
+    "bark_spruce",
+    "bark_spruce_normal",
+    "frond_spruce",
+    "leafcore_spruce"
+  ],
+  "glb_bytes": 343332
+}

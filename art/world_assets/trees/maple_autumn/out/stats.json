@@ -1,0 +1,33 @@
+{
+  "name": "tree_maple_autumn",
+  "triangles": 2344,
+  "materials": [
+    "Bark_maple_autumn",
+    "LeafCore_maple_autumn",
+    "Leaves_maple_autumn",
+    "Rock_tree"
+  ],
+  "size_m": [
+    6.178,
+    5.844,
+    6.206
+  ],
+  "min_m": [
+    -2.823,
+    -2.862,
+    -0.056
+  ],
+  "max_m": [
+    3.355,
+    2.982,
+    6.15
+  ],
+  "images": [
+    "bark_maple_autumn",
+    "bark_maple_autumn_normal",
+    "leafcore_maple_autumn",
+    "leaves_maple_autumn",
+    "rock_tree"
+  ],
+  "glb_bytes": 549324
+}

@@ -112,6 +112,7 @@ var _autotest_dir := ""
 var _style_frames := false # --styleframes=DIR: take the Woolcore style frames and quit
 var _capture := false # --capture: play the opening at a person's pace (record it with --write-movie)
 var _fps_probe := false # --fpsprobe: measure frame cost in town with each effect switched off in turn
+var _asset_frames := false # --assetframes=DIR: picture the world props (plots, trees, bus) and quit
 
 
 func _ready() -> void:
@@ -122,6 +123,9 @@ func _ready() -> void:
 		if a == "--fpsprobe":
 			_fps_probe = true
 			a = "--autotest=" + OS.get_user_data_dir()
+		if a.begins_with("--assetframes="):
+			_asset_frames = true
+			a = "--autotest=" + a.substr(14)
 		if a.begins_with("--styleframes="):
 			_style_frames = true
 			a = "--autotest=" + a.substr(14)
@@ -241,6 +245,8 @@ func _ready() -> void:
 		_run_fps_probe()
 	elif _style_frames:
 		_take_style_frames()
+	elif _asset_frames:
+		_take_asset_frames()
 	elif _autotest_dir != "":
 		_autotest()
 	else:
@@ -505,6 +511,11 @@ func _update_lighting() -> void:
 	if World.foliage_mat:
 		World.foliage_mat.set_shader_parameter("wind", 0.18 + rain * 0.3)
 		World.foliage_mat.set_shader_parameter("wet", rain)
+	for m in World.leaf_mats:
+		m.set_shader_parameter("wind", 0.18 + rain * 0.3)
+		m.set_shader_parameter("wet", rain)
+	if World.litter_mat:
+		World.litter_mat.set_shader_parameter("wet", rain)
 	if World.water_mat:
 		World.water_mat.set_shader_parameter("rain", rain)
 	var dryness := {"Spring": 0.05, "Summer": 0.25, "Autumn": 0.5, "Winter": 0.8}
@@ -2329,6 +2340,40 @@ func _frame_ms() -> float:
 	return (Time.get_ticks_usec() - t0) / 150000.0
 
 
+## Asset frames (run with -- --assetframes=/abs/dir): the world props from art/world_assets as
+## they look in the game, for reviewing a new model. Late morning light.
+func _take_asset_frames() -> void:
+	Game.time_running = false
+	_set_cam_lock(false)
+	Game.hour = 10.5
+	await _wait(1.0)
+	var views := [
+		["asset_plots.png", Vector3(12.8, 0, 0.2), 6.5, 30.0],
+		["asset_trees_north.png", Vector3(8.0, 0, -26.0), 24.0, 20.0],
+		["asset_trees_west.png", Vector3(-14.0, 0, -6.0), 16.0, 60.0],
+		["asset_trees_south.png", Vector3(12.0, 0, 20.0), 20.0, 200.0],
+		["asset_bus.png", Vector3(31.0, 0, 3.0), 11.0, 35.0],
+		["asset_plaza.png", Vector3(49.0, 0, 1.0), 9.0, 30.0],
+		["asset_plaza_wide.png", Vector3(53.0, 0, -1.0), 20.0, 10.0],
+		["asset_lane.png", Vector3(41.7, 0, -5.0), 6.0, 70.0],
+	]
+	plots[0].plant("pumpkin")
+	plots[1].plant("turnip")
+	plots[1].water()
+	plots[2].water()
+	spawn_prop("bus", "asset_bus", Vector3(31.0, 0, 3.0))
+	for v in views:
+		player.position = v[1] + Vector3(1.5, 0, 2.0)
+		cam_yaw = deg_to_rad(v[3])
+		cam_yaw_goal = cam_yaw
+		cam_target = v[1]
+		cam_dist = v[2]
+		await _wait(1.2)
+		await _shot(v[0])
+	print("ASSET FRAMES DONE")
+	get_tree().quit()
+
+
 ## Woolcore style frames (run with -- --styleframes=/abs/dir): the farm at golden hour, the
 ## hearth at night, and Maplewood with the embroidered dialogue box.
 func _take_style_frames() -> void:
@@ -3038,20 +3083,9 @@ func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> 
 	n.rotation.y = deg_to_rad(yaw_deg)
 	match kind:
 		"bus":
-			var paint := Color(0.36, 0.55, 0.52)
-			var cream := Color(0.93, 0.88, 0.76)
-			Catalog.box(n, Vector3(6.4, 1.1, 2.3), Vector3(0, 0.95, 0), paint)
-			Catalog.box(n, Vector3(6.4, 0.9, 2.3), Vector3(0, 1.95, 0), cream)
-			Catalog.box(n, Vector3(6.3, 0.12, 2.2), Vector3(0, 2.46, 0), paint.darkened(0.2))
-			for i in 6:
-				Catalog.box(n, Vector3(0.78, 0.6, 2.34), Vector3(-2.4 + i * 0.92, 1.98, 0), Color(0.2, 0.26, 0.32))
-			Catalog.box(n, Vector3(0.06, 0.8, 2.0), Vector3(3.21, 1.9, 0), Color(0.2, 0.26, 0.32))
-			for z in [-1.16, 1.16]:
-				for x in [-2.1, 2.1]:
-					Catalog.cyl(n, 0.42, 0.42, 0.28, Vector3(x, 0.42, z), Color(0.12, 0.12, 0.13), Vector3(90, 0, 0))
-			for z in [-0.75, 0.75]:
-				var lamp := Catalog.ball(n, 0.13, Vector3(3.22, 0.85, z), Color(1.0, 0.92, 0.6))
-				lamp.material_override = Catalog.mat(Color(1.0, 0.9, 0.6), 0.5, 2.5)
+			# The Maplewood bus (art/world_assets/maplewood_bus): front +X, doors on the +Z side.
+			if Catalog.model("res://assets/props/maplewood_bus.glb", n) == null:
+				_box_bus(n)
 		"suitcase":
 			Catalog.box(n, Vector3(0.52, 0.64, 0.22), Vector3(0, 0.36, 0), Color(0.55, 0.25, 0.2))
 			Catalog.box(n, Vector3(0.54, 0.05, 0.24), Vector3(0, 0.5, 0), Color(0.35, 0.18, 0.14))
@@ -3080,6 +3114,24 @@ func spawn_prop(kind: String, prop_name: String, p: Vector3, yaw_deg := 0.0) -> 
 			Catalog.box(n, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.25, 0), Color(0.8, 0.3, 0.8))
 	add_child(n)
 	props[prop_name] = n
+
+
+## The old box bus, used only if the bus model is missing.
+func _box_bus(n: Node3D) -> void:
+	var paint := Color(0.36, 0.55, 0.52)
+	var cream := Color(0.93, 0.88, 0.76)
+	Catalog.box(n, Vector3(6.4, 1.1, 2.3), Vector3(0, 0.95, 0), paint)
+	Catalog.box(n, Vector3(6.4, 0.9, 2.3), Vector3(0, 1.95, 0), cream)
+	Catalog.box(n, Vector3(6.3, 0.12, 2.2), Vector3(0, 2.46, 0), paint.darkened(0.2))
+	for i in 6:
+		Catalog.box(n, Vector3(0.78, 0.6, 2.34), Vector3(-2.4 + i * 0.92, 1.98, 0), Color(0.2, 0.26, 0.32))
+	Catalog.box(n, Vector3(0.06, 0.8, 2.0), Vector3(3.21, 1.9, 0), Color(0.2, 0.26, 0.32))
+	for z in [-1.16, 1.16]:
+		for x in [-2.1, 2.1]:
+			Catalog.cyl(n, 0.42, 0.42, 0.28, Vector3(x, 0.42, z), Color(0.12, 0.12, 0.13), Vector3(90, 0, 0))
+	for z in [-0.75, 0.75]:
+		var lamp := Catalog.ball(n, 0.13, Vector3(3.22, 0.85, z), Color(1.0, 0.92, 0.6))
+		lamp.material_override = Catalog.mat(Color(1.0, 0.9, 0.6), 0.5, 2.5)
 
 
 func move_prop(prop_name: String, p: Vector3, secs: float) -> void:

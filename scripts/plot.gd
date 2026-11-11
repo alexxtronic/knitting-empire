@@ -8,6 +8,10 @@ const Data = preload("res://scripts/data.gd")
 static var CROPS: Dictionary = Data.crops()
 const DRY := Color(0.52, 0.36, 0.22)
 const WET := Color(0.30, 0.20, 0.13)
+## The plot model (art/world_assets/dirt_plot): a raised soil block with three furrows and a grass
+## rim. Its tilled soil uses the material "Soil_plot", which gets darker while the plot is watered.
+const MODEL := "res://assets/props/dirt_plot.glb"
+const CROP_LIFT := 0.07 # crops stand on the furrows, which are higher than the old flat soil
 
 var crop := ""
 var growth := 0.0 # in-game hours of growth
@@ -16,14 +20,34 @@ var soil: MeshInstance3D
 var crop_root: Node3D
 var _stage := -2
 var _bob := 0.0
+## The model's soil surfaces, [MeshInstance3D, surface index], and their wet material.
+var _soil_slots: Array = []
+var _soil_wet: Material
 
 
 func _ready() -> void:
-	soil = Catalog.box(self, Vector3(1.0, 0.1, 1.0), Vector3(0, 0.03, 0), DRY)
-	for i in 3:
-		Catalog.box(self, Vector3(0.9, 0.025, 0.08), Vector3(0, 0.085, -0.3 + i * 0.3), DRY.darkened(0.15))
+	var inst := Catalog.model(MODEL, self)
+	if inst:
+		for mi in inst.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			for i in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(i)
+				if sm and sm.resource_name == "Soil_plot":
+					_soil_slots.append([m, i])
+					if sm is BaseMaterial3D and _soil_wet == null:
+						var wet := sm.duplicate() as BaseMaterial3D
+						wet.albedo_color = Color(0.55, 0.5, 0.48) # damp earth
+						wet.roughness = 0.6
+						_soil_wet = wet
+	if _soil_slots.is_empty():
+		soil = Catalog.box(self, Vector3(1.0, 0.1, 1.0), Vector3(0, 0.03, 0), DRY)
+		for i in 3:
+			Catalog.box(self, Vector3(0.9, 0.025, 0.08), Vector3(0, 0.085, -0.3 + i * 0.3), DRY.darkened(0.15))
+	var lift := Node3D.new()
+	lift.position.y = CROP_LIFT if soil == null else 0.0
+	add_child(lift)
 	crop_root = Node3D.new()
-	add_child(crop_root)
+	lift.add_child(crop_root)
 	var body := StaticBody3D.new()
 	body.collision_layer = 2
 	body.collision_mask = 0
@@ -105,7 +129,10 @@ func _process(delta: float) -> void:
 
 func refresh() -> void:
 	_stage = stage()
-	soil.material_override = Catalog.mat(WET if watered else DRY)
+	if soil:
+		soil.material_override = Catalog.mat(WET if watered else DRY)
+	for slot in _soil_slots:
+		(slot[0] as MeshInstance3D).set_surface_override_material(int(slot[1]), _soil_wet if watered else null)
 	for c in crop_root.get_children():
 		c.queue_free()
 	crop_root.position.y = 0

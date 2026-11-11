@@ -1,0 +1,44 @@
+{
+  "name": "maplewood_bus",
+  "triangles": 8356,
+  "materials": [
+    "BusBlack",
+    "BusPaint",
+    "BusGreen",
+    "wool_rug_oat",
+    "BusWindow_0",
+    "BusWindow_1",
+    "BusDoor",
+    "BusWindscreen",
+    "BusAmber",
+    "BusHeadlamp",
+    "BusTailRed",
+    "BusGreenDark",
+    "BusTyre",
+    "wool_stone",
+    "wool_stone_dark"
+  ],
+  "size_m": [
+    6.635,
+    2.41,
+    2.742
+  ],
+  "min_m": [
+    -3.21,
+    -1.205,
+    -0.02
+  ],
+  "max_m": [
+    3.425,
+    1.205,
+    2.722
+  ],
+  "images": [
+    "bus_door",
+    "bus_paint",
+    "bus_window_0",
+    "bus_window_1",
+    "bus_windscreen"
+  ],
+  "glb_bytes": 754388
+}

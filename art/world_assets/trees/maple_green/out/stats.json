@@ -1,0 +1,31 @@
+{
+  "name": "tree_maple_green",
+  "triangles": 2016,
+  "materials": [
+    "Bark_maple_green",
+    "LeafCore_maple_green",
+    "Leaves_maple_green"
+  ],
+  "size_m": [
+    6.198,
+    6.057,
+    6.7
+  ],
+  "min_m": [
+    -3.256,
+    -3.135,
+    0.0
+  ],
+  "max_m": [
+    2.942,
+    2.922,
+    6.7
+  ],
+  "images": [
+    "bark_maple_green",
+    "bark_maple_green_normal",
+    "leafcore_maple_green",
+    "leaves_maple_green"
+  ],
+  "glb_bytes": 546420
+}

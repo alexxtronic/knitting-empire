@@ -25,41 +25,179 @@ static func _foliage(m: MeshInstance3D, c: Color) -> void:
 const PATHS := [Rect2(8.1, 2.55, 9.0, 0.9), Rect2(16.15, -0.95, 0.9, 4.4), Rect2(16.5, -1.45, 1.0, 0.9)]
 
 
-## The ground itself is grass.gd; this adds the doormat and fallen leaves.
+## The ground itself is grass.gd; this adds the doormat and fallen leaves blown into the yard.
 static func build_ground(root: Node3D, lot: Rect2) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
 	# doormat
 	Catalog.box(root, Vector3(0.9, 0.02, 1.2), Vector3(8.6, 0.0, 3.0), Color(0.45, 0.33, 0.2))
-	# fallen autumn leaves
-	var leaf_cols := [Color(0.88, 0.5, 0.15), Color(0.8, 0.3, 0.12), Color(0.92, 0.7, 0.2)]
-	for i in 140:
-		var p := Vector3(rng.randf_range(lot.position.x, lot.end.x), 0.004, rng.randf_range(lot.position.y, lot.end.y))
-		if p.x > -0.6 and p.x < 8.6 and p.z > -12.6 and p.z < 6.6:
-			continue # not inside the house footprint
-		Catalog.box(root, Vector3(0.12, 0.005, 0.08), p, leaf_cols[rng.randi() % 3], Vector3(0, rng.randf() * 360.0, 0))
+	# fallen leaves: drifts of a dozen or so, and strays between them
+	var pts := []
+	var cols: Array = LITTER["maple_autumn"]
+	for i in 22:
+		var c := Vector2(rng.randf_range(lot.position.x, lot.end.x), rng.randf_range(lot.position.y, lot.end.y))
+		for k in rng.randi_range(6, 16):
+			_add_leaf(pts, c + Vector2(rng.randfn(0.0, 0.5), rng.randfn(0.0, 0.5)), cols, rng)
+	for i in 90:
+		_add_leaf(pts, Vector2(rng.randf_range(lot.position.x, lot.end.x), rng.randf_range(lot.position.y, lot.end.y)), cols, rng)
+	_litter(root, pts, rng)
 
 
+## Leaf colours on the ground under each kind of tree (and blown into the yard).
+const LITTER := {
+	"maple_autumn": [Color(0.78, 0.2, 0.08), Color(0.88, 0.38, 0.08), Color(0.93, 0.6, 0.12), Color(0.95, 0.76, 0.2), Color(0.6, 0.16, 0.07), Color(0.7, 0.45, 0.2)],
+	"maple_green": [Color(0.62, 0.72, 0.22), Color(0.82, 0.78, 0.25), Color(0.7, 0.52, 0.22), Color(0.55, 0.62, 0.2)],
+	"spruce": [Color(0.52, 0.38, 0.2), Color(0.45, 0.32, 0.18)],
+}
+## The map trees (art/world_assets/trees), with how often each one turns up.
+const TREE_KINDS := [["maple_autumn", 0.45], ["maple_green", 0.25], ["spruce", 0.3]]
+## The leaf materials on every tree, and the fallen leaves, so main.gd can set wind and rain.
+static var leaf_mats: Array[ShaderMaterial] = []
+static var litter_mat: ShaderMaterial
+
+
+static func _add_leaf(pts: Array, p: Vector2, cols: Array, rng: RandomNumberGenerator) -> void:
+	if p.x > -0.6 and p.x < 8.6 and p.y > -12.6 and p.y < 6.6:
+		return # not inside the house footprint
+	var c: Color = cols[rng.randi() % cols.size()]
+	pts.append([Vector3(p.x, 0.03 + rng.randf() * 0.015, p.y), c * rng.randf_range(0.85, 1.08)])
+
+
+## One MultiMesh of small flat leaf cards, each turned, tilted and tinted on its own.
+static func _litter(root: Node3D, pts: Array, rng: RandomNumberGenerator) -> void:
+	if pts.is_empty() or not ResourceLoader.exists("res://assets/props/leaf_litter.png"):
+		return
+	if litter_mat == null:
+		litter_mat = ShaderMaterial.new()
+		litter_mat.shader = preload("res://shaders/leaf_litter.gdshader")
+		litter_mat.set_shader_parameter("atlas", load("res://assets/props/leaf_litter.png"))
+	var q := QuadMesh.new()
+	q.size = Vector2(0.3, 0.3)
+	q.orientation = PlaneMesh.FACE_Y
+	q.material = litter_mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = q
+	mm.instance_count = pts.size()
+	for i in pts.size():
+		var b := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.25, 0.25))
+		b = b.scaled(Vector3.ONE * rng.randf_range(0.7, 1.35))
+		mm.set_instance_transform(i, Transform3D(b, pts[i][0]))
+		mm.set_instance_color(i, pts[i][1])
+		mm.set_instance_custom_data(i, Color(rng.randf(), 0, 0, 0))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "FallenLeaves"
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mmi)
+
+
+## The tree model's mesh with its leaf surfaces switched to the wind-sway shader (the painted
+## texture is kept). null if the model is missing.
+static func _tree_mesh(kind: String) -> ArrayMesh:
+	var path := "res://assets/props/tree_%s.glb" % kind
+	if not ResourceLoader.exists(path):
+		return null
+	var inst := (load(path) as PackedScene).instantiate()
+	var mesh: ArrayMesh = null
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		mesh = (mi as MeshInstance3D).mesh as ArrayMesh
+		break
+	inst.free()
+	if mesh == null:
+		return null
+	mesh = mesh.duplicate() as ArrayMesh
+	for i in mesh.get_surface_count():
+		var sm := mesh.surface_get_material(i)
+		var mname := sm.resource_name if sm else ""
+		if (mname.begins_with("Leaves_") or mname.begins_with("LeafCore_")) and sm is BaseMaterial3D:
+			var leaf := ShaderMaterial.new()
+			leaf.shader = preload("res://shaders/tree_leaves.gdshader")
+			leaf.set_shader_parameter("albedo_tex", (sm as BaseMaterial3D).albedo_texture)
+			leaf_mats.append(leaf)
+			mesh.surface_set_material(i, leaf)
+	return mesh
+
+
+## Scatters the three tree models over the countryside (outside keep_out), one MultiMesh per
+## kind, each tree turned, sized and tinted at random, with its fallen leaves around it.
 static func build_trees(root: Node3D, keep_out: Array) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	var placed := 0
+	leaf_mats.clear()
+	var spots := {} # kind -> [[Transform3D, Color], ...]
+	var placed: Array[Vector2] = []
+	var leaves := []
 	var tries := 0
-	while placed < 115 and tries < 4000:
+	while placed.size() < 115 and tries < 6000:
 		tries += 1
 		var x := rng.randf_range(-24, 86)
 		var z := rng.randf_range(-36, 30)
+		var at := Vector2(x, z)
 		var blocked := false
 		for r in keep_out:
-			if (r as Rect2).grow(1.0).has_point(Vector2(x, z)):
+			if (r as Rect2).grow(2.2).has_point(at):
+				blocked = true
+				break
+		for q in placed:
+			if q.distance_to(at) < 3.2:
 				blocked = true
 				break
 		if blocked:
 			continue
-		_tree(root, Vector3(x, 0, z), rng)
-		placed += 1
+		placed.append(at)
+		var roll := rng.randf()
+		var kind: String = TREE_KINDS[-1][0]
+		for k in TREE_KINDS:
+			roll -= float(k[1])
+			if roll < 0.0:
+				kind = k[0]
+				break
+		var s := rng.randf_range(0.85, 1.3) if kind == "spruce" else rng.randf_range(0.8, 1.2)
+		var basis := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s)
+		var tint := Color.WHITE
+		match kind:
+			"maple_autumn":
+				tint = Color(1.0, rng.randf_range(0.82, 1.08), rng.randf_range(0.8, 1.0))
+			"maple_green":
+				tint = Color(rng.randf_range(0.88, 1.05), 1.0, rng.randf_range(0.85, 1.0))
+			_:
+				var v := rng.randf_range(0.85, 1.05)
+				tint = Color(v, v, v)
+		if not spots.has(kind):
+			spots[kind] = []
+		spots[kind].append([Transform3D(basis, Vector3(x, 0, z)), tint])
+		var n: int = {"maple_autumn": 60, "maple_green": 20, "spruce": 6}[kind]
+		for i in n:
+			var a := rng.randf() * TAU
+			var d := 0.4 + 3.4 * s * sqrt(rng.randf())
+			_add_leaf(leaves, at + Vector2(cos(a), sin(a)) * d, LITTER[kind], rng)
+	for kind in spots:
+		var list: Array = spots[kind]
+		var mesh := _tree_mesh(kind)
+		if mesh == null:
+			for e in list:
+				var tf: Transform3D = e[0]
+				_tree(root, tf.origin, rng)
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, list[i][0])
+			mm.set_instance_color(i, list[i][1])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "Trees_" + kind
+		mmi.multimesh = mm
+		root.add_child(mmi)
+	_litter(root, leaves, rng)
 
 
+## The old procedural tree, used only if a tree model is missing.
 static func _tree(root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> void:
 	var t := Node3D.new()
 	t.position = p

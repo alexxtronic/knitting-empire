@@ -1,0 +1,37 @@
+{
+  "name": "dirt_plot",
+  "triangles": 3776,
+  "materials": [
+    "Soil_side",
+    "Moss_plot",
+    "Soil_plot",
+    "Stone_pebble",
+    "Grass_tuft_dark",
+    "Grass_tuft"
+  ],
+  "size_m": [
+    1.054,
+    1.062,
+    0.235
+  ],
+  "min_m": [
+    -0.513,
+    -0.536,
+    0.0
+  ],
+  "max_m": [
+    0.542,
+    0.526,
+    0.235
+  ],
+  "images": [
+    "dirt_plot_moss",
+    "dirt_plot_moss_normal",
+    "dirt_plot_pebble",
+    "dirt_plot_side",
+    "dirt_plot_side_normal",
+    "dirt_plot_soil",
+    "dirt_plot_soil_normal"
+  ],
+  "glb_bytes": 1497316
+}
