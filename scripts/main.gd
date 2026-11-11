@@ -1374,9 +1374,15 @@ func _perform(t, id: String) -> void:
 			var seat = _seat_point(t) if t is Furniture else null
 			player.start_activity("Resting", 4.0, _finish_rest, seat, t.rotation.y)
 		"nap":
-			player.start_activity("Napping", 5.0, _finish_nap, _seat_point(t), t.rotation.y)
+			if t is Furniture and t.item_id == "bed":
+				player.lie_in_bed(t, "Napping", 5.0, _finish_nap)
+			else:
+				player.start_activity("Napping", 5.0, _finish_nap, _seat_point(t), t.rotation.y)
 		"sleep":
-			player.start_activity("Zzz", 1.8, func(): pass, _seat_point(t), t.rotation.y)
+			if t is Furniture and t.item_id == "bed":
+				player.lie_in_bed(t, "Zzz", 1.8, func(): pass)
+			else:
+				player.start_activity("Zzz", 1.8, func(): pass, _seat_point(t), t.rotation.y)
 			_go_to_sleep(false)
 		"cook_turnip", "cook_pumpkin", "snack":
 			if id == "snack" and not Game.spend(5):
@@ -2812,6 +2818,7 @@ func _autotest() -> void:
 
 	await _graphics_checks()
 	await _character_checks()
+	await _bed_checks()
 	_do_action(chair, "knit")
 	await _wait(3.6)
 	_check("heroine sits to knit (%s, needles shown=%s)" % [player.body.current(), player.body.props != null and player.body.props.visible], player.busy and player.position.distance_to(chair.position) < 1.2 and player.body.current() == "SitKnit" and player.body.props != null and player.body.props.visible)
@@ -3487,6 +3494,35 @@ func _character_checks() -> void:
 		rowan.hold_time = 0.0
 	cam_target = player.position
 	cam_dist = cd0
+
+
+## Napping in the bed: she lies on her back with her head on the pillows under the quilt, the bed's
+## cushion and folded blanket are put away meanwhile, and everything is back when she gets up.
+func _bed_checks() -> void:
+	var beds = furniture.filter(func(f): return f.item_id == "bed")
+	if beds.is_empty():
+		_check("there is a bed to nap in", false)
+		return
+	var bed: Furniture = beds[0]
+	var tidy := bed.find_child("tidy", true, false) as Node3D
+	var tidy_seen: bool = tidy != null and tidy.visible
+	_perform(bed, "nap")
+	await _wait(1.2)
+	var sk: Skeleton3D = player.body.skeleton
+	var head: Vector3 = bed.to_local(sk.global_transform * sk.get_bone_global_pose(sk.find_bone("Head")).origin)
+	var feet: Vector3 = bed.to_local(sk.global_transform * sk.get_bone_global_pose(sk.find_bone("LeftFoot")).origin)
+	var cover := bed.get_node_or_null("LieCover") as Node3D
+	await _shot("44_nap_in_bed.png")
+	_check("napping, she lies in the bed on her back with her head on the pillows (head %.2f, %.2f; feet %.2f, %.2f)" % [head.y, head.z, feet.y, feet.z],
+		player.is_lying() and head.z < -0.55 and head.y > 0.78 and head.y < 1.0 and feet.z > 0.4 and feet.z < 0.95 and absf(head.x) < 0.3)
+	var cloth := cover.get_node_or_null("Cloth") as MeshInstance3D if cover != null else null
+	var bulge: float = cloth.mesh.get_aabb().end.y if cloth != null and cloth.mesh != null else 0.0
+	_check("the quilt lies over her in her shape and the cushion and folded blanket are put away (cover %s, highest point %.2f m, tidy %s)" % [cover != null and cover.visible, bulge, tidy != null and tidy.visible],
+		tidy_seen and cover != null and cover.visible and bulge > 0.85 and bulge < 1.15 and tidy != null and not tidy.visible)
+	player.cancel_activity()
+	await _wait(0.3)
+	_check("getting up brings the blanket back and she stands again (lying %s, tidy %s, cover %s)" % [player.is_lying(), tidy != null and tidy.visible, cover != null and cover.visible],
+		not player.is_lying() and tidy != null and tidy.visible and cover != null and not cover.visible)
 
 
 ## Bones an animation moves, by name (track paths also carry the character's own node name).

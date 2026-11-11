@@ -470,8 +470,10 @@ def tri_count(ob):
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
 
-def finish(name, out_dir, max_tris=None):
-    """Joins everything into one mesh called 'model', saves <name>.blend and exports <name>.glb."""
+def finish(name, out_dir, max_tris=None, separate=()):
+    """Joins everything into one mesh called 'model', saves <name>.blend and exports <name>.glb.
+    Parts whose names start with one of `separate` are joined into a second mesh called 'tidy', so
+    the game can hide them (a bed's folded blanket while someone sleeps in it)."""
     bpy.context.view_layer.update()
     obs = [o for o in COLL.objects if o.type == "MESH"]
     for o in obs:
@@ -484,16 +486,27 @@ def finish(name, out_dir, max_tris=None):
                 break
             else:
                 o.data.uv_layers.new(name="UVMap")
-    for o in bpy.context.view_layer.objects:
-        o.select_set(False)
-    for o in obs:
+    tidy = [o for o in obs if o.name.split(".")[0] in separate]
+    obs = [o for o in obs if o not in tidy]
+
+    def join(parts, label):
+        for o in bpy.context.view_layer.objects:
+            o.select_set(False)
+        for o in parts:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = parts[0]
+        bpy.ops.object.join()
+        j = bpy.context.view_layer.objects.active
+        j.name = label
+        j.data.name = name if label == "model" else name + "_" + label
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        return j
+
+    ob = join(obs, "model")
+    if tidy:
+        join(tidy, "tidy")
+    for o in COLL.objects:
         o.select_set(True)
-    bpy.context.view_layer.objects.active = obs[0]
-    bpy.ops.object.join()
-    ob = bpy.context.view_layer.objects.active
-    ob.name = "model"
-    ob.data.name = name
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     os.makedirs(out_dir, exist_ok=True)
     co = [v.co for v in ob.data.vertices]
     lo = Vector((min(c.x for c in co), min(c.y for c in co), min(c.z for c in co)))

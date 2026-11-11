@@ -163,4 +163,7 @@ for a in (25, 100, 160):
 for a in (-18, 22):
     K.cyl("needle", 0.007, 0.007, 0.34, (0.36, -0.67, ZT + 0.215), K.wool("brass"), verts=6, rot=(72, 0, a))
 
-K.finish(NAME, os.path.join(HERE, "out"), max_tris=9000)
+# the cushion and the folded blanket with Gran's knitting sit in their own mesh, "tidy": the game hides it
+# while Nora is in bed (scripts/player.gd lie_in_bed), so she can lie where they are
+K.finish(NAME, os.path.join(HERE, "out"), max_tris=9000,
+         separate=("cushion", "cushion_button", "blanket", "blanket_top", "blanket_stripe", "yarn", "yarn_wrap", "needle"))
