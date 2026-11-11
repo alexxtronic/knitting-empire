@@ -179,11 +179,21 @@
     {
       "name": "Garden Bench",
       "price": 160,
-      "size": [1.5, 0.5],
+      "size": [2.0, 1.0],
       "where": "out",
-      "height": 0.9,
+      "height": 1.0,
       "id": "bench",
-      "shop": "yard"
+      "shop": "yard",
+      "model": "res://assets/props/bench_park.glb"
+    },
+    {
+      "name": "Garden Bench",
+      "price": 110,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 1.0,
+      "id": "bench_short",
+      "model": "res://assets/props/bench_park_short.glb"
     },
     {
       "name": "Scarecrow",

@@ -228,6 +228,19 @@ static func model(path: String, r: Node3D) -> Node3D:
 
 # --- model builders --------------------------------------------------------------
 
+## Benches out in the world: about one in five is the short single seat (bench_short), the rest
+## the long bench. The pick depends only on where the bench stands, so the map is the same every
+## time (the 9 below is the seed: with it, one of today's six benches is short, in the plaza).
+## Both models come from art/world_assets/bench_park/build.py.
+const BENCH_SHORT_SHARE := 0.2
+const BENCH_IDS := ["bench", "bench_short"]
+
+static func world_bench(x: float, z: float) -> String:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(Vector3i(roundi(x * 10.0), roundi(z * 10.0), 9))
+	return "bench_short" if rng.randf() < BENCH_SHORT_SHARE else "bench"
+
+
 static func has_builder(id: String) -> bool:
 	return id in BUILDERS or ResourceLoader.exists(str(ITEMS.get(id, {}).get("model", "")))
 

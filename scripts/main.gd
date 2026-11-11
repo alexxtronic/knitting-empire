@@ -1175,7 +1175,7 @@ func _actions_for(t) -> Array:
 		match t.item_id:
 			"rocking_chair", "armchair":
 				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3)), _act("rest", "Rest  (+energy)")]
-			"sofa", "bench":
+			"sofa", "bench", "bench_short":
 				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)")]
 			"bed":
 				return [_act("sleep", "Sleep until morning"), _act("nap", "Take a nap  (1 hour)")]
@@ -1248,12 +1248,16 @@ func _stand_point(t) -> Vector3:
 
 func _seat_point(f) -> Vector3:
 	var y := 0.3
+	var fwd := 0.05
 	match f.item_id:
 		"bed":
 			y = 0.6 # on top of the quilt of assets/props/gran_bed.glb
 		"rocking_chair":
 			y = 0.32
-	return f.global_position + Vector3(0, y, 0) + f.front() * 0.05
+		"bench", "bench_short":
+			y = 0.25 # the boards of assets/props/bench_park.glb are 0.44 up; the seat sits forward of the back slats
+			fwd = 0.12
+	return f.global_position + Vector3(0, y, 0) + f.front() * fwd
 
 
 func _do_action(t, id: String) -> void:
@@ -1291,15 +1295,10 @@ func _perform(t, id: String) -> void:
 			if Game.use_energy(10.0):
 				player.start_activity("Knitting", 5.0, _finish_knit, _seat_point(t), t.rotation.y)
 		"rest":
-			var seat = _seat_point(t) if t is Furniture and t.item_id != "bench" else null
-			if t is Furniture and t.item_id == "bench":
-				seat = t.global_position + Vector3(0, 0.25, 0)
+			var seat = _seat_point(t) if t is Furniture else null
 			player.start_activity("Resting", 4.0, _finish_rest, seat, t.rotation.y)
 		"nap":
-			var seat2 = _seat_point(t)
-			if t.item_id == "bench":
-				seat2 = t.global_position + Vector3(0, 0.25, 0)
-			player.start_activity("Napping", 5.0, _finish_nap, seat2, t.rotation.y)
+			player.start_activity("Napping", 5.0, _finish_nap, _seat_point(t), t.rotation.y)
 		"sleep":
 			player.start_activity("Zzz", 1.8, func(): pass, _seat_point(t), t.rotation.y)
 			_go_to_sleep(false)
@@ -2827,8 +2826,49 @@ func _autotest() -> void:
 	await _act1_checks()
 	await _romance_checks()
 	await _polish_checks()
+	await _bench_checks()
 	print("AUTOTEST DONE")
 	get_tree().quit()
+
+
+## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
+## both models, about one bench in five out in the world is the short one, and she sits on the
+## boards of each.
+func _bench_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var benches: Array = []
+	for n in find_children("*", "Node3D", true, false):
+		if n is Furniture and not n.is_ghost and n.item_id in Catalog.BENCH_IDS:
+			benches.append(n)
+	var short: Array = benches.filter(func(f): return f.item_id == "bench_short")
+	var modelled: bool = benches.all(func(f): return f.find_children("model", "MeshInstance3D", true, false).size() == 1)
+	_check("the benches around the map are the park bench models, mostly long with a short one among them (%d benches, %d short)" % [benches.size(), short.size()],
+		benches.size() >= 3 and modelled and short.size() >= 1 and short.size() * 3 <= benches.size())
+	var picked := 0
+	for i in 5000:
+		if Catalog.world_bench(float(i % 100) * 0.7, float(i / 100) * 0.7) == "bench_short":
+			picked += 1
+	_check("one bench place in five gets the short bench (%.1f%% of 5000 places)" % (picked / 50.0), picked > 850 and picked < 1150)
+	_set_cam_lock(false)
+	for id in Catalog.BENCH_IDS:
+		var of_kind: Array = benches.filter(func(f): return f.item_id == id)
+		if of_kind.is_empty():
+			_check("there is a %s to sit on" % id, false)
+			continue
+		var b: Furniture = of_kind[0]
+		player.position = b.global_position + b.front() * 1.4
+		_perform(b, "rest")
+		cam_target = b.global_position
+		cam_dist = 6.5
+		await _wait(1.6)
+		var seat: Vector3 = _seat_point(b)
+		_check("she rests on the %s, on its boards (%s, %.2f m from the seat)" % [id, player.body.current(), player.position.distance_to(seat)],
+			player.busy and player.body.current() == "SitIdle" and player.position.distance_to(seat) < 0.05)
+		await _shot("43_%s.png" % id)
+		await _wait(3.2)
+	_set_cam_lock(true)
 
 
 ## Typed chat, all offline: the request we'd send, reading replies and errors, and the chat
@@ -3053,9 +3093,8 @@ func _camera_checks() -> void:
 func _build_town_decor() -> void:
 	for p in [Vector3(46.0, 0, -5.4), Vector3(60.0, 0, -5.4), Vector3(46.0, 0, 4.6), Vector3(60.0, 0, 4.6), Vector3(37.5, 0, 4.2), Vector3(57.0, 0, 13.0)]:
 		_decor("lantern", p, 0)
-	_decor("bench", Vector3(53.0, 0, 2.0), 2)
-	_decor("bench", Vector3(53.0, 0, -4.0), 0)
-	_decor("bench", Vector3(49.5, 0, -1.0), 1)
+	for b in [[Vector3(53.0, 0, 2.0), 2], [Vector3(53.0, 0, -4.0), 0], [Vector3(49.5, 0, -1.0), 1]]:
+		_decor(Catalog.world_bench(b[0].x, b[0].z), b[0], b[1]) # one bench in five is the short one
 	for p in [Vector3(55.0, 0, -8.3), Vector3(58.2, 0, -8.3), Vector3(62.3, 0, -7.9), Vector3(44.9, 0, -7.9)]:
 		_decor("flower_pot", p, 0)
 	_decor("sunflowers", Vector3(45.2, 0, -12.0), 0)

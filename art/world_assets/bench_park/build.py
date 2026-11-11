@@ -1,15 +1,17 @@
 """Park bench, copied from Alex's reference render (ref/reference.png): two cast-iron ends with scroll
 armrests and curled tops, a centre leg frame, three leaning back slats, four seat planks (the front one
-bull-nosed) and dome bolts. The bench only, no ground.
+bull-nosed) and dome bolts. The bench only, no ground. Two models come out of it: bench_park (2 m, the
+reference) and bench_park_short (1 m, the same bench at half length for one sitter, no centre legs).
 
 The wood and iron are procedural Cycles shaders (painted grain, light upper edges, soft cavity shadow,
 cast-iron mottling) baked onto the model's own UVs as a colour and a normal map per material, because
 glTF carries textures, not node trees. out/bench_park_shaders.blend keeps the shaders for editing.
 
-    Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/bench_park/build.py
+    Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/bench_park/build.py [-- name ...]
 
-BENCH_TEX (default 1024) sets the texture size, BENCH_SAMPLES (default 48) the bake samples.
-Front faces -Y here (+Z in Godot); about 2.0 m long, 0.78 m deep, 1.0 m tall, seat at 0.44 m.
+BENCH_TEX (default 1024) sets the texture size, BENCH_SAMPLES (default 36) the bake samples.
+Front faces -Y here (+Z in Godot); 0.83 m deep, 1.0 m tall, seat at 0.44 m, centred on its footprint.
+Then copy out*/<name>.glb to assets/props/ and import (see AGENTS.md).
 """
 import math
 import os
@@ -24,14 +26,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import kelib as K  # noqa: E402
 
-NAME = "bench_park"
-TEX = os.path.join(HERE, "tex")
-OUT = os.path.join(HERE, "out")
 RES = int(os.environ.get("BENCH_TEX", 1024))
-SAMPLES = int(os.environ.get("BENCH_SAMPLES", 48))
+SAMPLES = int(os.environ.get("BENCH_SAMPLES", 36))
+# end_x: centre plane of each end casting. wood_res: the boards' share of the texture size (half the
+# boards need half the texels). seed: which way the hand-cut boards wander.
+VARIANTS = {
+    "bench_park": {"end_x": 0.90, "centre_legs": True, "seed": 11, "wood_res": 1.0, "dir": ""},
+    "bench_park_short": {"end_x": 0.40, "centre_legs": False, "seed": 23, "wood_res": 0.5, "dir": "_short"},
+}
 
 # --- measures (metres) ------------------------------------------------------------------------
-END_X = 0.90            # centre plane of each end casting
+END_X = 0.90            # centre plane of each end casting (set per variant in main)
+CENTRE_LEGS = True
 FRAME_T = 0.10          # casting thickness: the reference is chunky, legs about as thick as they are wide
 SEAT_TOP = 0.44
 SEAT_T = 0.09           # rear seat boards; the front plank is deeper (0.12) and hangs like an apron
@@ -248,12 +254,14 @@ def back_axis(z):
     return 0.280 + (z - 0.60) * math.tan(LEAN), z
 
 
-def build_geometry(wood, metal):
-    rng = random.Random(11)
+def build_geometry(wood, metal, seed):
+    rng = random.Random(seed)
     parts_wood, parts_metal, steel = [], [], []
 
     # --- castings: both ends, and a leg frame in the middle
     for x, end in ((-END_X, True), (0.0, False), (END_X, True)):
+        if not end and not CENTRE_LEGS:
+            continue
         t = FRAME_T if end else 0.085
         side = 1 if x >= 0 else -1
         parts_metal.append(extrude_yz("frame", frame_outline(end), x - t / 2, x + t / 2, metal, seg=2))
@@ -557,7 +565,7 @@ def wire_for_bake(g, col, height, bump_strength, image_colour, image_normal):
     return {"out": out, "emit": emit, "diff": diff, "colour": tc, "normal": tn}
 
 
-def bake(ob, g, w, kind):
+def bake(ob, g, w, kind, res):
     nt = g.nt
     for l in list(w["out"].inputs["Surface"].links):
         nt.links.remove(l)
@@ -571,11 +579,11 @@ def bake(ob, g, w, kind):
         o.select_set(False)
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
-    bpy.ops.object.bake(type=kind, margin=max(4, RES // 128), use_clear=True, normal_space="TANGENT")
+    bpy.ops.object.bake(type=kind, margin=max(4, res // 128), use_clear=True, normal_space="TANGENT")
     img = node.image
-    px = np.empty(RES * RES * 4, dtype=np.float32)
+    px = np.empty(res * res * 4, dtype=np.float32)
     img.pixels.foreach_get(px)
-    return px.reshape(RES, RES, 4)[::-1, :, :3]
+    return px.reshape(res, res, 4)[::-1, :, :3]
 
 
 def to_srgb(a):
@@ -583,8 +591,13 @@ def to_srgb(a):
     return np.where(a <= 0.0031308, a * 12.92, 1.055 * np.power(a, 1 / 2.4) - 0.055)
 
 
-def main():
-    K.reset(NAME)
+def main(name):
+    global END_X, CENTRE_LEGS
+    v = VARIANTS[name]
+    END_X, CENTRE_LEGS = v["end_x"], v["centre_legs"]
+    tex = os.path.join(HERE, "tex" + v["dir"])
+    out = os.path.join(HERE, "out" + v["dir"])
+    K.reset(name)
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.samples = SAMPLES
@@ -593,7 +606,7 @@ def main():
     iron_bake = bpy.data.materials.new("bench_iron_shader")
     for m in (wood_bake, iron_bake):
         m.use_nodes = True
-    pw, pm, steel = build_geometry(wood_bake, iron_bake)
+    pw, pm, steel = build_geometry(wood_bake, iron_bake, v["seed"])
     for o in pm:
         K.apply_mods(o)
         at = o.data.attributes.new("steel", "FLOAT", "POINT")
@@ -604,28 +617,28 @@ def main():
     unwrap(metal)
 
     done = {}
-    for ob, mat, make, label, bump in ((wood, wood_bake, wood_shader, "bench_wood", 0.35),
-                                       (metal, iron_bake, iron_shader, "bench_iron", 0.22)):
+    for ob, mat, make, label, bump, res in ((wood, wood_bake, wood_shader, "bench_wood", 0.35, int(RES * v["wood_res"])),
+                                            (metal, iron_bake, iron_shader, "bench_iron", 0.22, RES)):
         g, col, height = make(mat)
-        ic = bpy.data.images.new(label + "_bake", RES, RES, alpha=False, float_buffer=True)
-        inn = bpy.data.images.new(label + "_bake_n", RES, RES, alpha=False, float_buffer=True)
+        ic = bpy.data.images.new(label + "_bake", res, res, alpha=False, float_buffer=True)
+        inn = bpy.data.images.new(label + "_bake_n", res, res, alpha=False, float_buffer=True)
         inn.colorspace_settings.name = "Non-Color"
         w = wire_for_bake(g, col, height, bump, ic, inn)
-        colour = to_srgb(bake(ob, g, w, "EMIT"))
-        normal = bake(ob, g, w, "NORMAL")
+        colour = to_srgb(bake(ob, g, w, "EMIT", res))
+        normal = bake(ob, g, w, "NORMAL", res)
         g.nt.links.new(w["emit"].outputs[0], w["out"].inputs["Surface"])
         done[label] = (ob, colour, normal)
         print("[ke] baked", label)
 
     # the shaders, kept for editing
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(out, exist_ok=True)
     bpy.context.preferences.filepaths.save_version = 0
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, NAME + "_shaders.blend"), copy=True)
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, name + "_shaders.blend"), copy=True)
 
     for label, rough, spec in (("bench_wood", 0.62, 0.35), ("bench_iron", 0.52, 0.45)):
         ob, colour, normal = done[label]
-        alb = K.save_image(label, colour, TEX)
-        nrm = K.save_image(label + "_n", normal, TEX)
+        alb = K.save_image(label, colour, tex)
+        nrm = K.save_image(label + "_n", normal, tex)
         m = K.textured(label + "_mat", alb, rough=rough, normal=nrm, normal_strength=1.0)
         m.node_tree.nodes["Principled BSDF"].inputs["Specular IOR Level"].default_value = spec
         ob.data.materials[0] = m
@@ -634,7 +647,14 @@ def main():
     for img in list(bpy.data.images):
         if img.name.endswith("_bake") or img.name.endswith("_bake_n"):
             bpy.data.images.remove(img)
-    K.finish(NAME, OUT)
+    # centre the bench on its footprint in depth (the back curls overhang more than the seat front),
+    # after the bake: the shaders paint in the model's own space
+    ys = [(o.matrix_world @ p.co).y for o in (wood, metal) for p in o.data.vertices]
+    for o in (wood, metal):
+        o.location.y -= (min(ys) + max(ys)) / 2
+    K.finish(name, out)
 
 
-main()
+names = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(VARIANTS)
+for n in names:
+    main(n)

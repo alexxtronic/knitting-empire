@@ -2,6 +2,9 @@
 views in plain clay (how it is built, with the paint off). White studio, no ground detail.
 
     Blender -b art/world_assets/bench_park/out/bench_park.blend --python art/world_assets/bench_park/review.py -- <out_dir> [view ...]
+
+REVIEW_END_X (default 0.9) is the end casting's distance from the centre: 0.4 for the short bench, so the
+close-ups land on its arm.
 """
 import math
 import os
@@ -55,16 +58,17 @@ sc.collection.objects.link(cam)
 sc.camera = cam
 
 # name: (azimuth from the front towards +X, elevation, distance, look-at, size)
-C = Vector((0, 0.03, 0.47))
+EX = float(os.environ.get("REVIEW_END_X", 0.9))
+C = Vector((0, 0.0, 0.47))
 VIEWS = {
-    "ref": (38, 22, 3.7, Vector((0.0, 0.03, 0.47)), (1280, 720)),
+    "ref": (38, 22, 3.7, C, (1280, 720)),
     "front_left": (-40, 16, 4.6, C, (960, 640)),
     "front": (0, 6, 4.6, C, (960, 640)),
     "side": (90, 4, 3.0, C, (960, 640)),
     "back": (150, 18, 4.6, C, (960, 640)),
     "game": (20, 52, 6.0, C, (960, 640)),
-    "close_arm": (48, 16, 1.6, Vector((0.86, -0.05, 0.50)), (960, 640)),
-    "close_back": (-150, 20, 1.8, Vector((-0.84, 0.25, 0.7)), (960, 640)),
+    "close_arm": (48, 16, 1.6, Vector((EX - 0.04, -0.10, 0.50)), (960, 640)),
+    "close_back": (-150, 20, 1.8, Vector((-EX + 0.06, 0.20, 0.7)), (960, 640)),
 }
 model = bpy.data.objects["model"]
 for name, (az, el, dist, ctr, size) in VIEWS.items():
