@@ -3,19 +3,19 @@
   "mode": "silhouette",
   "engine": "workbench",
   "bbox_min": [
-    -0.3525840938091278,
+    -0.3534161150455475,
     -0.2162259817123413,
     0.0
   ],
   "bbox_max": [
-    0.3525840938091278,
-    0.1413494050502777,
-    1.8086683750152588
+    0.3534161150455475,
+    0.1478826403617859,
+    1.8137046098709106
   ],
   "size_xyz": [
-    0.7051681876182556,
-    0.357575386762619,
-    1.8086683750152588
+    0.706832230091095,
+    0.3641086220741272,
+    1.8137046098709106
   ],
   "objects": [
     "CH_Rowan_Body",
@@ -28,12 +28,12 @@
     "CH_Rowan_Mouth",
     "CH_Rowan_Beard",
     "CH_Rowan_Brows",
-    "CH_Rowan_Hair",
     "CH_Rowan_Sweater",
     "CH_Rowan_Jeans",
     "CH_Rowan_Belt",
     "CH_Rowan_Boot_L",
-    "CH_Rowan_Boot_R"
+    "CH_Rowan_Boot_R",
+    "CH_Rowan_Hair"
   ],
   "renders": {
     "front": {
@@ -43,7 +43,7 @@
         0,
         0
       ],
-      "distance": 4.1787876933813095
+      "distance": 4.182054311037064
     },
     "side": {
       "file": "review/gate/silhouette_side.png",
@@ -52,7 +52,7 @@
         0,
         0
       ],
-      "distance": 4.352584093809128
+      "distance": 4.3534161150455475
     },
     "back": {
       "file": "review/gate/silhouette_back.png",
@@ -61,7 +61,7 @@
         0,
         0
       ],
-      "distance": 4.1787876933813095
+      "distance": 4.182054311037064
     }
   }
 }

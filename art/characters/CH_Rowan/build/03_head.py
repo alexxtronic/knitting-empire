@@ -35,18 +35,18 @@ def head_sdf(p):
     ax = np.abs(p[..., 0])
     q = np.stack([ax, p[..., 1], p[..., 2]], axis=-1)            # mirrored: paired features
     d = sd_ellipsoid(p, (0, -0.010, 1.685), (0.086, 0.115, 0.092))                       # cranium: forehead -0.125, top 1.777
-    d = smin(d, sd_ellipsoid(p, (0, -0.048, 1.603), (0.081, 0.084, 0.086)), 0.040)       # face and jaw: width 0.158 at the mouth
-    d = smin(d, sd_ellipsoid(q, (0.057, -0.020, 1.575), (0.022, 0.040, 0.034)), 0.030)   # jaw corners
-    d = smin(d, sd_ellipsoid(p, (0, -0.110, 1.547), (0.036, 0.031, 0.030)), 0.025)       # chin: front -0.138, bottom 1.518
-    d = smin(d, sd_ellipsoid(q, (0.043, -0.094, 1.613), (0.029, 0.027, 0.025)), 0.030)   # smiling cheeks
+    d = smin(d, sd_ellipsoid(p, (0, -0.048, 1.603), (0.078, 0.084, 0.086)), 0.040)       # face and jaw: width 0.158 at the mouth
+    d = smin(d, sd_ellipsoid(q, (0.055, -0.018, 1.588), (0.020, 0.038, 0.030)), 0.030)   # jaw corners
+    d = smin(d, sd_ellipsoid(p, (0, -0.110, 1.547), (0.031, 0.030, 0.029)), 0.025)       # chin: front -0.138, bottom 1.518
+    d = smin(d, sd_ellipsoid(q, (0.042, -0.096, 1.614), (0.025, 0.025, 0.023)), 0.038)   # smiling cheeks
     d = smin(d, sd_capsule(p, (0, 0.0, 1.38), (0, -0.022, 1.60), 0.059), 0.009)          # neck: width 0.121
     d = smin(d, sd_capsule(q, (0.016, -0.121, 1.689), (0.056, -0.100, 1.690), 0.008), 0.020)   # a soft brow ridge
     eye = np.array(EYE)
     d = smax(d, -sd_sphere(q, eye + np.array([0, -0.004, 0]), EYE_R + 0.0045), 0.012)    # eye socket
     d = smin(d, sd_sphere(q, eye, EYE_R + 0.0020), 0.006)                                # eyelids, 2 mm over the eyeball
     d = smin(d, sd_capsule(p, (0, -0.124, 1.660), (0, -0.150, 1.620), 0.0090, 0.0140), 0.014)  # a short nose bridge
-    d = smin(d, sd_sphere(p, (0, -0.150, 1.613), 0.0175), 0.008)                         # round nose tip: side view -0.164
-    d = smin(d, sd_sphere(q, (0.0155, -0.136, 1.608), 0.0105), 0.007)                    # nostril wings
+    d = smin(d, sd_sphere(p, (0, -0.149, 1.613), 0.0190), 0.008)                         # round nose tip: side view -0.164
+    d = smin(d, sd_sphere(q, (0.0175, -0.136, 1.608), 0.0115), 0.007)                    # nostril wings
     d = smin(d, sd_ellipsoid(p, (0, -0.134, 1.592), (0.026, 0.010, 0.0065)), 0.006)      # upper lip
     d = smin(d, sd_ellipsoid(p, (0, -0.1315, 1.5780), (0.026, 0.0110, 0.0080)), 0.007)   # lower lip
     return d
@@ -68,9 +68,10 @@ ZC = ZJ + DZ * (NMID - 1)
 LOW_E = [-27, -22, -16, -10, -5]          # rows under the jaw: rays tilted down from (0, YAX, ZJ)
 TOP_E = [8, 16, 24, 32, 41, 50, 60, 70, 80]   # rows over the cranium: rays tilted up from (0, YAX, ZC)
 RL = len(LOW_E)
+SMILE = 0.0080                            # how far the mouth corners rise (ref: a wide closed smile)
 MOUTH_I, MOUTH_C = 8, 7                   # mouth: middle row 8 (z 1.585), corners at columns +-7 (width 0.088)
-EYE_C0, EYE_C1, EYE_I0, EYE_I1 = 4, 10, 18, 22     # eye hole: 6 x 4 quads -> a 20-vertex lid loop
-EYE_ZC, EYE_HW, EYE_HU, EYE_HL, EYE_TILT = 1.6565, 0.0215, 0.0140, 0.0128, 0.0010   # opening 43 x 25 mm: the lids just touch the iris
+EYE_C0, EYE_C1, EYE_I0, EYE_I1 = 3, 11, 17, 23     # eye hole: 8 x 6 quads -> a 28-vertex lid loop
+EYE_ZC, EYE_HW, EYE_HU, EYE_HL, EYE_TILT = 1.6565, 0.0240, 0.0185, 0.0155, 0.0010   # opening 43 x 25 mm: the lids just touch the iris
 
 
 def col_theta():
@@ -85,15 +86,19 @@ def eye_outline(s, upper):
 
 
 def eye_loop():
-    """The 20 grid points round the eye hole (middle row, column) with their targets (x, z)."""
-    out = [((20, EYE_C0), eye_outline(-1, False))]
-    lower = [(19, EYE_C0), (18, EYE_C0)] + [(18, c) for c in range(EYE_C0 + 1, EYE_C1)] + [(18, EYE_C1), (19, EYE_C1)]
+    """The grid points round the eye hole (middle row, column) with their targets (x, z):
+    inner corner, along the lower lid, outer corner, back along the upper lid."""
+    mid = (EYE_I0 + EYE_I1) // 2
+    lower = [(i, EYE_C0) for i in range(mid - 1, EYE_I0 - 1, -1)] + [(EYE_I0, c) for c in range(EYE_C0 + 1, EYE_C1)] \
+        + [(i, EYE_C1) for i in range(EYE_I0, mid)]
+    upper = [(i, EYE_C1) for i in range(mid + 1, EYE_I1 + 1)] + [(EYE_I1, c) for c in range(EYE_C1 - 1, EYE_C0, -1)] \
+        + [(i, EYE_C0) for i in range(EYE_I1, mid, -1)]
+    out = [((mid, EYE_C0), eye_outline(-1, False))]
     for m, rc in enumerate(lower, start=1):
-        out.append((rc, eye_outline(-1 + 2 * m / 10, False)))
-    out.append(((20, EYE_C1), eye_outline(1, False)))
-    upper = [(21, EYE_C1), (22, EYE_C1)] + [(22, c) for c in range(EYE_C1 - 1, EYE_C0, -1)] + [(22, EYE_C0), (21, EYE_C0)]
+        out.append((rc, eye_outline(-1 + 2 * m / (len(lower) + 1), False)))
+    out.append(((mid, EYE_C1), eye_outline(1, False)))
     for m, rc in enumerate(upper, start=1):
-        out.append((rc, eye_outline(1 - 2 * m / 10, True)))
+        out.append((rc, eye_outline(1 - 2 * m / (len(upper) + 1), True)))
     return out
 
 
@@ -107,7 +112,7 @@ def head_grid():
         for c in range(-11, 12):
             s = min(abs(c) / MOUTH_C, 1.0)
             fade = 1.0 if abs(c) <= MOUTH_C else max(0.0, (11 - abs(c)) / 4.0)
-            ZZ[i, c % M] += (0.0055 * s * s - 0.0010) * w * fade
+            ZZ[i, c % M] += (SMILE * s * s - 0.0010) * w * fade
     # eye hole: pin its rim to the lid outline, relax the grid round it
     loop = eye_loop()
     targets = front_project([t[0] for (_, t) in loop], [t[1] for (_, t) in loop])
@@ -223,7 +228,7 @@ def write_jaw_groups(ob):
 
 def ear_points(side):
     """One ear as a grid (rows from the outer face to the inner face) in world space."""
-    C = np.array([0.085, 0.012, 1.630])                        # front view: ear out to x 0.10; side view ear centre
+    C = np.array([0.087, 0.012, 1.632])                        # front view: ear out to x 0.10; side view ear centre
     yaw = math.radians(32)                                     # ears stand out from the head
     a = np.array([math.sin(yaw), math.cos(yaw), 0.0])          # along the ear, front to back
     b = norm(np.array([0.0, 0.12, 1.0]))                       # up the ear, tipped back a little
@@ -233,8 +238,8 @@ def ear_points(side):
     b = b if b[2] > 0 else -b
 
     def sdf(q):
-        body = sd_ellipsoid(q, (0, 0, 0), (0.017, 0.030, 0.0065))
-        dent = sd_ellipsoid(q, (-0.0015, 0.003, 0.0068), (0.0095, 0.019, 0.0052))     # the bowl of the ear
+        body = sd_ellipsoid(q, (0, 0, 0), (0.019, 0.034, 0.0072))
+        dent = sd_ellipsoid(q, (-0.0015, 0.003, 0.0073), (0.011, 0.022, 0.0055))     # the bowl of the ear
         return smax(body, -dent, 0.004)
 
     rows = []
@@ -314,7 +319,8 @@ def build_head(M_):
         Bq = E + norm(dirn + 0.30 * perp) * (EYE_R + 0.0004)            # under the lid
         ia = [mb.vert(p) for p in A]
         ib = [mb.vert(p) for p in Bq]
-        up = [10] + list(range(11, 20)) + [0]              # outer corner, along the upper lid, inner corner
+        oc = len(loop) // 2                                # outer corner, along the upper lid, inner corner
+        up = [oc] + list(range(oc + 1, len(loop))) + [0]
         LASH.append((Pr[up], dirn[up], perp[up], E))
         mb.grid(None, idx=[rim, ia, ib], closed=True, uv=(0.2, 0.9, 1, 1))
     # lips: three loops going into the mouth, sealed at the corners
@@ -354,11 +360,11 @@ def build_eye(M_, side):
     mb = MB()
     n = 24
     phi = 2 * PI * np.arange(n) / n
-    alphas = [4, 11, 16.5, 22.5, 28, 32, 40, 52, 66, 84, 104, 126, 150, 170]      # from the pupil pole
+    alphas = [5, 14.8, 21, 27, 33.3, 36.5, 44, 55, 66, 84, 104, 126, 150, 170]      # from the pupil pole
     rows = []
     for a in alphas:
         ar = math.radians(a)
-        r = EYE_R + 0.0010 * float(smoothstep(32, 16, a))                          # the cornea bulges a little
+        r = EYE_R + 0.0010 * float(smoothstep(36.5, 19, a))                          # the cornea bulges a little
         rows.append(np.stack([r * math.sin(ar) * np.cos(phi), np.full(n, -r * math.cos(ar)), r * math.sin(ar) * np.sin(phi)], axis=1))
     idx = [[mb.vert(p) for p in row] for row in rows]
     mb.grid(None, idx=idx[0:2], closed=True, mat=2, uv=(0, 0, 1, 1))              # pupil: radius 4.6 mm
@@ -462,8 +468,8 @@ def beard_mask(P, elev, th):
     """1 where the beard grows, falling to 0 at its edge (front view: cheek line, moustache, lips left bare)."""
     x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
     thd = np.abs((np.degrees(th) + 180.0) % 360.0 - 180.0)          # 0 at the front, 180 at the back
-    top_tab = [(0, 1.6065), (8, 1.6050), (16, 1.6000), (24, 1.5975), (32, 1.6000), (45, 1.6120),
-               (60, 1.6300), (75, 1.6500), (84, 1.6680), (120, 1.6680)]
+    top_tab = [(0, 1.6065), (8, 1.6050), (16, 1.6000), (24, 1.5975), (32, 1.5960), (45, 1.6030),
+               (60, 1.6190), (75, 1.6430), (84, 1.6650), (120, 1.6680)]
     ztop = np.interp(thd, [t[0] for t in top_tab], [t[1] for t in top_tab])
     # wide ramps: the shell crosses the skin half way down each ramp, so its edge is a smooth line
     m = smoothstep(ztop + 0.010, ztop - 0.014, z)
@@ -475,8 +481,9 @@ def beard_mask(P, elev, th):
     m = np.minimum(m, np.where(elev < 0, under, 1.0))                            # under the chin only, fading out
     nose = smoothstep(-0.150, -0.138, y)
     m = np.minimum(m, np.where(z > 1.598, nose, 1.0))                            # not on the nose
-    lo = (x / 0.025) ** 2 + ((z - 1.5775) / 0.0065) ** 2
-    m = np.minimum(m, smoothstep(0.5, 1.9, lo))                                  # lower lip
+    dzs = z - (1.5840 + SMILE * (x / 0.040) ** 2)              # height above the line of the mouth
+    lips = smoothstep(-0.0088, -0.0052, dzs) * smoothstep(0.0030, 0.0010, dzs) * smoothstep(0.045, 0.037, x)
+    m = np.minimum(m, 1.0 - lips)                                                # the lower lip and the mouth line stay bare
     return m
 
 
@@ -495,9 +502,9 @@ def build_beard(M_, P, ELEV, THG, low_row_src):
     E2 = np.repeat(ELEV[:, None], M, axis=1)
     m = beard_mask(P, E2, THG)
     nrm = sdf_normal(head_sdf, P.reshape(-1, 3)).reshape(R, M, 3)
-    chin = smoothstep(1.568, 1.535, P[..., 2]) * smoothstep(55, 25, np.abs((np.degrees(THG) + 180.0) % 360.0 - 180.0))
-    thick = 0.0048 + 0.0070 * chin                       # ref: beard 5 mm on the cheeks, 13 mm under the chin
-    off = lerp(-0.0030, thick, smoothstep(0.45, 0.95, m))       # the shell starts inside the painted stubble
+    chin = smoothstep(1.568, 1.535, P[..., 2]) * smoothstep(40, 18, np.abs((np.degrees(THG) + 180.0) % 360.0 - 180.0))
+    thick = 0.0034 + 0.0055 * chin                       # ref: beard 5 mm on the cheeks, 13 mm under the chin
+    off = lerp(-0.0030, thick, smoothstep(0.45, 1.0, m) ** 1.5)       # the shell starts inside the painted stubble
     Q = P + nrm * off[..., None]
     mb = MB()
     wj = jaw_weight(P.reshape(-1, 3)).reshape(R, M)
@@ -538,11 +545,11 @@ def build_beard(M_, P, ELEV, THG, low_row_src):
 
 def build_brows(M_):
     mb = MB()
-    ctrl = [(0.0110, 1.6865), (0.0260, 1.6925), (0.0410, 1.6945), (0.0550, 1.6915), (0.0680, 1.6840)]   # front view
+    ctrl = [(0.0120, 1.6900), (0.0270, 1.6965), (0.0430, 1.6990), (0.0580, 1.6965), (0.0720, 1.6895)]   # front view
     path = resample(spline([(x, 0, z) for (x, z) in ctrl], 6), 13)
     n = len(path)
     s = np.linspace(0, 1, n)
-    half = np.interp(s, [0, 0.12, 0.5, 0.85, 1.0], [0.0045, 0.0075, 0.0070, 0.0048, 0.0012])   # ref: 14 mm thick
+    half = np.interp(s, [0, 0.12, 0.5, 0.85, 1.0], [0.0050, 0.0080, 0.0072, 0.0048, 0.0012])   # ref: 14 mm thick
     lift_end = np.interp(s, [0, 0.1, 0.9, 1.0], [0.3, 1.0, 1.0, 0.2])
     across = np.linspace(-1, 1, 5)
     for side in (1, -1):
@@ -562,9 +569,13 @@ def build_brows(M_):
     for (Pr, dirn, perp, EC) in LASH:
         k = len(Pr)
         t = np.linspace(0, 1, k)
-        wdt = 0.0006 + 0.0019 * np.sin(PI * t) ** 0.7
-        inner = Pr - dirn * (np.linalg.norm(Pr - EC, axis=1) - (EYE_R + 0.0010))[:, None]   # on the eyeball, under the lid edge
-        outer = Pr + dirn * 0.0007 + perp * (wdt[:, None] * 0.6)
+        wdt = 0.0012 + 0.0026 * np.sin(PI * t) ** 0.7
+        Aq = Pr - dirn * (np.linalg.norm(Pr - EC, axis=1) - (EYE_R + 0.0006))[:, None]        # the lid's edge on the eyeball
+        span = Pr - Aq
+        ln = np.maximum(np.linalg.norm(span, axis=1), 1e-6)[:, None]
+        lift = dirn * 0.0004 - perp * 0.0005                 # just proud of the lid margin
+        inner = Aq + lift
+        outer = Aq + span / ln * np.minimum(ln, wdt[:, None]) + lift
         mb.grid([inner, outer], closed=False, uv=(0.9, 0.5, 1, 1))
     ob = mb.build("CH_Rowan_Brows", "LOW", OWNER, [M_["brow"]], recalc=True)
     ob.vertex_groups.new(name="Head").add(list(range(len(ob.data.vertices))), 1.0, "REPLACE")

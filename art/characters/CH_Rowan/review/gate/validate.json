@@ -2,7 +2,7 @@
   "blend": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/characters/CH_Rowan/CH_Rowan_master.blend",
   "summary": {
     "tris_by_lod": {
-      "0": 50444
+      "0": 49936
     },
     "fail": [],
     "warn": [
@@ -47,11 +47,11 @@
       ],
       "fail": [],
       "info": {
-        "tris_evaluated": 5840,
-        "verts_evaluated": 2972,
-        "verts": 2972,
-        "faces": 2968,
-        "boundary_edges": 100,
+        "tris_evaluated": 5808,
+        "verts_evaluated": 2964,
+        "verts": 2964,
+        "faces": 2952,
+        "boundary_edges": 116,
         "nonmanifold_edges": 0,
         "islands": 3,
         "uv_loops_outside_0_1": 0,
@@ -196,14 +196,14 @@
       ],
       "fail": [],
       "info": {
-        "tris_evaluated": 1616,
-        "verts_evaluated": 912,
-        "verts": 912,
-        "faces": 808,
-        "boundary_edges": 210,
+        "tris_evaluated": 1556,
+        "verts_evaluated": 878,
+        "verts": 878,
+        "faces": 778,
+        "boundary_edges": 200,
         "nonmanifold_edges": 0,
         "islands": 1,
-        "uv_loops_outside_0_1": 3232,
+        "uv_loops_outside_0_1": 3112,
         "materials": [
           "CH_Rowan_Beard"
         ],
@@ -216,11 +216,11 @@
       "warn": [],
       "fail": [],
       "info": {
-        "tris_evaluated": 232,
-        "verts_evaluated": 174,
-        "verts": 174,
-        "faces": 116,
-        "boundary_edges": 108,
+        "tris_evaluated": 248,
+        "verts_evaluated": 190,
+        "verts": 190,
+        "faces": 124,
+        "boundary_edges": 124,
         "nonmanifold_edges": 0,
         "islands": 4,
         "uv_loops_outside_0_1": 0,
@@ -231,39 +231,19 @@
       }
     },
     {
-      "name": "CH_Rowan_Hair",
-      "type": "MESH",
-      "warn": [],
-      "fail": [],
-      "info": {
-        "tris_evaluated": 12652,
-        "verts_evaluated": 6493,
-        "verts": 6493,
-        "faces": 6798,
-        "boundary_edges": 112,
-        "nonmanifold_edges": 0,
-        "islands": 56,
-        "uv_loops_outside_0_1": 15332,
-        "materials": [
-          "CH_Rowan_Hair"
-        ],
-        "modifiers": []
-      }
-    },
-    {
       "name": "CH_Rowan_Sweater",
       "type": "MESH",
       "warn": [],
       "fail": [],
       "info": {
-        "tris_evaluated": 6912,
-        "verts_evaluated": 3534,
-        "verts": 902,
-        "faces": 864,
+        "tris_evaluated": 7680,
+        "verts_evaluated": 3918,
+        "verts": 998,
+        "faces": 960,
         "boundary_edges": 80,
         "nonmanifold_edges": 0,
         "islands": 1,
-        "uv_loops_outside_0_1": 2048,
+        "uv_loops_outside_0_1": 2432,
         "materials": [
           "CH_Rowan_Sweater"
         ],
@@ -365,6 +345,26 @@
           "CH_Rowan_BootLeather",
           "CH_Rowan_BootSole",
           "CH_Rowan_BootLace"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Hair",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 11452,
+        "verts_evaluated": 5885,
+        "verts": 5885,
+        "faces": 6166,
+        "boundary_edges": 112,
+        "nonmanifold_edges": 0,
+        "islands": 52,
+        "uv_loops_outside_0_1": 13852,
+        "materials": [
+          "CH_Rowan_Hair"
         ],
         "modifiers": []
       }

@@ -125,31 +125,32 @@ class G:
 def skin():
     g = G("CH_Rowan_Skin")
     P = g.pos()
-    base = (0.800, 0.370, 0.205)                         # ref forehead / hand, a warm peach
+    base = (0.780, 0.340, 0.180)                         # ref forehead / hand, a warm peach
     cheek = g.blob(P, (0.046, -0.110, 1.614), (0.030, 0.030, 0.024), 0.35, 1.25)
     nose = g.blob(P, (0.0, -0.158, 1.613), (0.016, 0.016, 0.014), 0.4, 1.3)
     ear = g.blob(P, (0.092, 0.016, 1.628), (0.012, 0.022, 0.030), 0.3, 1.2)
-    c = g.mix(g.math("MULTIPLY", cheek, 0.60), base, (0.800, 0.180, 0.095))       # ref cheek
-    c = g.mix(g.math("MULTIPLY", nose, 0.45), c, (0.820, 0.190, 0.100))
+    c = g.mix(g.math("MULTIPLY", cheek, 0.78), base, (0.800, 0.170, 0.085))       # ref cheek
+    c = g.mix(g.math("MULTIPLY", nose, 0.58), c, (0.820, 0.180, 0.090))
     c = g.mix(g.math("MULTIPLY", ear, 0.30), c, (0.800, 0.200, 0.115))
-    lower = g.blob(P, (0.0, -0.1310, 1.5765), (0.0235, 0.0150, 0.0062), 0.70, 1.15)
-    c = g.mix(g.math("MULTIPLY", lower, 0.55), c, (0.600, 0.150, 0.105))          # ref lower lip
-    # the line of the closed mouth, following the smile
+    # the closed, smiling mouth: a dark line that rises to the corners, a soft lower lip under it
     x, y, z = g.xyz(P)
     ax = g.math("ABSOLUTE", x)
-    xr = g.math("DIVIDE", ax, 0.044)
-    zline = g.math("ADD", 1.5843, g.math("MULTIPLY", g.math("MULTIPLY", xr, xr), 0.0055))
-    dz = g.math("ABSOLUTE", g.math("SUBTRACT", z, zline))
-    line = g.math("MULTIPLY", g.ramp(dz, 0.0017, 0.0005), g.ramp(ax, 0.047, 0.041))
-    line = g.math("MULTIPLY", line, g.ramp(y, -0.095, -0.105))
-    c = g.mix(g.math("MULTIPLY", line, 0.85), c, (0.200, 0.045, 0.030))
+    xr = g.math("DIVIDE", ax, 0.040)
+    zline = g.math("ADD", 1.5840, g.math("MULTIPLY", g.math("MULTIPLY", xr, xr), 0.0080))
+    dzs = g.math("SUBTRACT", z, zline)
+    front = g.ramp(y, -0.095, -0.105)
+    lip = g.math("MULTIPLY", g.ramp(dzs, -0.0100, -0.0055), g.ramp(dzs, -0.0002, -0.0020))
+    lip = g.math("MULTIPLY", g.math("MULTIPLY", lip, g.ramp(ax, 0.036, 0.024)), front)
+    c = g.mix(g.math("MULTIPLY", lip, 0.60), c, (0.600, 0.150, 0.105))            # ref lower lip
+    line = g.math("MULTIPLY", g.ramp(g.math("ABSOLUTE", dzs), 0.0018, 0.0006), g.ramp(ax, 0.043, 0.037))
+    c = g.mix(g.math("MULTIPLY", g.math("MULTIPLY", line, front), 0.9), c, (0.160, 0.035, 0.025))
     # stubble under the beard and the hair, so their edges are a clean painted line
     def attr(name):
         n = g.nt.nodes.new("ShaderNodeAttribute")
         n.attribute_name = name
         return g.ramp(n.outputs["Fac"], 0.12, 0.62)       # a soft stubble edge
     fb, fh = attr("beard"), attr("hair")
-    c = g.mix(fb, c, (0.130, 0.055, 0.027))
+    c = g.mix(fb, c, (0.185, 0.080, 0.040))
     c = g.mix(fh, c, (0.110, 0.046, 0.021))
     furry = g.math("MAXIMUM", fb, fh)
     g.p(color=c, rough=g.ramp(furry, 0.0, 1.0, 0.50, 0.90), sss=0.06)
@@ -167,6 +168,11 @@ def knit(name, color, fu=118.0, fv=132.0, strength=0.9):
     row = g.math("ADD", g.math("MULTIPLY", v, fv), g.math("MULTIPLY", tri, 0.45))
     h = g.math("ADD", g.math("MULTIPLY", g.math("SINE", g.math("MULTIPLY", row, 2 * math.pi)), 0.5), 0.5)
     h = g.math("MULTIPLY", h, g.ramp(tri, 0.0, 0.40))
+    at = g.nt.nodes.new("ShaderNodeAttribute")             # ribbed bands: plain ribs, 11 mm apart, run along the garment
+    at.attribute_name = "rib"
+    ribf = g.ramp(at.outputs["Fac"], 0.35, 0.65)
+    hr = g.math("ADD", g.math("MULTIPLY", g.math("SINE", g.math("MULTIPLY", u, 2 * math.pi / 0.011)), 0.5), 0.5)
+    h = g.math("ADD", h, g.math("MULTIPLY", g.math("SUBTRACT", hr, h), ribf))
     heather = g.noise(g.pos(), 900.0, 3.0)
     col = g.mix(g.ramp(heather, 0.35, 0.70), tuple(c * 0.72 for c in color), tuple(c * 1.25 for c in color))
     col = g.mix(g.ramp(h, 0.0, 0.5, 0.45, 0.0), col, tuple(c * 0.35 for c in color))     # darker in the valleys
@@ -174,13 +180,25 @@ def knit(name, color, fu=118.0, fv=132.0, strength=0.9):
     g.m.diffuse_color = (*color, 1.0)
 
 
-def cloth(name, color, twill=700.0, rough=0.85, strength=0.25):
+def cloth(name, color, twill=700.0, rough=0.85, strength=0.25, stitch=None):
     g = G(name)
     _, u, v = g.uv()
     d = g.math("SINE", g.math("MULTIPLY", g.math("ADD", u, v), twill * 2 * math.pi))
     n = g.noise(g.pos(), 350.0, 4.0)
     h = g.math("ADD", g.math("MULTIPLY", d, 0.5), n)
     col = g.mix(g.ramp(n, 0.3, 0.75), tuple(c * 0.8 for c in color), tuple(c * 1.3 for c in color))
+    if stitch:                                             # painted by 04_outfit.py in the metric UV space
+        img = bpy.data.images.load(stitch, check_existing=True)
+        img.reload()
+        img.colorspace_settings.name = "Non-Color"
+        t = g.nt.nodes.new("ShaderNodeTexImage")
+        t.image = img
+        t.extension = "CLIP"
+        g.nt.links.new(g.vec(g.math("DIVIDE", u, 2.5), g.math("DIVIDE", g.math("ADD", v, 0.3), 0.85), 0.0), t.inputs["Vector"])
+        r_, g_, _b = g.xyz(t.outputs["Color"])
+        col = g.mix(g.math("MULTIPLY", g_, 0.55), col, tuple(c * 0.25 for c in color))      # seam shadow
+        col = g.mix(g.math("MULTIPLY", r_, 0.95), col, (0.420, 0.200, 0.060))               # ref: tan topstitching
+        h = g.math("ADD", h, g.math("MULTIPLY", r_, 2.0))
     g.p(color=col, rough=rough, normal=g.bump(h, strength, 0.0008), spec=0.25)
     g.m.diffuse_color = (*color, 1.0)
 
@@ -212,9 +230,9 @@ def eyes():
     x, y, z = g.xyz(g.pos(obj=True))
     r = g.math("SQRT", g.math("ADD", g.math("MULTIPLY", x, x), g.math("MULTIPLY", z, z)))
     streak = g.noise(g.vec(g.math("MULTIPLY", g.math("ARCTAN2", x, z), 6.0), 0.0, 0.0), 3.0, 2.0)
-    c = g.mix(g.ramp(r, 0.0046, 0.0085), (0.050, 0.200, 0.480), (0.140, 0.420, 0.800))      # ref: clear blue
-    c = g.mix(g.math("MULTIPLY", g.ramp(streak, 0.3, 0.8), 0.35), c, (0.300, 0.600, 0.900))
-    c = g.mix(g.ramp(r, 0.0092, 0.0112), c, (0.012, 0.045, 0.130))                          # dark rim
+    c = g.mix(g.ramp(r, 0.0070, 0.0112), (0.060, 0.150, 0.300), (0.130, 0.270, 0.450))      # ref: clear blue
+    c = g.mix(g.math("MULTIPLY", g.ramp(streak, 0.3, 0.8), 0.30), c, (0.260, 0.430, 0.620))
+    c = g.mix(g.ramp(r, 0.0122, 0.0141), c, (0.015, 0.035, 0.080))                          # dark rim
     g.p(color=c, rough=0.08, coat=1.0)
     g.m.diffuse_color = (0.10, 0.34, 0.66, 1.0)
 
@@ -222,15 +240,16 @@ def eyes():
 def build():
     skin()
     knit("CH_Rowan_Sweater", (0.130, 0.106, 0.090))                     # ref sweater
-    cloth("CH_Rowan_Denim", (0.015, 0.018, 0.028))                      # ref jeans, read as dark indigo
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cloth("CH_Rowan_Denim", (0.015, 0.018, 0.028), stitch=os.path.join(here, "textures", "CH_Rowan_JeansStitch.png"))                      # ref jeans, read as dark indigo
     cloth("CH_Rowan_DenimCuff", (0.300, 0.265, 0.235), strength=0.35)   # ref cuff
     plain("CH_Rowan_BootLeather", (0.170, 0.058, 0.024), 0.42, noise_bump=0.12, scale=260.0, coat=0.15)
     plain("CH_Rowan_BootSole", (0.300, 0.185, 0.085), 0.85, noise_bump=0.2, scale=500.0)
     plain("CH_Rowan_BootLace", (0.360, 0.220, 0.100), 0.9, noise_bump=0.4, scale=1500.0)
     plain("CH_Rowan_Belt", (0.105, 0.043, 0.022), 0.5, noise_bump=0.1, scale=300.0)
     plain("CH_Rowan_Brass", (0.650, 0.440, 0.170), 0.32, metal=0.9)
-    hair("CH_Rowan_Hair", (0.095, 0.038, 0.017), (0.280, 0.118, 0.052))  # ref hair, shadow to highlight
-    hair("CH_Rowan_Beard", (0.120, 0.050, 0.024), (0.250, 0.108, 0.052), obj_noise=True, strength=0.7)
+    hair("CH_Rowan_Hair", (0.135, 0.056, 0.025), (0.265, 0.112, 0.050), strength=0.35)  # ref hair, shadow to highlight
+    hair("CH_Rowan_Beard", (0.150, 0.064, 0.030), (0.300, 0.135, 0.066), obj_noise=True, strength=0.9)
     hair("CH_Rowan_Brow", (0.060, 0.022, 0.009), (0.110, 0.040, 0.016), obj_noise=True, strength=0.5)
     eyes()
     plain("CH_Rowan_Teeth", (0.860, 0.830, 0.760), 0.28)

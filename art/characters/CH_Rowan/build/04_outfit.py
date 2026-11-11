@@ -55,14 +55,14 @@ TORSO = [
     (1.330, 0.157, 0.132, 0.136, -0.005, 2.40),
     (1.382, 0.155, 0.122, 0.133, -0.001, 2.40),   # side view 24%: front -0.120, back +0.133
     (1.432, 0.156, 0.108, 0.126, 0.004, 2.30),    # top of the armhole: front view 20% half width 0.153
-    (1.458, 0.118, 0.098, 0.106, 0.000, 2.20),
-    (1.476, 0.090, 0.086, 0.086, -0.010, 2.00),   # collar base: front view collar width 0.19
-    (1.497, 0.081, 0.080, 0.078, -0.011, 2.00),   # collar, outer top
-    (1.502, 0.071, 0.071, 0.070, -0.012, 2.00),   # collar, inner top: 1 cm clear of the neck
-    (1.482, 0.067, 0.067, 0.066, -0.012, 2.00),   # collar, turned in (hidden)
+    (1.452, 0.122, 0.100, 0.108, 0.000, 2.20),
+    (1.468, 0.096, 0.090, 0.090, -0.010, 2.00),   # crew collar base: front view collar width 0.19
+    (1.486, 0.088, 0.084, 0.082, -0.011, 2.00),   # collar, outer top
+    (1.491, 0.078, 0.075, 0.074, -0.012, 2.00),   # collar, inner top: clear of the neck
+    (1.472, 0.074, 0.071, 0.070, -0.012, 2.00),   # collar, turned in (hidden)
 ]
 AH_R0, AH_ROWS = 7, 4                 # armhole: rows 7..11, columns 4..8 (left) and 16..20 (right)
-COLLAR_DIP = 0.012                    # collar front sits lower than the back (side view)
+COLLAR_DIP = 0.020                    # collar front sits lower than the back (side view)
 
 # Shoulder fan (his left): rings pivot on the armpit. outer/top point, inner/bottom point, y, half depth
 SLEEVE_FAN = [
@@ -75,9 +75,11 @@ SLEEVE_FAN = [
 # distance along the upper arm from the shoulder joint, outer radius, inner radius, front/back radius
 SLEEVE_UPPER = [(0.215, 0.073, 0.056, 0.074), (0.260, 0.074, 0.068, 0.074)]
 # distance along the forearm from the elbow, radius
-SLEEVE_FORE = [(0.050, 0.076), (0.090, 0.077), (0.115, 0.072), (0.130, 0.057),   # bunched above the cuff
+SLEEVE_FORE = [(0.030, 0.074), (0.050, 0.080), (0.066, 0.071), (0.084, 0.080), (0.100, 0.070), (0.115, 0.077),   # pushed-up sleeve: three folds
+               (0.130, 0.057),                                                    # gathered into the cuff
                (0.142, 0.050), (0.170, 0.048), (0.198, 0.047),                    # ribbed cuff: z 1.02 to 0.957
                (0.201, 0.040), (0.186, 0.036)]                                    # turned in (hidden)
+CUFF_FROM = 7                         # first ribbed row of SLEEVE_FORE
 NS = 16
 
 
@@ -86,7 +88,7 @@ def torso_ring(z, a, bf, bb, cy, e):
     s, c = np.sin(th), np.cos(th)
     x = a * sgnpow(s, 2.0 / e)
     y = cy - np.where(c >= 0, bf, bb) * sgnpow(c, 2.0 / e)
-    w = float(smoothstep(1.43, 1.476, z))
+    w = float(smoothstep(1.43, 1.468, z))
     zz = z - COLLAR_DIP * c * w + 0.004 * w
     return np.stack([x, y, zz], axis=1)
 
@@ -126,6 +128,10 @@ def build_sweater(M):
         for c in (4, 5, 6, 7, 16, 17, 18, 19):
             skip.add((r, c))
     idx = mb.grid(rows, closed=True, skip=skip, uv=(0, 0, 1, 1), flip=False)
+    rib = mb.attrs.setdefault("rib", {})          # 1 on the ribbed bands: hem, collar, cuffs
+    for r in [0, 1, 2, 3] + list(range(len(rows) - 4, len(rows))):
+        for c in range(NT):
+            rib[idx[r][c]] = 1.0
     for side, c0 in ((1, 4), (-1, 16)):
         r0, r1 = AH_R0, AH_R0 + AH_ROWS
         loop = [idx[r0][c] for c in range(c0, c0 + 5)]
@@ -135,6 +141,9 @@ def build_sweater(M):
         srows = sleeve_rows(side)
         sidx = mb.grid(srows, closed=True, uv=(2.0 + side * 0.6, 0, 1, 1))
         mb.bridge(loop, sidx[0], outward_from=(side * 0.12, 0, 1.33), uv_ring=mb.last_uv)
+        for r in range(len(SLEEVE_FAN) + len(SLEEVE_UPPER) + CUFF_FROM, len(sidx)):
+            for vi in sidx[r]:
+                rib[vi] = 1.0
     ob = mb.build("CH_Rowan_Sweater", "LOW", OWNER, [M["sweater"]])
     subsurf(ob, 1, 2)
     return ob
@@ -180,12 +189,93 @@ def leg_ring(z, cx, cy, rx, ry, e=2.3):
     return np.stack([cx + rx * sgnpow(s, 2.0 / e), cy - ry * sgnpow(c, 2.0 / e), np.full(NL, z)], axis=1)
 
 
+def stitch_texture(path, C, Ul, w=2500, h=850):
+    """Paint the jeans' topstitching and seams in the metric UV space (1 mm per pixel):
+    red = tan stitch thread, green = seam shadow. C = waist circumference, Ul = leg column positions."""
+    R = np.zeros((h, w), dtype=np.float32)
+    Gc = np.zeros((h, w), dtype=np.float32)
+    sx, sy = w / 2.5, h / 0.85
+
+    def line(img, pts, width, dash=None):
+        pts = np.array(pts, dtype=float)
+        acc = 0.0
+        for (p0, p1) in zip(pts[:-1], pts[1:]):
+            a = np.array([p0[0] * sx, (p0[1] + 0.3) * sy])
+            b = np.array([p1[0] * sx, (p1[1] + 0.3) * sy])
+            ln = np.linalg.norm(b - a)
+            if ln < 1e-6:
+                continue
+            r = width * sx / 2 + 1.5
+            x0, x1 = int(max(0, min(a[0], b[0]) - r)), int(min(w, max(a[0], b[0]) + r + 1))
+            y0, y1 = int(max(0, min(a[1], b[1]) - r)), int(min(h, max(a[1], b[1]) + r + 1))
+            if x1 <= x0 or y1 <= y0:
+                acc += ln
+                continue
+            yy, xx = np.mgrid[y0:y1, x0:x1]
+            t = np.clip(((xx - a[0]) * (b[0] - a[0]) + (yy - a[1]) * (b[1] - a[1])) / ln ** 2, 0, 1)
+            d = np.hypot(xx - (a[0] + t * (b[0] - a[0])), yy - (a[1] + t * (b[1] - a[1])))
+            m = np.clip((width * sx / 2 - d) + 0.5, 0, 1)
+            if dash:
+                m = m * (((acc + t * ln) % ((dash[0] + dash[1]) * sx)) < dash[0] * sx)
+            img[y0:y1, x0:x1] = np.maximum(img[y0:y1, x0:x1], m)
+            acc += ln
+
+    def stitch(pts, double=0.0):
+        line(R, pts, 0.0024, dash=(0.0045, 0.0022))
+        if double:
+            line(R, [(p[0] + double, p[1]) for p in pts], 0.0024, dash=(0.0045, 0.0022))
+
+    def curve(pts, n=24):
+        return [tuple(q[:2]) for q in spline([(p[0], p[1], 0) for p in pts], n // (len(pts) - 1) + 1)]
+
+    wb = 0.060                                   # just under the belt
+    stitch([(0, wb), (C, wb)])
+    for uc in (0.0, C):                          # centre front: fly seam and J stitch
+        line(Gc, [(uc, wb), (uc, 0.275)], 0.003)
+    stitch(curve([(0.034, wb), (0.034, 0.150), (0.024, 0.178), (0.002, 0.192)]))
+    for sgn, base in ((1, 0.0), (-1, C)):        # front pockets
+        stitch(curve([(base + sgn * 0.075, wb), (base + sgn * 0.098, 0.092), (base + sgn * 0.150, 0.122), (base + sgn * (C / 4 - 0.006), 0.132)]))
+    for us in (C / 4, 3 * C / 4):                # side seams on the hips
+        line(Gc, [(us, wb), (us, 0.275)], 0.003)
+        stitch([(us + 0.006, wb), (us + 0.006, 0.275)])
+    line(Gc, [(C / 2, wb), (C / 2, 0.275)], 0.003)             # centre back
+    stitch([(C / 2 + 0.005, wb), (C / 2 + 0.005, 0.275)])
+    yoke = [(C / 4, 0.082), (C / 2, 0.118), (3 * C / 4, 0.082)]
+    line(Gc, yoke, 0.003)
+    stitch([(p[0], p[1] + 0.006) for p in yoke])
+    for uc in (C / 2 - 0.088, C / 2 + 0.088):    # back pockets
+        pw, top = 0.054, 0.132
+        poly = [(uc - pw, top), (uc + pw, top), (uc + pw, top + 0.088), (uc, top + 0.118), (uc - pw, top + 0.088), (uc - pw, top)]
+        line(Gc, poly, 0.0025)
+        stitch([(uc + (p[0] - uc) * 0.90, top + 0.006 + (p[1] - top) * 0.90) for p in poly])
+    for u0 in (1.9, 1.1):                        # legs: outer seam, inseam
+        outer = u0 + (Ul[6] + Ul[7]) / 2
+        inner = u0 + (Ul[14] + Ul[15]) / 2
+        line(Gc, [(outer, 0.0), (outer, 0.52)], 0.003)
+        stitch([(outer + 0.006, 0.0), (outer + 0.006, 0.52)])
+        line(Gc, [(inner, 0.0), (inner, 0.52)], 0.003)
+        stitch([(inner + 0.005, 0.0), (inner + 0.005, 0.52)], double=0.006)
+    px = np.zeros((h, w, 4), dtype=np.float32)
+    px[..., 0], px[..., 1], px[..., 3] = R, Gc, 1.0
+    img = bpy.data.images.get("CH_Rowan_JeansStitch")
+    if img is not None:
+        bpy.data.images.remove(img)
+    img = bpy.data.images.new("CH_Rowan_JeansStitch", w, h, alpha=False)
+    img.pixels.foreach_set(px.ravel())
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+    bpy.data.images.remove(img)
+
+
 def build_jeans(M):
     mb = MB()
     prow = [pelvis_ring(*r) for r in PELVIS]
     prow[-1][0, 2] -= 0.012          # front and back centre dip toward the crotch
     prow[-1][13, 2] -= 0.008
     idx = mb.grid(prow, closed=True, uv=(0, 0, 1, 1), flip=True)     # rows run downward
+    waist_c = float(mb.last_uv["U"][-1])
     last = idx[-1]
     cy = PELVIS[-1][4]
     c1 = mb.vert((0, cy - 0.050, CROTCH_Z))
@@ -201,6 +291,7 @@ def build_jeans(M):
             rows = mirror_points(rows)
         nleg = len(LEG)
         lidx = mb.grid(rows[:nleg], closed=True, uv=(1.5 + side * 0.4, 0, 1, 1), flip=side > 0)
+        leg_u = np.array(mb.last_uv["U"])
         cidx = [lidx[-1]] + [[mb.vert(p) for p in r] for r in rows[nleg:]]
         mb.grid(None, closed=True, idx=cidx, mat=1, uv=(1.5 + side * 0.4, -0.3, 1, 1), flip=side > 0)
         if side > 0:
@@ -219,6 +310,8 @@ def build_jeans(M):
             if np.dot(n, P.mean(axis=0) - cen) < 0:
                 q, uvs = q[::-1], uvs[::-1]
             mb.face(q, uvs, 0)
+    stitch_texture(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "textures", "CH_Rowan_JeansStitch.png"),
+                   waist_c, leg_u)
     ob = mb.build("CH_Rowan_Jeans", "LOW", OWNER, [M["denim"], M["cuff"]])
     subsurf(ob, 1, 2)
     return ob

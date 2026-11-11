@@ -98,30 +98,30 @@ def part_dir(gamma_deg, x=0.0):
 def build_locks(mb):
     rng = np.random.RandomState(7)
     n = 0
-    # A: from the centre parting out to both sides. gamma: -55 = over the forehead, 0 = top, +38 = crown
+    # A: from the centre parting out to both sides and back. gamma: -56 = over the forehead, 0 = top, +38 = crown.
+    # The front ones are the "curtains": they lift off the forehead, sweep out past the temples and flick up.
     for i, gam in enumerate(np.linspace(-56, 38, 10)):
         f = i / 9.0
         for side in (1, -1):
             u0 = part_dir(gam, side * 0.035)
-            back = lerp(-0.15, 0.55, f)                       # front locks sweep a little forward, the rest back
-            v0 = np.array([side * 1.0, back, 0.15])
-            length = lerp(0.160, 0.178, f) * (1 + 0.06 * rng.randn())
-            lift = lerp(0.038, 0.028, f)
-            pts, nr = lock_path(u0, v0, length, lift, grav=0.10, wave=0.22, phase=rng.rand() * 6.28,
-                                period=6.0 + rng.rand() * 2, flick=0.026)
-            add_lock(mb, pts, nr, 0.021, 0.0115, 0.1 * n)
+            v0 = np.array([side * 1.0, lerp(0.42, 0.85, f), 0.15])
+            length = lerp(0.128, 0.165, f) * (1 + 0.07 * rng.randn())
+            lift = lerp(0.034, 0.026, f) * (1 + 0.20 * rng.randn())
+            pts, nr = lock_path(u0, v0, length, lift, grav=lerp(0.05, 0.09, f), wave=0.19, phase=rng.rand() * 6.28,
+                                period=6.5 + rng.rand() * 2.0, flick=0.032)
+            add_lock(mb, pts, nr, 0.022 * (1 + 0.15 * rng.randn()), 0.012, 0.1 * n)
             n += 1
-    # B: the layer underneath on the sides and back, rooted lower, falling to the ears and the nape
-    for ring_i, (el, length, lift) in enumerate(((50, 0.122, 0.025), (28, 0.106, 0.022))):
-        for az in np.arange(52 + 9 * ring_i, 181, 19):
+    # B: the layer underneath, behind the ears and round the back, falling to the nape and curling out
+    for ring_i, (el, length, lift) in enumerate(((50, 0.120, 0.026), (28, 0.104, 0.023))):
+        for az in np.arange(76 + 9 * ring_i, 181, 17.5):
             for side in ((1, -1) if az < 179 else (1,)):
                 a, e = math.radians(az), math.radians(el)
                 u0 = np.array([side * math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e)])
-                v0 = np.array([side * math.sin(a) * 0.3, -math.cos(a) * 0.3 + 0.25, -1.0])
-                ln = length * (1 + 0.08 * rng.randn()) * (1.0 if az > 95 else 0.82)
-                pts, nr = lock_path(u0, v0, ln, lift, grav=0.16, wave=0.24, phase=rng.rand() * 6.28,
-                                    period=5.0 + rng.rand() * 2, flick=0.020)
-                add_lock(mb, pts, nr, 0.022, 0.011, 0.1 * n)
+                v0 = np.array([side * math.sin(a) * 0.25, -math.cos(a) * 0.25 + 0.35, -1.0])
+                ln = length * (1 + 0.08 * rng.randn())
+                pts, nr = lock_path(u0, v0, ln, lift * (1 + 0.2 * rng.randn()), grav=0.14, wave=0.20,
+                                    phase=rng.rand() * 6.28, period=6.0 + rng.rand() * 2.0, flick=0.028)
+                add_lock(mb, pts, nr, 0.023 * (1 + 0.15 * rng.randn()), 0.0115, 0.1 * n)
                 n += 1
     # C: from the crown down the back
     for az in (128, 146, 164, 180):
@@ -129,9 +129,9 @@ def build_locks(mb):
             u0 = part_dir(34, 0.0) + np.array([side * 0.10 * math.sin(math.radians(az)), 0.03, 0])
             a = math.radians(az)
             v0 = np.array([side * math.sin(a), -math.cos(a), -0.2])
-            pts, nr = lock_path(u0, v0, 0.150 * (1 + 0.06 * rng.randn()), 0.026, grav=0.12, wave=0.20,
-                                phase=rng.rand() * 6.28, period=6.5, flick=0.016)
-            add_lock(mb, pts, nr, 0.023, 0.012, 0.1 * n)
+            pts, nr = lock_path(u0, v0, 0.150 * (1 + 0.06 * rng.randn()), 0.028, grav=0.12, wave=0.18,
+                                phase=rng.rand() * 6.28, period=7.0, flick=0.022)
+            add_lock(mb, pts, nr, 0.024, 0.012, 0.1 * n)
             n += 1
     return n
 

@@ -20,11 +20,14 @@ done
 $B --background --python $SK/scripts/validate.py -- --blend $M --collections LOW \
    --out review/gate/validate.json --budget-tris 60000 --require-uv 2>&1 | grep -E "FAIL|WARN|PASS|tris|total" | head -40 || true
 
-# 3. face: mouth open and eyes turned; 4. the body without the outfit
+# 3. lit renders: turnaround at the reference's five angles, head, face test (mouth open, eyes turned),
+#    the body without the outfit, and wireframes; then the three review sheets
 OUT="CH_Rowan_Sweater,CH_Rowan_Jeans,CH_Rowan_Belt,CH_Rowan_Boot_L,CH_Rowan_Boot_R"
-$B --background --python review/look.py -- --blend $M --out review/face --name open --z 1.46 1.83 --views 0,40 \
-   --res 720 --aspect 0.85 --pose jaw=17,eyes=24:0 2>&1 | grep -E "LOOK|Error" || true
-$B --background --python review/look.py -- --blend $M --out review/face --name rest --z 1.46 1.83 --views 0,40 \
-   --res 720 --aspect 0.85 2>&1 | grep -E "LOOK|Error" || true
-$B --background --python review/look.py -- --blend $M --out review/nude --name body --views 0,45,90,180 \
-   --res 800 --aspect 0.46 --hide $OUT 2>&1 | grep -E "LOOK|Error" || true
+L="$B --background --python review/look.py -- --blend $M"
+$L --out review/beauty --name turn --views 0,315,90,135,180 --res 900 --aspect 0.46 --lit --samples 36 2>&1 | grep -E "Traceback|Error:" || true
+$L --out review/beauty --name head --z 1.44 1.83 --views 0,40,90 --res 760 --aspect 0.85 --lit --samples 40 2>&1 | grep -E "Traceback|Error:" || true
+$L --out review/face --name open --z 1.44 1.83 --views 0,40 --res 760 --aspect 0.85 --lit --samples 40 --pose jaw=16,eyes=22:0 2>&1 | grep -E "Traceback|Error:" || true
+$L --out review/nude --name lit --views 0,315,90,180 --res 800 --aspect 0.46 --lit --samples 28 --hide $OUT 2>&1 | grep -E "Traceback|Error:" || true
+$L --out review/wire --name wire --views 0,90 --res 900 --aspect 0.46 --clay --wire --hide $OUT,CH_Rowan_Hair,CH_Rowan_Beard 2>&1 | grep -E "Traceback|Error:" || true
+$L --out review/wire --name headwire --z 1.46 1.80 --views 0,60 --res 900 --aspect 0.8 --clay --wire --only CH_Rowan_Head 2>&1 | grep -E "Traceback|Error:" || true
+$PY review/sheets.py
