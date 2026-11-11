@@ -192,7 +192,7 @@ func collect() -> void:
 		_collect_node(f, "decor_" + f.item_id, f.display_name(), [] if f.is_flat() else [f.footprint()])
 	if World.barn != null and is_instance_valid(World.barn):
 		var p: Vector3 = World.barn.position
-		_collect_node(World.barn, "barn", "Barn", [Rect2(p.x - 2.6, p.z - 2.1, 5.2, 4.2)])
+		_collect_node(World.barn, "barn", "Barn", World.barn_blocks(p) if not World.barn_parts.is_empty() else [Rect2(p.x - 2.6, p.z - 2.1, 5.2, 4.2)])
 	var bp: Vector3 = main.bin.position
 	_collect_node(main.bin, "bin", "Shipping bin", [Rect2(bp.x - 0.5, bp.z - 0.35, 1.0, 0.7)])
 	for p in main.plots:

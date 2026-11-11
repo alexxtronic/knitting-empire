@@ -235,11 +235,104 @@ static func _tree(root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> void:
 		_foliage(Catalog.ball(t, 0.85, Vector3(-0.5, 3.4, -0.2), c.lightened(0.08)), c.lightened(0.08))
 
 
-static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
+## The barn is the model from art/world_assets/barn, which comes in parts so it can open up while
+## she is inside: `roof`, each wall at full height (`wall_front`...) and cut down to a stub
+## (`wall_front_low`...), two door leaves hinged at their outer edges, `base` and `interior`.
+## Its doors are in the +Z wall. BARN_SIZE is over the walls (x, z).
+const BARN_MODEL := "res://assets/props/barn.glb"
+const BARN_SIZE := Vector2(5.6, 5.0)
+const BARN_WALLS := {"front": Vector3(0, 0, 1), "back": Vector3(0, 0, -1), "left": Vector3(-1, 0, 0), "right": Vector3(1, 0, 0)}
+static var barn_parts := {} # MeshInstance3D by part name; empty if the model is missing
+static var barn_inside := false # she is standing in it
+static var barn_open := 0.0 # the doors: 0 shut .. 1 swung open
+static var _barn_light: OmniLight3D
+
+
+## Builds the barn and returns what blocks the way (Rect2 on the ground): its walls either side of
+## the doorway, the two rows of stalls, and the hay and feed corners. The aisle stays free.
+static func build_barn(root: Node3D, pos: Vector3) -> Array:
 	var b := Node3D.new()
+	b.name = "Barn"
 	b.position = pos
 	root.add_child(b)
 	barn = b
+	barn_parts = {}
+	barn_inside = false
+	barn_open = 0.0
+	var inst := Catalog.model(BARN_MODEL, b)
+	if inst == null:
+		_box_barn(b)
+		return [Rect2(pos.x - 2.6, pos.z - 2.1, 5.2, 4.2)]
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		barn_parts[str(mi.name)] = mi
+	for side in BARN_WALLS:
+		if barn_parts.has("wall_%s_low" % side):
+			(barn_parts["wall_%s_low" % side] as Node3D).visible = false
+	# the lantern on the end wall lights the inside after dark (update_barn sets how bright)
+	_barn_light = Catalog.omni(b, Vector3(0, 2.0, -1.9), Color(1.0, 0.74, 0.42), 6.5, 0.0, 1.3)
+	_barn_light.shadow_enabled = false
+	return barn_blocks(pos)
+
+
+## The barn's obstacles for a barn standing square at `pos` (god mode turns and moves them with it).
+static func barn_blocks(pos: Vector3) -> Array:
+	var o := Vector2(pos.x, pos.z)
+	var w := BARN_SIZE.x * 0.5
+	var d := BARN_SIZE.y * 0.5
+	var local := [
+		Rect2(-w, -d, BARN_SIZE.x, 0.2), Rect2(-w, -d, 0.2, BARN_SIZE.y), Rect2(w - 0.2, -d, 0.2, BARN_SIZE.y), # back, left, right
+		Rect2(-w, d - 0.2, w - 1.0, 0.2), Rect2(1.0, d - 0.2, w - 1.0, 0.2), # the front wall either side of the doors
+		Rect2(-2.66, -2.36, 1.66, 2.91), Rect2(1.0, -2.36, 1.66, 2.91), # stalls
+		Rect2(-2.6, 0.75, 1.75, 1.55), # hay bales and the loose pile
+		Rect2(1.55, 0.55, 1.05, 1.75), Rect2(1.05, 1.8, 0.6, 0.5), # feed trough and barrel, sacks
+		Rect2(-0.7, -2.36, 1.4, 0.5), # ladder, pitchfork
+	]
+	var out: Array = []
+	for r in local:
+		out.append(Rect2((r as Rect2).position + o, (r as Rect2).size))
+	return out
+
+
+## The ground under the barn's floor, wherever it stands now, so no grass grows through the boards.
+static func barn_floor() -> Array:
+	if barn == null or not is_instance_valid(barn) or not barn.visible or barn_parts.is_empty():
+		return []
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for sx in [-0.5, 0.5]:
+		for sz in [-0.5, 0.5]:
+			var p: Vector3 = barn.global_transform * Vector3(sx * BARN_SIZE.x, 0, sz * BARN_SIZE.y)
+			lo = lo.min(Vector2(p.x, p.z))
+			hi = hi.max(Vector2(p.x, p.z))
+	return [Rect2(lo, hi - lo)]
+
+
+## Every frame: the doors swing open as she comes up to them and shut behind her when she leaves;
+## while she is inside the roof is hidden and the walls that face the camera drop to stubs (unless
+## Walls Up is on), like the house; the lantern comes up as the daylight goes.
+static func update_barn(who: Vector3, cam_yaw: float, walls_up: bool, delta: float) -> void:
+	if barn == null or not is_instance_valid(barn) or barn_parts.is_empty():
+		return
+	var p: Vector3 = barn.global_transform.affine_inverse() * who
+	barn_inside = barn.visible and absf(p.x) < BARN_SIZE.x * 0.5 and absf(p.z) < BARN_SIZE.y * 0.5
+	var at_door: bool = barn.visible and absf(p.x) < 2.2 and p.z > 0.0 and p.z < BARN_SIZE.y * 0.5 + 2.6
+	barn_open = move_toward(barn_open, 1.0 if barn_inside or at_door else 0.0, delta * 2.0)
+	var swing := deg_to_rad(105.0) * smoothstep(0.0, 1.0, barn_open)
+	(barn_parts["door_l"] as Node3D).rotation.y = -swing
+	(barn_parts["door_r"] as Node3D).rotation.y = swing
+	(barn_parts["roof"] as Node3D).visible = not barn_inside
+	var cdir := Vector3(sin(cam_yaw), 0, cos(cam_yaw))
+	for side in BARN_WALLS:
+		var n: Vector3 = (barn.global_transform.basis * (BARN_WALLS[side] as Vector3)).normalized()
+		var cut: bool = barn_inside and not walls_up and n.dot(cdir) > 0.25
+		(barn_parts["wall_" + side] as Node3D).visible = not cut
+		(barn_parts["wall_%s_low" % side] as Node3D).visible = cut
+	if _barn_light != null and is_instance_valid(_barn_light):
+		_barn_light.light_energy = 1.3 * clampf(1.0 - Game.daylight(), 0.0, 1.0)
+
+
+## The old box barn, kept for when the model is missing.
+static func _box_barn(b: Node3D) -> void:
 	var red := Color(0.62, 0.17, 0.14)
 	var white := Color(0.95, 0.93, 0.88)
 	Catalog.box(b, Vector3(5, 3.2, 4), Vector3(0, 1.6, 0), red)
@@ -262,7 +355,6 @@ static func build_barn(root: Node3D, pos: Vector3) -> Rect2:
 	Catalog.box(b, Vector3(0.8, 0.8, 0.05), Vector3(0, 3.6, 2.02), Color(0.15, 0.1, 0.08))
 	Catalog.box(b, Vector3(0.95, 0.08, 0.06), Vector3(0, 4.03, 2.04), white)
 	Catalog.box(b, Vector3(0.95, 0.08, 0.06), Vector3(0, 3.17, 2.04), white)
-	return Rect2(pos.x - 2.6, pos.z - 2.1, 5.2, 4.2)
 
 
 ## The pond is one node (water, rim, lily pads, reeds), so god mode can pick it up.

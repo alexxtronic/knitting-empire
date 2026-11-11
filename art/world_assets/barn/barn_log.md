@@ -64,11 +64,27 @@ origins on the hinge line, `roof` (with the cupola) and `interior`. The corner p
   and lantern → moved up into the gable; mesh lightened (footing and shakes, 32,100 → 26,916 triangles).
 - Round 2 (`review/round2/`): sent to Alex.
 
+## In the game (2026-11-11)
+
+Alex approved the model ("Yes, install it").
+
+- `assets/props/barn.glb` stands where the box barn stood (`World.build_barn`, at 21.5, -9.5, doors to +Z).
+  The box barn's code is kept as a fallback for a missing model.
+- Walking: the walls either side of the doorway, the two rows of stalls and the hay and feed corners block
+  the way (`World.barn_blocks`); the doorway, the front of the barn and the aisle are free. The ground
+  under the floor is cleared of grass (`World.barn_floor`).
+- `World.update_barn`, every frame: the doors swing open when she is within about 2.6 m of them or inside,
+  and shut behind her; while she is inside, the roof is hidden and the walls facing the camera are swapped
+  for their stubs (not when Walls Up is on), as in the house; a lantern light comes up as daylight goes.
+- The world editor still moves and turns the barn, with its obstacles. Turned to an angle that is not a
+  quarter turn, the obstacles become boxes round the turned walls and the inside may be closed off.
+- Autotest: `_barn_checks` (the parts, walking in, opening up, closing again); `--only=barn` runs just it.
+  Pictures in `review/in_game/`.
+
 ## Not done yet
 
-- Not in the game. Replacing the box barn means: the model in place of `World.build_barn`, the roof and
-  camera-facing walls hidden when she is inside, doors that open, a walkable interior, and whatever
-  "storing pets" should do. To be agreed with Alex after he has seen the model.
+- Storing pets: the stalls are closed and empty. What goes in them, and how, is for Alex to say.
+- She cannot go into the stalls (their gates do not open).
 - Triangles are above the style guide's 15,000 for a building.
 
 ## Licences

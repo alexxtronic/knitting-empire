@@ -179,7 +179,7 @@ func _ready() -> void:
 	decor_root = Node3D.new()
 	add_child(decor_root)
 	_build_town_decor()
-	grid_blockers.append(World.build_barn(self, Vector3(21.5, 0, -9.5)))
+	grid_blockers.append_array(World.build_barn(self, Vector3(21.5, 0, -9.5)))
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
 	grid_blockers.append_array(World.build_pen(self, PEN, PEN_GATE))
@@ -629,6 +629,7 @@ func _rebuild_grass(replant := true) -> void:
 		clear.append(Town.PLAZA)
 	clear.append(Town.COTTAGE.grow(0.3))
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
+	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	var roads: Image = god.road_img if painted else null
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
@@ -902,6 +903,7 @@ func _process(delta: float) -> void:
 		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
 	_update_camera(delta)
 	_update_walls()
+	World.update_barn(player.position, cam_yaw, walls_up, delta)
 	_update_lighting()
 	_update_story_staging(delta)
 	_update_needs(delta)
@@ -2810,6 +2812,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=barn" in OS.get_cmdline_user_args(): # just the barn checks and their pictures
+		await _wait(1.5)
+		await _barn_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -2960,7 +2968,55 @@ func _autotest() -> void:
 	await _romance_checks()
 	await _polish_checks()
 	await _bench_checks()
+	await _barn_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
+
+
+## The barn (art/world_assets/barn): the model stands where the box barn stood, she can walk in
+## through the doors, and it opens up while she is inside: doors swung back, roof hidden, the
+## walls toward the camera cut down to stubs. It closes up again when she leaves.
+func _barn_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var parts: Dictionary = World.barn_parts
+	_check("the barn is the model, in its parts (%d: base, roof, interior, two doors, four walls and their stubs)" % parts.size(),
+		parts.size() == 13 and parts.has("roof") and parts.has("door_l") and parts.has("interior") and parts.has("wall_front_low"))
+	if parts.is_empty() or not World.barn.visible:
+		return
+	var xf: Transform3D = World.barn.global_transform
+	var out_front: Vector3 = xf * Vector3(0.25, 0, 6.4)
+	var aisle: Vector3 = xf * Vector3(0.25, 0, -0.4)
+	out_front.y = 0.0
+	aisle.y = 0.0
+	player.position = out_front
+	_set_cam_lock(false)
+	cam_target = xf.origin + Vector3(0, 1.5, 0)
+	cam_dist = 19.0
+	await _wait(1.8)
+	var shut: bool = World.barn_open < 0.05 and (parts["roof"] as Node3D).visible and not World.barn_inside
+	await _shot("44_barn.png")
+	player.walk(_find_path(player.position, aisle))
+	await _walk_wait(25.0)
+	cam_target = aisle
+	cam_dist = 12.5
+	await _wait(1.6)
+	var cut := 0
+	for side in World.BARN_WALLS:
+		if (parts["wall_%s_low" % side] as Node3D).visible and not (parts["wall_" + side] as Node3D).visible:
+			cut += 1
+	_check("she walks into the barn through its doors and it opens up round her (%.1f m from the aisle, doors %.0f%% open, roof %s, %d walls cut down)" % [player.position.distance_to(aisle), World.barn_open * 100.0, "hidden" if not (parts["roof"] as Node3D).visible else "shown", cut],
+		shut and player.position.distance_to(aisle) < 0.8 and World.barn_inside and World.barn_open > 0.95 and not (parts["roof"] as Node3D).visible and cut >= 1 and cut <= 2)
+	await _shot("44_barn_inside.png")
+	player.walk(_find_path(player.position, out_front))
+	await _walk_wait(25.0)
+	cam_target = xf.origin + Vector3(0, 1.5, 0)
+	cam_dist = 19.0
+	await _wait(1.8)
+	var whole: bool = World.BARN_WALLS.keys().all(func(s): return (parts["wall_" + s] as Node3D).visible and not (parts["wall_%s_low" % s] as Node3D).visible)
+	_check("the barn closes up again when she leaves (doors %.0f%% open, roof %s)" % [World.barn_open * 100.0, "shown" if (parts["roof"] as Node3D).visible else "hidden"],
+		not World.barn_inside and World.barn_open < 0.05 and (parts["roof"] as Node3D).visible and whole and player.position.distance_to(out_front) < 0.8)
+	_set_cam_lock(true)
 
 
 ## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
