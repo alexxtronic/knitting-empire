@@ -1,0 +1,38 @@
+{
+  "name": "fireplace",
+  "triangles": 9978,
+  "materials": [
+    "fireplace_stone",
+    "fireplace_soot",
+    "fireplace_wood",
+    "fireplace_brass",
+    "fireplace_wax",
+    "fireplace_flame",
+    "fireplace_iron",
+    "fireplace_log"
+  ],
+  "size_m": [
+    2.06,
+    0.93,
+    2.704
+  ],
+  "min_m": [
+    -1.03,
+    -0.49,
+    -0.005
+  ],
+  "max_m": [
+    1.03,
+    0.44,
+    2.699
+  ],
+  "images": [
+    "fireplace_log",
+    "fireplace_log_n",
+    "fireplace_stone",
+    "fireplace_stone_n",
+    "fireplace_wood",
+    "fireplace_wood_n"
+  ],
+  "glb_bytes": 740156
+}

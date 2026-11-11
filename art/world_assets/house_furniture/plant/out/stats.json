@@ -1,0 +1,28 @@
+{
+  "name": "plant",
+  "triangles": 4084,
+  "materials": [
+    "plant_terracotta",
+    "plant_soil",
+    "plant_leaf3",
+    "plant_leaf",
+    "plant_leaf2"
+  ],
+  "size_m": [
+    0.47,
+    0.484,
+    0.547
+  ],
+  "min_m": [
+    -0.254,
+    -0.227,
+    0.0
+  ],
+  "max_m": [
+    0.216,
+    0.256,
+    0.547
+  ],
+  "images": [],
+  "glb_bytes": 160468
+}

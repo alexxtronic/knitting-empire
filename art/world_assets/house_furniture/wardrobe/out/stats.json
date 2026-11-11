@@ -1,0 +1,34 @@
+{
+  "name": "wardrobe",
+  "triangles": 3080,
+  "materials": [
+    "wardrobe_wood",
+    "wardrobe_panel",
+    "wardrobe_brass",
+    "wardrobe_hatbox",
+    "wardrobe_hatbox_lid",
+    "wardrobe_strap"
+  ],
+  "size_m": [
+    1.56,
+    0.578,
+    2.195
+  ],
+  "min_m": [
+    -0.78,
+    -0.308,
+    0.0
+  ],
+  "max_m": [
+    0.78,
+    0.27,
+    2.195
+  ],
+  "images": [
+    "wardrobe_panel",
+    "wardrobe_panel_n",
+    "wardrobe_wood",
+    "wardrobe_wood_n"
+  ],
+  "glb_bytes": 258104
+}

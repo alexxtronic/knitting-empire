@@ -1,0 +1,40 @@
+{
+  "name": "bookshelf",
+  "triangles": 6292,
+  "materials": [
+    "bookshelf_wood",
+    "bookshelf_back",
+    "bookshelf_book0",
+    "bookshelf_gilt",
+    "bookshelf_book1",
+    "bookshelf_book4",
+    "bookshelf_book5",
+    "bookshelf_book2",
+    "bookshelf_book3",
+    "bookshelf_terracotta",
+    "bookshelf_leaf2",
+    "bookshelf_leaf"
+  ],
+  "size_m": [
+    1.52,
+    0.47,
+    2.177
+  ],
+  "min_m": [
+    -0.76,
+    -0.235,
+    0.0
+  ],
+  "max_m": [
+    0.76,
+    0.235,
+    2.177
+  ],
+  "images": [
+    "bookshelf_back",
+    "bookshelf_back_n",
+    "bookshelf_wood",
+    "bookshelf_wood_n"
+  ],
+  "glb_bytes": 467596
+}

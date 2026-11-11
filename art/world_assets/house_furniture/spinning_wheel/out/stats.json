@@ -1,0 +1,34 @@
+{
+  "name": "spinning_wheel",
+  "triangles": 2564,
+  "materials": [
+    "spinning_wheel_wood",
+    "spinning_wheel_dark",
+    "spinning_wheel_iron",
+    "spinning_wheel_yarn",
+    "spinning_wheel_band",
+    "spinning_wheel_wool"
+  ],
+  "size_m": [
+    1.015,
+    0.469,
+    1.308
+  ],
+  "min_m": [
+    -0.509,
+    -0.235,
+    -0.013
+  ],
+  "max_m": [
+    0.506,
+    0.235,
+    1.295
+  ],
+  "images": [
+    "spinning_wheel_dark",
+    "spinning_wheel_dark_n",
+    "spinning_wheel_wood",
+    "spinning_wheel_wood_n"
+  ],
+  "glb_bytes": 255784
+}

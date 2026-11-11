@@ -1,0 +1,36 @@
+{
+  "name": "armchair",
+  "triangles": 2052,
+  "materials": [
+    "armchair_wood",
+    "armchair_fabric",
+    "armchair_fabric_light",
+    "armchair_plaid"
+  ],
+  "size_m": [
+    0.973,
+    0.891,
+    0.899
+  ],
+  "min_m": [
+    -0.487,
+    -0.42,
+    0.0
+  ],
+  "max_m": [
+    0.487,
+    0.471,
+    0.899
+  ],
+  "images": [
+    "armchair_fabric",
+    "armchair_fabric_light",
+    "armchair_fabric_light_n",
+    "armchair_fabric_n",
+    "armchair_plaid",
+    "armchair_plaid_n",
+    "armchair_wood",
+    "armchair_wood_n"
+  ],
+  "glb_bytes": 511060
+}

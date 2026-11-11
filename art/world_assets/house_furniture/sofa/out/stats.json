@@ -1,0 +1,39 @@
+{
+  "name": "sofa",
+  "triangles": 2956,
+  "materials": [
+    "sofa_wood",
+    "sofa_fabric",
+    "sofa_fabric_light",
+    "sofa_plaid",
+    "sofa_green"
+  ],
+  "size_m": [
+    1.953,
+    0.947,
+    0.976
+  ],
+  "min_m": [
+    -0.977,
+    -0.42,
+    0.0
+  ],
+  "max_m": [
+    0.977,
+    0.527,
+    0.976
+  ],
+  "images": [
+    "sofa_fabric",
+    "sofa_fabric_light",
+    "sofa_fabric_light_n",
+    "sofa_fabric_n",
+    "sofa_green",
+    "sofa_green_n",
+    "sofa_plaid",
+    "sofa_plaid_n",
+    "sofa_wood",
+    "sofa_wood_n"
+  ],
+  "glb_bytes": 623576
+}

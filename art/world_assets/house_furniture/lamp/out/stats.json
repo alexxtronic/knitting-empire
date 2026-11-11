@@ -1,0 +1,31 @@
+{
+  "name": "lamp",
+  "triangles": 1052,
+  "materials": [
+    "lamp_wood",
+    "lamp_brass",
+    "lamp_shade",
+    "lamp_trim",
+    "lamp_bulb"
+  ],
+  "size_m": [
+    0.45,
+    0.443,
+    1.61
+  ],
+  "min_m": [
+    -0.225,
+    -0.222,
+    0.0
+  ],
+  "max_m": [
+    0.225,
+    0.222,
+    1.61
+  ],
+  "images": [
+    "lamp_wood",
+    "lamp_wood_n"
+  ],
+  "glb_bytes": 129348
+}

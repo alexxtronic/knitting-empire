@@ -8,7 +8,8 @@
       "where": "in",
       "height": 1.2,
       "id": "rocking_chair",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/rocking_chair.glb"
     },
     {
       "name": "Plaid Armchair",
@@ -17,7 +18,8 @@
       "where": "in",
       "height": 1.0,
       "id": "armchair",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/armchair.glb"
     },
     {
       "name": "Cozy Sofa",
@@ -26,7 +28,8 @@
       "where": "in",
       "height": 1.0,
       "id": "sofa",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/sofa.glb"
     },
     {
       "name": "Quilted Bed",
@@ -45,7 +48,8 @@
       "where": "in",
       "height": 1.1,
       "id": "kitchen",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/kitchen.glb"
     },
     {
       "name": "Round Coffee Table",
@@ -64,7 +68,8 @@
       "where": "in",
       "height": 0.9,
       "id": "dining_table",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/dining_table.glb"
     },
     {
       "name": "Bookshelf",
@@ -73,7 +78,8 @@
       "where": "in",
       "height": 1.9,
       "id": "bookshelf",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/bookshelf.glb"
     },
     {
       "name": "Oak Wardrobe",
@@ -82,7 +88,8 @@
       "where": "in",
       "height": 2.0,
       "id": "wardrobe",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/wardrobe.glb"
     },
     {
       "name": "Stone Fireplace",
@@ -91,7 +98,8 @@
       "where": "in",
       "height": 2.6,
       "id": "fireplace",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/fireplace.glb"
     },
     {
       "name": "Spinning Wheel",
@@ -100,7 +108,8 @@
       "where": "in",
       "height": 1.3,
       "id": "spinning_wheel",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/spinning_wheel.glb"
     },
     {
       "name": "Floor Lamp",
@@ -109,7 +118,8 @@
       "where": "in",
       "height": 1.6,
       "id": "lamp",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/lamp.glb"
     },
     {
       "name": "Yarn Basket",
@@ -168,7 +178,8 @@
       "where": "any",
       "height": 0.9,
       "id": "plant",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/plant.glb"
     },
     {
       "name": "Flower Pot",

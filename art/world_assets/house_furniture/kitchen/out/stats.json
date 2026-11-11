@@ -1,0 +1,36 @@
+{
+  "name": "kitchen",
+  "triangles": 5752,
+  "materials": [
+    "kitchen_cabinet",
+    "kitchen_brass",
+    "kitchen_wood",
+    "kitchen_ceramic",
+    "kitchen_iron",
+    "kitchen_enamel",
+    "kitchen_apple",
+    "kitchen_jar_lid"
+  ],
+  "size_m": [
+    2.04,
+    0.94,
+    1.21
+  ],
+  "min_m": [
+    -1.02,
+    -0.45,
+    0.0
+  ],
+  "max_m": [
+    1.02,
+    0.49,
+    1.21
+  ],
+  "images": [
+    "kitchen_cabinet",
+    "kitchen_cabinet_n",
+    "kitchen_wood",
+    "kitchen_wood_n"
+  ],
+  "glb_bytes": 393228
+}

@@ -255,6 +255,10 @@ static func build(id: String, r: Node3D) -> void:
 			var l := omni(r, Vector3(1.1, 1.52, 0.38), Color(1.0, 0.7, 0.38), 4.5, 0.1, 1.4)
 			l.shadow_enabled = false # it sits inside the lantern's glass
 			l.set_meta("candle", true)
+		elif id == "fireplace": # the model has the hearth, grate and logs; the flames and firelight are live
+			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
+		elif id == "lamp": # the model's shade glows; this is the light it throws
+			omni(r, Vector3(0, 1.3, 0), Color(1.0, 0.78, 0.5), 5.0, 0.3, 1.6)
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)
@@ -442,16 +446,22 @@ static func _fireplace(r: Node3D) -> void:
 	box(r, Vector3(1.25, 1.3, 0.6), Vector3(0, 2.0, -0.15), STONE)
 	cyl(r, 0.07, 0.07, 0.7, Vector3(0, 0.18, 0.25), WOOD_DARK, Vector3(0, 0, 90))
 	cyl(r, 0.06, 0.06, 0.6, Vector3(0.05, 0.28, 0.22), WOOD, Vector3(0, 25, 90))
-	var f1 := glow(ball(r, 0.18, Vector3(0, 0.38, 0.25), FIRE, Vector3(1, 1.5, 0.6)), FIRE, 4.0)
-	var f2 := glow(ball(r, 0.1, Vector3(0.1, 0.42, 0.28), Color(1.0, 0.8, 0.3)), Color(1.0, 0.8, 0.3), 5.0)
-	var f3 := glow(ball(r, 0.12, Vector3(-0.12, 0.34, 0.27), Color(1.0, 0.35, 0.1)), Color(1.0, 0.35, 0.1), 4.0)
-	for f in [f1, f2, f3]:
-		f.set_meta("flame", true)
+	_fireplace_fire(r, Vector3(0, 0.38, 0.25))
 	for x in [-0.8, -0.66, 0.78]:
 		var h := 0.12 + absf(x) * 0.08
 		cyl(r, 0.03, 0.03, h, Vector3(x, 1.37 + h * 0.5, 0.2), CREAM)
 		glow(ball(r, 0.025, Vector3(x, 1.4 + h, 0.2), Color(1.0, 0.8, 0.4)), Color(1.0, 0.8, 0.4), 4.0)
-	var l := omni(r, Vector3(0, 0.6, 0.9), Color(1.0, 0.55, 0.25), 7.0, 1.2, 2.6)
+
+
+## The fire itself, at `at` in the fireplace's own space: three glowing flames that flicker
+## (furniture.gd) and the firelight thrown into the room. Used by the model and by the box fallback.
+static func _fireplace_fire(r: Node3D, at: Vector3) -> void:
+	var f1 := glow(ball(r, 0.18, at, FIRE, Vector3(1, 1.5, 0.6)), FIRE, 4.0)
+	var f2 := glow(ball(r, 0.1, at + Vector3(0.1, 0.04, 0.03), Color(1.0, 0.8, 0.3)), Color(1.0, 0.8, 0.3), 5.0)
+	var f3 := glow(ball(r, 0.12, at + Vector3(-0.12, -0.04, 0.02), Color(1.0, 0.35, 0.1)), Color(1.0, 0.35, 0.1), 4.0)
+	for f in [f1, f2, f3]:
+		f.set_meta("flame", true)
+	var l := omni(r, at + Vector3(0, 0.22, 0.65), Color(1.0, 0.55, 0.25), 7.0, 1.2, 2.6)
 	l.set_meta("fire", true)
 
 

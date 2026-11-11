@@ -1343,8 +1343,8 @@ func _seat_point(f) -> Vector3:
 	match f.item_id:
 		"bed":
 			y = 0.6 # on top of the quilt of assets/props/gran_bed.glb
-		"rocking_chair":
-			y = 0.32
+		"rocking_chair", "sofa", "armchair":
+			y = 0.42 # the top of their seat cushions (art/world_assets/house_furniture)
 		"bench", "bench_short":
 			y = 0.374 # the top of the boards of assets/props/bench_park.glb: the seated loops put the seat at her origin
 			fwd = 0.03 # her back against the slats
@@ -2852,6 +2852,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=house" in OS.get_cmdline_user_args(): # just the house furniture checks, with every piece set out for a picture
+		await _wait(1.5)
+		await _house_checks(true)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=barn" in OS.get_cmdline_user_args(): # just the barn checks and their pictures
 		await _wait(1.5)
 		await _barn_checks()
@@ -3008,10 +3014,67 @@ func _autotest() -> void:
 	await _act1_checks()
 	await _romance_checks()
 	await _polish_checks()
+	await _house_checks(false)
 	await _bench_checks()
 	await _barn_checks()
 	await _flock_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
+
+
+## The furniture of her house (art/world_assets/house_furniture): each of the eleven pieces is its
+## model, the fireplace still has its flickering flames and firelight and the lamp its light, and
+## she sits on the cushions. showcase (the --only=house run) also sets out the pieces a new house
+## doesn't start with, for a picture.
+func _house_checks(showcase: bool) -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var ids := ["rocking_chair", "fireplace", "kitchen", "sofa", "armchair", "spinning_wheel", "dining_table", "bookshelf", "wardrobe", "lamp", "plant"]
+	var modelled: Array = []
+	var flames := 0
+	var lights := 0
+	for id in ids:
+		var f := Furniture.new()
+		add_child(f)
+		f.setup(id, 0)
+		if f.find_children("model", "MeshInstance3D", true, false).size() == 1:
+			modelled.append(id)
+		if id == "fireplace":
+			flames = f.flames.size()
+			lights += f.lights.size()
+		if id == "lamp":
+			lights += f.lights.size()
+		f.queue_free()
+	_check("her house's furniture is the new models (%d of %d; the fire has %d flames, fire and lamp %d lights)" % [modelled.size(), ids.size(), flames, lights],
+		modelled.size() == ids.size() and flames == 3 and lights == 2)
+	if not showcase:
+		return
+	for extra in [["sofa", Vector3(5.5, 0, 3.0), 3], ["armchair", Vector3(3.5, 0, 5.0), 2], ["dining_table", Vector3(6.0, 0, 5.0), 0],
+			["wardrobe", Vector3(7.5, 0, 3.0), 3], ["spinning_wheel", Vector3(5.0, 0, 1.5), 0]]:
+		_spawn_furniture(extra[0], extra[1], extra[2])
+	_set_cam_lock(false)
+	player.position = Vector3(4.2, 0, 4.2)
+	cam_target = Vector3(4.0, 0.5, 3.0)
+	cam_dist = 14.0
+	await _wait(2.0)
+	await _shot("46_house.png")
+	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
+	_perform(chair, "rest")
+	cam_target = chair.global_position
+	cam_dist = 6.0
+	await _wait(1.8)
+	await _shot("46_rocking_chair.png")
+	await _wait(3.0)
+	var sofa = furniture.filter(func(f): return f.item_id == "sofa")[0]
+	_perform(sofa, "rest")
+	cam_target = sofa.global_position
+	await _wait(1.8)
+	await _shot("46_sofa.png")
+	cam_target = Vector3(1.6, 0.6, 1.6)
+	cam_dist = 7.5
+	await _wait(3.0)
+	await _shot("46_hearth_kitchen.png")
+	_set_cam_lock(true)
 
 
 ## The barn (art/world_assets/barn): the model stands where the box barn stood, she can walk in

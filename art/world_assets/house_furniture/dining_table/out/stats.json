@@ -1,0 +1,39 @@
+{
+  "name": "dining_table",
+  "triangles": 4094,
+  "materials": [
+    "dining_table_wood",
+    "dining_table_peg",
+    "dining_table_plaid",
+    "dining_table_ceramic",
+    "dining_table_band",
+    "dining_table_stem",
+    "dining_table_petal",
+    "dining_table_eye",
+    "dining_table_brass",
+    "dining_table_wax",
+    "dining_table_flame"
+  ],
+  "size_m": [
+    1.962,
+    0.925,
+    1.204
+  ],
+  "min_m": [
+    -0.981,
+    -0.463,
+    0.0
+  ],
+  "max_m": [
+    0.981,
+    0.463,
+    1.204
+  ],
+  "images": [
+    "dining_table_plaid",
+    "dining_table_plaid_n",
+    "dining_table_wood",
+    "dining_table_wood_n"
+  ],
+  "glb_bytes": 529720
+}
