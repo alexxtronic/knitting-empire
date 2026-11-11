@@ -81,10 +81,26 @@ Alex approved the model ("Yes, install it").
 - Autotest: `_barn_checks` (the parts, walking in, opening up, closing again); `--only=barn` runs just it.
   Pictures in `review/in_game/`.
 
+## The flock sleeps in the barn (2026-11-11)
+
+Alex: the sheep should walk into the stalls by themselves at night.
+
+- The four stall gates are now parts of their own (`gate_l0`, `gate_l1`, `gate_r0`, `gate_r1`), hinged at
+  the end nearer the doors; 17 parts in all.
+- `main.gd` `_update_flock`: from 19:30 each sheep walks from the pen, out of its gate, through the barn
+  doors and down the aisle into her stall, and stands there facing the aisle; from 6:30 she walks back to
+  the pen. Past four sheep, a second one shares each stall. A game that starts at night finds them already
+  housed. No barn (deleted in the editor), no bedtime.
+- `sheep.gd`: `walk_route`, `place`, `housed`; she walks home at 0.8 m/s, twice her grazing amble.
+- `World.update_barn` opens the barn doors for sheep on the move and swings a stall gate in for a sheep
+  passing it; both shut again behind her.
+- The world editor: moving the pen no longer drags a housed sheep out of the barn.
+- Autotest: `_flock_checks`. The rest of the autotest keeps bedtime off, so its sheep stay in the pen.
+
 ## Not done yet
 
-- Storing pets: the stalls are closed and empty. What goes in them, and how, is for Alex to say.
-- She cannot go into the stalls (their gates do not open).
+- She cannot go into the stalls herself. Shearing a housed sheep is done from the aisle.
+- Only the sheep sleep there; there are no other animals yet.
 - Triangles are above the style guide's 15,000 for a building.
 
 ## Licences

@@ -237,14 +237,19 @@ static func _tree(root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> void:
 
 ## The barn is the model from art/world_assets/barn, which comes in parts so it can open up while
 ## she is inside: `roof`, each wall at full height (`wall_front`...) and cut down to a stub
-## (`wall_front_low`...), two door leaves hinged at their outer edges, `base` and `interior`.
-## Its doors are in the +Z wall. BARN_SIZE is over the walls (x, z).
+## (`wall_front_low`...), two door leaves hinged at their outer edges, four stall gates
+## (`gate_r0`...: right or left of the aisle, 0 nearest the doors), `base` and `interior`.
+## Its doors are in the +Z wall. BARN_SIZE is over the walls (x, z). The stalls and gates are given
+## in the barn's own space as (x, z): BARN_STALLS in the order the flock fills them.
 const BARN_MODEL := "res://assets/props/barn.glb"
 const BARN_SIZE := Vector2(5.6, 5.0)
 const BARN_WALLS := {"front": Vector3(0, 0, 1), "back": Vector3(0, 0, -1), "left": Vector3(-1, 0, 0), "right": Vector3(1, 0, 0)}
 static var barn_parts := {} # MeshInstance3D by part name; empty if the model is missing
 static var barn_inside := false # she is standing in it
 static var barn_open := 0.0 # the doors: 0 shut .. 1 swung open
+const BARN_STALLS := [Vector2(1.8, -0.2), Vector2(-1.8, -0.2), Vector2(1.8, -1.66), Vector2(-1.8, -1.66)]
+const BARN_GATES := {"gate_r0": Vector2(0.95, -0.2), "gate_l0": Vector2(-0.95, -0.2), "gate_r1": Vector2(0.95, -1.66), "gate_l1": Vector2(-0.95, -1.66)}
+static var barn_gate := {} # each stall gate: 0 shut .. 1 swung into its stall
 static var _barn_light: OmniLight3D
 
 
@@ -259,6 +264,7 @@ static func build_barn(root: Node3D, pos: Vector3) -> Array:
 	barn_parts = {}
 	barn_inside = false
 	barn_open = 0.0
+	barn_gate = {}
 	var inst := Catalog.model(BARN_MODEL, b)
 	if inst == null:
 		_box_barn(b)
@@ -307,15 +313,48 @@ static func barn_floor() -> Array:
 	return [Rect2(lo, hi - lo)]
 
 
-## Every frame: the doors swing open as she comes up to them and shut behind her when she leaves;
-## while she is inside the roof is hidden and the walls that face the camera drop to stubs (unless
-## Walls Up is on), like the house; the lantern comes up as the daylight goes.
-static func update_barn(who: Vector3, cam_yaw: float, walls_up: bool, delta: float) -> void:
+## The barn can house the flock: it is the model, standing, with its stall gates.
+static func barn_ready() -> bool:
+	return barn != null and is_instance_valid(barn) and barn.visible and barn_parts.has("gate_r0")
+
+
+## Where sheep number `i` sleeps: {"stall": the spot in her stall, "aisle": the spot in the aisle
+## she turns in from, "yaw": the way she faces (toward the aisle)}. Past four sheep, a second one
+## shares each stall.
+static func barn_stall(i: int) -> Dictionary:
+	var c: Vector2 = BARN_STALLS[i % BARN_STALLS.size()]
+	var dz := -0.28 if (i / BARN_STALLS.size()) % 2 == 0 else 0.33
+	var xf := barn.global_transform
+	var face: Vector3 = xf.basis * Vector3(-signf(c.x), 0, 0)
+	return {"stall": xf * Vector3(c.x, 0, c.y + dz), "aisle": xf * Vector3(signf(c.x) * 0.3, 0, c.y + dz * 0.5),
+		"yaw": atan2(face.x, face.z)}
+
+
+## Every frame: the doors swing open as she comes up to them and shut behind her when she leaves
+## (and for the sheep in `movers`, on their way in or out); a stall gate swings in for a sheep
+## passing it; while she is inside the roof is hidden and the walls that face the camera drop to
+## stubs (unless Walls Up is on), like the house; the lantern comes up as the daylight goes.
+static func update_barn(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, movers: Array = []) -> void:
 	if barn == null or not is_instance_valid(barn) or barn_parts.is_empty():
 		return
-	var p: Vector3 = barn.global_transform.affine_inverse() * who
+	var inv := barn.global_transform.affine_inverse()
+	var p: Vector3 = inv * who
 	barn_inside = barn.visible and absf(p.x) < BARN_SIZE.x * 0.5 and absf(p.z) < BARN_SIZE.y * 0.5
 	var at_door: bool = barn.visible and absf(p.x) < 2.2 and p.z > 0.0 and p.z < BARN_SIZE.y * 0.5 + 2.6
+	var gate_wanted := {}
+	for m in movers:
+		var q: Vector3 = inv * (m as Vector3)
+		if absf(q.x) < 2.2 and absf(q.z) < BARN_SIZE.y * 0.5 + 2.2:
+			at_door = at_door or barn.visible
+		for g in BARN_GATES:
+			if Vector2(q.x, q.z).distance_to(BARN_GATES[g]) < 1.5:
+				gate_wanted[g] = true
+	for g in BARN_GATES:
+		if not barn_parts.has(g):
+			continue
+		barn_gate[g] = move_toward(float(barn_gate.get(g, 0.0)), 1.0 if gate_wanted.has(g) else 0.0, delta * 2.5)
+		var turn := deg_to_rad(92.0) * smoothstep(0.0, 1.0, float(barn_gate[g]))
+		(barn_parts[g] as Node3D).rotation.y = -turn if str(g).begins_with("gate_r") else turn
 	barn_open = move_toward(barn_open, 1.0 if barn_inside or at_door else 0.0, delta * 2.0)
 	var swing := deg_to_rad(105.0) * smoothstep(0.0, 1.0, barn_open)
 	(barn_parts["door_l"] as Node3D).rotation.y = -swing

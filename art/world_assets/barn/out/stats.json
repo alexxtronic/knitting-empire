@@ -109,13 +109,41 @@
         "barn_gold"
       ]
     },
-    "interior": {
-      "triangles": 8078,
+    "gate_l0": {
+      "triangles": 628,
       "materials": [
         "barn_stall",
-        "barn_iron",
+        "barn_iron"
+      ]
+    },
+    "gate_l1": {
+      "triangles": 628,
+      "materials": [
+        "barn_stall",
+        "barn_iron"
+      ]
+    },
+    "gate_r0": {
+      "triangles": 628,
+      "materials": [
+        "barn_stall",
+        "barn_iron"
+      ]
+    },
+    "gate_r1": {
+      "triangles": 628,
+      "materials": [
+        "barn_stall",
+        "barn_iron"
+      ]
+    },
+    "interior": {
+      "triangles": 5566,
+      "materials": [
+        "barn_stall",
         "barn_straw",
         "barn_water",
+        "barn_iron",
         "barn_dark",
         "barn_sack",
         "barn_glow"
@@ -143,5 +171,5 @@
     "barn_trim",
     "barn_trim_n"
   ],
-  "glb_bytes": 2328340
+  "glb_bytes": 2321424
 }

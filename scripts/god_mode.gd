@@ -355,8 +355,9 @@ func _apply(el: El) -> void:
 			main.pen_rect.position += Vector2(d.x, d.z)
 			for s in main.sheep_list:
 				s.pen.position += Vector2(d.x, d.z)
-				s.position += d
 				s._target += d
+				if not s.housed and s.route.is_empty(): # a sheep in the barn, or on her way, stays where she is
+					s.position += d
 
 
 func _apply_leaves(el: El) -> void:

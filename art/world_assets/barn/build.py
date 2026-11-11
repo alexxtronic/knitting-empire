@@ -11,6 +11,8 @@ The game shows a building's inside by hiding what is in the way, so the model is
     wall_front|back|left|right    each wall at full height (the gables go with front and back)
     wall_*_low                the same wall cut down to a 0.62 m stub, shown instead when it faces the camera
     door_l, door_r            the two door leaves, each with its origin on its hinge line, so they can swing
+    gate_l0|l1|r0|r1          the four stall gates (left or right of the aisle, 0 nearest the doors), hinged
+                              at the end nearer the doors, so they can swing into their stalls
     roof                      shakes, barge boards, ridge, cupola and weathervane: hidden when she is inside
     interior                  stalls, hay, tools
 
@@ -50,6 +52,8 @@ LOW = 0.62                 # height of a cut-down wall
 RNG = random.Random(4)
 M = {}
 PARTS = {}
+CLAIMED = set()   # objects already given to a part of their own (the stall gates, built inside `interior`)
+HINGES = {}       # part name -> where its origin goes, so the game can swing it
 
 
 class part:
@@ -62,7 +66,7 @@ class part:
         self.before = set(K.COLL.objects)
 
     def __exit__(self, *a):
-        PARTS.setdefault(self.name, []).extend(o for o in K.COLL.objects if o not in self.before)
+        PARTS.setdefault(self.name, []).extend(o for o in K.COLL.objects if o not in self.before and o not in CLAIMED)
 
 
 # --- materials ---------------------------------------------------------------------------------------
@@ -401,8 +405,13 @@ def build_interior():
             g = Matrix.Rotation(math.pi / 2, 3, "Z")
             before = set(K.COLL.objects)
             gate(a0, a1, 0.0)
-            for ob in [o for o in K.COLL.objects if o not in before]:
+            leaf = [o for o in K.COLL.objects if o not in before]
+            for ob in leaf:
                 ob.matrix_world = Matrix.Translation((s * aisle, 0, 0)) @ g.to_4x4() @ ob.matrix_world
+            name = "gate_%s%d" % ("r" if s > 0 else "l", k)
+            PARTS[name] = leaf
+            CLAIMED.update(leaf)
+            HINGES[name] = (s * aisle, a0 - 0.02, 0.0)
             mound("bedding", s * (ix + aisle) / 2 + s * 0.1, (y0 + y1) / 2, 0.66, 0.13, 0.85, grain="x", seed=k + 5 * s)
             bucket(s * (aisle + 0.33), y1 - 0.34)
         bx("stall_post", (0.15, 0.15, 1.42), (s * aisle, iy - 0.075, 0.71), M["stall"], bevel=0.03, seg=2)
@@ -522,8 +531,8 @@ def main():
     with part("interior"):
         build_interior()
     bpy.context.view_layer.update()
-    hinge = {"door_l": (-DOOR_W / 2, -D / 2 - 0.035, 0.0), "door_r": (DOOR_W / 2, -D / 2 - 0.035, 0.0)}
-    obs = [join_part(n, o, hinge.get(n)) for n, o in PARTS.items() if o]
+    HINGES.update({"door_l": (-DOOR_W / 2, -D / 2 - 0.035, 0.0), "door_r": (DOOR_W / 2, -D / 2 - 0.035, 0.0)})
+    obs = [join_part(n, o, HINGES.get(n)) for n, o in PARTS.items() if o]
     stats = {"name": NAME, "parts": {}, "triangles": 0}
     for o in obs:
         t = K.tri_count(o)

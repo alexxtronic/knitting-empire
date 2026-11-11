@@ -7,6 +7,10 @@ extends Node3D
 ## tools/rig_sheep.py with the same loops: Walk (a four-beat walk), Graze (head down, tugging and
 ## chewing) and Idle (breathing, shifting her weight, looking about). She grazes her way round the
 ## pen a step or two at a time, crosses it now and then, and eases in and out of every walk.
+##
+## Bedtime (main.gd's _update_flock): at dusk she is given a route to her stall in the barn and
+## walks it at a purposeful pace without stopping to graze. She is `housed` when she gets there,
+## and stands in her stall facing the aisle until she is given the route back to the pen.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const REGROW_HOURS := 10.0
@@ -19,6 +23,7 @@ const WALK_SPEED := 0.38 # metres per second, an amble (each sheep's own pace is
 const STRIDE := {"woolly": 0.315, "sheared": 0.462}
 const BLEND := 0.6 # seconds to cross-fade between loops (her head takes a moment to come up)
 const GRAZE_CHANCE := 0.7 # at each stop: graze, or just stand and look about
+const HOME_SPEED := 0.8 # metres per second on the way to the barn and back
 
 var pen := Rect2()
 ## 0..1, shearable at 1. Setting it (shearing, loading a save, overnight growth) updates the look.
@@ -27,6 +32,10 @@ var wool := 1.0:
 		wool = clampf(v, 0.0, 1.0)
 		_update_look()
 var hold_time := 0.0
+var route: Array = [] # Vector3 points still to pass, in order
+var housed := false # in her stall for the night
+var heading_in := false # the route she is on ends in her stall
+var stall_yaw := 0.0 # which way she faces once housed
 var _target := Vector3.ZERO
 var _wait := 0.0
 var _grazing := false
@@ -94,6 +103,53 @@ func hold(seconds: float) -> void:
 	hold_time = seconds
 
 
+## Sends her along `points`: to her stall (she is housed at the end, facing `yaw`) or back to the pen.
+func walk_route(points: Array, to_stall: bool, yaw := 0.0) -> void:
+	route = points.duplicate()
+	heading_in = to_stall
+	housed = false
+	stall_yaw = yaw
+	_wait = 0.0
+
+
+## Puts her straight in her stall, or straight back in the pen, without the walk (a save loaded
+## at night, the autotest).
+func place(at: Vector3, in_stall: bool, yaw := 0.0) -> void:
+	position = at
+	route = []
+	heading_in = false
+	housed = in_stall
+	stall_yaw = yaw
+	_speed = 0.0
+	if in_stall:
+		rotation.y = yaw
+	else:
+		_pick_target()
+
+
+func _follow_route(delta: float) -> void:
+	var to: Vector3 = (route[0] as Vector3) - position
+	to.y = 0
+	var d := to.length()
+	if d < 0.18:
+		route.pop_front()
+		if route.is_empty():
+			housed = heading_in
+			heading_in = false
+			if not housed:
+				_wait = randf_range(1.0, 3.0)
+				_pick_target()
+		return
+	var off := absf(angle_difference(rotation.y, atan2(to.x, to.z)))
+	var want := HOME_SPEED * _pace * clampf(1.2 - off / 1.2, 0.25, 1.0)
+	if route.size() == 1: # slowing into her stall, or into the pen
+		want = minf(want, maxf(0.15, sqrt(2.0 * 0.6 * d)))
+	_speed = move_toward(_speed, want, 1.2 * delta)
+	position += Vector3(sin(rotation.y), 0, cos(rotation.y)).lerp(to / d, 0.6).normalized() * _speed * delta
+	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 4.0))
+	_play("Walk", _speed)
+
+
 ## Where she heads next. Grazing sheep mostly shuffle a step or two to fresh grass, and only now
 ## and then cross the pen.
 func _pick_target() -> void:
@@ -126,6 +182,14 @@ func _process(delta: float) -> void:
 		hold_time -= delta
 		_speed = 0.0
 		_play("Idle")
+		return
+	if housed:
+		_speed = 0.0
+		rotation.y = lerp_angle(rotation.y, stall_yaw, 1.0 - exp(-delta * 2.0))
+		_play("Idle")
+		return
+	if not route.is_empty():
+		_follow_route(delta)
 		return
 	if _wait > 0.0:
 		_wait -= delta

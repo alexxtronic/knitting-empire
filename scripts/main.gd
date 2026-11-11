@@ -75,6 +75,11 @@ var nature # nature.gd: rocks, plants, hedges, fences, lamp posts and benches
 var god: GodMode # god_mode.gd: the admin's world editor, and the saved layout it applies at launch
 var pond_rect := Rect2()
 var pen_rect := PEN # where the sheep pen stands now (god mode can move it)
+const SHEEP_IN := 19.5 # the hour the flock heads for its stalls in the barn
+const SHEEP_OUT := 6.5 # the hour it comes back out to the pen
+var flock_bedtime := true
+var _flock_t := 0.0
+var _flock_seen := false
 var bin: Node3D
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
@@ -265,6 +270,7 @@ func _ready() -> void:
 	hud.render_thumbnails()
 	_load_display()
 	tips_enabled = _autotest_dir == "" # the autotest turns them on for its own check
+	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
 	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
 	Engine.set_meta("ke_skip_title", false)
@@ -908,7 +914,9 @@ func _process(delta: float) -> void:
 		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
 	_update_camera(delta)
 	_update_walls()
-	World.update_barn(player.position, cam_yaw, walls_up, delta)
+	_update_flock(delta)
+	World.update_barn(player.position, cam_yaw, walls_up, delta,
+		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
 	_update_lighting()
 	_update_story_staging(delta)
 	_update_needs(delta)
@@ -2847,6 +2855,7 @@ func _autotest() -> void:
 	if "--only=barn" in OS.get_cmdline_user_args(): # just the barn checks and their pictures
 		await _wait(1.5)
 		await _barn_checks()
+		await _flock_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -3001,6 +3010,7 @@ func _autotest() -> void:
 	await _polish_checks()
 	await _bench_checks()
 	await _barn_checks()
+	await _flock_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
 
 
@@ -3012,8 +3022,8 @@ func _barn_checks() -> void:
 	hud.hide_dialogue()
 	Game.hour = 11.0
 	var parts: Dictionary = World.barn_parts
-	_check("the barn is the model, in its parts (%d: base, roof, interior, two doors, four walls and their stubs)" % parts.size(),
-		parts.size() == 13 and parts.has("roof") and parts.has("door_l") and parts.has("interior") and parts.has("wall_front_low"))
+	_check("the barn is the model, in its parts (%d: base, roof, interior, two doors, four stall gates, four walls and their stubs)" % parts.size(),
+		parts.size() == 17 and parts.has("roof") and parts.has("door_l") and parts.has("interior") and parts.has("wall_front_low") and parts.has("gate_l1"))
 	if parts.is_empty() or not World.barn.visible:
 		return
 	var xf: Transform3D = World.barn.global_transform
@@ -3048,6 +3058,62 @@ func _barn_checks() -> void:
 	var whole: bool = World.BARN_WALLS.keys().all(func(s): return (parts["wall_" + s] as Node3D).visible and not (parts["wall_%s_low" % s] as Node3D).visible)
 	_check("the barn closes up again when she leaves (doors %.0f%% open, roof %s)" % [World.barn_open * 100.0, "shown" if (parts["roof"] as Node3D).visible else "hidden"],
 		not World.barn_inside and World.barn_open < 0.05 and (parts["roof"] as Node3D).visible and whole and player.position.distance_to(out_front) < 0.8)
+	_set_cam_lock(true)
+
+
+## The flock's bedtime: at dusk the sheep walk from the pen to their stalls in the barn, the stall
+## gates and the barn doors shutting behind them, and at first light they walk back out. (The
+## rest of the autotest runs with bedtime off, so its sheep stay where it expects them.)
+func _flock_checks() -> void:
+	if not World.barn_ready() or sheep_list.is_empty():
+		return
+	hud.hide_dialogue()
+	var xf: Transform3D = World.barn.global_transform
+	var pen_mid := Vector3(pen_rect.get_center().x, 0, pen_rect.get_center().y)
+	for s in sheep_list: # a known start: everyone in the pen
+		s.place(Vector3(randf_range(s.pen.position.x, s.pen.end.x), 0, randf_range(s.pen.position.y, s.pen.end.y)), false)
+	player.position = pen_mid + (pen_mid - xf.origin).normalized() * 6.0 # out of the way, on the far side of the pen
+	_set_cam_lock(false)
+	cam_target = (pen_mid + xf.origin) * 0.5
+	cam_dist = 26.0
+	flock_bedtime = true
+	_flock_seen = true
+	Game.hour = 20.0
+	await _wait(7.0)
+	var walking: int = sheep_list.filter(func(s): return s.heading_in and not s.route.is_empty()).size()
+	await _shot("45_flock_going_in.png")
+	var t := 0.0
+	while t < 75.0 and not sheep_list.all(func(s): return s.housed):
+		await _wait(0.5)
+		t += 0.5
+	await _wait(2.5) # gates and doors swing shut
+	var housed: int = sheep_list.filter(func(s): return s.housed).size()
+	var in_place := true
+	for i in sheep_list.size():
+		in_place = in_place and sheep_list[i].position.distance_to(World.barn_stall(i)["stall"]) < 0.35
+	var gates_shut: bool = World.barn_gate.values().all(func(g): return float(g) < 0.05)
+	_check("at dusk the flock walks from the pen to its stalls in the barn (%d setting off, %d of %d housed after %.0f s, gates %s, doors %.0f%% open)" % [walking, housed, sheep_list.size(), t, "shut" if gates_shut else "open", World.barn_open * 100.0],
+		walking >= 1 and housed == sheep_list.size() and in_place and gates_shut and World.barn_open < 0.05)
+	# a look inside: she steps into the aisle, which lifts the roof off
+	var aisle: Vector3 = xf * Vector3(0.25, 0, 0.9)
+	aisle.y = 0.0
+	player.position = aisle
+	cam_target = xf.origin
+	cam_dist = 12.5
+	await _wait(1.8)
+	await _shot("45_flock_in_stalls.png")
+	player.position = pen_mid + (pen_mid - xf.origin).normalized() * 6.0
+	cam_target = (pen_mid + xf.origin) * 0.5
+	cam_dist = 26.0
+	Game.hour = 7.0
+	t = 0.0
+	var home := func(s) -> bool: return not s.housed and s.route.is_empty() and pen_rect.has_point(Vector2(s.position.x, s.position.z))
+	while t < 75.0 and not sheep_list.all(home):
+		await _wait(0.5)
+		t += 0.5
+	_check("at first light they walk back out to the pen (%d of %d in the pen after %.0f s)" % [sheep_list.filter(home).size(), sheep_list.size(), t],
+		sheep_list.all(home))
+	flock_bedtime = false
 	_set_cam_lock(true)
 
 
@@ -3747,6 +3813,41 @@ func _decor(id: String, pos: Vector3, r: int) -> void:
 	decor.append(f)
 	if not f.is_flat():
 		grid_blockers.append(f.footprint())
+
+
+## The flock keeps farm hours: at dusk each sheep walks from the pen to her stall in the barn, and
+## at first light back out to the pen. A game that starts at night finds them already in their
+## stalls. Without the barn (deleted in the editor, or the old box) they stay in the pen.
+func _update_flock(delta: float) -> void:
+	_flock_t -= delta
+	if _flock_t > 0.0:
+		return
+	_flock_t = 0.5
+	var night: bool = flock_bedtime and World.barn_ready() and (Game.hour >= SHEEP_IN or Game.hour < SHEEP_OUT)
+	var first := not _flock_seen
+	_flock_seen = true
+	for i in sheep_list.size():
+		var s = sheep_list[i]
+		if night:
+			if s.housed or s.heading_in:
+				continue
+			var st: Dictionary = World.barn_stall(i)
+			if first:
+				s.place(st["stall"], true, st["yaw"])
+				continue
+			var way_in: Array = _find_path(s.position, st["aisle"])
+			way_in.append(st["stall"])
+			s.walk_route(way_in, true, st["yaw"])
+		elif s.housed or s.heading_in:
+			var to := Vector3(randf_range(s.pen.position.x, s.pen.end.x), 0, randf_range(s.pen.position.y, s.pen.end.y))
+			var way_out: Array = []
+			if s.housed and World.barn_ready():
+				var from: Vector3 = World.barn_stall(i)["aisle"]
+				way_out = _find_path(from, to)
+				way_out.push_front(from)
+			else:
+				way_out = _find_path(s.position, to)
+			s.walk_route(way_out, false)
 
 
 func _add_sheep() -> void:
