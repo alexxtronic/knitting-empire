@@ -1,0 +1,67 @@
+{
+  "blend": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/characters/CH_Rowan/CH_Rowan_master.blend",
+  "mode": "silhouette",
+  "engine": "workbench",
+  "bbox_min": [
+    -0.3525840938091278,
+    -0.2162259817123413,
+    0.0
+  ],
+  "bbox_max": [
+    0.3525840938091278,
+    0.1413494050502777,
+    1.8086683750152588
+  ],
+  "size_xyz": [
+    0.7051681876182556,
+    0.357575386762619,
+    1.8086683750152588
+  ],
+  "objects": [
+    "CH_Rowan_Body",
+    "CH_Rowan_Head",
+    "CH_Rowan_Eye_L",
+    "CH_Rowan_Eye_R",
+    "CH_Rowan_TeethUpper",
+    "CH_Rowan_TeethLower",
+    "CH_Rowan_Tongue",
+    "CH_Rowan_Mouth",
+    "CH_Rowan_Beard",
+    "CH_Rowan_Brows",
+    "CH_Rowan_Hair",
+    "CH_Rowan_Sweater",
+    "CH_Rowan_Jeans",
+    "CH_Rowan_Belt",
+    "CH_Rowan_Boot_L",
+    "CH_Rowan_Boot_R"
+  ],
+  "renders": {
+    "front": {
+      "file": "review/gate/silhouette_front.png",
+      "az_el_lens": [
+        0,
+        0,
+        0
+      ],
+      "distance": 4.1787876933813095
+    },
+    "side": {
+      "file": "review/gate/silhouette_side.png",
+      "az_el_lens": [
+        90,
+        0,
+        0
+      ],
+      "distance": 4.352584093809128
+    },
+    "back": {
+      "file": "review/gate/silhouette_back.png",
+      "az_el_lens": [
+        180,
+        0,
+        0
+      ],
+      "distance": 4.1787876933813095
+    }
+  }
+}

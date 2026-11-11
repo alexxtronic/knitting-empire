@@ -1,0 +1,373 @@
+{
+  "blend": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/characters/CH_Rowan/CH_Rowan_master.blend",
+  "summary": {
+    "tris_by_lod": {
+      "0": 50444
+    },
+    "fail": [],
+    "warn": [
+      "CH_Rowan_Head: 32 ngons",
+      "CH_Rowan_Head: 13 doubled vertices within 0.0001",
+      "CH_Rowan_Beard: 13 doubled vertices within 0.0001",
+      "CH_Rowan_Belt: 20 zero-area faces",
+      "CH_Rowan_Boot_L: 2 zero-area faces",
+      "CH_Rowan_Boot_L: 10 edges shared by more than two faces",
+      "CH_Rowan_Boot_R: 2 zero-area faces",
+      "CH_Rowan_Boot_R: 10 edges shared by more than two faces"
+    ]
+  },
+  "objects": [
+    {
+      "name": "CH_Rowan_Body",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 9584,
+        "verts_evaluated": 4809,
+        "verts": 4809,
+        "faces": 4792,
+        "boundary_edges": 32,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "flipped_vs_recalc": 4792,
+        "uv_loops_outside_0_1": 13536,
+        "materials": [
+          "CH_Rowan_Skin"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Head",
+      "type": "MESH",
+      "warn": [
+        "32 ngons",
+        "13 doubled vertices within 0.0001"
+      ],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 5840,
+        "verts_evaluated": 2972,
+        "verts": 2972,
+        "faces": 2968,
+        "boundary_edges": 100,
+        "nonmanifold_edges": 0,
+        "islands": 3,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Skin"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Eye_L",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 672,
+        "verts_evaluated": 338,
+        "verts": 338,
+        "faces": 360,
+        "boundary_edges": 0,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_EyeWhite",
+          "CH_Rowan_Iris",
+          "CH_Rowan_Pupil"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Eye_R",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 672,
+        "verts_evaluated": 338,
+        "verts": 338,
+        "faces": 360,
+        "boundary_edges": 0,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_EyeWhite",
+          "CH_Rowan_Iris",
+          "CH_Rowan_Pupil"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_TeethUpper",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 672,
+        "verts_evaluated": 392,
+        "verts": 392,
+        "faces": 336,
+        "boundary_edges": 110,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Teeth",
+          "CH_Rowan_Gum"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_TeethLower",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 672,
+        "verts_evaluated": 392,
+        "verts": 392,
+        "faces": 336,
+        "boundary_edges": 110,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Teeth",
+          "CH_Rowan_Gum"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Tongue",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 120,
+        "verts_evaluated": 62,
+        "verts": 62,
+        "faces": 70,
+        "boundary_edges": 0,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Tongue"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Mouth",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 108,
+        "verts_evaluated": 61,
+        "verts": 61,
+        "faces": 60,
+        "boundary_edges": 12,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "flipped_vs_recalc": 60,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_MouthInside"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Beard",
+      "type": "MESH",
+      "warn": [
+        "13 doubled vertices within 0.0001"
+      ],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 1616,
+        "verts_evaluated": 912,
+        "verts": 912,
+        "faces": 808,
+        "boundary_edges": 210,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 3232,
+        "materials": [
+          "CH_Rowan_Beard"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Brows",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 232,
+        "verts_evaluated": 174,
+        "verts": 174,
+        "faces": 116,
+        "boundary_edges": 108,
+        "nonmanifold_edges": 0,
+        "islands": 4,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Brow"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Hair",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 12652,
+        "verts_evaluated": 6493,
+        "verts": 6493,
+        "faces": 6798,
+        "boundary_edges": 112,
+        "nonmanifold_edges": 0,
+        "islands": 56,
+        "uv_loops_outside_0_1": 15332,
+        "materials": [
+          "CH_Rowan_Hair"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Sweater",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 6912,
+        "verts_evaluated": 3534,
+        "verts": 902,
+        "faces": 864,
+        "boundary_edges": 80,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 2048,
+        "materials": [
+          "CH_Rowan_Sweater"
+        ],
+        "modifiers": [
+          "SUBSURF:Subdivision"
+        ]
+      }
+    },
+    {
+      "name": "CH_Rowan_Jeans",
+      "type": "MESH",
+      "warn": [],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 4576,
+        "verts_evaluated": 2345,
+        "verts": 600,
+        "faces": 572,
+        "boundary_edges": 58,
+        "nonmanifold_edges": 0,
+        "islands": 1,
+        "uv_loops_outside_0_1": 1536,
+        "materials": [
+          "CH_Rowan_Denim",
+          "CH_Rowan_DenimCuff"
+        ],
+        "modifiers": [
+          "SUBSURF:Subdivision"
+        ]
+      }
+    },
+    {
+      "name": "CH_Rowan_Belt",
+      "type": "MESH",
+      "warn": [
+        "20 zero-area faces"
+      ],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 740,
+        "verts_evaluated": 440,
+        "verts": 440,
+        "faces": 370,
+        "boundary_edges": 136,
+        "nonmanifold_edges": 0,
+        "islands": 8,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_Belt",
+          "CH_Rowan_Brass",
+          "CH_Rowan_Denim"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Boot_L",
+      "type": "MESH",
+      "warn": [
+        "2 zero-area faces",
+        "10 edges shared by more than two faces"
+      ],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 2688,
+        "verts_evaluated": 1406,
+        "verts": 1406,
+        "faces": 1428,
+        "boundary_edges": 106,
+        "nonmanifold_edges": 10,
+        "islands": 8,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_BootLeather",
+          "CH_Rowan_BootSole",
+          "CH_Rowan_BootLace"
+        ],
+        "modifiers": []
+      }
+    },
+    {
+      "name": "CH_Rowan_Boot_R",
+      "type": "MESH",
+      "warn": [
+        "2 zero-area faces",
+        "10 edges shared by more than two faces"
+      ],
+      "fail": [],
+      "info": {
+        "tris_evaluated": 2688,
+        "verts_evaluated": 1406,
+        "verts": 1406,
+        "faces": 1428,
+        "boundary_edges": 106,
+        "nonmanifold_edges": 10,
+        "islands": 8,
+        "uv_loops_outside_0_1": 0,
+        "materials": [
+          "CH_Rowan_BootLeather",
+          "CH_Rowan_BootSole",
+          "CH_Rowan_BootLace"
+        ],
+        "modifiers": []
+      }
+    }
+  ]
+}
