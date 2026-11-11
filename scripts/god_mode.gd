@@ -18,7 +18,9 @@ extends Node3D
 ##   "roads"    the painted road map (a PNG, base64): red = dirt, green = gravel, blue = cobbles
 ## With no file, or a part missing from it, that part of the world is exactly what the code builds.
 ##
-## The Place tool's drop-down lists everything that can be set down one at a time: every kind of
+## The Place tool shows the chosen thing under the pointer with a green outline (R turns it left,
+## T right), sets one down on a click and streams them out while the button is held. Its
+## drop-down lists everything that can be set down: every kind of
 ## scenery, every model in assets/props (a kind that the code never scatters, such as the single
 ## maple leaves, becomes scenery of its own the first time one is placed) and every catalog piece.
 ##
@@ -131,6 +133,11 @@ var _pen_at := Vector3.ZERO
 var _pen_place := Rect2()
 var _pond: El
 var _place_pick: OptionButton
+var _ghost: Node3D # the Place tool's preview: the thing itself under the pointer, outlined in green
+var _ghost_yaw := 0.0
+var _ghost_scale := 1.0
+var _ghost_mat: StandardMaterial3D
+var _stream := {} # click and hold with the Place tool: {"from", "last", "els", "changed"}
 var _shape_btn: Button
 var _mask_dirty := false
 var _mask_t := 0.0
@@ -744,6 +751,10 @@ func set_active(on: bool) -> void:
 		main.hud.show_toast("World editor: click anything to pick it up and drag it. R turns it, Delete removes it.")
 	else:
 		_end_stroke()
+		_end_stream()
+		if _ghost != null:
+			_ghost.queue_free()
+			_ghost = null
 		_drag = {}
 		select(null)
 		hover = null
@@ -773,6 +784,7 @@ func cam_bounds() -> Rect2:
 
 func set_tool(t: String) -> void:
 	_end_stroke()
+	_end_stream()
 	tool = t
 	for k in _tool_btns:
 		(_tool_btns[k] as Button).set_pressed_no_signal(k == t)
@@ -783,7 +795,8 @@ func set_tool(t: String) -> void:
 		hover = null
 		_draw_boxes()
 	if _ring != null:
-		_ring.visible = t != "select"
+		_ring.visible = t != "select" and t != "place" # the Place tool shows the thing itself instead
+	_make_ghost()
 	_draw_ring()
 	_show_status()
 
@@ -864,7 +877,7 @@ func handle_mouse(e: InputEvent) -> bool:
 		return true
 	if e is InputEventMouseMotion:
 		var mm := e as InputEventMouseMotion
-		if (mm.button_mask & MOUSE_BUTTON_MASK_LEFT) == 0 and (_painting or not _drag.is_empty()):
+		if (mm.button_mask & MOUSE_BUTTON_MASK_LEFT) == 0 and (_painting or not _drag.is_empty() or not _stream.is_empty()):
 			release() # the button came up over the toolbar, where the editor never saw it
 		move(mm.position, mm.shift_pressed)
 		return not main.drag_pan # a right-drag still pans the camera
@@ -874,11 +887,16 @@ func handle_mouse(e: InputEvent) -> bool:
 func press(mpos: Vector2) -> void:
 	_mouse = mpos
 	_end_stroke()
+	_end_stream()
 	_drag = {}
 	if tool == "place":
 		var spot = main._ground_point(mpos)
 		if spot != null:
-			place(spot)
+			# one now; holding the button and moving streams more (move), letting go ends it (release)
+			_stream = {"from": spot, "last": spot, "els": [], "changed": []}
+			var first := _place_one(spot, _stream["changed"])
+			if first != null:
+				_stream["els"].append(first)
 		return
 	if tool != "select":
 		_begin_stroke(mpos)
@@ -893,7 +911,14 @@ func press(mpos: Vector2) -> void:
 func move(mpos: Vector2, snap := false) -> void:
 	_mouse = mpos
 	_mouse_moved = true
-	if _painting:
+	if tool == "place":
+		var g = main._ground_point(mpos)
+		if g != null:
+			if _stream.is_empty():
+				_move_ghost(g)
+			else:
+				_stream_to(g, snap)
+	elif _painting:
 		var g = main._ground_point(mpos)
 		if g != null:
 			_stroke_to(g, snap)
@@ -916,6 +941,7 @@ func move(mpos: Vector2, snap := false) -> void:
 
 
 func release() -> void:
+	_end_stream()
 	if _painting:
 		_end_stroke()
 	elif not _drag.is_empty():
@@ -974,7 +1000,7 @@ func duplicate_selected() -> El:
 	else:
 		main.hud.show_toast("The %s is one of a kind: it can be moved, turned or deleted, not copied." % src.title.to_lower())
 		return null
-	undo_stack.append(["add", el])
+	undo_stack.append(["add", [el]])
 	_refresh(_reblock(el))
 	select(el)
 	return el
@@ -1051,6 +1077,17 @@ func place_options() -> Array:
 
 ## Sets one of the chosen thing down at a spot on the ground (the Place tool), and selects it.
 func place(at: Vector3) -> El:
+	var changed: Array = []
+	var el := _place_one(at, changed)
+	if el != null:
+		undo_stack.append(["add", [el]])
+		_refresh(changed)
+	return el
+
+
+## Sets one down as the preview shows it (its turn and size). The ground rects that changed are
+## added to `changed`; the caller brings the grid and the grass up to date and records the undo.
+func _place_one(at: Vector3, changed: Array) -> El:
 	if place_id == "":
 		place_id = str(place_options()[0][0])
 	var what := place_id.get_slice(":", 1)
@@ -1058,20 +1095,149 @@ func place(at: Vector3) -> El:
 	if place_id.begins_with("decor:"):
 		if not Catalog.ITEMS.has(what):
 			return null
-		el = _add_decor(what, Vector3(at.x, 0, at.z), 0.0)
+		el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw)
 	else:
 		if not _ensure_kind(what):
 			main.hud.show_toast("There's no model for that.")
 			return null
-		var natural := _starts(what, NATURAL)
-		var s := randf_range(0.9, 1.15) if natural else 1.0
-		var yaw := randf() * TAU if natural else 0.0
-		var y := -0.03 * s if what.begins_with("rock_") else 0.0
-		el = _add_scenery(what, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), Vector3(at.x, y, at.z)))
-	undo_stack.append(["add", el])
-	_refresh(_reblock(el))
-	select(el)
+		el = _add_scenery(what, _ghost_xf(at))
+	changed.append_array(_reblock(el))
+	_next_look()
+	_move_ghost(at)
 	return el
+
+
+## Where the thing being placed would stand at a spot, with the preview's turn and size.
+func _ghost_xf(at: Vector3) -> Transform3D:
+	var y := -0.03 * _ghost_scale if place_id.begins_with("scenery:rock_") else 0.0
+	return Transform3D(Basis(Vector3.UP, _ghost_yaw).scaled(Vector3.ONE * _ghost_scale), Vector3(at.x, y, at.z))
+
+
+## Natural scenery (trees, rocks, plants, leaves) gets a new turn and size for each one set down,
+## as the code scatters it; everything else keeps the turn it was given with R and T.
+func _next_look() -> void:
+	if place_id.begins_with("scenery:") and _starts(place_id.get_slice(":", 1), NATURAL):
+		_ghost_yaw = randf() * TAU
+		_ghost_scale = randf_range(0.9, 1.15)
+	else:
+		_ghost_scale = 1.0
+
+
+## Builds the Place tool's preview: the chosen thing itself, see-through with a green outline.
+func _make_ghost() -> void:
+	if _ghost != null:
+		_ghost.queue_free()
+		_ghost = null
+	if not active or tool != "place" or place_id == "":
+		return
+	var what := place_id.get_slice(":", 1)
+	if place_id.begins_with("decor:"):
+		if not Catalog.ITEMS.has(what):
+			return
+		var f := Furniture.new()
+		add_child(f)
+		f.setup(what, 0)
+		f.set_ghost(true)
+		_ghost = f
+	else:
+		if not _ensure_kind(what):
+			return
+		var mi := MeshInstance3D.new()
+		mi.mesh = templates[what]["mesh"]
+		mi.transparency = 0.25
+		add_child(mi)
+		_ghost = mi
+	if _ghost_mat == null:
+		# an outline: the model again, a little fatter, back faces only, plain green
+		_ghost_mat = StandardMaterial3D.new()
+		_ghost_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_ghost_mat.albedo_color = Color(0.3, 1.0, 0.4)
+		_ghost_mat.cull_mode = BaseMaterial3D.CULL_FRONT
+		_ghost_mat.grow = true
+		_ghost_mat.grow_amount = 0.03
+	var meshes: Array = _ghost.find_children("*", "MeshInstance3D", true, false)
+	if _ghost is MeshInstance3D:
+		meshes.append(_ghost)
+	for m in meshes:
+		(m as MeshInstance3D).material_overlay = _ghost_mat
+		(m as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ghost_yaw = 0.0
+	_next_look()
+	var g = main._ground_point(_mouse)
+	_move_ghost(g if g != null else main.cam_target)
+
+
+func _move_ghost(at: Vector3) -> void:
+	if _ghost != null:
+		_ghost.global_transform = _ghost_xf(at)
+
+
+## R turns left and T turns right: the preview while placing, otherwise the selected thing.
+func turn(degrees: float) -> void:
+	if tool == "place":
+		_ghost_yaw += deg_to_rad(degrees)
+		if _ghost != null:
+			_move_ghost(_ghost.global_position)
+	else:
+		rotate_selected(degrees)
+
+
+## How far apart a stream sets things down along `dir`: the length of the thing's footprint that
+## way, so fences and hedges dragged along their length join end to end.
+func _stream_spacing(dir: Vector2) -> float:
+	var size := Vector2(0.5, 0.5)
+	var what := place_id.get_slice(":", 1)
+	if place_id.begins_with("decor:"):
+		size = Catalog.ITEMS[what]["size"]
+	elif templates.has(what):
+		var b: AABB = (templates[what]["mesh"] as Mesh).get_aabb()
+		size = Vector2(b.size.x, b.size.z) * _ghost_scale
+	var along := Vector2(cos(_ghost_yaw), -sin(_ghost_yaw)) # the thing's own x axis on the ground
+	var c := absf(dir.dot(along))
+	var s := sqrt(maxf(0.0, 1.0 - c * c))
+	return maxf(0.15, size.x * c + size.y * s)
+
+
+## Click and hold with the Place tool: one more each time the pointer has gone a footprint
+## further. Shift keeps the stream on a straight line (snapped to 45 degrees) from where it began.
+func _stream_to(g: Vector3, straight: bool) -> void:
+	var from: Vector3 = _stream["from"]
+	if straight:
+		var d := Vector2(g.x - from.x, g.z - from.z)
+		if d.length() < 0.05:
+			return
+		var dir := Vector2.from_angle(snappedf(d.angle(), PI / 4.0))
+		g = from + Vector3(dir.x, 0, dir.y) * maxf(d.dot(dir), 0.0)
+	var natural := place_id.begins_with("scenery:") and _starts(place_id.get_slice(":", 1), NATURAL)
+	for i in 200:
+		var last: Vector3 = _stream["last"]
+		var to := Vector3(g.x - last.x, 0, g.z - last.z)
+		var dir2 := Vector2(to.x, to.z).normalized()
+		var gap := _stream_spacing(dir2) * (0.9 if natural else 1.0)
+		if to.length() < gap:
+			break
+		var next := last + Vector3(dir2.x, 0, dir2.y) * gap
+		_stream["last"] = next
+		var at := next
+		if natural and not straight:
+			at += Vector3(-dir2.y, 0, dir2.x) * randf_range(-0.3, 0.3) * gap # a loose line, not a ruled one
+		var el := _place_one(at, _stream["changed"])
+		if el == null:
+			break
+		_stream["els"].append(el)
+	_move_ghost(g)
+
+
+func _end_stream() -> void:
+	if _stream.is_empty():
+		return
+	var s := _stream
+	_stream = {}
+	if not (s["els"] as Array).is_empty():
+		undo_stack.append(["add", s["els"]])
+		if undo_stack.size() > 80:
+			undo_stack.pop_front()
+		_refresh(s["changed"])
 
 
 func _add_decor(id: String, at: Vector3, yaw: float) -> El:
@@ -1094,10 +1260,14 @@ func undo() -> void:
 			_refresh(_set_state(u[1], u[2], u[3]))
 			select(null if u[3] else u[1])
 		"add":
-			var el: El = u[1]
-			if selected == el:
-				select(null)
-			_refresh(_set_state(el, el.xf, true))
+			# one thing, or everything a held click streamed out
+			var changed: Array = []
+			for e in u[1]:
+				var el := e as El
+				if selected == el:
+					select(null)
+				changed.append_array(_set_state(el, el.xf, true))
+			_refresh(changed)
 		"roads":
 			road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, u[1])
 			for el in u[2]:
@@ -1111,7 +1281,9 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 	var cmd := k.is_command_or_control_pressed()
 	match kc:
 		KEY_R:
-			rotate_selected(-TURN_STEP if k.shift_pressed else TURN_STEP)
+			turn(TURN_STEP) # left
+		KEY_T:
+			turn(-TURN_STEP) # right
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
 			delete_selected()
 		KEY_Z:
@@ -1500,11 +1672,11 @@ func _show_status() -> void:
 	var s := ""
 	if tool == "select":
 		if selected != null:
-			s = "%s selected. Drag to move (Shift snaps to 25 cm), R / Shift+R to turn, Delete to remove, Ctrl/Cmd+D to copy." % selected.title
+			s = "%s selected. Drag to move (Shift snaps to 25 cm). R turns it left, T right. Delete removes it, Ctrl/Cmd+D copies it." % selected.title
 		else:
 			s = "Click anything to select it, then drag it. Right-drag or WASD moves the camera, the wheel zooms."
 	elif tool == "place":
-		s = "Click to set one down. Pick what from the list. The last one placed stays selected: R turns it, Delete removes it."
+		s = "Click to set one down; hold and drag for a stream of them (Shift keeps it straight). R turns the preview left, T right. Ctrl/Cmd+Z undoes."
 	elif tool == "erase":
 		s = "Drag over a road or the paving to rub it out. Hold Shift for a straight line. [ and ] change the brush size."
 	else:
@@ -1586,8 +1758,8 @@ func _build_ui() -> void:
 	brush_row.add_child(_shape_btn)
 	brush_row.add_child(VSeparator.new())
 	var row2 := brush_row
-	row2.add_child(hud._button("Turn left", func(): rotate_selected(TURN_STEP)))
-	row2.add_child(hud._button("Turn right", func(): rotate_selected(-TURN_STEP)))
+	row2.add_child(hud._button("Turn left (R)", func(): turn(TURN_STEP)))
+	row2.add_child(hud._button("Turn right (T)", func(): turn(-TURN_STEP)))
 	row2.add_child(hud._button("Copy", func(): duplicate_selected()))
 	row2.add_child(hud._button("Delete", func(): delete_selected()))
 	vb.add_child(row2)

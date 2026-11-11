@@ -112,9 +112,9 @@ When exporting, add `data/*` to the export preset's non-resource include filter,
 The map is laid out in the game itself. Run the game from the project, open **Settings**, and under **God mode** switch on **Edit the world**. (The switch is for the admin only: it appears when the game runs from the project with the Godot editor build, and never in an exported game.)
 
 - **Select & move:** click anything (a tree, a rock, a hedge, a lamp post, a shop, the fountain, a crop plot) and drag it. Hold Shift to snap to 25 cm.
-- **Turn:** R turns the selected thing 15 degrees, Shift+R turns it back.
+- **Turn:** R turns the selected thing 15 degrees to the left, T to the right.
 - **Delete:** Delete, Backspace or X. **Copy:** Ctrl/Cmd+D (scenery, lamp posts, benches and other decor). **Undo:** Ctrl/Cmd+Z.
-- **Place:** choose anything from the drop-down next to Place (every kind of tree, rock, plant and leaf, every model in `assets/props`, every catalog piece) and click to set one down at a time. The last one placed stays selected, so R turns it and Delete removes it.
+- **Place:** choose anything from the drop-down next to Place (every kind of tree, rock, plant and leaf, every model in `assets/props`, every catalog piece) and it appears under the pointer with a green outline. R and T turn it. Click to set one down, or hold the button and drag for a stream of them (Shift keeps the stream on a straight line; fences and hedges dragged along their length join end to end).
 - **Roads:** pick Dirt road, Gravel road or Cobblestones and drag to paint. One click with a wide round brush makes a round patch (a cul-de-sac). Hold **Shift** while dragging for a straight line; it snaps to the nearest 45 degrees and follows the pointer until you let go. The brush can be round or square and up to 30 m across; `[` and `]` change its size. Erase road rubs out any road, including the plaza and paths the game starts with. Painting a road clears the grass, tufts and flowers under it.
 - The camera works as usual (WASD, right-drag, wheel) and can go out to the far trees. The clock stops while you edit.
 - **Done** saves. The layout goes to `data/world_layout.json`, which the game applies every time it starts: it is the map every player gets, so commit it. **Reset world** throws the saved layout away.

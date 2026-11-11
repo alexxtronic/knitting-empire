@@ -3045,8 +3045,12 @@ func _god_checks() -> void:
 		picked_lamp and lamp.xf.origin.distance_to(lamp_to) < 0.3 and lamp.node.global_position.distance_to(lamp.xf.origin) < 0.001 and _walkable(_cell(lamp_from)) and not _walkable(_cell(lamp.xf.origin)))
 	await _key_tap(KEY_R)
 	await _key_tap(KEY_R)
+	await _key_tap(KEY_R)
+	var turned_left := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
+	await _key_tap(KEY_T)
 	var lamp_turn := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
-	_check("god mode: R turns the selected thing 15 degrees a press (%.1f degrees after two)" % lamp_turn, absf(lamp_turn - 30.0) < 0.1)
+	_check("god mode: R turns the selected thing 15 degrees to the left a press and T to the right (%.1f degrees after three Rs, %.1f after a T)" % [turned_left, lamp_turn],
+		absf(turned_left - 45.0) < 0.1 and absf(lamp_turn - 30.0) < 0.1)
 	var copy: GodMode.El = god.duplicate_selected()
 	_check("god mode: Copy sets a second lamp post down beside it", copy != null and copy.added and copy.node.visible and god.selected == copy and decor.has(copy.node))
 
@@ -3169,10 +3173,17 @@ func _god_checks() -> void:
 	god._place_pick.select(leaf_item)
 	god._place_pick.item_selected.emit(leaf_item)
 	var leaf_spot := Vector3(30.0, 0, 15.0)
+	# the chosen thing follows the pointer, outlined in green, before it is set down
+	god.move(cam.unproject_position(leaf_spot))
+	var preview: MeshInstance3D = god._ghost as MeshInstance3D
+	var preview_ok: bool = preview != null and preview.visible and preview.mesh != null and preview.material_overlay != null \
+		and (preview.material_overlay as StandardMaterial3D).albedo_color.g > 0.9 and preview.global_position.distance_to(leaf_spot) < 0.1
 	god.press(cam.unproject_position(leaf_spot))
+	god.release()
 	god.press(cam.unproject_position(leaf_spot + Vector3(0.6, 0, 0.3)))
+	god.release()
 	var leaves_placed: int = god.scenery.get("leaf_yellow", []).size()
-	var last_leaf: GodMode.El = god.selected
+	var last_leaf: GodMode.El = god.scenery["leaf_yellow"][-1] if leaves_placed > 0 else null
 	god.place_id = "decor:milk_churn"
 	var churn: GodMode.El = god.place(Vector3(31.5, 0, 15.5))
 	god.place_id = "scenery:tree_spruce"
@@ -3180,8 +3191,48 @@ func _god_checks() -> void:
 	var spruce: GodMode.El = god.place(Vector3(36.0, 0, 17.0))
 	_check("god mode: the Place list holds everything in the world (%d things), and a click sets one down: two gold leaves, a milk churn, a spruce" % options.size(),
 		options.size() > 50 and ids.has("scenery:rock_boulder") and ids.has("scenery:hedge") and ids.has("decor:lantern") and ids.has("scenery:maplewood_bus") and not ids.has("scenery:cobble_plaza_0")
-		and god.tool == "place" and leaves_placed == 2 and last_leaf != null and last_leaf.kind == "leaf_yellow" and last_leaf.xf.origin.distance_to(leaf_spot + Vector3(0.6, 0, 0.3)) < 0.2
+		and god.tool == "place" and preview_ok and leaves_placed == 2 and last_leaf != null and last_leaf.kind == "leaf_yellow" and last_leaf.xf.origin.distance_to(leaf_spot + Vector3(0.6, 0, 0.3)) < 0.2
 		and churn != null and churn.added and decor.has(churn.node) and spruce != null and god.scenery["tree_spruce"].size() == spruces0 + 1 and not spruce.leaves.is_empty())
+
+	# R and T turn the preview, and what is set down stands the way the preview showed it
+	god.place_id = "scenery:fence_picket"
+	god.set_tool("place")
+	await _key_tap(KEY_T)
+	await _key_tap(KEY_T)
+	await _key_tap(KEY_R)
+	var preview_turn := rad_to_deg(god._ghost_yaw)
+	var turned_fence: GodMode.El = god.place(Vector3(27.0, 0, 18.5))
+	var fence_yaw := rad_to_deg(GodMode._yaw(turned_fence.xf))
+	await _key_tap(KEY_R) # square to the map again for the row below
+	god.place_id = "scenery:tree_maple_autumn"
+	god.set_tool("place")
+	god.move(cam.unproject_position(Vector3(31.0, 0, 16.5)))
+	await _shot("64_god_preview.png")
+	god.place_id = "scenery:fence_picket"
+	god.set_tool("place")
+	# click and hold: a stream of them along the drag; fences dragged along their length join up
+	var fences0: int = god.scenery["fence_picket"].size()
+	var row_from := Vector3(29.0, 0, 18.0)
+	god.press(cam.unproject_position(row_from))
+	god.move(cam.unproject_position(row_from + Vector3(2.0, 0, 0)))
+	god.move(cam.unproject_position(row_from + Vector3(4.3, 0, 0)))
+	god.release()
+	var row: Array = god.scenery["fence_picket"].slice(fences0)
+	var joined := row.size() >= 4
+	for i in range(1, row.size()):
+		var step: Vector3 = row[i].xf.origin - row[i - 1].xf.origin
+		joined = joined and absf(step.x - row[0].bounds.size.x) < 0.02 and absf(step.z) < 0.02
+	# leaves stream out loosely, and one Undo takes the whole stream back
+	god.place_id = "scenery:leaf_red"
+	god.set_tool("place")
+	god.press(cam.unproject_position(Vector3(28.0, 0, 13.0)))
+	god.move(cam.unproject_position(Vector3(31.0, 0, 13.4)))
+	god.release()
+	var red_leaves: int = god.scenery["leaf_red"].filter(func(e): return not e.deleted).size()
+	god.undo()
+	var red_after: int = god.scenery["leaf_red"].filter(func(e): return not e.deleted).size()
+	_check("god mode: R and T turn the preview and the thing is set down that way (preview %.0f, fence %.0f degrees); holding the button streams them out: %d fences joined end to end %s, %d red leaves, all gone after one Undo (%d left)" % [preview_turn, fence_yaw, row.size(), joined, red_leaves, red_after],
+		absf(preview_turn + 15.0) < 0.1 and absf(fence_yaw + 15.0) < 0.1 and joined and row.size() <= 5 and red_leaves >= 6 and red_after == 0)
 
 	# the sheep pen is one piece: click a fence post, drag it, and the sheep come too
 	god.set_tool("select")
