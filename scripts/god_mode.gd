@@ -41,6 +41,11 @@ const ROAD_PX := 8 # pixels of the painted road map per metre
 const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1)}
 const TOOLS := [["select", "Select & move"], ["place", "Place"], ["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["erase", "Erase road"]]
 const BRUSH_MAX := 15.0 # metres (radius)
+const SIZE_STEP := 1.1 # how much bigger one press of + makes a thing (and - smaller)
+const SIZE_MIN := 0.2
+const SIZE_MAX := 5.0
+## Extra entries in the Place list: a model at a smaller size to begin with, [model, size, name].
+const SMALL_OPTIONS := [["rock_cluster", 0.5, "Rock cluster (small)"], ["rock_single", 0.5, "Rock (small)"]]
 ## Scenery that is set down turned and sized a little at random, as the code scatters it.
 const NATURAL := ["tree_", "rock_", "bush_", "tuft_", "flowers_", "clover", "leaf_", "maple_"]
 ## Scenery you walk through: it never blocks the way.
@@ -109,7 +114,9 @@ var hover: El
 var tool := "select"
 var brush := 1.2 # metres (radius, or half the side of the square brush)
 var brush_square := false
-var place_id := "" # what the Place tool sets down: "scenery:<model>" or "decor:<catalog id>"
+var place_id := "" # what the Place tool sets down: "scenery:<model>", "scenery:<model>:<size>" or "decor:<catalog id>"
+var place_size := 1.0 # how big the Place tool sets things down (+ and - change it)
+var _size_for := "" # the place_id that place_size was last reset for
 var small_on := true
 var roads_on := false # the layout has painted roads: the code's own paths and cobbles are replaced by the map
 var road_img: Image
@@ -339,6 +346,7 @@ func _apply(el: El) -> void:
 		plots_edited = true
 	if el.kind == "pond" and World.water_mat != null:
 		World.water_mat.set_shader_parameter("centre", el.xf.origin)
+		World.water_mat.set_shader_parameter("radius", 2.0 * _size_of(el))
 	if el.kind == "pen":
 		# the sheep and the field they wander go with the fence
 		var d: Vector3 = el.xf.origin - _pen_at
@@ -463,9 +471,16 @@ func _block_rects(el: El) -> Array:
 			out.append(_turned(Rect2(b.position.x * s.x, b.position.z * s.z, b.size.x * s.x, b.size.z * s.z), _yaw(el.xf), o))
 		return out
 	var turn := _yaw(el.xf) - _yaw(el.base)
+	var f := _size_of(el)
 	for r in el.block_local:
-		out.append(_turned(r, turn, o))
+		out.append(_turned(Rect2((r as Rect2).position * f, (r as Rect2).size * f), turn, o))
 	return out
+
+
+## How big a thing is now: scenery against its model, anything else against how the code built it.
+static func _size_of(el: El) -> float:
+	var s: float = el.xf.basis.get_scale().x
+	return s if el.scenery else s / maxf(el.base.basis.get_scale().x, 0.0001)
 
 
 static func _starts(kind: String, prefixes: Array) -> bool:
@@ -535,7 +550,7 @@ func _sync_beds() -> void:
 func pond_circles() -> Array:
 	if _pond == null:
 		return [Vector3(2.5, -16.0, 2.55)]
-	return [] if _pond.deleted else [Vector3(_pond.xf.origin.x, _pond.xf.origin.z, 2.55)]
+	return [] if _pond.deleted else [Vector3(_pond.xf.origin.x, _pond.xf.origin.z, 2.55 * _size_of(_pond))]
 
 
 ## Worn earth under the crop plots (main.gd's grass mask asks for this).
@@ -620,11 +635,11 @@ func load_layout() -> void:
 		if bool(v.get("del", false)):
 			_set_state(el, el.base, true)
 		else:
-			var b := Basis(Vector3.UP, deg_to_rad(float(v.get("r", 0.0)))) * el.base.basis
+			var b := (Basis(Vector3.UP, deg_to_rad(float(v.get("r", 0.0)))) * el.base.basis).scaled(Vector3.ONE * float(v.get("s", 1.0)))
 			_set_state(el, Transform3D(b, Vector3(float(v.get("x", el.base.origin.x)), el.base.origin.y, float(v.get("z", el.base.origin.z)))), false)
 	for a in d.get("added", []):
 		if Catalog.ITEMS.has(str(a.get("id", ""))):
-			_add_decor(str(a["id"]), Vector3(float(a["x"]), 0, float(a["z"])), deg_to_rad(float(a.get("r", 0.0))))
+			_add_decor(str(a["id"]), Vector3(float(a["x"]), 0, float(a["z"])), deg_to_rad(float(a.get("r", 0.0))), float(a.get("s", 1.0)))
 	if not orphans.is_empty() or not unknown_scenery.is_empty():
 		push_warning("world layout: %d saved changes match nothing in the world now (kept in the file): %s" % [orphans.size() + unknown_scenery.size(), ", ".join(orphans.keys() + unknown_scenery.keys())])
 	if d.has("roads"):
@@ -667,11 +682,16 @@ func layout() -> Dictionary:
 		var o := el.xf.origin
 		if el.added:
 			if not el.deleted:
-				added.append({"id": str(el.node.get("item_id")), "x": snappedf(o.x, 0.001), "z": snappedf(o.z, 0.001), "r": snappedf(rad_to_deg(_yaw(el.xf)), 0.01)})
+				var a := {"id": str(el.node.get("item_id")), "x": snappedf(o.x, 0.001), "z": snappedf(o.z, 0.001), "r": snappedf(rad_to_deg(_yaw(el.xf)), 0.01)}
+				if absf(_size_of(el) - 1.0) > 0.0005:
+					a["s"] = snappedf(_size_of(el), 0.001)
+				added.append(a)
 		elif el.deleted:
 			nodes[el.key] = {"del": true}
 		elif not el.xf.is_equal_approx(el.base):
 			nodes[el.key] = {"x": snappedf(o.x, 0.001), "z": snappedf(o.z, 0.001), "r": snappedf(rad_to_deg(angle_difference(_yaw(el.base), _yaw(el.xf))), 0.01)}
+			if absf(_size_of(el) - 1.0) > 0.0005:
+				nodes[el.key]["s"] = snappedf(_size_of(el), 0.001) # its size, as a multiple of how the code builds it
 	var sc := unknown_scenery.duplicate()
 	for kind in baked:
 		var list: Array = []
@@ -996,7 +1016,7 @@ func duplicate_selected() -> El:
 	if src.scenery:
 		el = _add_scenery(src.kind, Transform3D(src.xf.basis, at), src.tint)
 	elif src.node is Furniture:
-		el = _add_decor(str(src.node.get("item_id")), at, _yaw(src.xf))
+		el = _add_decor(str(src.node.get("item_id")), at, _yaw(src.xf), _size_of(src))
 	else:
 		main.hud.show_toast("The %s is one of a kind: it can be moved, turned or deleted, not copied." % src.title.to_lower())
 		return null
@@ -1063,6 +1083,9 @@ func place_options() -> Array:
 			if _starts(m, group[1]):
 				out.append(["scenery:" + m, TITLES.get(m, str(m).capitalize()), group[0]])
 				models.erase(m)
+				for small in SMALL_OPTIONS:
+					if small[0] == m:
+						out.append(["scenery:%s:%s" % [m, str(small[1])], small[2], group[0]])
 	var decor: Array = []
 	for id in Catalog.ITEMS:
 		if Catalog.has_builder(id):
@@ -1090,12 +1113,14 @@ func place(at: Vector3) -> El:
 func _place_one(at: Vector3, changed: Array) -> El:
 	if place_id == "":
 		place_id = str(place_options()[0][0])
+	if place_id != _size_for:
+		_next_look() # a different thing than the preview was made for: start from its own size
 	var what := place_id.get_slice(":", 1)
 	var el: El
 	if place_id.begins_with("decor:"):
 		if not Catalog.ITEMS.has(what):
 			return null
-		el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw)
+		el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale)
 	else:
 		if not _ensure_kind(what):
 			main.hud.show_toast("There's no model for that.")
@@ -1116,11 +1141,15 @@ func _ghost_xf(at: Vector3) -> Transform3D:
 ## Natural scenery (trees, rocks, plants, leaves) gets a new turn and size for each one set down,
 ## as the code scatters it; everything else keeps the turn it was given with R and T.
 func _next_look() -> void:
+	if place_id != _size_for:
+		# a new choice starts at its own size: 1, or what a "(small)" entry names
+		_size_for = place_id
+		place_size = float(place_id.get_slice(":", 2)) if place_id.get_slice_count(":") > 2 else 1.0
 	if place_id.begins_with("scenery:") and _starts(place_id.get_slice(":", 1), NATURAL):
 		_ghost_yaw = randf() * TAU
-		_ghost_scale = randf_range(0.9, 1.15)
+		_ghost_scale = place_size * randf_range(0.9, 1.15)
 	else:
-		_ghost_scale = 1.0
+		_ghost_scale = place_size
 
 
 ## Builds the Place tool's preview: the chosen thing itself, see-through with a green outline.
@@ -1182,13 +1211,45 @@ func turn(degrees: float) -> void:
 		rotate_selected(degrees)
 
 
+## + makes it bigger and - smaller: the preview (and all that follow) while placing, otherwise
+## the selected thing.
+func resize(factor: float) -> void:
+	if tool == "place":
+		var to := clampf(place_size * factor, SIZE_MIN, SIZE_MAX)
+		_ghost_scale *= to / place_size
+		place_size = to
+		if _ghost != null:
+			_move_ghost(_ghost.global_position)
+		_show_status()
+	else:
+		resize_selected(factor)
+
+
+func resize_selected(factor: float) -> void:
+	if selected == null or selected.deleted:
+		return
+	if selected.kind == "pen":
+		main.hud.show_toast("The sheep pen keeps its size: the sheep's field is tied to it.")
+		return
+	var now := _size_of(selected)
+	var f := clampf(now * factor, SIZE_MIN, SIZE_MAX) / now
+	if absf(f - 1.0) < 0.0001:
+		return
+	var from := selected.xf
+	selected.xf.basis = selected.xf.basis.scaled(Vector3.ONE * f)
+	if selected.kind.begins_with("rock_"):
+		selected.xf.origin.y = -0.03 * _size_of(selected) # rocks sit a little into the ground
+	_measure(selected)
+	_edited(selected, from, false)
+
+
 ## How far apart a stream sets things down along `dir`: the length of the thing's footprint that
 ## way, so fences and hedges dragged along their length join end to end.
 func _stream_spacing(dir: Vector2) -> float:
 	var size := Vector2(0.5, 0.5)
 	var what := place_id.get_slice(":", 1)
 	if place_id.begins_with("decor:"):
-		size = Catalog.ITEMS[what]["size"]
+		size = (Catalog.ITEMS[what]["size"] as Vector2) * _ghost_scale
 	elif templates.has(what):
 		var b: AABB = (templates[what]["mesh"] as Mesh).get_aabb()
 		size = Vector2(b.size.x, b.size.z) * _ghost_scale
@@ -1240,12 +1301,13 @@ func _end_stream() -> void:
 		_refresh(s["changed"])
 
 
-func _add_decor(id: String, at: Vector3, yaw: float) -> El:
+func _add_decor(id: String, at: Vector3, yaw: float, size := 1.0) -> El:
 	main._decor(id, at, 0)
 	var f: Furniture = main.decor[-1]
 	var el := _collect_node(f, "decor_" + id, f.display_name(), [] if f.is_flat() else [f.footprint()])
 	el.added = true
-	_set_state(el, Transform3D(Basis(Vector3.UP, yaw), at), false)
+	_set_state(el, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * size), at), false)
+	_measure(el)
 	return el
 
 
@@ -1284,6 +1346,14 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 			turn(TURN_STEP) # left
 		KEY_T:
 			turn(-TURN_STEP) # right
+		KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
+			if cmd:
+				return false
+			resize(SIZE_STEP)
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			if cmd:
+				return false
+			resize(1.0 / SIZE_STEP)
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
 			delete_selected()
 		KEY_Z:
@@ -1672,11 +1742,11 @@ func _show_status() -> void:
 	var s := ""
 	if tool == "select":
 		if selected != null:
-			s = "%s selected. Drag to move (Shift snaps to 25 cm). R turns it left, T right. Delete removes it, Ctrl/Cmd+D copies it." % selected.title
+			s = "%s selected. Drag to move (Shift snaps to 25 cm). R / T turn it, + / - resize it (now %d%%). Delete removes it, Ctrl/Cmd+D copies it." % [selected.title, roundi(_size_of(selected) * 100.0)]
 		else:
 			s = "Click anything to select it, then drag it. Right-drag or WASD moves the camera, the wheel zooms."
 	elif tool == "place":
-		s = "Click to set one down; hold and drag for a stream of them (Shift keeps it straight). R turns the preview left, T right. Ctrl/Cmd+Z undoes."
+		s = "Click to set one down; hold and drag for a stream (Shift keeps it straight). R / T turn the preview, + / - resize it (now %d%%). Ctrl/Cmd+Z undoes." % roundi(place_size * 100.0)
 	elif tool == "erase":
 		s = "Drag over a road or the paving to rub it out. Hold Shift for a straight line. [ and ] change the brush size."
 	else:
@@ -1761,6 +1831,8 @@ func _build_ui() -> void:
 	row2.add_child(hud._button("Turn left (R)", func(): turn(TURN_STEP)))
 	row2.add_child(hud._button("Turn right (T)", func(): turn(-TURN_STEP)))
 	row2.add_child(hud._button("Copy", func(): duplicate_selected()))
+	row2.add_child(hud._button("Smaller (-)", func(): resize(1.0 / SIZE_STEP)))
+	row2.add_child(hud._button("Bigger (+)", func(): resize(SIZE_STEP)))
 	row2.add_child(hud._button("Delete", func(): delete_selected()))
 	vb.add_child(row2)
 	row2 = HBoxContainer.new()

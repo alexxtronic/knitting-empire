@@ -3051,6 +3051,8 @@ func _god_checks() -> void:
 	var lamp_turn := rad_to_deg(angle_difference(GodMode._yaw(lamp.base), GodMode._yaw(lamp.xf)))
 	_check("god mode: R turns the selected thing 15 degrees to the left a press and T to the right (%.1f degrees after three Rs, %.1f after a T)" % [turned_left, lamp_turn],
 		absf(turned_left - 45.0) < 0.1 and absf(lamp_turn - 30.0) < 0.1)
+	await _key_tap(KEY_EQUAL) # + makes it a tenth bigger
+	var lamp_size: float = GodMode._size_of(lamp)
 	var copy: GodMode.El = god.duplicate_selected()
 	_check("god mode: Copy sets a second lamp post down beside it", copy != null and copy.added and copy.node.visible and god.selected == copy and decor.has(copy.node))
 
@@ -3234,6 +3236,23 @@ func _god_checks() -> void:
 	_check("god mode: R and T turn the preview and the thing is set down that way (preview %.0f, fence %.0f degrees); holding the button streams them out: %d fences joined end to end %s, %d red leaves, all gone after one Undo (%d left)" % [preview_turn, fence_yaw, row.size(), joined, red_leaves, red_after],
 		absf(preview_turn + 15.0) < 0.1 and absf(fence_yaw + 15.0) < 0.1 and joined and row.size() <= 5 and red_leaves >= 6 and red_after == 0)
 
+	# + and - resize the selected thing and the preview; the list has small rocks ready-made
+	god.place_id = "scenery:rock_single:0.5"
+	god.set_tool("place")
+	var small_start: float = god.place_size
+	await _key_tap(KEY_MINUS)
+	var small_set: float = god.place_size
+	var small_rock: GodMode.El = god.place(Vector3(33.0, 0, 13.5))
+	var rock_size: float = GodMode._size_of(small_rock)
+	god.set_tool("select")
+	god.select(small_rock)
+	await _key_tap(KEY_EQUAL)
+	await _key_tap(KEY_EQUAL)
+	var rock_grown: float = GodMode._size_of(small_rock)
+	_check("god mode: + and - resize things: the lamp post grew to %.0f%%; \"Rock (small)\" and \"Rock cluster (small)\" are in the Place list at half size (%.0f%%, %.0f%% after a -), the rock was set down at %.0f%% and two + made it %.0f%%" % [lamp_size * 100.0, small_start * 100.0, small_set * 100.0, rock_size * 100.0, rock_grown * 100.0],
+		absf(lamp_size - 1.1) < 0.001 and ids.has("scenery:rock_cluster:0.5") and ids.has("scenery:rock_single:0.5") and absf(small_start - 0.5) < 0.001 and absf(small_set - 0.5 / 1.1) < 0.001
+		and rock_size > small_set * 0.89 and rock_size < small_set * 1.16 and absf(rock_grown / rock_size - 1.21) < 0.01)
+
 	# the sheep pen is one piece: click a fence post, drag it, and the sheep come too
 	god.set_tool("select")
 	var pen: GodMode.El = god.by_key.get("pen@20.00,-1.00")
@@ -3273,7 +3292,7 @@ func _god_checks() -> void:
 		not god.active and Game.time_running and saved_ok and real_before == real_after and hud.chrome.any(func(c): return c.visible))
 	# the last step: the whole scene again, built from that layout
 	Engine.set_meta("ke_god_reload", {"lamp": lamp.key, "lamp_at": lamp.xf.origin, "lamp_turn": lamp_turn, "bale": bale.key, "copy_at": copy.xf.origin,
-		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": rocks0 + 1, "bushes": bushes0 - 1, "patch": patch,
+		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": god.scenery["rock_single"].filter(func(e): return not e.deleted).size(), "bushes": bushes0 - 1, "lamp_size": lamp_size, "patch": patch,
 		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1})
 	get_tree().reload_current_scene()
 
@@ -3291,6 +3310,7 @@ func _god_reload_checks() -> void:
 	var copy_at: Vector3 = want["copy_at"]
 	_check("saved layout: the lamp post is where it was dragged and turned, its copy stands beside it and the hay bale is gone (lamp %.2f m off, turned %.1f, %d copy)" % [lamp.node.global_position.distance_to(lamp_at), turn, copies.size()],
 		lamp.node.global_position.distance_to(lamp_at) < 0.01 and absf(turn - float(want["lamp_turn"])) < 0.1 and not _walkable(_cell(lamp_at))
+		and absf(GodMode._size_of(lamp) - float(want["lamp_size"])) < 0.01 and absf(lamp.node.scale.x - float(want["lamp_size"])) < 0.01
 		and copies.size() == 1 and copies[0].node.global_position.distance_to(copy_at) < 0.01 and not bale.node.visible and _walkable(_cell(bale.base.origin)))
 	var kind: String = want["tree_kind"]
 	var tree_at: Vector3 = want["tree_at"]
