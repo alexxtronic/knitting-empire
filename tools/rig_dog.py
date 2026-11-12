@@ -351,21 +351,39 @@ for poly in me.polygons:
     for vi, li in zip(poly.vertices, poly.loop_indices):
         vuv.setdefault(vi, me.uv_layers.active.data[li].uv.copy())
 neck_z = J["Neck"].z - 0.03 * S
-scarf = 0
+cand = set()
 for v in me.vertices:
     uv = vuv.get(v.index)
     if uv is None or (v.co - J["Head"]).dot(HEAD_N) > -HEAD_FADE:
         continue
-    i = (min(ch - 1, int(uv.y * ch)) * cw + min(cw - 1, int(uv.x * cw))) * 4
-    r, g, b = cpx[i], cpx[i + 1], cpx[i + 2]
-    if not (r > 0.25 and g < 0.45 * r and b < 0.45 * r) and not (r > 0.6 and g > 0.55 and b > 0.4 and v.co.z < neck_z):  # red wool, or the tails' cream stripes
-        continue
     if v.co.y > J["Neck"].y + 0.1 * S:  # nothing past the shoulders is scarf
         continue
+    i = (min(ch - 1, int(uv.y * ch)) * cw + min(cw - 1, int(uv.x * cw))) * 4
+    r, g, b = cpx[i], cpx[i + 1], cpx[i + 2]
+    if r > 0.25 and g < 0.45 * r and b < 0.45 * r:  # red wool
+        cand.add(v.index)
+# The tails' snowflakes and stripes are cream, and their edges blend: close the red selection over
+# the mesh (grow it four rings, then shrink it four), so every stitch inside the scarf comes along.
+adj = {}
+for e in me.edges:
+    a0, b0 = e.vertices
+    adj.setdefault(a0, []).append(b0)
+    adj.setdefault(b0, []).append(a0)
+allowed = {v.index for v in me.vertices if (v.co - J["Head"]).dot(HEAD_N) <= -HEAD_FADE and v.co.y <= J["Neck"].y + 0.1 * S}
+grown = set(cand)
+for _ in range(4):
+    grown |= {n for i in grown for n in adj.get(i, ()) if n in allowed}
+closed = set(grown)
+for _ in range(4):
+    closed = {i for i in closed if all(n in closed for n in adj.get(i, ()))}
+sel = closed | cand
+scarf = 0
+for vi in sel:
+    v = me.vertices[vi]
     bone_name = "Neck" if v.co.z > neck_z else "Spine1"
     for g2 in v.groups:
         g2.weight = 0.0
-    groups[bone_name].add([v.index], 1.0, "REPLACE")
+    groups[bone_name].add([vi], 1.0, "REPLACE")
     scarf += 1
 print("SCARF %d vertices bound rigid (wrap to Neck, tails to Spine1)" % scarf)
 for v in me.vertices:  # normalise, and drop what's too faint to matter

@@ -35,6 +35,14 @@
   5. Scarf wrap pinched into a wedge by the shoulders → scarf bound rigid (wrap to Neck, tails to Spine1)
   6. Idle stance staggered (minor, from the paw shapes): left
   7. A smoother patch of fur behind the scarf tails at the cut (minor, hidden at game distance): left
+- Motion round 2 (a new reviewer; review/motion2_*.jpg, review/round2_cut_closeup.png): four legs everywhere, the cut clean, the walk upright, the run reads as a gallop
+  1. The scarf tails crumple into a streaked knot whenever a foreleg swings forward (blocking): the colour test found the red wool but not the cream snowflakes and stripes, which stayed on the leg → the red selection closed over the mesh (grown four rings, shrunk four) so every stitch of the tails is bound rigid
+  2. Gallop torso stiff, no frame with all four paws off the ground (minor): left
+  3. The neck wrap looks pinched from the side (minor): left (helped by 1)
+  4. Tail and ears still in Walk and Trot; Idle stands in a half step (minor): left
+  5. A hairline crease at the shoulder in one gallop frame, probably the cut (minor): left
+  6. Walk and Trot look alike from the side; the trot's hind leg trails long (minor): left
+  7. Golden fur close to the orange floor indoors (minor, the game's lighting): left
 - Earlier own rounds: the first loops crouched like a cat stalking (the body kept at its rest height, the steps too long) → each loop now finds its height; the cut showed scarf red and leg shading at its rim → the patch widened and coloured from golden fur only
 
 ## In the game
