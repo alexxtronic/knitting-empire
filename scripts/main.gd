@@ -103,6 +103,7 @@ var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
 var ai: AiChat # typed chat with villagers, voiced by Claude
+var minimap: Minimap # the map under the coins (minimap.gd): click it to walk there
 var chat_v = null # the villager you're chatting with
 var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
@@ -263,6 +264,9 @@ func _ready() -> void:
 	cinema = Cinematic.new()
 	cinema.main = self
 	add_child(cinema)
+	minimap = Minimap.new()
+	minimap.main = self
+	hud.add_minimap(minimap)
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -1001,6 +1005,7 @@ func _process(delta: float) -> void:
 	_update_story_staging(delta)
 	_update_needs(delta)
 	_update_gaze()
+	_update_hold(delta)
 	_update_chat()
 	_update_tips(delta)
 	if Game.hour >= 24.0 and not sleeping:
@@ -1199,6 +1204,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			_pan_camera(Vector2(-mm.relative.x, -mm.relative.y) * 0.03 * cam_dist / 23.0)
 		if ghost:
 			_update_ghost(mm.position)
+				else:
+					hold_release()
 		else:
 			_update_hover(mm.position)
 	elif e is InputEventGesture and _is_repeat_gesture(e as InputEventGesture):
@@ -1409,10 +1416,82 @@ func _live_click(mpos: Vector2) -> void:
 
 var _rclick_from := Vector2(-999, -999)
 
+		_hold_t = 0.0 # held down, he keeps going the way the mouse points (_update_hold)
 
 ## A right click: the ring of what she can do there. On a thing, its own actions; on open
 ## ground, walking there and (with her hoe) digging a bed. Beds are only ever dug from here, so a
 ## plain click never turns the lawn over by accident.
+		_hold_t = 0.0
+
+
+# --- walking: a click on the map, or the mouse held down -----------------------------------
+
+const HOLD_AFTER := 0.22 # s the button must stay down before a click becomes steering
+const HOLD_AHEAD := 2.5 # m: while steering she always heads for a point this far toward the mouse
+var _hold_t := -1.0 # s the left button has been down after a click on open ground; -1 when it isn't
+var _hold_steering := false
+var _hold_repath := 0.0
+
+
+## Who a click on the ground moves: the dog while the player steers him (Tab), else Nora.
+func _walker() -> Node3D:
+	return dog if dog and dog.controlled else player
+
+
+## A click on the minimap: she (or the dog) walks to that spot of the world. True if they set off.
+func minimap_walk(g: Vector3) -> bool:
+	if sleeping or story.is_playing() or title_on or knit.active or cinema.active or god.active or mode != Mode.LIVE:
+		return false
+	hud.hide_menu()
+	hud.hide_dialogue()
+	var w := _walker()
+	var p := _find_path(w.position, g)
+	if p.is_empty():
+		return false
+	w.walk(p)
+	_click_marker(g)
+	return true
+
+
+## The left button came up: if she was being steered she stops where she is; a quick click just
+## carries on to where it was sent.
+func hold_release() -> void:
+	if _hold_steering:
+		_walker().walk([])
+	_hold_t = -1.0
+	_hold_steering = false
+
+
+## While the button stays down after a click on open ground, she walks the way the mouse points
+## from her, until it comes up.
+func _update_hold(delta: float) -> void:
+	if _hold_t < 0.0:
+		return
+	if _autotest_dir == "" and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		hold_release() # the button came up over a panel, where we never heard of it
+		return
+	if sleeping or story.is_playing() or title_on or knit.active or cinema.active or god.active or mode != Mode.LIVE or hud.is_menu_open():
+		_hold_t = -1.0
+		_hold_steering = false
+		return
+	_hold_t += delta
+	if _hold_t < HOLD_AFTER:
+		return
+	_hold_steering = true
+	_hold_repath -= delta
+	if _hold_repath > 0.0:
+		return
+	_hold_repath = 0.12
+	var w := _walker()
+	var g = _ground_point(_last_mouse)
+	if g == null:
+		return
+	var d := Vector3(g.x - w.position.x, 0, g.z - w.position.z)
+	if d.length() < 0.6:
+		w.walk([]) # the mouse is on her: she waits there
+		return
+	var to := w.position + d.normalized() * HOLD_AHEAD
+	w.walk(_find_path(w.position, to))
 func _right_click(mpos: Vector2) -> void:
 	var t = _ray_target(mpos)
 	if t != null:
@@ -3610,6 +3689,12 @@ func _autotest() -> void:
 	await _wait(0.4)
 	_check("action menu opens on rocking chair as a ring (%s)" % str(hud.pie.labels()), hud.is_menu_open() and hud.pie.labels().size() == 2)
 	await _shot("02_menu.png")
+	if "--only=minimap" in OS.get_cmdline_user_args(): # just the minimap and walking by holding the mouse down
+		await _wait(1.5)
+		await _minimap_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	hud.hide_menu()
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
 	await _face_checks()
@@ -3791,6 +3876,7 @@ func _light_checks() -> void:
 	var missing: Array = []
 	for id in Lighting.BAKED:
 		var path := "res://assets/props/%s.glb" % id
+	await _minimap_checks()
 		if not ResourceLoader.exists(path):
 			missing.append(id + " (no model)")
 			continue
@@ -5233,7 +5319,9 @@ func _minimap_checks() -> void:
 		hi = maxf(hi, c.get_luminance())
 	_check("it shows the world from above, not a blank square (brightness %.2f..%.2f)" % [lo, hi], hi - lo > 0.08)
 	await _shot("50_minimap.png")
-	var crop := get_viewport().get_texture().get_image().get_region(Rect2i(Vector2i(r.position) - Vector2i(8, 60), Vector2i(r.size) + Vector2i(16, 68)))
+	var full := get_viewport().get_texture().get_image()
+	var k := float(full.get_width()) / vw.x # the HUD is laid out in its own units; the picture is in pixels
+	var crop := full.get_region(Rect2i(Vector2i((r.position - Vector2(8, 60)) * k), Vector2i((r.size + Vector2(16, 68)) * k)))
 	crop.save_png(_autotest_dir.path_join("50_minimap_close.png"))
 	# a click on it walks her there
 	var goal := Vector3(10.5, 0, 6.5)
@@ -5254,16 +5342,16 @@ func _minimap_checks() -> void:
 	mm.set_zoom(-1)
 	# held down: she walks the way the mouse points until it comes up
 	player.walk([])
-	player.position = Vector3(4.6, 0, 4.9)
+	player.position = Vector3(10.5, 0, 6.5) # out on the grass, clear of the house walls
 	await _wait(0.6)
 	var p0 := player.position
-	var aim := Vector3(9.6, 0, 4.9) # 5 m east of her
+	var aim := Vector3(10.5, 0, 11.5) # 5 m south of her
 	_last_mouse = cam.unproject_position(aim)
 	_live_click(_last_mouse)
 	await _wait(1.8)
 	var gone := player.position - p0
-	_check("held down on the ground, she keeps walking toward the mouse (steering %s, %.1f m east)" % [_hold_steering, gone.x],
-		_hold_steering and gone.x > 1.2 and absf(gone.z) < 1.0)
+	_check("held down on the ground, she keeps walking toward the mouse (steering %s, %.1f m south, %.1f m off to the side)" % [_hold_steering, gone.z, gone.x],
+		_hold_steering and gone.z > 1.2 and absf(gone.x) < gone.z * 0.5)
 	await _shot("50_hold_walk.png")
 	hold_release()
 	await _wait(0.3)
@@ -5272,7 +5360,7 @@ func _minimap_checks() -> void:
 	_check("let go and she stops where she is (%.2f m more, path %d)" % [player.position.distance_to(p1), player.path.size()],
 		player.position.distance_to(p1) < 0.25 and player.path.is_empty())
 	# a quick click still walks her all the way
-	_last_mouse = cam.unproject_position(player.position + Vector3(0, 0, 3.0))
+	_last_mouse = cam.unproject_position(player.position + Vector3(0, 0, -3.0)) # back the way she came
 	_live_click(_last_mouse)
 	await _wait(0.05)
 	hold_release()

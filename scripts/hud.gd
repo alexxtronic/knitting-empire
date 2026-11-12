@@ -217,6 +217,7 @@ var god_freeze_check: CheckButton
 var god_edit_check: CheckButton
 var god_edit_note: Label
 var fps_label: Label
+var minimap: Minimap # under the coins (minimap.gd); main.gd makes it and hands it over with add_minimap
 var _fps_t := 0.0
 var music_slider: HSlider
 var sound_slider: HSlider
@@ -532,6 +533,17 @@ func _build_resources() -> void:
 	fps_label.visible = false
 	root.add_child(fps_label)
 	_place(fps_label, 1.0, 0.0, Vector2(20, 58))
+
+
+## The little map, under the coins; the frames-per-second line moves down below it.
+func add_minimap(m: Minimap) -> void:
+	minimap = m
+	root.add_child(m)
+	_place(m, 1.0, 0.0, Vector2(16 + Minimap.SIZE, 70))
+	m.offset_right = m.offset_left + Minimap.SIZE
+	m.offset_bottom = m.offset_top + Minimap.SIZE
+	chrome.append(m)
+	_place(fps_label, 1.0, 0.0, Vector2(20, 76 + Minimap.SIZE))
 
 
 ## What used to be the left-hand column, opened by the Menu button or Esc.
