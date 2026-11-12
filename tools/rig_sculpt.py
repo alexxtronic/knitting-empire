@@ -30,6 +30,7 @@ PROJECT, PLY, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[
 FACES = int(argv[argv.index("--faces") + 1]) if "--faces" in argv else 24000
 TEX = int(argv[argv.index("--tex") + 1]) if "--tex" in argv else 2048
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
+COAT = float(argv[argv.index("--coat") + 1]) if "--coat" in argv else 0.0  # nearest-bone weights: jacket length below the hips
 
 scene = bpy.context.scene
 rig = next(o for o in scene.objects if o.type == "ARMATURE")
@@ -70,7 +71,9 @@ V = np.array([v.co[:] for v in hi.data.vertices])
 z0, h = V[:, 2].min(), V[:, 2].max() - V[:, 2].min()
 s = head_top / h
 torso = V[(V[:, 2] - z0 > 0.59 * h) & (V[:, 2] - z0 < 0.73 * h)]
-cx, cy = np.median(torso[:, 0]), np.median(torso[:, 1])
+# x from the middle of the slice's outline, not the median vertex: dense detail on one side (a badge
+# on the chest) would pull a median off the body's centre line
+cx, cy = 0.5 * sum(np.percentile(torso[:, 0], (2, 98))), np.median(torso[:, 1])
 hi.data.transform(Matrix.Diagonal((s, s, s, 1)) @ Matrix.Translation((-cx, -cy, -z0)))
 hi.data.update()
 print("SCULPT scale", round(s, 4), "verts", len(hi.data.vertices))
@@ -225,6 +228,63 @@ bpy.ops.object.parent_set(type="ARMATURE_AUTO")
 print("WEIGHTS groups", len(lo.vertex_groups))
 
 
+def nearest_bone_weights():
+    """Bone heat fails on meshes made of many loose shells (Tripo's Clean Topology: jacket, shirt and
+    trousers as separate pieces), leaving skin bound to nothing and whole bones unbound. Then bind every
+    vertex to its nearest bones instead: weight 1/d^5 to the bone segments, a left bone only on the left
+    of the body and a right one only on the right, the three strongest kept, then smoothed along the mesh."""
+    deform = [b.name for b in temp.data.bones if b.use_deform]
+    D = np.stack([seg_dist(L, *seg[b]) for b in deform], axis=1)
+    W = 1.0 / (D + 0.004) ** 5
+    for k, b in enumerate(deform):
+        if b.startswith("Left"):
+            W[L[:, 0] < -0.01, k] = 0.0
+        elif b.startswith("Right"):
+            W[L[:, 0] > 0.01, k] = 0.0
+    W[W < np.sort(W, axis=1)[:, -3][:, None]] = 0.0
+    W /= W.sum(axis=1, keepdims=True)
+    if COAT:  # a long jacket hangs from the hips: the thighs' pull fades out over COAT metres below the hip joint
+        crotch = seg["LeftUpperLeg"][0][2]
+        keep = np.clip((crotch - 0.02 - L[:, 2]) / COAT, 0.0, 1.0)
+        hips = deform.index("Hips")
+        for k, b in enumerate(deform):
+            if b.endswith("UpperLeg"):
+                W[:, hips] += W[:, k] * (1.0 - keep)
+                W[:, k] *= keep
+    E = np.array([e.vertices[:] for e in lo.data.edges])
+    deg = np.bincount(E.ravel(), minlength=len(L)).astype(float)[:, None]
+    for _ in range(4):  # smooth along the mesh, so joints bend rather than crease
+        acc = np.zeros_like(W)
+        np.add.at(acc, E[:, 0], W[E[:, 1]])
+        np.add.at(acc, E[:, 1], W[E[:, 0]])
+        W = np.where(deg > 0, 0.5 * W + 0.5 * acc / np.maximum(deg, 1), W)
+    W[W < 0.01] = 0.0
+    W /= W.sum(axis=1, keepdims=True)
+    for b in deform:
+        g = lo.vertex_groups.get(b) or lo.vertex_groups.new(name=b)
+        g.remove(list(range(len(L))))
+    for k, b in enumerate(deform):
+        g = lo.vertex_groups[b]
+        for i in np.where(W[:, k] > 1e-3)[0]:
+            g.add([int(i)], float(W[i, k]), "REPLACE")
+
+
+def heat_failed():
+    names = {g.index: g.name for g in lo.vertex_groups}
+    bare, used = 0, set()
+    for v in lo.data.vertices:
+        gs = [g for g in v.groups if g.weight > 1e-4]
+        if not gs:
+            bare += 1
+        else:
+            used.add(names[max(gs, key=lambda g: g.weight).group])
+    limbs = [s + b for s in ("Left", "Right") for b in ("LowerLeg", "Foot", "LowerArm", "Hand")]
+    missing = [b for b in limbs if b not in used]
+    print("HEAT bare verts", bare, "of", len(L), "limb bones with no skin", missing)
+    return bare > 0.005 * len(L) or bool(missing)
+
+
+
 def seg_dist(P, a, b):
     ab = b - a
     t = np.clip(((P - a) @ ab) / max(ab @ ab, 1e-9), 0.0, 1.0)
@@ -248,6 +308,10 @@ def geodesic(seeds, adj, n):
                 heapq.heappush(q, (di + w, j))
     return d
 
+
+if "--nearest-weights" in argv or heat_failed():
+    nearest_bone_weights()
+    print("WEIGHTS nearest-bone fallback")
 
 # Automatic weights go by straight-line distance, so where a hand rests against a thigh or a forearm
 # against the sweater, skin of one is bound to the other's bones and the arm sinks into the body when
