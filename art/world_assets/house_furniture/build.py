@@ -3,8 +3,10 @@
 spinning wheel, dining table, bookshelf, wardrobe, floor lamp and potted fern. Each stands in for a
 box model in scripts/catalog.gd, on the same footprint (data/furniture.json), facing the same way.
 
-The references (ref/<id>.png) were made in ChatGPT, one per piece, on white. Wood, cloth, plaid and
+The references (ref/<id>.png) were made in ChatGPT, one per piece, on white. Wood, cloth and
 straw-like textures are the small painterly maps of craftlib; iron, brass, glass and flames are flat colours.
+The tartan's wool (fibre speckle and woven relief) comes from two Poly Haven fabric scans (CC0, in
+../textures_web), and the sofa's throw is draped over it with Blender's cloth simulation.
 
     Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/house_furniture/build.py [-- id ...]
 
@@ -30,6 +32,9 @@ ITEM = ""
 TEX = ""
 M = {}
 SEAT = 0.42   # the top of every seat cushion
+WEB = os.path.join(os.path.dirname(HERE), "textures_web")
+WOOL_SPECKLE = 3.0   # how strongly the wool scan's fibres show in the tartan's colour
+WOOL_RELIEF = 1.2    # the strength of the tartan's woven normal map
 
 
 # --- materials ---------------------------------------------------------------------------------------
@@ -41,11 +46,25 @@ def wood(key="wood", base="#d07a32", light="#eb9a4f", dark="#a2551e", seams=0, k
     return M[key]
 
 
+def web_map(rel, n=512, data=False):
+    """A downloaded fabric scan (../textures_web, Poly Haven, CC0) as a float array (n, n, 3),
+    row 0 at the top, squeezed to a square that still tiles."""
+    img = bpy.data.images.load(os.path.join(WEB, rel))
+    if data:
+        img.colorspace_settings.name = "Non-Color"
+    img.scale(n, n)
+    px = np.empty(n * n * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    bpy.data.images.remove(img)
+    return px.reshape(n, n, 4)[::-1, :, :3].copy()
+
+
 def plaid():
     """Red tartan as in the references: broad darker bands both ways, thin cream lines between them
-    and a fine gold line down the middle of each band."""
+    and a fine gold line down the middle of each band. Woven wool: the fibre speckle is a herringbone
+    wool scan's and the relief a boucle wool's."""
     if "plaid" not in M:
-        n = 256
+        n = 512
         yy, xx = np.mgrid[0:n, 0:n]
         u, v = xx / n, yy / n
 
@@ -55,14 +74,16 @@ def plaid():
         band = np.clip((lines(u, (0.25, 0.75), 0.075) + lines(v, (0.25, 0.75), 0.075)) * 0.6, 0, 1)
         cream = np.clip(lines(u, (0.0, 0.5), 0.014) + lines(v, (0.0, 0.5), 0.014), 0, 1)
         gold = np.clip(lines(u, (0.25, 0.75), 0.009) + lines(v, (0.25, 0.75), 0.009), 0, 1)
-        weave = K.tile_noise(n, 0.4, 5)
+        fibre = web_map("poly_wool_herringbone/poly_wool_herringbone_diff_1k.jpg", n).mean(axis=2)
+        fibre = np.clip(1.0 + (fibre / fibre.mean() - 1.0) * WOOL_SPECKLE, 0.72, 1.25)
+        soft = K.tile_noise(n, 1.3, 5)
         rgb = CL.mix(CL.C("#cc4433"), CL.C("#8f2319"), band[..., None])
         rgb = CL.mix(rgb, CL.C("#f3dfae"), cream[..., None] * 0.9)
         rgb = CL.mix(rgb, CL.C("#e9a93c"), gold[..., None] * 0.6)
-        rgb = rgb * (0.93 + 0.14 * weave[..., None])
+        rgb = rgb * fibre[..., None] * (0.95 + 0.1 * soft[..., None])
         i = K.save_image(ITEM + "_plaid", rgb, TEX)
-        nm = K.save_image(ITEM + "_plaid_n", K.normal_from_height(weave * 0.5, 1.5), TEX)
-        M["plaid"] = K.textured(ITEM + "_plaid", i, rough=0.95, normal=nm, normal_strength=0.8)
+        nm = K.save_image(ITEM + "_plaid_n", web_map("wool_boucle/wool_boucle_nor_gl_1k.jpg", n, data=True), TEX)
+        M["plaid"] = K.textured(ITEM + "_plaid", i, rough=1.0, normal=nm, normal_strength=WOOL_RELIEF)
     return M["plaid"]
 
 
@@ -143,6 +164,111 @@ def candle(x, y, z, h=0.16):
     ball("flame", 0.02, (x, y, z + 0.04 + h), flat("flame", "#ffc24a", 0.4, emit=3.0), scale=(1, 1, 1.9), u=8, v=6)
 
 
+def drape(name, size, centre, yaw, mat, cell=0.025, frames=90, tris=900, uv_scale=3.2, fringe=18, tassel=0.1, floor=None):
+    """A blanket of size (x, y) dropped flat from `centre` (turned `yaw` degrees) onto everything
+    built so far and left to settle by cloth simulation, then cut down to about `tris` triangles,
+    given a turned-under hem and a fringe along its two short ends."""
+    sc = bpy.context.scene
+    nx, ny = round(size[0] / cell), round(size[1] / cell)
+    rz = Matrix.Rotation(math.radians(yaw), 3, "Z")
+    rng = random.Random(7)
+    verts, uvs_v = [], []
+    for j in range(ny + 1):
+        for i in range(nx + 1):
+            lx, ly = (i / nx - 0.5) * size[0], (j / ny - 0.5) * size[1]
+            verts.append(Vector(centre) + rz @ Vector((lx, ly, rng.uniform(-0.004, 0.004))))
+            uvs_v.append((lx * uv_scale, ly * uv_scale))
+    faces, uvs = [], []
+    for j in range(ny):
+        for i in range(nx):
+            f = (i + j * (nx + 1), i + 1 + j * (nx + 1), i + 1 + (j + 1) * (nx + 1), i + (j + 1) * (nx + 1))
+            faces.append(f)
+            uvs.extend(uvs_v[k] for k in f)
+    solids = [o for o in K.COLL.objects if o.type == "MESH"]
+    for o in solids:
+        o.modifiers.new("hit", "COLLISION")
+        o.collision.thickness_outer = 0.012
+        o.collision.cloth_friction = 60.0
+        o.collision.damping = 0.9
+    ob = CL._finish_mesh(name, verts, faces, uvs, mat, recalc=False)
+    c = ob.modifiers.new("cloth", "CLOTH")
+    st, cs = c.settings, c.collision_settings
+    st.quality = 10
+    st.mass = 0.25
+    st.tension_stiffness = st.compression_stiffness = 12.0
+    st.shear_stiffness = 4.0
+    st.bending_stiffness = 0.25     # a soft wool blanket: it folds rather than tents
+    st.tension_damping = st.compression_damping = st.shear_damping = 6.0
+    st.bending_damping = 0.6
+    st.air_damping = 2.0
+    cs.collision_quality = 5
+    cs.distance_min = 0.012
+    cs.use_self_collision = True
+    cs.self_distance_min = 0.008
+    c.point_cache.frame_start, c.point_cache.frame_end = 1, frames
+    sc.frame_start, sc.frame_end = 1, frames
+    for f in range(1, frames + 1):
+        sc.frame_set(f)
+    K.apply_mods(ob)
+    for o in solids:
+        o.modifiers.remove(o.modifiers["hit"])
+    sc.frame_set(1)
+    me = ob.data
+    rows = [[me.vertices[i + j * (nx + 1)].co.copy() for i in range(nx + 1)] for j in (0, 3, ny, ny - 3)]
+
+    if os.environ.get("DRAPE_DEBUG"):
+        for r in rows:
+            print("[drape]", " ".join("(%.2f %.2f %.2f)" % tuple(r[i]) for i in range(0, nx + 1, 5)))
+    d = ob.modifiers.new("lean", "DECIMATE")
+    d.ratio = min(1.0, tris / (2.0 * nx * ny))
+    K.apply_mods(ob)
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    uv = bm.loops.layers.uv.active
+    rim = [e for e in bm.edges if e.is_boundary]
+    at = {v: v.link_loops[0][uv].uv.copy() for e in rim for v in e.verts}
+    out = bmesh.ops.extrude_edge_only(bm, edges=rim)["geom"]
+    bm.normal_update()
+    for v in [g for g in out if isinstance(g, bmesh.types.BMVert)]:
+        src = next(e.other_vert(v) for e in v.link_edges if e.other_vert(v) in at)
+        at[v] = at[src]
+        v.co = src.co - src.normal * 0.016
+    for f in {f for g in out if isinstance(g, bmesh.types.BMEdge) for f in g.link_faces}:
+        for lp in f.loops:
+            lp[uv].uv = at[lp.vert]
+        f.smooth = True
+    bm.to_mesh(me)
+    bm.free()
+
+    # fringe: flat strands in the plane of the cloth (the material is two-sided), every other one
+    # cream, taken from the tartan's cream crossing. They carry on the way the cloth runs, stand a
+    # little proud of it, and stop short of `floor` (a seat they would otherwise sink into).
+    tv, tf, tu = [], [], []
+    pitch = size[0] / fringe
+    for edge, inner, flip in ((rows[0], rows[1], -1.0), (rows[2], rows[3], 1.0)):
+        for k in range(fringe):
+            t = (k + 0.5) / fringe * nx
+            i0 = min(int(t), nx - 1)
+            p = edge[i0].lerp(edge[i0 + 1], t - i0)
+            run = (p - inner[i0].lerp(inner[i0 + 1], t - i0)).normalized()
+            across = (edge[i0 + 1] - edge[i0]).normalized()
+            face = across.cross(run * flip).normalized()
+            along = (run + across * rng.uniform(-0.16, 0.16) + face * 0.12).normalized()
+            length = tassel * rng.uniform(0.85, 1.1)
+            if floor is not None and along.z < -0.05:
+                length = max(0.035, min(length, (p.z - floor) / -along.z))
+            root = p + face * 0.008 - run * 0.012
+            tint = (0.0, 0.0) if k % 2 else (0.118, 0.118)
+            b0 = len(tv)
+            tv.extend([root - across * pitch * 0.36, root + across * pitch * 0.36,
+                       root + along * length + across * pitch * 0.3, root + along * length - across * pitch * 0.3])
+            tf.append((b0, b0 + 1, b0 + 2, b0 + 3))
+            tu.extend([tint] * 4)
+    CL._finish_mesh(name + "_fringe", tv, tf, tu, mat, recalc=False, smooth=False)
+    return ob
+
+
 # --- rocking chair -------------------------------------------------------------------------------------
 
 def rocking_chair():
@@ -200,10 +326,8 @@ def armchair():
 def sofa():
     xs = upholstered(2, cloth("fabric", "#e6cc9b"), cloth("fabric_light", "#ecd6a8"))
     p = plaid()
-    # a plaid throw over the back at one end, and two cushions at the other
-    bx("throw_top", (0.62, 0.46, 0.03), (xs[0] - 0.08, 0.275, 0.935), p, bevel=0.012, rot=(-7, 0, 0), scale=3.2)
-    bx("throw_front", (0.62, 0.03, 0.44), (xs[0] - 0.08, 0.07, 0.725), p, bevel=0.012, rot=(-12, 0, 0), scale=3.2)
-    bx("throw_back", (0.62, 0.03, 0.30), (xs[0] - 0.08, 0.50, 0.78), p, bevel=0.012, rot=(-5, 0, 0), scale=3.2)
+    # a plaid throw dropped over the back and the arm at one end, and two cushions at the other
+    drape("throw", (0.74, 1.04), (xs[0] - 0.13, 0.25, 1.0), 6.0, p, floor=SEAT + 0.012)
     pillow("cushion", (0.36, 0.13, 0.36), (xs[1] - 0.12, 0.05, 0.63), p, rot=(-20, 0, 6))
     pillow("cushion_green", (0.36, 0.13, 0.36), (xs[1] + 0.2, 0.10, 0.65), cloth("green", "#7f8f45"), rot=(-18, 0, -14))
 

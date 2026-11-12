@@ -1,6 +1,6 @@
 {
   "name": "sofa",
-  "triangles": 2956,
+  "triangles": 3777,
   "materials": [
     "sofa_wood",
     "sofa_fabric",
@@ -10,8 +10,8 @@
   ],
   "size_m": [
     1.953,
-    0.947,
-    0.976
+    0.979,
+    0.924
   ],
   "min_m": [
     -0.977,
@@ -20,8 +20,8 @@
   ],
   "max_m": [
     0.977,
-    0.527,
-    0.976
+    0.559,
+    0.924
   ],
   "images": [
     "sofa_fabric",
@@ -35,5 +35,5 @@
     "sofa_wood",
     "sofa_wood_n"
   ],
-  "glb_bytes": 623576
+  "glb_bytes": 1464868
 }
