@@ -59,6 +59,10 @@ KNIT_TWIST = {"nora_tripo": dict(UpperArm=0.3, LowerArm=-0.5, Hand=-0.5)}
 # down, and at full swing the needle tips part by several centimetres. Each arm key is scaled
 # about its mean, so the tips stay together and the hands still work.
 KNIT_SWING = {"nora_tripo": 0.2}
+# How far (degrees) the upper arms swing out from the shoulder, so her elbows clear her sides and
+# sit out over the chair's arms; each forearm then turns back in so the hand (and its needle) stays
+# where it was.
+KNIT_SPREAD = {"nora_tripo": 20.0}
 # The needles: length past the index side and past the little-finger side, radius.
 NEEDLE = dict(tip=0.15, butt=0.075, r=0.0042)
 
@@ -210,6 +214,68 @@ def twist_knit_loop(rig):
                 f.update()
     act["knit_swing"] = swing
     print("[grip] SitKnit arms turned", want, "stroke kept", swing)
+
+
+def spread_knit_arms(rig):
+    """Swings SitKnit's upper arms out by KNIT_SPREAD about the shoulder (a turn about the body's
+    front axis), then turns each forearm so the wrist goes back where it was, the hand keeping its
+    own orientation. Done key by key in armature space; records the spread on the action, so a
+    second run only adds the difference."""
+    act = bpy.data.actions["SitKnit"]
+    want = KNIT_SPREAD[CID]
+    delta = math.radians(want - float(act.get("knit_spread", 0.0)))
+    if abs(delta) < 1e-9:
+        return
+    ad = rig.animation_data
+    keep = [t.mute for t in ad.nla_tracks]
+    for t in ad.nla_tracks:
+        t.mute = True
+    ad.action = act
+    if act.slots:
+        ad.action_slot = act.slots[0]
+    fcs = action_fcurves(act)
+    names = [s + b for s in ("Right", "Left") for b in ("UpperArm", "LowerArm", "Hand")]
+    curves = {n: {f.array_index: f for f in fcs if f.data_path == 'pose.bones["%s"].rotation_euler' % n} for n in names}
+    frames = [int(round(k.co[0])) for k in curves["RightUpperArm"][0].keyframe_points]
+    new = {n: [] for n in names}
+    sc = bpy.context.scene
+    for fr in frames:
+        sc.frame_set(fr)
+        bpy.context.view_layer.update()
+        for side, sx in (("Right", 1.0), ("Left", -1.0)):
+            U, L, H = (rig.pose.bones[side + b] for b in ("UpperArm", "LowerArm", "Hand"))
+            Um, Lm, Hm = U.matrix.copy(), L.matrix.copy(), H.matrix.copy()
+            wrist = Hm.translation.copy()
+            # the swing: about the body's front-back axis through the shoulder
+            R = Matrix.Translation(Um.translation) @ Matrix.Rotation(sx * delta, 4, "Y") @ Matrix.Translation(-Um.translation)
+            U2 = R @ Um
+            elbow = U2 @ Vector((0, U.bone.length, 0))
+            L1 = R @ Lm
+            L1.translation = elbow
+            q = (L1.to_3x3() @ Vector((0, 1, 0))).rotation_difference(wrist - elbow)
+            L2 = (q.to_matrix().to_4x4() @ L1.to_3x3().to_4x4())
+            L2.translation = elbow
+            H2 = Hm.copy()
+            H2.translation = L2 @ Vector((0, L.bone.length, 0))
+            for pb, m in ((U, U2), (L, L2), (H, H2)):
+                pb.matrix = m
+                bpy.context.view_layer.update()
+            for pb in (U, L, H):
+                e = pb.rotation_euler.copy()
+                if new[pb.name]:
+                    e.make_compatible(new[pb.name][-1])
+                new[pb.name].append(e)
+    for n in names:
+        for i in range(3):
+            f = curves[n][i]
+            for k, e in zip(f.keyframe_points, new[n]):
+                k.co[1] = e[i]
+                k.handle_left_type = k.handle_right_type = "AUTO_CLAMPED"
+            f.update()
+    for t, m in zip(ad.nla_tracks, keep):
+        t.mute = m
+    act["knit_spread"] = want
+    print("[grip] SitKnit elbows out by %.0f degrees" % want)
 
 
 def hand_deform(rig, side):
@@ -387,6 +453,7 @@ def main():
         add_key(body, name, G)
     rig = rig_obj()
     twist_knit_loop(rig)
+    spread_knit_arms(rig)
     build_needles(rig)
 
 
