@@ -1,0 +1,45 @@
+{
+  "name": "hoe",
+  "triangles": 4696,
+  "materials": [
+    "tool_wood",
+    "tool_endgrain",
+    "tool_iron_plain",
+    "tool_rivet",
+    "tool_iron",
+    "tool_band",
+    "tool_knot"
+  ],
+  "size_m": [
+    0.237,
+    0.097,
+    0.817
+  ],
+  "min_m": [
+    -0.042,
+    -0.055,
+    -0.024
+  ],
+  "max_m": [
+    0.195,
+    0.042,
+    0.793
+  ],
+  "images": [
+    "tool_band",
+    "tool_band_n",
+    "tool_endgrain",
+    "tool_endgrain_n",
+    "tool_iron",
+    "tool_iron_n",
+    "tool_iron_plain",
+    "tool_iron_plain_n",
+    "tool_iron_plain_r",
+    "tool_iron_r",
+    "tool_knot",
+    "tool_knot_n",
+    "tool_wood",
+    "tool_wood_n"
+  ],
+  "glb_bytes": 2049276
+}

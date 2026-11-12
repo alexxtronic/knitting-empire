@@ -1,0 +1,47 @@
+{
+  "name": "shears",
+  "triangles": 8528,
+  "materials": [
+    "tool_iron",
+    "tool_iron_plain",
+    "tool_wood",
+    "tool_endgrain",
+    "tool_rivet",
+    "tool_redcloth",
+    "tool_knot"
+  ],
+  "size_m": [
+    0.157,
+    0.06,
+    0.413
+  ],
+  "min_m": [
+    -0.079,
+    -0.031,
+    -0.002
+  ],
+  "max_m": [
+    0.079,
+    0.029,
+    0.411
+  ],
+  "images": [
+    "tool_band",
+    "tool_band_n",
+    "tool_endgrain",
+    "tool_endgrain_n",
+    "tool_iron",
+    "tool_iron_n",
+    "tool_iron_plain",
+    "tool_iron_plain_n",
+    "tool_iron_plain_r",
+    "tool_iron_r",
+    "tool_knot",
+    "tool_knot_n",
+    "tool_redcloth",
+    "tool_redcloth_n",
+    "tool_wood",
+    "tool_wood_n"
+  ],
+  "glb_bytes": 2203800
+}

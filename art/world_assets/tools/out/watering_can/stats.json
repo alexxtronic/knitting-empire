@@ -1,0 +1,49 @@
+{
+  "name": "watering_can",
+  "triangles": 9452,
+  "materials": [
+    "tool_iron_plain",
+    "tool_rivet",
+    "tool_band",
+    "tool_hole",
+    "tool_felt_petal",
+    "tool_felt_centre",
+    "tool_felt_leaf",
+    "tool_knot"
+  ],
+  "size_m": [
+    0.434,
+    0.26,
+    0.384
+  ],
+  "min_m": [
+    -0.13,
+    -0.13,
+    0.0
+  ],
+  "max_m": [
+    0.304,
+    0.13,
+    0.384
+  ],
+  "images": [
+    "tool_band",
+    "tool_band_n",
+    "tool_endgrain",
+    "tool_endgrain_n",
+    "tool_felt_centre",
+    "tool_felt_leaf",
+    "tool_felt_petal",
+    "tool_iron",
+    "tool_iron_n",
+    "tool_iron_plain",
+    "tool_iron_plain_n",
+    "tool_iron_plain_r",
+    "tool_iron_r",
+    "tool_knot",
+    "tool_knot_n",
+    "tool_wood",
+    "tool_wood_n"
+  ],
+  "glb_bytes": 1589104
+}

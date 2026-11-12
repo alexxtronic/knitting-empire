@@ -922,6 +922,7 @@ func _process(delta: float) -> void:
 		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
 	_update_camera(delta)
 	_update_walls()
+	_update_held_tool()
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
@@ -1263,6 +1264,59 @@ const PLOT_GRID := 1.2 # beds sit on the grid the first twelve were laid out on
 const PLOT_ORIGIN := Vector2(11.0, -1.0)
 const CHOP_WOOD := 2
 var _chopped := {} # tree (a god mode element) -> the day it was last chopped: once a day each
+
+
+const TOOL_MODEL := "res://assets/props/%s.glb"
+## How a tool sits in her right hand: the hand bone's own space, the tool's grip at the palm.
+## Tools stand along their +Y from the foot of the handle (art/world_assets/tools/build.py).
+const TOOL_GRIP := 0.2 # metres up the handle
+const TOOL_PALM := Vector3(0.0, 0.07, 0.03) # the palm, in the hand bone's space
+const TOOL_TILT := 35.0 # degrees the handle points up from level, out in front of her
+## Tools held other than the hatchet's way: [grip metres up the model, tilt]. The long tools are
+## held further up the shaft and lower; the can hangs from the top of its bail, spout forward.
+const TOOL_HOLD := {"hoe": [0.32, 22.0], "shovel": [0.3, 22.0], "scythe": [0.3, 22.0], "shears": [0.07, 35.0],
+	"watering_can": [0.368, 90.0]}
+var _tool_grip: Node3D
+var _tool_fit := 0 # frames until the grip is fitted to her hand (the bone has to have moved first)
+var _tool_hand: BoneAttachment3D
+var _held_id := ""
+
+
+## Shows the hotbar's tool in her hand (once that tool has a model), and takes it away while she
+## sits, sleeps or is in a story scene.
+func _update_held_tool() -> void:
+	var id := hud.selected_item() if not title_on else ""
+	if not Game.TOOLS.has(id) or not ResourceLoader.exists(TOOL_MODEL % id):
+		id = ""
+	if id != _held_id and player.body and player.body.skeleton:
+		_held_id = id
+		if _tool_hand == null:
+			_tool_hand = BoneAttachment3D.new()
+			player.body.skeleton.add_child(_tool_hand)
+			_tool_hand.bone_name = "RightHand"
+		for c in _tool_hand.get_children():
+			c.queue_free()
+		if id != "":
+			_tool_grip = Node3D.new() # the model hangs from its grip point, not its foot
+			_tool_hand.add_child(_tool_grip)
+			_tool_grip.position = TOOL_PALM
+			var m := Catalog.model(TOOL_MODEL % id, _tool_grip)
+			if m:
+				m.position = Vector3(0, -float(TOOL_HOLD.get(id, [TOOL_GRIP])[0]), 0)
+			_tool_fit = 3
+	if _tool_fit > 0 and _held_id != "" and not player.busy:
+		_tool_fit -= 1
+		if _tool_fit == 0:
+			# Carried like a hatchet: the handle out in front of her and tilted up, the blade down.
+			# Fitted once against how her hand hangs now; after that it moves with the hand.
+			var fwd: Vector3 = player.global_transform.basis.z.normalized()
+			var a := deg_to_rad(float(TOOL_HOLD.get(_held_id, [0.0, TOOL_TILT])[1]))
+			var handle := (fwd * cos(a) + Vector3.UP * sin(a)).normalized()
+			var blade := (fwd * sin(a) - Vector3.UP * cos(a)).normalized()
+			var want := Basis(blade, handle, blade.cross(handle))
+			_tool_grip.basis = _tool_hand.global_transform.basis.orthonormalized().inverse() * want
+	if _tool_hand:
+		_tool_hand.visible = _held_id != "" and mode == Mode.LIVE and not story.is_playing() and not player.is_sitting() and not player.is_lying()
 
 
 ## Uses the tool on whatever was clicked. False when the tool has nothing to do there, and the
@@ -4306,6 +4360,29 @@ func _tool_checks() -> void:
 	await _wait(0.5)
 	_check("axe: chops wood from the tree under the click (%s, wood %d), once a day each (asked again %s, wood %d, busy %s)" % [used, wood, again, Game.count("wood"), player.busy],
 		used and wood == CHOP_WOOD and again and Game.count("wood") == wood and not player.busy)
+	# the axe has a model, so it shows in her hand
+	hud.hot_sel = Game.slots.find("axe")
+	player.position = Vector3(9.0, 0, 8.0) # out from under the tree she just chopped
+	player.rotation.y = cam_yaw + 0.5
+	var dist0 := cam_dist
+	cam_dist = 5.0
+	await _wait(1.2)
+	var held: Array = _tool_hand.find_children("*", "MeshInstance3D", true, false) if _tool_hand else []
+	_check("axe: shows in her right hand while it's the tool picked (%d mesh, visible %s)" % [held.size(), _tool_hand != null and _tool_hand.visible],
+		held.size() >= 1 and _tool_hand.visible and _tool_hand.bone_name == "RightHand")
+	await _shot("47_tool_in_hand.png")
+	# every tool has a model now: each shows in her hand in turn
+	var shown := PackedStringArray()
+	for tid in Game.TOOLS:
+		hud.hot_sel = Game.slots.find(tid)
+		await _wait(0.6)
+		var ms: Array = _tool_hand.find_children("*", "MeshInstance3D", true, false) if _tool_hand else []
+		if _held_id == tid and ms.size() >= 1 and _tool_hand.visible:
+			shown.append(tid)
+		if tid != "axe":
+			await _shot("47_in_hand_%s.png" % tid)
+	_check("each of the six tools shows in her hand when picked (%s)" % ", ".join(shown), shown.size() == Game.TOOLS.size())
+	cam_dist = dist0
 	# an empty hand, or a tool with nothing to do there, leaves the click alone
 	_check("tools: nothing to do means the click is left alone", not _tool_click("", plots[0], Vector2.ZERO) and not _tool_click("watering_can", sheep_list[0], Vector2.ZERO))
 	Game.take_item("wood", Game.count("wood"))
