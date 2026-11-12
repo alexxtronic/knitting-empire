@@ -34,6 +34,7 @@ TEX = int(argv[argv.index("--tex") + 1]) if "--tex" in argv else 2048
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
 HEIGHT = float(argv[argv.index("--height") + 1]) if "--height" in argv else 0.0  # the sculpt's full height in metres when it is not the rig's: a tall hat or big hair puts the chin too low otherwise
 COAT = float(argv[argv.index("--coat") + 1]) if "--coat" in argv else 0.0  # nearest-bone weights: jacket length below the hips
+APRON = "--apron" in argv  # a long apron or skirt hangs free in front of the thighs: let its hem drape off the knees
 
 scene = bpy.context.scene
 rig = next(o for o in scene.objects if o.type == "ARMATURE")
@@ -194,12 +195,55 @@ for pb in temp.pose.bones:  # the copy keeps whatever pose the rig was last eval
     pb.matrix_basis = Matrix.Identity(4)
 bpy.context.view_layer.update()
 swing = {}
+arm_r = {}  # side -> (radius, a point on the centre line, its direction) of a held-out arm
 moved_joint = {}  # side -> how far the arm's joint was moved to the sculpt's shoulder (T-pose exports)
 raised = {}  # side -> True when the sculpt's arm is held out (its angle found along the arm)
 select_only(temp)
 bpy.ops.object.mode_set(mode="EDIT")
 eb = temp.data.edit_bones
 seg = {}  # bone -> (head, tail) of the aimed copy, in the mesh's space
+
+
+def fit_legs(ebs, fit):
+    """Move a rig's leg bones to the sculpt's legs: fit is side -> (hip, knee, ankle) shifts."""
+    for side, (dh, dk, da) in fit.items():
+        ebs[side + "UpperLeg"].head += dh
+        ebs[side + "UpperLeg"].tail += dk
+        ebs[side + "LowerLeg"].head += dk
+        ebs[side + "LowerLeg"].tail += da
+        for b in ("Foot", "Toes"):
+            ebs[side + b].transform(Matrix.Translation(da))
+
+
+# the legs: the rig's stand where its own body's do, but a stocky sculpt's stand wider (Steve's shins
+# are 10 cm further out) and every sculpt's stand behind the bones, since it is centred on its feet's
+# box and the toes reach forward. A knee bending off its trouser leg shears it. Take each leg's line from
+# its shin, where nothing hangs over it (an apron or a coat comes down to the knee), up to the knee; the
+# hip joint goes half as far out, as a real stance splays from the pelvis.
+leg_fit = {}
+for side, sx in (("Left", 1), ("Right", -1)):
+    ankle, knee, hip = (eb[side + b].head.copy() for b in ("Foot", "LowerLeg", "UpperLeg"))
+    zs, cx, cy = [], [], []
+    for z in np.arange(ankle.z + 0.06, ankle.z + 0.6 * (knee.z - ankle.z), 0.015):
+        sl = L[(np.abs(L[:, 2] - z) < 0.006) & (L[:, 0] * sx > 0.015)]
+        if len(sl) > 8:
+            zs.append(z)
+            cx.append((sl[:, 0].min() + sl[:, 0].max()) / 2)
+            cy.append((sl[:, 1].min() + sl[:, 1].max()) / 2)
+    if len(zs) < 4:
+        continue
+    fx, fy = np.polyfit(zs, cx, 1), np.polyfit(zs, cy, 1)
+    at = lambda z: Vector((float(np.polyval(fx, z)), float(np.polyval(fy, z)), z))
+    da = at(ankle.z) - ankle
+    dk = at(knee.z) - knee
+    da.z = dk.z = 0.0
+    if max(da.length, dk.length) > 0.18:  # not a leg: leave the rig's
+        print("LEGS", side, "fit out of range", tuple(round(v, 3) for v in dk))
+        continue
+    dh = Vector((dk.x * 0.5, dk.y, 0.0))
+    leg_fit[side] = (dh, dk, da)
+    print("LEGS", side, "knee moved by", tuple(round(v, 3) for v in dk), "ankle by", tuple(round(v, 3) for v in da))
+fit_legs(eb, leg_fit)
 for side, sx in (("Left", 1), ("Right", -1)):
     sh = eb[side + "UpperArm"].head.copy()
     tip = eb[side + "Hand"].tail.copy()
@@ -235,6 +279,7 @@ for side, sx in (("Left", 1), ("Right", -1)):
         # gap under it. Put the joint on the arm's line just inside the side of the torso under the arm.
         off = pick - c
         r = float(np.median(np.linalg.norm(off - np.outer(off @ ax, ax), axis=1)))
+        arm_r[side] = (r, c.copy(), ax.copy())
         z_at = lambda x: c[2] + (x - c[0]) / ax[0] * ax[2]
         zp = z_at(sh.x) - r - 0.04
         under = L[(np.abs(L[:, 2] - zp) < 0.006) & (L[:, 0] * sx > 0) & (L[:, 0] * sx < sh.x * sx + 0.12)]
@@ -243,12 +288,25 @@ for side, sx in (("Left", 1), ("Right", -1)):
             jx = (w - 0.02) * sx
             joint = Vector((jx, sh.y, z_at(jx)))
             shift = joint - sh
-            for b in ("UpperArm", "LowerArm", "Hand"):
+            # the whole collarbone moves with the joint: moving only its tail tips it steeply down
+            # (Wren's joint is 13 cm under the rig's), and the loops' small shrugs then swing it up
+            # into a hunch
+            for b in ("Shoulder", "UpperArm", "LowerArm", "Hand"):
                 eb[side + b].transform(Matrix.Translation(shift))
-            eb[side + "Shoulder"].tail = joint
-            moved_joint[side] = shift.copy()
+            # the rig's arm is Nora's length: stretch the chain about the joint to reach the sculpt's
+            # fingertips, so the elbow bends where the sleeve's elbow is
+            reach_ = (L - np.array(joint)) @ ax
+            d_ = np.linalg.norm((L - c) - np.outer((L - c) @ ax, ax), axis=1)
+            tips = reach_[(d_ < r + 0.08) & (reach_ > 0)]
+            chain = (eb[side + "Hand"].tail - eb[side + "UpperArm"].head).length
+            k_raw = float(np.percentile(tips, 99.5) / chain) if len(tips) else 1.0
+            k = float(np.clip(k_raw, 0.7, 1.25))
+            S_ = Matrix.Translation(joint) @ Matrix.Scale(k, 4) @ Matrix.Translation(-joint)
+            for b in ("UpperArm", "LowerArm", "Hand"):
+                eb[side + b].transform(S_)
+            moved_joint[side] = (shift.copy(), k)
             print("SHOULDER", side, "arm radius", round(r, 3), "torso side", round(w, 3), "joint moved by",
-                  tuple(round(v, 3) for v in shift))
+                  tuple(round(v, 3) for v in shift), "arm length x", round(k, 3), "measured", round(k_raw, 3))
             sh = joint
             tip = eb[side + "Hand"].tail.copy()
     have = Vector((tip.x - sh.x, 0.0, tip.z - sh.z)).normalized()
@@ -432,10 +490,47 @@ for side, sx in (("Left", 1), ("Right", -1)):
         # when the arm came down from the T-pose, flaring the sleeve. Out there it is all arm, blended
         # over 8 cm across the joint; the arm hangs level, so only skin near the shoulder's height counts.
         shj = seg[side + "UpperArm"][0]
+        # near the arm: within its radius (plus 5 cm) of the arm's own centre line, as measured, out
+        # from just inside the joint; the rig's bones are shorter and don't run down its middle
+        r_, c_, ax_ = arm_r[side]
+        off_ = L - c_
+        d_arm = np.linalg.norm(off_ - np.outer(off_ @ ax_, ax_), axis=1)
+        near = (d_arm < r_ + 0.05) & (L[:, 0] * sx > shj[0] * sx - 0.06)
         t = np.clip((L[:, 0] * sx - (shj[0] * sx - 0.03)) / 0.08, 0.0, 1.0)
         t[np.abs(L[:, 2] - shj[2]) > 0.22] = 0.0
-        t[L[:, 0] * sx < 0.0] = 0.0
+        t[(L[:, 0] * sx < 0.0) | ~near] = 0.0
         gi_arm = {gidx[b] for b in arm_bones[1:] if b in gidx}
+        # hair over the shoulder (or a collar, a bag strap) lies near the arm in the T-pose and took
+        # some of its weight; above the joint and away from the arm, it belongs with the body
+        # only round the shoulder itself: a level arm's hand and fingers are above the joint and off
+        # the line too (the men's T-poses), and must stay on the arm
+        along = (L - np.array(shj)) @ ax_
+        loose = ~near & (L[:, 2] > shj[2] - 0.05) & (L[:, 0] * sx > 0.0) & (along < 0.10)
+        # but a sleeve is the arm's own surface: a puffed shoulder (Giorgio) or a short sleeve's top
+        # (Steve), the shirt over a broad shoulder, are all joined to the arm, while hair only lies on it
+        # (its own shell, or joined only far round by the scalp). Keep whatever the surface reaches
+        # within 30 cm of the upper arm.
+        seeds_ = np.where((d_arm < r_ + 0.08) & (along > 0.10) & (along < 0.25))[0]
+        if len(seeds_):
+            sleeve = geodesic(seeds_, adj, n) < 0.30
+            print("SPLIT", side, "sleeve kept on the arm", int((loose & sleeve).sum()))
+            loose &= ~sleeve
+            # and the sleeve's top swings with the arm like the skin under it
+            t = np.clip((L[:, 0] * sx - (shj[0] * sx - 0.03)) / 0.08, 0.0, 1.0)
+            t[np.abs(L[:, 2] - shj[2]) > 0.22] = 0.0
+            t[(L[:, 0] * sx < 0.0) | ~(near | sleeve)] = 0.0
+        freed = 0
+        for i in np.where(loose)[0]:
+            v = lo.data.vertices[i]
+            drop = [g.group for g in v.groups if g.group in gi_arm and g.weight > 0.0]
+            for gi in drop:
+                lo.vertex_groups[gi].remove([int(i)])
+            if drop:
+                freed += 1
+                if not any(g.weight > 1e-4 for g in v.groups):
+                    b = min(["Neck", "UpperChest", side + "Shoulder"], key=lambda b: seg_dist(L[i:i + 1], *seg[b])[0])
+                    lo.vertex_groups[gidx[b]].add([int(i)], 1.0, "REPLACE")
+        print("SPLIT", side, "hair and collar off the arm", freed)
         changed = 0
         for i in np.where(t > 0.0)[0]:
             v = lo.data.vertices[i]
@@ -549,6 +644,66 @@ for side, sx in (("Left", 1), ("Right", -1)):
     print("SPLIT", side, "arm verts", int(is_arm.sum()), "body verts", int(is_body.sum()), "weights moved", moved,
           "hand verts", int((is_arm & (d_hand < 0.06)).sum()))
 
+if APRON:
+    # an apron in front of the thighs rode them up level when he sat and stuck out past his knees like
+    # a tray. Cloth that stands off the front of the thigh hands its lower part to the shin, from the
+    # middle of the thigh down to the knee (at most 70%), so the hem hangs down over the knees seated
+    # and swings a little with the shins walking.
+    freed = 0
+    for side, sx in (("Left", 1), ("Right", -1)):
+        hip, knee = (np.array(p) for p in seg[side + "UpperLeg"])
+        th = knee - hip
+        u = np.clip((L - hip) @ th / (th @ th), 0.0, 1.5)
+        rad = np.linalg.norm(L - (hip + np.outer(u, th)), axis=1)
+        gu, gl = gidx[side + "UpperLeg"], gidx[side + "LowerLeg"]
+        wu = np.zeros(len(L))
+        for i in np.where((u > 0.3) & (u < 1.3) & (L[:, 0] * sx > -0.03))[0]:
+            for g in lo.data.vertices[i].groups:
+                if g.group == gu:
+                    wu[i] = g.weight
+        legs = (wu > 0.5) & (u > 0.3) & (u < 1.0)
+        if not legs.any():
+            continue
+        # the trouser's radius round the thigh, taken behind it where no apron hangs
+        back = legs & ((L[:, 1] - (hip[1] + u * th[1])) > 0.0)
+        leg_r = float(np.median(rad[back])) if back.sum() > 20 else float(np.percentile(rad[legs], 15))
+        front = (L[:, 1] - (hip[1] + u * th[1])) < -0.6 * leg_r
+        cloth = (wu > 0.0) & front & (rad > leg_r + 0.03)
+        share = np.clip((u - 0.5) / 0.5, 0.0, 1.0) * 0.7
+        share[~cloth] = 0.0
+        # soften its edge over the surface, so the cloth beside it bends with it rather than tearing
+        has = wu > 0.0
+        for _ in range(4):
+            nb = np.array([np.mean([share[j] for j, _ in adj[i]]) if adj[i] else share[i] for i in range(len(L))])
+            share = np.where(has, np.maximum(share, 0.5 * share + 0.5 * nb), 0.0)
+        for i in np.where(has & (share > 0.01))[0]:
+            move = wu[i] * share[i]
+            lo.vertex_groups[gu].add([int(i)], float(wu[i] - move), "REPLACE")
+            lo.vertex_groups[gl].add([int(i)], float(move), "ADD")
+            freed += 1
+        print("APRON", side, "thigh radius", round(leg_r, 3), "cloth verts to the shin", int((cloth).sum()), "with the blend", int((has & (share > 0.01)).sum()))
+
+# the seat: the automatic weights hang the buttocks (and a jacket's tail over them) on the thighs,
+# so a knee raised in a run swung them out behind in a balloon. Behind the hip joint the pelvis carries
+# them; the thigh's pull comes back over 20 cm below the joint, and fades in over 6 cm round the side.
+hips_g = gidx["Hips"]
+for side, sx in (("Left", 1), ("Right", -1)):
+    hip = np.array(seg[side + "UpperLeg"][0])
+    gu = gidx[side + "UpperLeg"]
+    keep = np.clip((hip[2] - 0.04 - L[:, 2]) / 0.20, 0.15, 1.0)
+    behind = np.clip((L[:, 1] - hip[1] + 0.02) / 0.06, 0.0, 1.0)
+    m = 1.0 - behind * (1.0 - keep)
+    zone = (m < 0.999) & (L[:, 0] * sx > -0.02) & (L[:, 2] > hip[2] - 0.30) & (L[:, 2] < hip[2] + 0.20)
+    moved = 0
+    for i in np.where(zone)[0]:
+        w = next((g.weight for g in lo.data.vertices[i].groups if g.group == gu), 0.0)
+        if w <= 0.0:
+            continue
+        lo.vertex_groups[gu].add([int(i)], float(w * m[i]), "REPLACE")
+        lo.vertex_groups[hips_g].add([int(i)], float(w * (1.0 - m[i])), "ADD")
+        moved += 1
+    print("SEAT", side, "verts eased onto the pelvis", moved)
+
 # the head: one rigid piece from the jaw line up, turning on a short band of neck (tools/rigid_head.py)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rigid_head  # noqa: E402
@@ -574,11 +729,19 @@ bpy.data.objects.remove(old_body)
 if moved_joint:  # the real rig's arms move to the same shoulder joints the mesh now hangs from
     select_only(rig)
     bpy.ops.object.mode_set(mode="EDIT")
-    for side, shift in moved_joint.items():
+    for side, (shift, k) in moved_joint.items():
         reb = rig.data.edit_bones
-        for b in ("UpperArm", "LowerArm", "Hand"):
+        for b in ("Shoulder", "UpperArm", "LowerArm", "Hand"):
             reb[side + b].transform(Matrix.Translation(shift))
-        reb[side + "Shoulder"].tail = reb[side + "UpperArm"].head
+        j_ = reb[side + "UpperArm"].head.copy()
+        S_ = Matrix.Translation(j_) @ Matrix.Scale(k, 4) @ Matrix.Translation(-j_)
+        for b in ("UpperArm", "LowerArm", "Hand"):
+            reb[side + b].transform(S_)
+    bpy.ops.object.mode_set(mode="OBJECT")
+if leg_fit:  # the real rig's legs move to the same places
+    select_only(rig)
+    bpy.ops.object.mode_set(mode="EDIT")
+    fit_legs(rig.data.edit_bones, leg_fit)
     bpy.ops.object.mode_set(mode="OBJECT")
 lo.parent = rig
 am = lo.modifiers.new("Armature", "ARMATURE")
