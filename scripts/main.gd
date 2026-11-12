@@ -3595,6 +3595,21 @@ func _autotest() -> void:
 	_do_action(chair, "knit")
 	await _wait(3.6)
 	_check("heroine sits to knit (%s, needles shown=%s)" % [player.body.current(), player.body.props != null and player.body.props.visible], player.busy and player.position.distance_to(chair.position) < 1.2 and player.body.current() == "SitKnit" and player.body.props != null and player.body.props.visible)
+	# her fingers round the needles (the knit_R and knit_L keys, tools/add_grip.py), close up from in front
+	_check("her fingers close round both needles while she knits (grip %.2f)" % player.body.knit_grip(), player.body.knit_grip() > 0.99)
+	var knit_sk: Skeleton3D = player.body.skeleton
+	var knit_at: Vector3 = knit_sk.global_transform * ((knit_sk.get_bone_global_pose(knit_sk.find_bone("LeftHand")).origin + knit_sk.get_bone_global_pose(knit_sk.find_bone("RightHand")).origin) * 0.5)
+	var knit_cam := Camera3D.new()
+	add_child(knit_cam)
+	var knit_front: Vector3 = player.global_transform.basis.z.normalized()
+	knit_cam.fov = 40.0
+	knit_cam.global_position = knit_at + knit_front * 0.85 + Vector3(0, 0.35, 0)
+	knit_cam.look_at(knit_at + knit_front * 0.1, Vector3.UP)
+	knit_cam.current = true
+	await _wait(0.2)
+	await _shot("02d_knit_hands.png")
+	knit_cam.queue_free()
+	cam.current = true
 	var cd0 := cam_dist
 	cam_target = player.position
 	cam_dist = 5.5

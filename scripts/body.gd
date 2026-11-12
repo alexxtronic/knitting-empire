@@ -24,6 +24,9 @@ var ok := false # true when the model loaded with every loop
 var anim: AnimationPlayer
 var skeleton: Skeleton3D
 var props: Node3D # knitting needles and swatch, shown only while knitting
+## Her meshes with the knitting fists (shape keys knit_R and knit_L, tools/add_grip.py), closed
+## round the needles while she knits.
+var _knit_meshes: Array = []
 var walk_anim_speed := 3.0
 var run_anim_speed := 3.0 # the ground speed the Run loop's stride matches
 var brisk_anim_speed := 0.0 # and the Brisk loop's; 0 when the body has none
@@ -95,6 +98,8 @@ func load_character(char_id: String) -> bool:
 	props = inst.find_child("KnitProps", true, false) as Node3D
 	if props:
 		props.visible = false
+	_knit_meshes = inst.find_children("*", "MeshInstance3D", true, false).filter(
+		func(mi): return mi.mesh != null and mi.find_blend_shape_by_name("knit_R") >= 0)
 	anim.play("Idle")
 	anim.seek(randf() * anim.get_animation("Idle").length, true) # so no two people stand in step
 	ok = true
@@ -140,6 +145,19 @@ func play(loop_name: String, ground_speed := 0.0) -> void:
 		anim.speed_scale = maxf(ground_speed / run_anim_speed, MIN_STRIDE_RATE)
 	if props:
 		props.visible = loop_name == "SitKnit"
+	for mi in _knit_meshes:
+		for key in ["knit_R", "knit_L"]:
+			var k: int = mi.find_blend_shape_by_name(key)
+			if k >= 0:
+				mi.set_blend_shape_value(k, 1.0 if loop_name == "SitKnit" else 0.0)
+
+
+## How far her fingers are closed round both knitting needles: 0 open, 1 closed (no keys: 0).
+func knit_grip() -> float:
+	if _knit_meshes.is_empty():
+		return 0.0
+	var mi: MeshInstance3D = _knit_meshes[0]
+	return minf(mi.get_blend_shape_value(mi.find_blend_shape_by_name("knit_R")), mi.get_blend_shape_value(mi.find_blend_shape_by_name("knit_L")))
 
 
 ## Tells the rig how the character really moved this frame (speed, turning, speeding up).

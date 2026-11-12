@@ -1,56 +1,98 @@
-"""Adds a 'grip_R' shape key to a character's body: the right hand's fingers curled round a handle
-that runs front to back across the palm (the fist a tool is held in), the thumb and palm pushed out
-of the handle. The rig has no finger bones, so the game turns the key on while she holds a tool.
+"""Her hands: shape keys that close a character's fingers round what she holds, and the knitting
+pose that goes with them. The rig has no finger bones, so the game turns the keys on and off.
+
+- 'grip_R': the right hand's fist round a tool handle that runs front to back across the palm, the
+  thumb lying on the handle. The game turns it on while she holds a tool.
+- 'knit_R' and 'knit_L': each hand round a knitting needle: three fingers curled round it, the index
+  finger left almost straight (on the right hand it carries the yarn, on the left it steadies the
+  tip), the thumb on top. The game turns them on while she knits (scripts/body.gd).
+- The knitting loop (SitKnit) turned palms down, the upper arms out a little, so the index side of
+  each fist faces the middle, and the needles (the KnitProps mesh) laid through the fists with the
+  tips crossing, the work hanging from the left needle.
 
 Run it on the eyes model's blend (after tools/add_eyes.py, which starts that blend afresh), then
 import. It saves the blend and exports assets/<id>_eyes.glb with add_eyes.py's export settings.
 
     Blender -b tools/character_build/<id>_eyes/<id>_eyes.blend -P tools/add_grip.py -- "$PWD" <id> [--review]
 
-The hand's measurements (rest pose, Blender metres) are per character: GRIPS below. The game's
-TOOL_FIST in scripts/main.gd must match the handle's centre and axis here.
+The hand's measurements (rest pose, Blender metres) are per character: GRIPS below, given for the
+right hand; the left hand uses them mirrored. The game's FIST_C in scripts/main.gd must match the
+grip_R handle's centre and axis here.
 """
 import math
 import os
+import struct
+import json
 import sys
+import tempfile
 
+import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Quaternion, Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 PROJECT, CID = argv[0], argv[1]
 REVIEW = "--review" in argv
 
 # Nora's right hand hangs at her side, palm in (+x), fingers down, knuckles at z 0.725; the
-# fingers fan front (index, y -0.105) to back (little finger, y -0.02). The handle: a cylinder
-# along y through (HX, HZ), radius R, against the palm just below the finger roots.
+# fingers fan front (index, y -0.105) to back (little finger, y -0.02). Each grip's handle is a
+# cylinder along y through (hx, hz), radius r, against the palm just below the finger roots.
+# theta: how far each finger curls at most, little, ring, middle, index (radians). thumb: the box
+# that is the thumb (x above, y below, z between zmin and z), its root, how far it swings onto the
+# handle and how far from the handle's middle it stays.
+_THUMB = dict(x=-0.212, y=-0.088, z=0.80, zmin=0.0, root=(-0.196, 0.80))
 GRIPS = {
-    "nora_tripo": dict(zk=0.725, hx=-0.194, hz=0.716, r=0.021, theta_max=3.25,
-                      bands=(-0.034, -0.061, -0.09), thumb=dict(x=-0.212, y=-0.088, z=0.80, root=(-0.196, 0.80), turn=24.0, clear=0.011)),
+    "nora_tripo": {
+        "grip_R": dict(side="Right", zk=0.725, hx=-0.194, hz=0.716, r=0.021, theta=(3.25,) * 4,
+                       bands=(-0.034, -0.061, -0.09), thumb=dict(_THUMB, turn=24.0, clear=0.011)),
+        # a needle is thin: the fingers close round it nearer the palm, and not all the way
+        "knit_R": dict(side="Right", zk=0.725, hx=-0.209, hz=0.716, r=0.0045, theta=(2.75, 2.7, 2.5, 0.55),
+                       bands=(-0.034, -0.061, -0.09), thumb=dict(_THUMB, turn=14.0, clear=0.011)),
+        "knit_L": dict(side="Left", zk=0.725, hx=-0.206, hz=0.716, r=0.0045, theta=(2.75, 2.7, 2.5, 0.4),
+                       bands=(-0.034, -0.061, -0.09), thumb=dict(_THUMB, zmin=0.705, turn=14.0, clear=0.011)),
+    },
 }
-G = GRIPS[CID]
+# The knitting loop: extra twist (radians) about each bone's own length, right side; the left is
+# mirrored. The upper arm turns out (spreads the hands), the forearm and wrist turn palm down.
+KNIT_TWIST = {"nora_tripo": dict(UpperArm=0.3, LowerArm=-0.5, Hand=-0.5)}
+# The needles: length past the index side and past the little-finger side, radius.
+NEEDLE = dict(tip=0.13, butt=0.075, r=0.0042)
 
 
 def body_mesh():
-    return max([o for o in bpy.data.objects if o.type == "MESH"], key=lambda o: len(o.data.vertices))
+    return max([o for o in bpy.data.objects if o.type == "MESH" and o.name != "KnitProps"], key=lambda o: len(o.data.vertices))
 
 
-def main():
-    body = body_mesh()
+def rig_obj():
+    return next(o for o in bpy.data.objects if o.type == "ARMATURE")
+
+
+def smooth01(t):
+    t = min(1.0, max(0.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def add_key(body, name, G):
+    """One hand closed round a handle along y through (hx, hz). Worked in right-hand terms: the left
+    hand's points are mirrored in x on the way in and out."""
     me = body.data
-    gi = body.vertex_groups["RightHand"].index
+    sx = 1.0 if G["side"] == "Right" else -1.0
+    gi = body.vertex_groups[G["side"] + "Hand"].index
     mw = body.matrix_world
     inv = mw.inverted()
     if not me.shape_keys:
         body.shape_key_add(name="Basis", from_mix=False)
-    if "grip_R" in me.shape_keys.key_blocks:
-        body.shape_key_remove(me.shape_keys.key_blocks["grip_R"])
-    key = body.shape_key_add(name="grip_R", from_mix=False)
+    if name in me.shape_keys.key_blocks:
+        body.shape_key_remove(me.shape_keys.key_blocks[name])
+    key = body.shape_key_add(name=name, from_mix=False)
 
     def w_hand(v):
         return sum(g.weight for g in v.groups if g.group == gi)
 
-    P = {v.index: mw @ v.co for v in me.vertices if w_hand(v) > 0.3}
+    def mirror(p):
+        return Vector((sx * p.x, p.y, p.z))
+
+    P = {v.index: mirror(mw @ v.co) for v in me.vertices if w_hand(v) > 0.3}
     hx, hz, R, zk = G["hx"], G["hz"], G["r"], G["zk"]
     th = G["thumb"]
 
@@ -58,7 +100,7 @@ def main():
         return sum(1 for b in G["bands"] if p.y < b)
 
     def is_thumb(p):
-        return p.x > th["x"] and p.y < th["y"] and p.z < th["z"]
+        return p.x > th["x"] and p.y < th["y"] and th["zmin"] < p.z < th["z"]
 
     fingers = {i: p for i, p in P.items() if p.z < zk and not is_thumb(p) and w_hand(me.vertices[i]) > 0.5}
     # each finger's palm side at its root: the innermost of its vertices just below the knuckle
@@ -67,35 +109,33 @@ def main():
         if p.z > zk - 0.03:
             b = band(p)
             xs[b] = max(xs.get(b, -9.0), p.x)
-    print("[grip] fingers", len(fingers), "palm side per finger", {b: round(x, 4) for b, x in sorted(xs.items())})
+    print("[grip] %s: fingers %d, palm side per finger %s" % (name, len(fingers), {b: round(x, 4) for b, x in sorted(xs.items())}))
     moved = {}
     for i, p in fingers.items():
-        x0 = xs.get(band(p), hx - R)
+        b = band(p)
+        x0 = xs.get(b, hx - R)
         rf = max(R, hx - x0)              # this finger wraps the handle at its own distance from it
         n = x0 - p.x                       # depth from the finger's palm side toward its back
         s = zk - p.z                       # how far down the finger
         # bend about the finger's middle, so its back stretches a little and its pad tucks in
+        tmax = G["theta"][b]
         theta = s / (rf + 0.009)
-        theta = G["theta_max"] * math.tanh(theta / G["theta_max"])
+        theta = tmax * math.tanh(theta / tmax)
         rad = rf + n
         # the bend only starts at the knuckle: a vertex level with it stays where it is
         c = Vector((hx, p.y, zk))
-        q = c + Vector((-rad * math.cos(theta), 0.0, -rad * math.sin(theta)))
-        q.x += 0.0
-        moved[i] = q
+        moved[i] = c + Vector((-rad * math.cos(theta), 0.0, -rad * math.sin(theta)))
     # the thumb comes down the other side of the handle, as in a real fist: it swings out from its
-    # root over the handle's inner side and rests on the fingertips there (round 2: it hung straight
-    # down, through the handle). Its turn grows over its first 2.5 cm, so it stays joined to the palm.
+    # root over the handle's inner side and lies on it. Its turn grows over its first 2.5 cm, so it
+    # stays joined to the palm.
     rx, rz = th["root"]
     turn = math.radians(th["turn"])
     for i, p in P.items():
         if not is_thumb(p) or i in moved:
             continue
-        s_ = rz - p.z
-        a = turn * min(1.0, max(0.0, s_ / 0.025)) ** 2 * (3 - 2 * min(1.0, max(0.0, s_ / 0.025)))
+        a = turn * smooth01((rz - p.z) / 0.025)
         dx, dz = p.x - rx, p.z - rz
         q = Vector((rx + dx * math.cos(a) - dz * math.sin(a), p.y, rz + dx * math.sin(a) + dz * math.cos(a)))
-        # clear of the fingertips curled up that side: no closer to the handle's middle than this
         d = Vector((q.x - hx, 0.0, q.z - hz))
         if d.length < R + th["clear"]:
             q = Vector((hx, q.y, hz)) + d.normalized() * (R + th["clear"])
@@ -111,9 +151,226 @@ def main():
             q = Vector((hx, q.y, hz)) + d.normalized() * clear
         moved[i] = q
     for i, q in moved.items():
-        key.data[i].co = inv @ q
+        key.data[i].co = inv @ mirror(q)
     key.value = 0.0
-    print("[grip] moved", len(moved), "vertices; handle at x %.3f z %.3f r %.3f" % (hx, hz, R))
+    print("[grip] %s: moved %d vertices; handle at x %.3f z %.3f r %.3f" % (name, len(moved), sx * hx, hz, R))
+
+
+def action_fcurves(act):
+    out = []
+    for layer in act.layers:
+        for strip in layer.strips:
+            for cb in strip.channelbags:
+                out += list(cb.fcurves)
+    return out
+
+
+def twist_knit_loop(rig):
+    """Turns SitKnit's arms by KNIT_TWIST, about each bone's own length, on every key. It records
+    what it applied on the action, so a second run only adds the difference."""
+    act = bpy.data.actions["SitKnit"]
+    want = KNIT_TWIST[CID]
+    done = dict(act.get("knit_twist", {}))
+    fcs = action_fcurves(act)
+    for side, sx in (("Right", 1.0), ("Left", -1.0)):
+        for bone, ang in want.items():
+            delta = sx * (ang - float(done.get(bone, 0.0)))
+            if abs(delta) < 1e-9:
+                continue
+            path = 'pose.bones["%s%s"].rotation_euler' % (side, bone)
+            comp = {f.array_index: f for f in fcs if f.data_path == path}
+            assert len(comp) == 3, "SitKnit has no full rotation keys on " + side + bone
+            for k in range(len(comp[0].keyframe_points)):
+                pts = [comp[j].keyframe_points[k] for j in range(3)]
+                e = rig.pose.bones[side + bone].rotation_euler.copy()
+                for j in range(3):
+                    e[j] = pts[j].co[1]
+                ne = (e.to_quaternion() @ Quaternion((0, 1, 0), delta)).to_euler(e.order, e)
+                for j in range(3):
+                    pts[j].co[1] = ne[j]
+                    pts[j].handle_left_type = pts[j].handle_right_type = "AUTO_CLAMPED"
+            for f in comp.values():
+                f.update()
+    act["knit_twist"] = dict(want)
+    print("[grip] SitKnit arms turned", want)
+
+
+def hand_deform(rig, side):
+    """Rest -> SitKnit pose (frame 0), world space, for points riding on that hand alone."""
+    ad = rig.animation_data
+    keep = (ad.action, [t.mute for t in ad.nla_tracks])
+    for t in ad.nla_tracks:
+        t.mute = True
+    act = bpy.data.actions["SitKnit"]
+    ad.action = act
+    if act.slots:
+        ad.action_slot = act.slots[0]
+    bpy.context.scene.frame_set(1)
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
+    pb = rig.pose.bones[side + "Hand"]
+    D = rig.matrix_world @ pb.matrix @ pb.bone.matrix_local.inverted() @ rig.matrix_world.inverted()
+    ad.action = keep[0]
+    for t, m in zip(ad.nla_tracks, keep[1]):
+        t.mute = m
+    return D
+
+
+def swatch_image():
+    """The Fair Isle swatch's texture: the procedural Nora (assets/nora.glb) still carries it; the
+    sculpted model's blend lost the file. Packed into the blend so the export keeps it."""
+    img = bpy.data.images.get("swatch")
+    if img is not None and img.has_data and img.size[0] > 0:
+        if img.packed_file is None:
+            img.pack()
+        return img
+    path = os.path.join(PROJECT, "assets", "nora.glb")
+    if not os.path.exists(path):
+        return None
+    b = open(path, "rb").read()
+    n = struct.unpack("<I", b[12:16])[0]
+    j = json.loads(b[20:20 + n])
+    binoff = 20 + n + 8
+    for im in j.get("images", []):
+        if im.get("name") == "swatch":
+            bv = j["bufferViews"][im["bufferView"]]
+            data = b[binoff + bv.get("byteOffset", 0): binoff + bv.get("byteOffset", 0) + bv["byteLength"]]
+            tmp = os.path.join(tempfile.mkdtemp(), "swatch.png")
+            open(tmp, "wb").write(data)
+            if img is not None:
+                bpy.data.images.remove(img)
+            img = bpy.data.images.load(tmp)
+            img.name = "swatch"
+            img.pack()
+            return img
+    return None
+
+
+def lathe(bm, a, b, r, segs=10):
+    """A needle from butt a to tip b: a round stick tapering to a point, a bead cap on the butt."""
+    axis = (b - a).normalized()
+    q = Vector((0, 0, 1)).rotation_difference(axis)
+    L = (b - a).length
+    prof = [(-0.009, 0.0), (-0.0085, 0.0045), (-0.006, 0.0078), (-0.002, 0.0085), (0.0, r), (L - 0.035, r), (L - 0.012, r * 0.55), (L, 0.0)]
+    rings = []
+    for z, rr in prof:
+        if rr == 0.0:
+            rings.append([bm.verts.new(a + q @ Vector((0, 0, z)))])
+            continue
+        rings.append([bm.verts.new(a + q @ Vector((rr * math.cos(2 * math.pi * k / segs), rr * math.sin(2 * math.pi * k / segs), z))) for k in range(segs)])
+    faces = []
+    for i in range(len(rings) - 1):
+        A, B = rings[i], rings[i + 1]
+        cap = i < 4  # the bead
+        for k in range(segs):
+            if len(A) == 1:
+                f = bm.faces.new((A[0], B[(k + 1) % segs], B[k]))
+            elif len(B) == 1:
+                f = bm.faces.new((A[k], A[(k + 1) % segs], B[0]))
+            else:
+                f = bm.faces.new((A[k], A[(k + 1) % segs], B[(k + 1) % segs], B[k]))
+            f.material_index = 1 if cap else 0
+            f.smooth = True
+            faces.append(f)
+    return faces
+
+
+def build_needles(rig):
+    """Replaces the KnitProps mesh: a needle through each knitting fist (along the grip's handle,
+    rest pose, bound to that hand), the tips toward the middle, and the work hanging from the left
+    needle, laid out in the SitKnit pose and moved back to rest on the left hand."""
+    old = bpy.data.objects["KnitProps"]
+    mats = {m.name: m for m in old.data.materials}
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    groups = {}
+    posed = {}
+    for side, sx in (("Right", 1.0), ("Left", -1.0)):
+        G = GRIPS[CID]["knit_" + side[0]]
+        c = Vector((sx * G["hx"], 0.0, G["hz"]))
+        butt = Vector((c.x, 0.02 + NEEDLE["butt"], c.z))   # past the little finger
+        tip = Vector((c.x, -0.105 - NEEDLE["tip"], c.z))    # past the index finger
+        # the two tips pass a finger's width apart: the right needle a little in front
+        D = hand_deform(rig, side)
+        Dinv = D.inverted()
+        off = D.to_3x3().inverted() @ Vector((0, -0.006 * sx, 0))
+        tip += off
+        fs = lathe(bm, butt, tip, NEEDLE["r"])
+        for f in fs:
+            for v in f.verts:
+                groups[v] = side + "Hand"
+        posed[side] = (D, D @ butt, D @ tip)
+    # the work: a small knitted piece hanging off the left needle's front half, toward her lap
+    D, pb, pt = posed["Left"]
+    Dinv = D.inverted()
+    across = pt - pb
+    top_a, top_b = pb + across * 0.42, pb + across * 0.86
+    down = Vector((0, 0, -1))
+    toward = Vector((0, 1, 0))
+    nu, nv, depth = 8, 6, 0.085
+    grid = []
+    for j in range(nv + 1):
+        v = j / nv
+        row = []
+        for i in range(nu + 1):
+            u = i / nu
+            p = top_a + (top_b - top_a) * u + down * depth * v + toward * (0.02 * math.sin(math.pi * v) + 0.025 * v)
+            p += toward * 0.006 * math.sin(math.pi * u) + down * 0.004 * math.sin(math.pi * u) * v
+            vert = bm.verts.new(Dinv @ p)
+            groups[vert] = "LeftHand"
+            row.append(vert)
+        grid.append(row)
+    for j in range(nv):
+        for i in range(nu):
+            for flip in (False, True):  # both faces, a little apart: a knitted piece has two sides
+                vs = (grid[j][i], grid[j][i + 1], grid[j + 1][i + 1], grid[j + 1][i])
+                if flip:
+                    vs = tuple(reversed(vs))
+                try:
+                    f = bm.faces.new(vs)
+                except ValueError:
+                    continue
+                f.material_index = 2
+                f.smooth = True
+                uvs = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]
+                if flip:
+                    uvs = list(reversed(uvs))
+                for loop, (uu, vv) in zip(f.loops, uvs):
+                    loop[uv].uv = (uu / nu, 1.0 - vv / nv)
+    me = bpy.data.meshes.new("KnitProps")
+    vidx = {}
+    bm.verts.index_update()
+    order = list(bm.verts)
+    bm.to_mesh(me)
+    bm.free()
+    for name in ("Needle", "NeedleCap", "Swatch"):
+        me.materials.append(mats.get(name))
+    img = swatch_image()
+    sw = mats.get("Swatch")
+    if img is not None and sw is not None:
+        for n in sw.node_tree.nodes:
+            if n.type == "TEX_IMAGE":
+                n.image = img
+    old_me = old.data
+    old.data = me
+    bpy.data.meshes.remove(old_me)
+    for vg in list(old.vertex_groups):
+        old.vertex_groups.remove(vg)
+    for side in ("Right", "Left"):
+        vg = old.vertex_groups.new(name=side + "Hand")
+        vg.add([k for k, v in enumerate(order) if groups.get(v) == side + "Hand"], 1.0, "REPLACE")
+    # the mesh is in rest-pose world space: undo the object's own transform
+    me.transform(old.matrix_world.inverted())
+    print("[grip] needles laid through the fists; swatch texture", img.name if img else None)
+
+
+def main():
+    body = body_mesh()
+    for name, G in GRIPS[CID].items():
+        add_key(body, name, G)
+    rig = rig_obj()
+    twist_knit_loop(rig)
+    build_needles(rig)
 
 
 main()
