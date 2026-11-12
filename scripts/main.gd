@@ -638,6 +638,9 @@ func _rebuild_grass(replant := true) -> void:
 		dirt.append_array(World.PATHS)
 		dirt.append_array(Town.PATHS)
 	dirt.append_array(god.bed_rects() if god != null else [GodMode.BEDS])
+	for p in plots:
+		if p.tilled: # the beds she dug herself
+			dirt.append(Rect2(p.position.x - 0.75, p.position.z - 0.75, 1.5, 1.5))
 	var clear: Array = grid_blockers.filter(func(r): return r != pond_rect)
 	clear.append(Rect2(-0.35, _zmin() - 0.35, HOUSE_W + 0.7, HOUSE_FRONT - _zmin() + 0.7))
 	if not painted:
@@ -1241,6 +1244,8 @@ func _update_hover(mpos: Vector2) -> void:
 
 func _live_click(mpos: Vector2) -> void:
 	var t = _ray_target(mpos)
+	if _tool_click(hud.selected_item(), t, mpos):
+		return
 	if t != null:
 		var acts := _actions_for(t)
 		if not acts.is_empty():
@@ -1250,6 +1255,153 @@ func _live_click(mpos: Vector2) -> void:
 	if g != null:
 		player.walk(_find_path(player.position, g))
 		_click_marker(g)
+
+
+# --- tools: with one in her hand (the hotbar), a click uses it ---------------------------
+
+const PLOT_GRID := 1.2 # beds sit on the grid the first twelve were laid out on
+const PLOT_ORIGIN := Vector2(11.0, -1.0)
+const CHOP_WOOD := 2
+var _chopped := {} # tree (a god mode element) -> the day it was last chopped: once a day each
+
+
+## Uses the tool on whatever was clicked. False when the tool has nothing to do there, and the
+## click then does what it always did (the ring of actions, or walking).
+func _tool_click(tool: String, t, mpos: Vector2) -> bool:
+	if not Game.TOOLS.has(tool) or player.busy:
+		return false
+	match tool:
+		"watering_can":
+			if t is Plot and t.crop != "" and not t.is_ready() and not t.watered:
+				_do_action(t, "water")
+				return true
+		"shears":
+			if t is Sheep and t.is_woolly():
+				_do_action(t, "shear")
+				return true
+		"shovel":
+			if t is Plot and t.crop == "":
+				if not t.tilled:
+					hud.show_toast("Gran dug these beds. They stay.")
+					return true
+				_tool_walk(t.position, t.position + Vector3(0, 0, 0.9), 3.0, "Clearing the bed", 1.4, _finish_clear_plot.bind(t))
+				return true
+		"hoe":
+			var g = _ground_point(mpos)
+			if t == null and g != null:
+				var at := _plot_spot(g)
+				var why := _till_problem(at)
+				if why != "":
+					hud.show_toast(why)
+					return true
+				_tool_walk(at, at + Vector3(0, 0, 0.9), 4.0, "Digging a bed", 1.8, _finish_till.bind(at))
+				return true
+		"axe":
+			var tree = god.pick_kind(mpos, "tree_") if t == null else null
+			if tree != null:
+				if int(_chopped.get(tree, 0)) == Game.day:
+					hud.show_toast("She's taken what this tree can spare today.")
+					return true
+				var trunk: Vector3 = tree.xf.origin
+				trunk.y = 0.0
+				var away := (player.position - trunk)
+				away.y = 0.0
+				away = away.normalized() if away.length() > 0.1 else Vector3(0, 0, 1)
+				_tool_walk(trunk, trunk + away * 1.3, 6.0, "Chopping", 2.6, _finish_chop.bind(tree))
+				return true
+		"scythe":
+			var g = _ground_point(mpos)
+			if t == null and g != null and grass.grass_at(g.x, g.z) > 0.6:
+				_tool_walk(g, g, 3.0, "Cutting hay", 1.6, _finish_mow)
+				return true
+	return false
+
+
+## Walks to `stand`, faces `look` and starts the tool's work, if she has the energy for it.
+func _tool_walk(look: Vector3, stand: Vector3, energy: float, text: String, secs: float, done: Callable) -> void:
+	_click_marker(look)
+	player.walk(_find_path(player.position, stand), func():
+		player.face_point(look)
+		if Game.use_energy(energy):
+			player.start_activity(text, secs, done))
+
+
+## The bed square a click on the ground means: the nearest one on the beds' grid.
+func _plot_spot(g: Vector3) -> Vector3:
+	var c := ((Vector2(g.x, g.z) - PLOT_ORIGIN) / PLOT_GRID).round() * PLOT_GRID + PLOT_ORIGIN
+	return Vector3(c.x, 0, c.y)
+
+
+## Why a bed can't be dug at this spot ("" when it can): it has to be open ground on her land.
+func _till_problem(at: Vector3) -> String:
+	var p := Vector2(at.x, at.z)
+	var bed := Rect2(p - Vector2(0.5, 0.5), Vector2(1.0, 1.0))
+	if not LOT.grow(-0.6).has_point(p):
+		return "That's past the edge of her land."
+	for pl in plots:
+		if absf(pl.position.x - at.x) < PLOT_GRID - 0.05 and absf(pl.position.z - at.z) < PLOT_GRID - 0.05:
+			return "There's a bed here already."
+	var house := Rect2(-0.6, _zmin() - 0.6, HOUSE_W + 1.2, HOUSE_FRONT - _zmin() + 1.2)
+	if house.intersects(bed) or pen_rect.grow(0.5).intersects(bed):
+		return "Not here: it's in the way."
+	for r in grid_blockers:
+		if (r as Rect2).intersects(bed):
+			return "Not here: something's in the way."
+	for c in [p, bed.position, bed.end, Vector2(bed.position.x, bed.end.y), Vector2(bed.end.x, bed.position.y)]:
+		if god.road_at(c.x, c.y) != "":
+			return "Not on the path."
+	if not god.roads_on:
+		for r in World.PATHS:
+			if (r as Rect2).intersects(bed):
+				return "Not on the path."
+	return ""
+
+
+func _add_plot(at: Vector3) -> Plot:
+	var p = Plot.new()
+	p.position = at
+	p.tilled = true
+	add_child(p)
+	plots.append(p)
+	return p
+
+
+## The grass makes way for a bed she dug, and grows back when she clears it.
+func _regrass(at: Vector3) -> void:
+	_rebuild_grass(false)
+	grass.replant(Rect2(at.x - 1.0, at.z - 1.0, 2.0, 2.0))
+
+
+func _finish_till(at: Vector3) -> void:
+	if _till_problem(at) != "":
+		return
+	_add_plot(at)
+	_regrass(at)
+	Game.add_need("fitness", 2.0)
+	hud.show_toast("A new bed. Plant something in it.")
+
+
+func _finish_clear_plot(p) -> void:
+	if not plots.has(p) or p.crop != "":
+		return
+	plots.erase(p)
+	var at: Vector3 = p.position
+	p.queue_free()
+	_regrass(at)
+	Game.add_need("fitness", 1.0)
+
+
+func _finish_chop(tree) -> void:
+	_chopped[tree] = Game.day
+	Game.add_item("wood", CHOP_WOOD)
+	Game.add_need("fitness", 3.0)
+	hud.show_toast("+%d wood" % CHOP_WOOD)
+
+
+func _finish_mow() -> void:
+	Game.add_item("hay")
+	Game.add_need("fitness", 1.5)
+	hud.show_toast("+1 hay")
 
 
 func _click_marker(p: Vector3) -> void:
@@ -1823,8 +1975,12 @@ func _load_game() -> bool:
 		if Catalog.ITEMS.has(str(e["id"])):
 			_spawn_furniture(str(e["id"]), Vector3(float(e["x"]), 0, float(e["z"])), int(e["rot"]))
 	var pl: Array = d.get("plots", [])
-	for i in mini(pl.size(), plots.size()):
-		plots[i].from_dict(pl[i])
+	for i in pl.size():
+		var at = (pl[i] as Dictionary).get("tilled") # a bed she dug: it comes with its place
+		if at is Array and i >= plots.size():
+			_add_plot(Vector3(float(at[0]), 0, float(at[1])))
+		if i < plots.size():
+			plots[i].from_dict(pl[i])
 	var sh: Array = d.get("sheep", [])
 	for i in mini(sh.size(), sheep_list.size()):
 		sheep_list[i].wool = float(sh[i])
@@ -2909,6 +3065,7 @@ func _autotest() -> void:
 	if "--only=hud" in OS.get_cmdline_user_args(): # just the hotbar, bag, menu and needs checks
 		await _wait(1.5)
 		await _hud_checks()
+		await _tool_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -2922,7 +3079,6 @@ func _autotest() -> void:
 	await _shot("02_menu.png")
 	hud.hide_menu()
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
-	await _hud_checks()
 	var happy0 := Game.happiness
 
 	await _graphics_checks()
@@ -3067,6 +3223,8 @@ func _autotest() -> void:
 	await _barn_checks()
 	await _shop_checks()
 	await _flock_checks()
+	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
+	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
 
 
@@ -3902,16 +4060,15 @@ func _anim_bones(a: Animation) -> Array:
 	return out
 
 
-## The pared-down HUD: the hotbar and bag, the menu behind Esc, needs that show only when low,
+## The pared-down HUD: the hotbar and bag, the menu behind Esc, the need bars top left,
 ## and the frame counter and camera buttons off until settings turns them on.
 func _hud_checks() -> void:
 	var inv0: Dictionary = Game.inv.duplicate()
-	var energy0 := Game.energy
 	Game.add_item("wool", 1)
 	await _wait(0.1)
 	var wool_at: int = Game.slots.find("wool")
 	_check("hotbar: nine slots and a bag of 27, wool in slot %d showing %d" % [wool_at + 1, hud.slot_btns[maxi(wool_at, 0)].n],
-		hud.slot_btns.size() == 36 and wool_at >= 0 and wool_at < 9 and hud.slot_btns[wool_at].n == Game.count("wool") and hud.hotbar.visible)
+		hud.slot_btns.size() == 36 and wool_at >= 0 and hud.slot_btns[wool_at].n == Game.count("wool") and hud.hotbar.visible)
 	await _key_tap(KEY_3)
 	var third := hud.hot_sel
 	await _key_tap(KEY_1)
@@ -3929,12 +4086,13 @@ func _hud_checks() -> void:
 	# the bag: I opens it, two clicks swap slots, Esc shuts it
 	await _key_tap(KEY_I)
 	var bag_open := hud.bag_panel.visible
+	var other := 20 if wool_at != 20 else 21
 	hud.slot_btns[wool_at].pressed.emit()
-	hud.slot_btns[20].pressed.emit()
+	hud.slot_btns[other].pressed.emit()
 	await _wait(0.1)
-	var moved: bool = Game.slots[20] == "wool" and hud.slot_btns[20].n == Game.count("wool")
+	var moved: bool = Game.slots[other] == "wool" and hud.slot_btns[other].n == Game.count("wool")
 	await _shot("46_bag.png")
-	hud.slot_btns[20].pressed.emit()
+	hud.slot_btns[other].pressed.emit()
 	hud.slot_btns[wool_at].pressed.emit()
 	await _key_tap(KEY_ESCAPE)
 	_check("bag: I opens it (%s), clicking two slots swaps them (%s) and back, Esc shuts it" % [bag_open, moved],
@@ -3949,18 +4107,11 @@ func _hud_checks() -> void:
 	var build_on := mode == Mode.BUILD and hud.build_btn.button_pressed and hud.catalog_panel.visible
 	await _key_tap(KEY_B)
 	_check("build: B opens Build & Buy and lights the bar's button (%s), B again leaves" % build_on, build_on and mode == Mode.LIVE and not hud.build_btn.button_pressed)
-	# needs only show while low
-	for need in Game.NEEDS:
-		Game.set(need, 80.0)
-	Game.energy = 20.0
-	await _wait(0.2)
-	var low: Array = Game.NEEDS.filter(func(n): return hud.needs_cells[n].visible)
-	hud.needs_all = true
-	await _wait(0.2)
-	var all: Array = Game.NEEDS.filter(func(n): return hud.needs_cells[n].visible)
-	hud.needs_all = false
-	_check("needs: only the low one shows (%s), all six on request (%d)" % [str(low), all.size()], low == ["energy"] and all.size() == 6 and hud.needs_panel.visible)
-	Game.energy = energy0
+	# her needs sit top left, under the Menu button
+	var needs_at := hud.needs_panel.get_global_rect()
+	var shown: Array = Game.NEEDS.filter(func(n): return hud.needs_cells[n].is_visible_in_tree())
+	_check("needs: all six bars show top left under Menu (%d shown, panel at %s)" % [shown.size(), str(needs_at.position)],
+		shown.size() == 6 and needs_at.position.x < 40.0 and needs_at.position.y > hud.menu_btn.get_global_rect().end.y and needs_at.end.y < 420.0)
 	# the frame counter and the camera buttons are off until settings turns them on
 	var off := not hud.fps_label.visible and not hud.cam_pad.visible
 	hud.set_option("fps", true)
@@ -3971,6 +4122,112 @@ func _hud_checks() -> void:
 	_check("settings: frame counter and camera buttons start hidden (%s) and can be shown (%s)" % [off, on], off and on)
 	Game.inv = inv0
 	await _wait(0.1)
+
+
+## Waits (up to `secs`) for a tool's work to be over: `done` true and her hands free.
+func _tool_wait(done: Callable, secs := 30.0) -> void:
+	var t := 0.0
+	while (not done.call() or player.busy) and t < secs:
+		await _wait(0.2)
+		t += 0.2
+
+
+## The six tools: she owns them, and with one in hand a click uses it.
+func _tool_checks() -> void:
+	var energy0 := Game.energy
+	Game.energy = 100.0
+	# on the farm, out in front of the house, in daylight and with her hands free
+	story.auto = false
+	hud.hide_dialogue()
+	set_mode(Mode.LIVE)
+	player.cancel_activity()
+	player.position = Vector3(9.0, 0, 8.0)
+	_set_cam_lock(true)
+	await _wait(1.0)
+	var owned: Array = Game.TOOLS.filter(func(t): return Game.count(t) == 1 and Game.slots.has(t) and Hud.Slot.icon(t) != null)
+	_check("tools: she owns all six, each with a slot and a picture (%s)" % str(owned), owned.size() == 6)
+	hud.hot_sel = Game.slots.find("hoe")
+	_check("tools: picking the hoe's slot puts it in her hand ('%s')" % hud.selected_item(), hud.selected_item() == "hoe")
+	await _shot("47_tools_hotbar.png")
+	# the hoe: a new bed on open ground, the grass making way; never on a bed that's there
+	var spot := Vector3.ZERO
+	var best := INF
+	for j in range(-8, 9):
+		for i in range(-8, 9):
+			var c := Vector3(PLOT_ORIGIN.x + i * PLOT_GRID, 0, PLOT_ORIGIN.y + j * PLOT_GRID)
+			if _till_problem(c) == "" and c.distance_to(player.position) < best and grass.grass_at(c.x, c.z) > 0.8:
+				best = c.distance_to(player.position)
+				spot = c
+	var n0 := plots.size()
+	var taken := _till_problem(plots[0].position)
+	var used := _tool_click("hoe", null, cam.unproject_position(spot))
+	await _tool_wait(func(): return plots.size() > n0)
+	var bed: Plot = plots[plots.size() - 1]
+	_check("hoe: digs a new bed on open ground (%s, beds %d→%d, grass there %.2f) and not on an old one ('%s')" % [used, n0, plots.size(), grass.grass_at(spot.x, spot.z), taken],
+		used and plots.size() == n0 + 1 and bed.tilled and bed.position.distance_to(spot) < 0.7 and grass.grass_at(spot.x, spot.z) < 0.5 and taken != "")
+	# the watering can
+	bed.plant("turnip")
+	used = _tool_click("watering_can", bed, Vector2.ZERO)
+	await _tool_wait(func(): return bed.watered)
+	_check("watering can: waters the crop under the click (%s, watered %s)" % [used, bed.watered], used and bed.watered)
+	await _shot("47_tools_bed.png")
+	# a bed she dug is saved with its place
+	var saved: Dictionary = bed.to_dict()
+	_check("hoe: the bed is saved with its place (%s)" % str(saved.get("tilled")), saved.get("tilled") is Array)
+	# the shovel: clears a bed she dug, leaves Gran's
+	bed.clear_crop()
+	var grans: Array = plots.filter(func(p): return not p.tilled and p.crop == "")
+	var kept := _tool_click("shovel", grans[0], Vector2.ZERO)
+	var n1 := plots.size()
+	used = _tool_click("shovel", bed, Vector2.ZERO)
+	await _tool_wait(func(): return plots.size() < n1)
+	await _wait(0.2)
+	_check("shovel: clears the bed she dug (beds %d→%d, grass back %.2f) and leaves Gran's (%s)" % [n1, plots.size(), grass.grass_at(spot.x, spot.z), kept],
+		used and kept and plots.size() == n0 and grass.grass_at(spot.x, spot.z) > 0.5)
+	# the shears
+	var woolly: Array = sheep_list.filter(func(s): return s.is_woolly())
+	if woolly.is_empty():
+		sheep_list[0].wool = 1.0
+		woolly = [sheep_list[0]]
+	var wool0 := Game.count("wool")
+	used = _tool_click("shears", woolly[0], Vector2.ZERO)
+	await _tool_wait(func(): return Game.count("wool") > wool0)
+	_check("shears: shear the sheep under the click (wool %d→%d)" % [wool0, Game.count("wool")], used and Game.count("wool") == wool0 + 2)
+	# the scythe
+	var hay_at := player.position
+	for r in [3.0, 5.0, 8.0]:
+		for a in 8:
+			var c: Vector3 = player.position + Vector3(cos(a * TAU / 8.0), 0, sin(a * TAU / 8.0)) * float(r)
+			if grass.grass_at(c.x, c.z) > 0.9 and LOT.has_point(Vector2(c.x, c.z)) and hay_at == player.position:
+				hay_at = c
+	used = _tool_click("scythe", null, cam.unproject_position(hay_at))
+	await _tool_wait(func(): return Game.count("hay") > 0)
+	_check("scythe: cuts hay from the grass (%s, hay %d)" % [used, Game.count("hay")], used and Game.count("hay") == 1)
+	# the axe: wood from a tree, once a day each
+	var tree = null
+	best = INF
+	for el in god.els:
+		if not el.deleted and el.kind.begins_with("tree_") and el.xf.origin.distance_to(player.position) < best:
+			best = el.xf.origin.distance_to(player.position)
+			tree = el
+	var at_tree := cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0))
+	used = _tool_click("axe", null, at_tree)
+	await _tool_wait(func(): return Game.count("wood") > 0, 45.0)
+	var wood := Game.count("wood")
+	await _wait(0.6) # the camera follows her, so the tree is somewhere else on screen now
+	var again := _tool_click("axe", null, cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0)))
+	await _wait(0.5)
+	_check("axe: chops wood from the tree under the click (%s, wood %d), once a day each (asked again %s, wood %d, busy %s)" % [used, wood, again, Game.count("wood"), player.busy],
+		used and wood == CHOP_WOOD and again and Game.count("wood") == wood and not player.busy)
+	# an empty hand, or a tool with nothing to do there, leaves the click alone
+	_check("tools: nothing to do means the click is left alone", not _tool_click("", plots[0], Vector2.ZERO) and not _tool_click("watering_can", sheep_list[0], Vector2.ZERO))
+	Game.take_item("wood", Game.count("wood"))
+	Game.take_item("hay", Game.count("hay"))
+	Game.take_item("wool", 2)
+	woolly[0].wool = 1.0
+	hud.hot_sel = 0
+	Game.energy = energy0
+	await _wait(0.2)
 
 
 func _key_tap(kc: Key, hold := 0.0) -> void:

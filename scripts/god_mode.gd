@@ -855,6 +855,31 @@ func select(el: El) -> void:
 
 ## What's under the pointer: the nearest thing whose own triangles the click hits, else whatever
 ## stands right by the spot on the ground (thin things like lamp posts are hard to hit exactly).
+## The nearest thing under the mouse whose kind starts with `prefix` ("tree_" for the axe), or
+## null. Unlike pick() it never falls back to whatever is near the ground point.
+func pick_kind(mpos: Vector2, prefix: String) -> El:
+	var from: Vector3 = main.cam.project_ray_origin(mpos)
+	var dir: Vector3 = main.cam.project_ray_normal(mpos)
+	var best: El = null
+	var best_t := INF
+	for el in els:
+		if el.deleted or not el.kind.begins_with(prefix):
+			continue
+		var to_c: Vector3 = el.xf * el.bounds.get_center() - from
+		var along := to_c.dot(dir)
+		if along < 0.0 or (to_c - dir * along).length_squared() > el.radius * el.radius:
+			continue
+		var inv := el.xf.affine_inverse()
+		var hit: Dictionary = _triangles(el).intersect_segment(inv * from, inv * (from + dir * 400.0))
+		if hit.is_empty():
+			continue
+		var t := (el.xf * (hit["position"] as Vector3) - from).dot(dir)
+		if t < best_t:
+			best_t = t
+			best = el
+	return best
+
+
 func pick(mpos: Vector2) -> El:
 	var from: Vector3 = main.cam.project_ray_origin(mpos)
 	var dir: Vector3 = main.cam.project_ray_normal(mpos)

@@ -26,14 +26,14 @@ Every change to the game's code or data must keep the autotest green. A change t
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path . --resolution 1280x800 -- --autotest=/tmp/ke_shots > /tmp/ke_autotest.log 2>&1
-grep -c '^PASS' /tmp/ke_autotest.log   # expect 185 at the time of writing
+grep -c '^PASS' /tmp/ke_autotest.log   # expect 196 at the time of writing
 grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 ```
 
 - The log must end with `AUTOTEST DONE`. If it doesn't, the script crashed: look for `SCRIPT ERROR` in the log.
 - The checks are in `scripts/main.gd`. `_autotest()` calls `_story_checks`, `_act1_checks`, `_romance_checks`, `_polish_checks` and others. When you add a feature, add a check for it there.
 - To check only the park benches and trash cans (the models, the one-in-five short bench, sitting on each), add `--only=bench` after `--autotest=DIR`. It takes a few seconds and saves `43_bench.png`, `43_bench_short.png` and a `43_trash_can_N.png` for up to three cans.
-- To check only the HUD (the hotbar and bag, the Esc menu, needs that show only when low, the settings switches), add `--only=hud`. It takes a few seconds and saves `46_hud.png` and `46_bag.png`. Make the folder you give `--autotest=` first, or the pictures aren't saved.
+- To check only the HUD (the hotbar and bag, the Esc menu, the need bars, the settings switches), and the six tools (each used once on the farm), add `--only=hud`. It takes about a minute and saves `46_hud.png`, `46_bag.png`, `47_tools_hotbar.png` and `47_tools_bed.png`. Make the folder you give `--autotest=` first, or the pictures aren't saved.
 - To check only the barn (the model's parts, walking in and out, how it opens up) and the flock's bedtime (the sheep walk to their stalls at dusk and back to the pen at first light), add `--only=barn`. It saves `44_barn.png`, `44_barn_inside.png`, `45_flock_going_in.png` and `45_flock_in_stalls.png`. The rest of the autotest runs with bedtime off (`flock_bedtime`), so its sheep stay in the pen.
 - To check only the walk-in shops (Woolly Goods, the bakery, the land office: walking in through each door, how it opens up, the shopkeeper behind the counter, Hazel's croissant), add `--only=shops`. It saves `46_<shop>.png` and `46_<shop>_inside.png` for `shop`, `bakery` and `office`.
 - To check only the house furniture (the twelve models, the fire's flames and light, the lamp's light), add `--only=house`. That run also sets out the pieces a new house doesn't start with and saves `46_house.png` and three closer pictures.

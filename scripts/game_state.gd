@@ -40,6 +40,8 @@ var inv := {}
 ## Where each carried thing sits: item ids, "" for an empty slot. The first nine are the hotbar,
 ## the rest the bag (hud.gd). Counts stay in `inv`; sync_slots() keeps the two in step.
 const SLOTS := 36
+## The tools she always owns (one each, never used up). main.gd says what each does (_tool_click).
+const TOOLS := ["hoe", "watering_can", "shears", "shovel", "axe", "scythe"]
 var slots: Array = []
 # --- needs, 0..100 (100 = fully met). Shown in the needs panel (hud.gd). ---------
 var energy: float = 100.0
@@ -93,6 +95,7 @@ func load_tuning() -> void:
 func reset() -> void:
 	coins = START_COINS
 	inv = START_INVENTORY.duplicate()
+	give_tools()
 	slots = []
 	energy = 100.0
 	fullness = 80.0
@@ -229,6 +232,11 @@ func sync_slots() -> void:
 			var free := slots.find("")
 			if free >= 0:
 				slots[free] = id
+
+
+func give_tools() -> void:
+	for t in TOOLS:
+		inv[t] = 1
 
 
 func swap_slots(a: int, b: int) -> void:
@@ -383,6 +391,7 @@ func from_dict(d: Dictionary) -> void:
 	var saved_inv: Dictionary = d.get("inv", {})
 	for k in saved_inv:
 		inv[str(k)] = int(saved_inv[k])
+	give_tools() # saves from before the tools get them too
 	slots = []
 	var seen := {}
 	for id in d.get("slots", []):

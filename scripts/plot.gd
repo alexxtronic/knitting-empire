@@ -19,6 +19,7 @@ const CROP_MODEL := "res://assets/props/crop_%s_%d.glb"
 var crop := ""
 var growth := 0.0 # in-game hours of growth
 var watered := false
+var tilled := false # dug with the hoe (main.gd), so saved with its place; the shovel can remove it
 var soil: MeshInstance3D
 var crop_root: Node3D
 var _stage := -2
@@ -179,7 +180,10 @@ func refresh() -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"crop": crop, "growth": growth, "watered": watered}
+	var d := {"crop": crop, "growth": growth, "watered": watered}
+	if tilled:
+		d["tilled"] = [position.x, position.z]
+	return d
 
 
 func from_dict(d: Dictionary) -> void:

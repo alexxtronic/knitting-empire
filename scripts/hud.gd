@@ -196,7 +196,6 @@ var build_btn: Button # at the end of the hotbar
 var menu_btn: Button
 var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
 var needs_panel: PanelContainer
-var needs_all := false # show every need, not only the low ones (Tab does the same while held)
 var cam_pad: PanelContainer
 var fps_check: CheckButton
 var cam_pad_check: CheckButton
@@ -575,7 +574,31 @@ class Slot extends Button:
 		"turnip": ["Turnip", Color(0.82, 0.62, 0.9)],
 		"pumpkin": ["Pumpkin", Color(0.98, 0.55, 0.15)],
 		"sweater": ["Sweater", Color(0.85, 0.25, 0.2)],
+		"wood": ["Wood", Color(0.72, 0.47, 0.25)],
+		"hay": ["Hay", Color(0.94, 0.72, 0.2)],
+		# tools: a third entry says what a click does with it in her hand
+		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "click open ground on the farm to dig a new bed"],
+		"watering_can": ["Watering can", Color(0.45, 0.5, 0.6), "click a growing crop to water it"],
+		"shears": ["Shears", Color(0.8, 0.3, 0.25), "click a woolly sheep to shear it"],
+		"shovel": ["Shovel", Color(0.5, 0.45, 0.45), "click a bed you dug to clear it away"],
+		"axe": ["Axe", Color(0.55, 0.4, 0.3), "click a tree to chop some wood"],
+		"scythe": ["Scythe", Color(0.5, 0.55, 0.5), "click long grass to cut hay"],
 	}
+	static var _icons := {}
+
+	static func holds_tool(item: String) -> bool:
+		return ITEM_INFO.has(item) and (ITEM_INFO[item] as Array).size() > 2
+
+	## What the tool does, for the toast when she takes it in hand ("" for anything else).
+	static func tool_hint(item: String) -> String:
+		return str(ITEM_INFO[item][2]) if holds_tool(item) else ""
+
+	## The item's picture (assets/icons/<id>.png), or null: it is then drawn as a coloured token.
+	static func icon(item: String) -> Texture2D:
+		if not _icons.has(item):
+			var path := "res://assets/icons/%s.png" % item
+			_icons[item] = load(path) if ResourceLoader.exists(path) else null
+		return _icons[item]
 
 	static func item_name(item: String) -> String:
 		return str(ITEM_INFO[item][0]) if ITEM_INFO.has(item) else item.capitalize()
@@ -593,7 +616,12 @@ class Slot extends Button:
 		n = count
 		chosen = in_hand
 		picked = is_picked
-		tooltip_text = "" if id == "" else "%s × %d" % [item_name(id), n]
+		if id == "":
+			tooltip_text = ""
+		elif holds_tool(id):
+			tooltip_text = "%s: %s" % [item_name(id), tool_hint(id)]
+		else:
+			tooltip_text = "%s × %d" % [item_name(id), n]
 		queue_redraw()
 
 	func _draw() -> void:
@@ -602,9 +630,13 @@ class Slot extends Button:
 			draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(0.95, 0.80, 0.46) if chosen else Color(0.6, 0.85, 1.0), false, 3.0)
 		if id != "":
 			var col: Color = ITEM_INFO[id][1] if ITEM_INFO.has(id) else Color.from_hsv(float(id.hash() % 360) / 360.0, 0.45, 0.85)
-			draw_circle(size * 0.5 + Vector2(0, 1.5), size.x * 0.27, Color(0, 0, 0, 0.35))
-			draw_circle(size * 0.5, size.x * 0.27, col)
-			var t := str(n)
+			var pic := icon(id)
+			if pic != null:
+				draw_texture_rect(pic, Rect2(Vector2(4, 4), size - Vector2(8, 8)), false)
+			else:
+				draw_circle(size * 0.5 + Vector2(0, 1.5), size.x * 0.27, Color(0, 0, 0, 0.35))
+				draw_circle(size * 0.5, size.x * 0.27, col)
+			var t := "" if holds_tool(id) else str(n)
 			var w := f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 			draw_string_outline(f, Vector2(size.x - w - 5, size.y - 5), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
 			draw_string(f, Vector2(size.x - w - 5, size.y - 5), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1))
@@ -679,6 +711,7 @@ func toggle_bag() -> void:
 func _slot_clicked(i: int) -> void:
 	if not bag_panel.visible:
 		hot_sel = i # only the hotbar can be clicked with the bag shut
+		_announce_tool()
 		return
 	if _picked < 0:
 		if Game.slots[i] != "":
@@ -692,6 +725,14 @@ func _slot_clicked(i: int) -> void:
 func hotbar_key(n: int) -> void:
 	hot_sel = clampi(n - 1, 0, HOTBAR - 1)
 	click()
+	_announce_tool()
+
+
+## Says what the tool she just took in hand is for.
+func _announce_tool() -> void:
+	var id := selected_item()
+	if Slot.holds_tool(id):
+		show_toast("%s: %s." % [Slot.item_name(id), Slot.tool_hint(id)])
 
 
 ## The id of the thing in her hand ("" for an empty slot).
@@ -732,11 +773,9 @@ const NEED_INFO := {
 }
 
 
-const NEED_LOW := 35.0
-
-## The needs panel: each need is an icon badge, a name and a bar whose arrows show which way it's
-## heading. A need only shows while it is low (under NEED_LOW); hold Tab to see all six. Above
-## them, while she's busy, what she's doing and a Stop button.
+## The needs panel, top left under the Menu button: six needs in one column, each an icon badge,
+## a name and a bar whose arrows show which way it's heading. Above them, while she's busy, what
+## she's doing and a Stop button.
 func _build_needs() -> void:
 	var pc := PanelContainer.new()
 	needs_panel = pc
@@ -788,7 +827,7 @@ func _build_needs() -> void:
 	vb.add_child(grid)
 	pc.add_child(vb)
 	root.add_child(pc)
-	_place(pc, 0.0, 1.0, Vector2(16, 16))
+	_place(pc, 0.0, 0.0, Vector2(16, 62))
 	# the action bar over her head
 	act_bubble = PanelContainer.new()
 	act_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -826,9 +865,6 @@ func _update_needs(delta: float) -> void:
 		elif r < -0.04:
 			t = -1
 		needs_meters[need].set_value(v / 100.0, t)
-		needs_cells[need].visible = needs_all or v < NEED_LOW or Input.is_key_pressed(KEY_TAB)
-	# only what needs her attention: the low needs, and what she's doing
-	needs_panel.visible = now_row.visible or needs_cells.values().any(func(c): return c.visible)
 	if sample:
 		_need_t = 0.0
 		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("her thin city coat" if Game.worn_quality <= 1 else "a %s sweater she knit" % Game.stars(Game.worn_quality))
@@ -1142,7 +1178,8 @@ func _build_help() -> void:
 [b]Live mode:[/b] click the ground to walk; hold [b]Shift[/b] to jog. Click things (chair, bed, kitchen, soil plots, sheep, shipping bin) for a menu of actions.
 [b]Farming:[/b] plant seeds in the soil plots, water them every day, harvest when they glow. Eat crops at the kitchen or ship them.
 [b]Build & Buy[/b] ([b]B[/b], or Build on the bar): pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
-[b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag. Her needs show up bottom left when one runs low; hold [b]Tab[/b] to see them all.
+[b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.
+[b]Tools:[/b] with a tool in her hand, a click uses it. The hoe digs new beds on open ground, the watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
 [b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons.
 [b]Maplewood:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
