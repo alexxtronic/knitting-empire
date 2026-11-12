@@ -2,7 +2,7 @@
   "name": "barn",
   "parts": {
     "base": {
-      "triangles": 2404,
+      "triangles": 2296,
       "materials": [
         "barn_floor",
         "barn_straw",
@@ -13,7 +13,7 @@
       "triangles": 2216,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim",
         "barn_glow",
         "barn_muntin"
@@ -23,7 +23,7 @@
       "triangles": 392,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim"
       ]
     },
@@ -31,7 +31,7 @@
       "triangles": 1276,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_glow",
         "barn_muntin",
         "barn_trim"
@@ -41,14 +41,14 @@
       "triangles": 88,
       "materials": [
         "barn_siding",
-        "barn_boards"
+        "barn_panel"
       ]
     },
     "wall_left": {
       "triangles": 1476,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim",
         "barn_glow",
         "barn_muntin"
@@ -58,7 +58,7 @@
       "triangles": 304,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim"
       ]
     },
@@ -66,7 +66,7 @@
       "triangles": 1476,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim",
         "barn_glow",
         "barn_muntin"
@@ -76,7 +76,7 @@
       "triangles": 304,
       "materials": [
         "barn_siding",
-        "barn_boards",
+        "barn_panel",
         "barn_trim"
       ]
     },
@@ -138,7 +138,7 @@
       ]
     },
     "interior": {
-      "triangles": 5566,
+      "triangles": 6978,
       "materials": [
         "barn_stall",
         "barn_straw",
@@ -150,7 +150,7 @@
       ]
     }
   },
-  "triangles": 26916,
+  "triangles": 28220,
   "images": [
     "barn_beam",
     "barn_beam_n",
@@ -158,6 +158,8 @@
     "barn_boards_n",
     "barn_floor",
     "barn_floor_n",
+    "barn_panel",
+    "barn_panel_n",
     "barn_shake",
     "barn_shake_n",
     "barn_siding",
@@ -171,5 +173,5 @@
     "barn_trim",
     "barn_trim_n"
   ],
-  "glb_bytes": 2321424
+  "glb_bytes": 2656664
 }

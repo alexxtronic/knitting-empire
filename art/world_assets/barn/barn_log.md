@@ -97,6 +97,21 @@ Alex: the sheep should walk into the stalls by themselves at night.
 - The world editor: moving the pen no longer drags a housed sheep out of the barn.
 - Autotest: `_flock_checks`. The rest of the autotest keeps bedtime off, so its sheep stay in the pen.
 
+## Panelled walls and real straw (2026-11-12)
+
+Alex: "give the barn dark red wood panels for the walls", then "the hay in the barn looks bad, try to redo
+it to be more straw-like".
+
+- The inner skin of every wall and gable is now dark red boards (`barn_panel`, `#7a2a20`) in place of the
+  bare wood; the outside was red already. Stalls, gates and the roof deck stay bare wood.
+- Straw: the heaps were smooth striped blobs. `strew()` now lays loose stalks (flat strips, each showing
+  one strand of the straw texture) every which way: 75 trodden about each patch of floor (no blob under
+  them), 120 over each stall's bedding, 150 over the loose pile, strays on the bales and in the trough.
+  The colour is a paler straw gold (`#e6bb4c`) than the orange hay. 28,220 triangles in all.
+- In the game the barn also has the plank floor every building has (`Planks`, shade "barn"), laid just
+  over the model's boards and under the straw.
+- Renders in `review/round3/`.
+
 ## Not done yet
 
 - She cannot go into the stalls herself. Shearing a housed sheep is done from the aisle.

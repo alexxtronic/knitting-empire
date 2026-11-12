@@ -40,7 +40,7 @@ OUT = os.path.join(HERE, "out")
 
 # --- measures (metres) ----------------------------------------------------------------------------
 W, D = 5.6, 5.0            # over the walls
-SKIN = 0.07                # each wall is two skins of boards: red outside, bare wood inside
+SKIN = 0.07                # each wall is two skins of boards: red outside, dark red panelling inside
 H = 2.7                    # eaves
 PITCH = math.radians(43)
 RIDGE = H + W / 2 * math.tan(PITCH)
@@ -94,11 +94,12 @@ def materials():
     M["tan"] = wood("barn_beam", "#d98a3c", "#eea85c", "#a55e1e", seed=7)
     M["shake"] = wood("barn_shake", "#6c493f", "#7f5a4b", "#4d342d", knots=0, seed=9, rough=0.85)
     M["boards"] = wood("barn_boards", "#bd8c54", "#d2a468", "#93653a", seams=4, knots=0, seed=11, n=512)
+    M["panel"] = wood("barn_panel", "#7a2a20", "#93392b", "#521811", seams=4, knots=1, seed=17, n=512)
     M["floor"] = wood("barn_floor", "#a37646", "#bd9160", "#6f4c2a", seams=3, seed=13, n=512)
     M["stall"] = wood("barn_stall", "#c08c50", "#dcae72", "#8c5c2e", seed=15)
     i, nm = stone_maps("barn_stone")
     M["stone"] = K.textured("barn_stone", i, rough=0.9, normal=nm, normal_strength=1.0)
-    i, nm = CL.straw_maps("barn_straw", TEX, base="#f0a51a", light="#ffd34d", dark="#b06a08")
+    i, nm = CL.straw_maps("barn_straw", TEX, base="#e6bb4c", light="#f8e092", dark="#a47424")
     M["straw"] = K.textured("barn_straw", i, rough=0.8, normal=nm, normal_strength=0.7)
     M["iron"] = K.plain("barn_iron", "#3b3435", 0.6)
     M["glow"] = K.plain("barn_glow", "#ffd884", 0.4, emit=1.8)
@@ -143,11 +144,11 @@ class Wall:
 
 
 def skins(wall, a0, a1, z0, z1):
-    """The two layers of boards between a0 and a1: red outside, bare inside."""
+    """The two layers of boards between a0 and a1: red outside, dark red panelling inside."""
     if a1 - a0 < 0.02:
         return
     wall.box("siding", (a0 + a1) / 2, -SKIN / 2, (z0 + z1) / 2, a1 - a0, SKIN, z1 - z0, M["red"], bevel=0.006)
-    wall.box("boards", (a0 + a1) / 2, -SKIN * 1.5, (z0 + z1) / 2, a1 - a0, SKIN, z1 - z0, M["boards"], bevel=0.006)
+    wall.box("boards", (a0 + a1) / 2, -SKIN * 1.5, (z0 + z1) / 2, a1 - a0, SKIN, z1 - z0, M["panel"], bevel=0.006)
 
 
 def window(wall, a, z, w=0.86, h=0.86):
@@ -165,7 +166,7 @@ def window(wall, a, z, w=0.86, h=0.86):
 
 def gable(y, face):
     """The triangle of wall under the roof at one end, two skins, with a window in the front one."""
-    for k, mat in ((0, M["red"]), (1, M["boards"])):
+    for k, mat in ((0, M["red"]), (1, M["panel"])):
         y0 = y - face * SKIN * k
         y1 = y - face * SKIN * (k + 1)
         pts = [(-W / 2, H), (W / 2, H), (0.0, RIDGE)]
@@ -228,12 +229,35 @@ def mound(name, x, y, r, h, sy=1.0, grain="y", seed=0):
     return ob
 
 
+def strew(name, x, y, r, h=0.0, sy=1.0, n=70, z0=0.0, lift=8.0, length=(0.2, 0.4), seed=0):
+    """Loose straw: n stalks strewn every which way over an ellipse (r by r * sy), lying on a heap
+    h high that stands on z0. Each stalk is a flat strip showing one strand of the straw texture
+    (dark at one end, sunlit at the other); `lift` is how far, in degrees, they tip out of level."""
+    rg = random.Random(seed * 13 + 1)
+    verts, faces, uvs = [], [], []
+    for _ in range(n):
+        d, a = rg.random() ** 0.62, rg.uniform(0, math.tau)
+        top = z0 + h * max(0.0, 1.0 - d * d) ** 0.7
+        yaw, pitch = rg.uniform(0, math.tau), math.radians(rg.uniform(-lift, lift))
+        ln, wd = rg.uniform(*length), rg.uniform(0.013, 0.022)
+        run = Vector((math.cos(yaw) * math.cos(pitch), math.sin(yaw) * math.cos(pitch), math.sin(pitch)))
+        side = Vector((-math.sin(yaw), math.cos(yaw), 0.0)) * (wd / 2)
+        c = Vector((x + math.cos(a) * d * r, y + math.sin(a) * d * r * sy, top + 0.012 + abs(run.z) * ln / 2 + rg.uniform(0.0, 0.025)))
+        k = rg.randrange(56)
+        u0, u1 = (k + 0.2) / 56, (k + 0.8) / 56
+        b = len(verts)
+        verts.extend([c - run * (ln / 2) - side, c - run * (ln / 2) + side, c + run * (ln / 2) + side, c + run * (ln / 2) - side])
+        faces.append((b, b + 1, b + 2, b + 3))
+        uvs.extend([(u0, 0.05), (u1, 0.05), (u1, 0.98), (u0, 0.98)])
+    return CL._finish_mesh(name, verts, faces, uvs, M["straw"], recalc=False, smooth=False)
+
+
 def build_base():
     """Floor, straw, the stone footing all the way round and the threshold slab."""
     bx("floor", (W - 0.2, D - 0.2, 0.08), (0, 0, -0.01), M["floor"], grain="y", bevel=0.0)
     for (x, y, r, sy) in ((-1.9, 0.3, 0.75, 0.9), (1.85, 1.5, 0.8, 0.8), (1.9, -0.1, 0.7, 0.85), (-1.9, 1.6, 0.8, 0.8),
                           (0.1, 0.9, 0.9, 1.6), (-1.7, -1.6, 0.9, 0.7)):
-        mound("straw", x, y, r, 0.05, sy, seed=int(x * 10 + y * 3))
+        strew("straw", x, y, r * 1.1, 0.02, sy, n=75, z0=0.03, lift=6, seed=int(x * 10 + y * 3))   # trodden about the floor
     for side, yaw, half, length in (("front", 0.0, D / 2, W), ("back", math.pi, D / 2, W),
                                     ("right", math.pi / 2, W / 2, D), ("left", -math.pi / 2, W / 2, D)):
         wall = Wall(yaw, half, length)
@@ -412,14 +436,18 @@ def build_interior():
             PARTS[name] = leaf
             CLAIMED.update(leaf)
             HINGES[name] = (s * aisle, a0 - 0.02, 0.0)
-            mound("bedding", s * (ix + aisle) / 2 + s * 0.1, (y0 + y1) / 2, 0.66, 0.13, 0.85, grain="x", seed=k + 5 * s)
+            mound("bedding", s * (ix + aisle) / 2 + s * 0.1, (y0 + y1) / 2, 0.62, 0.11, 0.85, grain="x", seed=k + 5 * s)
+            strew("bedding", s * (ix + aisle) / 2 + s * 0.1, (y0 + y1) / 2, 0.7, 0.12, 0.85, n=120, lift=14, seed=k + 5 * s)
             bucket(s * (aisle + 0.33), y1 - 0.34)
         bx("stall_post", (0.15, 0.15, 1.42), (s * aisle, iy - 0.075, 0.71), M["stall"], bevel=0.03, seg=2)
     # front left: hay, baled and loose
     bale(-1.95, -1.95, 0.0, 8)
     bale(-1.9, -1.42, 0.0, -5)
     bale(-1.93, -1.72, 0.40, 3)
-    mound("hay_pile", -1.25, -1.05, 0.6, 0.42, 0.85, grain="z", seed=9)
+    mound("hay_pile", -1.25, -1.05, 0.56, 0.4, 0.85, grain="z", seed=9)
+    strew("hay_pile", -1.25, -1.05, 0.66, 0.42, 0.85, n=150, lift=32, length=(0.22, 0.46), seed=9)
+    for bx_, by_, bz_ in ((-1.95, -1.95, 0.40), (-1.9, -1.42, 0.40), (-1.93, -1.72, 0.80)):
+        strew("bale_stray", bx_, by_, 0.42, 0.0, 0.5, n=12, z0=bz_ - 0.01, lift=24, length=(0.12, 0.24), seed=int(by_ * -10))
     # front right: a feed trough on legs, sacks, a barrel
     trough(1.92, -1.3)
     for (x, y, yaw, lean) in ((1.2, -2.05, 20, 0), (1.62, -2.1, -15, 0), (1.42, -2.02, 5, 1)):
@@ -453,6 +481,7 @@ def trough(x, y):
     ob = K.ball("trough_hay", 0.3, (x, y, 0.56), M["straw"], scale=(0.62, 2.3, 0.36), u=10, v=6)
     K.apply_mods(ob)
     K.uv_box(ob, 1.6, grain="y")
+    strew("trough_hay", x, y, 0.2, 0.09, 3.2, n=40, z0=0.57, lift=20, length=(0.16, 0.3), seed=4)
 
 
 def barrel(x, y):
