@@ -1,5 +1,5 @@
 {
-  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed', 'brisk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk, Brisk (the Walk with a longer stride, used above a stroll) and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Everyone with a model plays with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Their eyes are real (tools/add_eyes.py cuts the painted ones out and adds eyeballs, lids and lashes: the '_eyes' models, driven by scripts/face.gd); 'model_painted_eyes' is the model before that, and is used while the '_eyes' model hasn't been made yet (the NPCs Alex added on 2026-11-12: Barbara, Gary, Giorgio, Sabrina, Steve, and Wren's new model). Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
+  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed', 'brisk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk, Brisk (the Walk with a longer stride, used above a stroll) and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Everyone with a model plays with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Their eyes are real (tools/add_eyes.py cuts the painted ones out and adds eyeballs, lids and lashes: the '_eyes' models, driven by scripts/face.gd); 'model_painted_eyes' is the model before that. The NPCs Alex added on 2026-11-12 (Barbara, Gary, Giorgio, Sabrina, Steve, and Wren's new model) play with their painted-eye model for now; 'model_eyes' is where their real-eyed model goes, to be swapped into 'model' once Alex approves it. Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
   "player": "nora",
   "characters": [
     {
@@ -29,7 +29,8 @@
     {
       "id": "wren",
       "name": "Wren",
-      "model": "res://assets/wren_tripo_eyes.glb",
+      "model": "res://assets/wren_tripo.glb",
+      "model_eyes": "res://assets/wren_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/wren_tripo.glb",
       "walk_anim_speed": 1.01,
       "brisk_anim_speed": 1.18,
@@ -39,7 +40,8 @@
     {
       "id": "barbara",
       "name": "Barbara",
-      "model": "res://assets/barbara_tripo_eyes.glb",
+      "model": "res://assets/barbara_tripo.glb",
+      "model_eyes": "res://assets/barbara_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/barbara_tripo.glb",
       "walk_anim_speed": 1.01,
       "brisk_anim_speed": 1.18,
@@ -49,7 +51,8 @@
     {
       "id": "gary",
       "name": "Gary",
-      "model": "res://assets/gary_tripo_eyes.glb",
+      "model": "res://assets/gary_tripo.glb",
+      "model_eyes": "res://assets/gary_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/gary_tripo.glb",
       "walk_anim_speed": 1.06,
       "brisk_anim_speed": 1.21,
@@ -59,7 +62,8 @@
     {
       "id": "giorgio",
       "name": "Giorgio",
-      "model": "res://assets/giorgio_tripo_eyes.glb",
+      "model": "res://assets/giorgio_tripo.glb",
+      "model_eyes": "res://assets/giorgio_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/giorgio_tripo.glb",
       "walk_anim_speed": 1.06,
       "brisk_anim_speed": 1.21,
@@ -69,7 +73,8 @@
     {
       "id": "sabrina",
       "name": "Sabrina",
-      "model": "res://assets/sabrina_tripo_eyes.glb",
+      "model": "res://assets/sabrina_tripo.glb",
+      "model_eyes": "res://assets/sabrina_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/sabrina_tripo.glb",
       "walk_anim_speed": 1.01,
       "brisk_anim_speed": 1.18,
@@ -79,7 +84,8 @@
     {
       "id": "steve",
       "name": "Steve",
-      "model": "res://assets/steve_tripo_eyes.glb",
+      "model": "res://assets/steve_tripo.glb",
+      "model_eyes": "res://assets/steve_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/steve_tripo.glb",
       "walk_anim_speed": 1.06,
       "brisk_anim_speed": 1.21,
