@@ -26,8 +26,8 @@ def setup(name, seed):
     stone.node_tree.nodes["Principled BSDF"].inputs["Specular IOR Level"].default_value = 0.3
     ma, mn = N.moss_maps(name + "_moss", TEX, seed=seed)
     moss = K.textured(name + "_moss_mat", ma, rough=0.95, normal=mn, normal_strength=1.0)
-    blade = K.plain(name + "_grass", "#3d8a22", 0.6)
-    blade2 = K.plain(name + "_grass2", "#5aa32a", 0.6)
+    blade = K.plain(name + "_grass", "#34532a", 0.7)
+    blade2 = K.plain(name + "_grass2", "#4a6a2e", 0.7)
     pebble = K.plain(name + "_pebble", "#6a5d52", 0.8)
     return stone, moss, blade, blade2, pebble
 

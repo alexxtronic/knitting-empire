@@ -12,7 +12,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 4850,
+      "triangles": 4762,
       "materials": [
         "walls_office",
         "stone_office",
@@ -24,8 +24,6 @@
         "bloom_a",
         "bloom_b",
         "bloom_c",
-        "timber_office",
-        "sign_office",
         "column"
       ]
     },
@@ -116,6 +114,6 @@
       ]
     }
   },
-  "triangles": 14992,
-  "glb_bytes": 3577896
+  "triangles": 14904,
+  "glb_bytes": 3571680
 }

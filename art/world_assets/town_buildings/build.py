@@ -8,6 +8,8 @@ stone step, and each shop's own extras (striped awnings and a yarn basket, a bre
 chalkboard, a porch and a notice board).
 
 The sign board sits where town.gd puts its lettering (a Label3D, so the names stay editable text).
+The shops with a hanging sign (art/world_assets/shop_signs, HANGING_SIGN) have no board: town.gd
+hangs the sign there instead.
 
 You can walk in, so the model is exported in parts, like the barn (scripts/interiors.gd opens it up):
 
@@ -60,6 +62,7 @@ W, D = S["w"], S["d"]
 H = 3.4  # eaves
 BAND = 2.74  # the timber band over the door, below the sign
 SIGN_Z = H - 0.38  # the sign board's centre (town.gd puts the name there)
+HANGING_SIGN = ("shop", "bakery", "office", "homegoods")  # town.gd hangs a carved sign (shop_signs) here, no board
 G = 1.6  # gable rise
 PL = 0.35  # plinth height
 FRONT = -D / 2
@@ -411,7 +414,8 @@ def build_wall(side, low):
     apply_cuts(targets)
     timbers(side)
     if side == "front" and CAP is None:
-        sign_board()
+        if KIND not in HANGING_SIGN:
+            sign_board()
         front_extras()
     CAP = None
 

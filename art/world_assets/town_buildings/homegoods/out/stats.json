@@ -9,7 +9,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 4814,
+      "triangles": 4726,
       "materials": [
         "walls_homegoods",
         "stone_homegoods",
@@ -24,7 +24,6 @@
         "awning_homegoods",
         "iron",
         "timber_homegoods",
-        "sign_homegoods",
         "handle"
       ]
     },
@@ -122,6 +121,6 @@
       ]
     }
   },
-  "triangles": 12456,
-  "glb_bytes": 3574608
+  "triangles": 12368,
+  "glb_bytes": 3566516
 }

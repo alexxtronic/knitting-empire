@@ -1,0 +1,14 @@
+{
+  "id": "trash_can",
+  "atlas": 256,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.373,
+  "light_p05": 0.0,
+  "seconds": 4.3,
+  "glb_bytes": 1093908,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

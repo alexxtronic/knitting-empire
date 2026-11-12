@@ -1,0 +1,36 @@
+{
+  "name": "sign_heart_bakery",
+  "triangles": 9220,
+  "materials": [
+    "shopsign_board",
+    "shopsign_face_heart_bakery",
+    "shopsign_rod",
+    "shopsign_iron",
+    "shopsign_bolt",
+    "shopsign_ring"
+  ],
+  "size_m": [
+    1.988,
+    0.175,
+    0.757
+  ],
+  "min_m": [
+    -0.996,
+    -0.175,
+    -0.336
+  ],
+  "max_m": [
+    0.992,
+    0.0,
+    0.421
+  ],
+  "images": [
+    "heart_bakery_face.png",
+    "heart_bakery_face_n.png",
+    "shopsign_board",
+    "shopsign_board_n",
+    "shopsign_rod",
+    "shopsign_rod_n"
+  ],
+  "glb_bytes": 1860996
+}

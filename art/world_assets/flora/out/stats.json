@@ -1,0 +1,29 @@
+{
+  "name": "hedge",
+  "triangles": 1432,
+  "materials": [
+    "hedge_mat",
+    "hedge_leaves"
+  ],
+  "size_m": [
+    2.323,
+    1.088,
+    1.281
+  ],
+  "min_m": [
+    -1.246,
+    -0.544,
+    0.0
+  ],
+  "max_m": [
+    1.076,
+    0.543,
+    1.281
+  ],
+  "images": [
+    "cluster_dark.png",
+    "hedge_leaf.png",
+    "hedge_leaf_n.png"
+  ],
+  "glb_bytes": 652992
+}

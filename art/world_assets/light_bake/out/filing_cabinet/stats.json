@@ -1,0 +1,14 @@
+{
+  "id": "filing_cabinet",
+  "atlas": 512,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.527,
+  "light_p05": 0.0,
+  "seconds": 40.3,
+  "glb_bytes": 346084,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

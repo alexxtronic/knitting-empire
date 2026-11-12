@@ -1,0 +1,14 @@
+{
+  "id": "daisy_crate",
+  "atlas": 256,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.187,
+  "light_p05": 0.0,
+  "seconds": 44.1,
+  "glb_bytes": 939192,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

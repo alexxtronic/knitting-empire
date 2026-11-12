@@ -1,0 +1,78 @@
+{
+  "title": "hay_bale",
+  "subject": "stylised hand-painted cozy farm prop",
+  "collection_prefix": "KE_",
+  "hdri": "",
+  "hdri_strength": 0.07,
+  "hdri_rotation_deg": 215.0,
+  "ground": "asphalt",
+  "ground_z": -0.001,
+  "cameras": {
+    "hero": [
+      [
+        1.2,
+        -1.4,
+        0.95
+      ],
+      [
+        0,
+        0,
+        0.22
+      ],
+      45
+    ],
+    "game": [
+      [
+        1.6,
+        -1.6,
+        2.4
+      ],
+      [
+        0,
+        0,
+        0.2
+      ],
+      45
+    ],
+    "side": [
+      [
+        0,
+        -1.8,
+        0.3
+      ],
+      [
+        0,
+        0,
+        0.24
+      ],
+      45
+    ],
+    "detail": [
+      [
+        0.35,
+        -0.65,
+        0.5
+      ],
+      [
+        0.1,
+        -0.2,
+        0.35
+      ],
+      45
+    ]
+  },
+  "final": {
+    "res": [
+      1600,
+      1066
+    ],
+    "samples": 128
+  },
+  "preview": {
+    "res": [
+      960,
+      640
+    ],
+    "samples": 48
+  }
+}

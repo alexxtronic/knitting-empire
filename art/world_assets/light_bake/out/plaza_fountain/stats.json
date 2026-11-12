@@ -1,0 +1,14 @@
+{
+  "id": "plaza_fountain",
+  "atlas": 1024,
+  "reach": 1.0,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.333,
+  "light_p05": 0.0,
+  "seconds": 16.7,
+  "glb_bytes": 4261472,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

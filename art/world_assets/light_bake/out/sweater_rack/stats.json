@@ -1,0 +1,14 @@
+{
+  "id": "sweater_rack",
+  "atlas": 256,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.476,
+  "light_p05": 0.0,
+  "seconds": 7.5,
+  "glb_bytes": 333816,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

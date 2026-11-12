@@ -1,0 +1,33 @@
+{
+  "name": "rock_single",
+  "triangles": 2494,
+  "materials": [
+    "rock_single_stone_mat",
+    "rock_single_moss_mat",
+    "rock_single_grass",
+    "rock_single_grass2",
+    "rock_single_pebble"
+  ],
+  "size_m": [
+    0.976,
+    0.899,
+    0.419
+  ],
+  "min_m": [
+    -0.492,
+    -0.401,
+    0.0
+  ],
+  "max_m": [
+    0.484,
+    0.498,
+    0.419
+  ],
+  "images": [
+    "rock_single_moss_albedo",
+    "rock_single_moss_normal",
+    "rock_single_stone_albedo",
+    "rock_single_stone_normal"
+  ],
+  "glb_bytes": 5468576
+}

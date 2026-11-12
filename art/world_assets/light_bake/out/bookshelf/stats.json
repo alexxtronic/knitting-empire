@@ -1,0 +1,14 @@
+{
+  "id": "bookshelf",
+  "atlas": 1024,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.193,
+  "light_p05": 0.0,
+  "seconds": 14.0,
+  "glb_bytes": 1306076,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

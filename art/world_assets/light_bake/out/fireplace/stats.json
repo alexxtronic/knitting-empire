@@ -1,0 +1,14 @@
+{
+  "id": "fireplace",
+  "atlas": 1024,
+  "reach": 0.8,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.252,
+  "light_p05": 0.0,
+  "seconds": 30.8,
+  "glb_bytes": 1452244,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

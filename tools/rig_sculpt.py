@@ -2,7 +2,7 @@
 
 Run headless:
   Blender -b tools/character_build/<id>/<id>.blend -P tools/rig_sculpt.py -- \
-      <project_dir> <colored.ply> <out_id> [--faces 24000] [--tex 2048] [--render DIR]
+      <project_dir> <colored.ply> <out_id> [--faces 24000] [--tex 2048] [--height 1.9] [--render DIR]
 
 Takes a body mesh, either a vertex-coloured .ply (image-to-sculpt plus tools/project_colors.py, or
 tools/run_triposr.py; +Z up, facing -Y, any scale) or a textured .glb/.gltf (e.g. from tripo.ai: glTF's
@@ -30,6 +30,7 @@ PROJECT, PLY, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[
 FACES = int(argv[argv.index("--faces") + 1]) if "--faces" in argv else 24000
 TEX = int(argv[argv.index("--tex") + 1]) if "--tex" in argv else 2048
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
+HEIGHT = float(argv[argv.index("--height") + 1]) if "--height" in argv else 0.0  # the sculpt's full height in metres when it is not the rig's: a tall hat or big hair puts the chin too low otherwise
 COAT = float(argv[argv.index("--coat") + 1]) if "--coat" in argv else 0.0  # nearest-bone weights: jacket length below the hips
 
 scene = bpy.context.scene
@@ -69,7 +70,7 @@ else:
 hi.name = OUT_ID + "_hi"
 V = np.array([v.co[:] for v in hi.data.vertices])
 z0, h = V[:, 2].min(), V[:, 2].max() - V[:, 2].min()
-s = head_top / h
+s = (HEIGHT or head_top) / h
 torso = V[(V[:, 2] - z0 > 0.59 * h) & (V[:, 2] - z0 < 0.73 * h)]
 # x from the middle of the slice's outline, not the median vertex: dense detail on one side (a badge
 # on the chest) would pull a median off the body's centre line
@@ -337,6 +338,14 @@ for side, sx in (("Left", 1), ("Right", -1)):
     seeds_arm = np.where(side_ok & (d_fore < 0.05) & (L[:, 2] > wrist[2] + 0.06))[0]
     seeds_body = np.where(side_ok & (((d_thigh < 0.07) & (L[:, 2] < seg[side + "Hand"][1][2] - 0.03))
                                      | ((np.abs(L[:, 0]) < 0.05) & (np.abs(L[:, 2] - elbow[2]) < 0.1))))[0]
+    if "--wide-body" in argv:
+        # a stout body's apron or overalls are further than 7 cm from the thigh bone, so the thigh finds no
+        # seeds on them and the arm's skin floods the hip: the body's core (inside the wrist line, knee to
+        # armpit) is body too, and thick forearms need a wider reach to be found at all
+        knee_z = seg[side + "LowerLeg"][0][2]
+        core = side_ok & (np.abs(L[:, 0]) < 0.6 * abs(wrist[0])) & (L[:, 2] > knee_z) & (L[:, 2] < sh_z - 0.08)
+        seeds_body = np.union1d(seeds_body, np.where(core)[0])
+        seeds_arm = np.where(side_ok & (d_fore < 0.085) & (L[:, 2] > wrist[2] + 0.06) & (np.abs(L[:, 0]) > 0.75 * abs(elbow[0])))[0]
     if not len(seeds_arm) or not len(seeds_body):
         print("SPLIT", side, "skipped: no seeds")
         continue

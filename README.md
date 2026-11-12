@@ -80,6 +80,8 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `tools/make_audio.py` | makes every sound in `assets/audio/` (footsteps, needles, UI, ambience loops, the music) |
 | `scripts/rig.gd` | procedural motion on top of the loops: head turns to look at people, idle glances and weight shifts, leaning into turns, breathing |
 | `scripts/grass.gd` | the ground and the grass blades |
+| `scripts/lighting.gd`, `shaders/mist.gdshader` | the morning mist and its light shafts, SDFGI on High |
+| `art/world_assets/light_bake/build.py` | Cycles light bake: each static prop's contact shadows and bounce light, baked into its GLB |
 | `shaders/woolcore.gdshader` | the felt and knit look |
 | `shaders/ground`, `grass_blade`, `foliage`, `water`, `sky` | ground, grass, trees, pond and sky |
 | `docs/woolcore/` | style frames (ignored by Godot) |
@@ -186,6 +188,8 @@ The three style frames in `docs/woolcore/` are made by the game itself:
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path "$PWD" --resolution 1280x800 -- --styleframes="$PWD/docs/woolcore"
 ```
+
+**Light.** Two halves. Live, in Godot: the sun moves through the day with soft shadows that are crisp where a thing touches the ground and blur further out, screen-space bounce light and contact shading, SDFGI on High (light bouncing across the whole scene, the sky shut out under the trees and indoors), and a morning mist (`scripts/lighting.gd`): a low, patchy volumetric fog that rises before first light, is thickest when Nora wakes at 6 and burns off by about 10, with the low sun's shadows through it as shafts of light between the trees. Baked, in Blender: `art/world_assets/light_bake/build.py` path-traces each static prop in Cycles under a white sky (the shade under a bench seat, the creases of a sofa, the foot of a wall, and the light bouncing back into them) and bakes it into an atlas inside the prop's GLB, which Godot reads as ambient occlusion. Only what is close to the prop counts, so the bake moves with it when it's moved in the world editor; the sun's shadows stay live because the sun moves.
 
 To see what each graphics effect costs, the frame-cost probe times the town at noon and the farm at night with each effect switched off in turn (vsync off; macOS sometimes turns it back on, and then every reading pins at the display's refresh time):
 

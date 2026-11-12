@@ -22,6 +22,7 @@ const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
+const Lighting = preload("res://scripts/lighting.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
@@ -98,6 +99,7 @@ var chat_v = null # the villager you're chatting with
 var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
+var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
 var decor_root: Node3D
 var sign_to_town: Landmark
 var sign_to_farm: Landmark
@@ -165,6 +167,9 @@ func _ready() -> void:
 		# stray click or hover can't send Nora somewhere else or move a piece being placed
 		get_window().mouse_passthrough = true
 	_setup_environment()
+	lighting = Lighting.new()
+	add_child(lighting)
+	lighting.setup(self)
 	_fit_3d_resolution()
 	get_viewport().size_changed.connect(_fit_3d_resolution)
 	cam = Camera3D.new()
@@ -505,6 +510,7 @@ func apply_graphics() -> void:
 	for l in find_children("*", "OmniLight3D", true, false):
 		(l as OmniLight3D).shadow_enabled = med
 	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
+	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
 
@@ -577,6 +583,7 @@ func _update_lighting() -> void:
 	env.volumetric_fog_density = 0.01 * rain + 0.004 * warm * warm * dl
 	env.volumetric_fog_enabled = gfx >= 1 and env.volumetric_fog_density > 0.0006
 	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.95).lerp(horizon, 0.3)
+	lighting.update(rain, dl)
 	env.adjustment_saturation = 1.1 - 0.3 * rain
 	if World.foliage_mat:
 		World.foliage_mat.set_shader_parameter("wind", 0.18 + rain * 0.3)
@@ -1385,22 +1392,29 @@ var _chopped := {} # tree (a god mode element) -> the day it was last chopped: o
 
 
 const TOOL_MODEL := "res://assets/props/%s.glb"
-## How a tool sits in her right hand: the hand bone's own space, the tool's grip at the palm.
-## Tools stand along their +Y from the foot of the handle (art/world_assets/tools/build.py).
-const TOOL_GRIP := 0.2 # metres up the handle
-const TOOL_PALM := Vector3(0.0, 0.07, 0.03) # the palm, in the hand bone's space
-const TOOL_TILT := 35.0 # degrees the handle points up from level, out in front of her
-## Tools held other than the hatchet's way: [grip metres up the model, tilt]. The long tools are
-## held further up the shaft and lower; the can hangs from the top of its bail, spout forward.
-const TOOL_HOLD := {"hoe": [0.32, 22.0], "shovel": [0.3, 22.0], "scythe": [0.3, 22.0], "shears": [0.07, 35.0],
-	"watering_can": [0.368, 90.0]}
-var _tool_grip: Node3D
-var _tool_fit := 0 # frames until the grip is fitted to her hand (the bone has to have moved first)
+## Her right fist, from tools/add_grip.py: the 'grip_R' shape key curls her fingers round a handle
+## through FIST_C along FIST_AXIS (her model's own space in its rest pose: forward is +Z, the hand
+## hanging down at her side). A tool's handle goes through that, so her fingers close round it.
+const FIST_C := Vector3(-0.194, 0.716, 0.06)
+const FIST_AXIS := Vector3(0, 0, 1)
+const FIST_DOWN := Vector3(0, -1, 0)
+## How each tool sits in the fist, in the tool model's own space (built standing up, art/world_assets/
+## tools/build.py): the point held, the handle's direction toward the working end, the side that
+## hangs down, and its size in the game. Each is held where its handle is as thick as the fist.
+const TOOL_HOLD := {
+	"axe": [Vector3(0.004, 0.36, 0), Vector3.UP, Vector3.RIGHT, 0.55],
+	"hoe": [Vector3(0, 0.3, 0), Vector3.UP, Vector3.RIGHT, 0.65],
+	"shovel": [Vector3(0, 0.3, 0), Vector3.UP, Vector3.BACK, 0.65],
+	"scythe": [Vector3(0, 0.37, 0), Vector3.UP, Vector3.RIGHT, 0.65],
+	"shears": [Vector3(0.044, 0.11, 0.0065), Vector3(-0.22, 0.975, 0), Vector3.RIGHT, 0.8],
+	"watering_can": [Vector3(0, 0.368, 0), Vector3.RIGHT, Vector3.DOWN, 0.75],
+}
 var _tool_hand: BoneAttachment3D
 var _held_id := ""
+var _grip_meshes: Array = [] # her meshes with the grip_R shape key
 
 
-## Shows the hotbar's tool in her hand (once that tool has a model), and takes it away while she
+## Shows the hotbar's tool in her fist (once that tool has a model), and takes it away while she
 ## sits, sleeps or is in a story scene.
 func _update_held_tool() -> void:
 	var id := hud.selected_item() if not title_on else ""
@@ -1408,33 +1422,42 @@ func _update_held_tool() -> void:
 		id = ""
 	if id != _held_id and player.body and player.body.skeleton:
 		_held_id = id
+		var sk: Skeleton3D = player.body.skeleton
 		if _tool_hand == null:
 			_tool_hand = BoneAttachment3D.new()
-			player.body.skeleton.add_child(_tool_hand)
+			sk.add_child(_tool_hand)
 			_tool_hand.bone_name = "RightHand"
+			_grip_meshes = player.body.find_children("*", "MeshInstance3D", true, false).filter(
+				func(mi): return mi.mesh != null and mi.find_blend_shape_by_name("grip_R") >= 0)
 		for c in _tool_hand.get_children():
 			c.queue_free()
 		if id != "":
-			_tool_grip = Node3D.new() # the model hangs from its grip point, not its foot
-			_tool_hand.add_child(_tool_grip)
-			_tool_grip.position = TOOL_PALM
-			var m := Catalog.model(TOOL_MODEL % id, _tool_grip)
+			var m := Catalog.model(TOOL_MODEL % id, _tool_hand)
 			if m:
-				m.position = Vector3(0, -float(TOOL_HOLD.get(id, [TOOL_GRIP])[0]), 0)
-			_tool_fit = 3
-	if _tool_fit > 0 and _held_id != "" and not player.busy:
-		_tool_fit -= 1
-		if _tool_fit == 0:
-			# Carried like a hatchet: the handle out in front of her and tilted up, the blade down.
-			# Fitted once against how her hand hangs now; after that it moves with the hand.
-			var fwd: Vector3 = player.global_transform.basis.z.normalized()
-			var a := deg_to_rad(float(TOOL_HOLD.get(_held_id, [0.0, TOOL_TILT])[1]))
-			var handle := (fwd * cos(a) + Vector3.UP * sin(a)).normalized()
-			var blade := (fwd * sin(a) - Vector3.UP * cos(a)).normalized()
-			var want := Basis(blade, handle, blade.cross(handle))
-			_tool_grip.basis = _tool_hand.global_transform.basis.orthonormalized().inverse() * want
+				m.transform = _tool_in_fist(sk, id)
 	if _tool_hand:
 		_tool_hand.visible = _held_id != "" and mode == Mode.LIVE and not story.is_playing() and not player.is_sitting() and not player.is_lying()
+		for mi in _grip_meshes:
+			mi.set_blend_shape_value(mi.find_blend_shape_by_name("grip_R"), 1.0 if _tool_hand.visible else 0.0)
+
+
+## Where a tool sits in the hand bone's space: its handle through the fist, the hanging side down.
+func _tool_in_fist(sk: Skeleton3D, id: String) -> Transform3D:
+	var hold: Array = TOOL_HOLD[id]
+	var rest: Transform3D = sk.get_bone_global_rest(sk.find_bone("RightHand")).orthonormalized()
+	var a: Vector3 = rest.basis.inverse() * FIST_AXIS
+	var d: Vector3 = rest.basis.inverse() * FIST_DOWN
+	var want := _frame(a, d)
+	var have := _frame(hold[1], hold[2])
+	var b: Basis = (want * have.inverse()).scaled(Vector3.ONE * float(hold[3]))
+	return Transform3D(b, rest.affine_inverse() * FIST_C - b * (hold[0] as Vector3))
+
+
+## A right-handed frame from a main direction and a second one squared off against it.
+func _frame(main_dir: Vector3, second: Vector3) -> Basis:
+	var x := main_dir.normalized()
+	var y := (second - x * second.dot(x)).normalized()
+	return Basis(x, y, x.cross(y))
 
 
 ## Uses the tool on whatever was clicked. False when the tool has nothing to do there, and the
@@ -2951,6 +2974,8 @@ func _run_fps_probe() -> void:
 		"ssil": func(on): env.ssil_enabled = on,
 		"vol_fog": func(on): env.volumetric_fog_enabled = on,
 		"glow": func(on): env.glow_enabled = on,
+		"sdfgi": func(on): env.sdfgi_enabled = on,
+		"morning mist": func(on): lighting.mist_enabled = on,
 		"sun_shadow": func(on): sun.shadow_enabled = on,
 		"sun_soft": func(on): RenderingServer.directional_soft_shadow_filter_set_quality(4 if on else 2),
 		"lamp_shadows": func(on):
@@ -2974,7 +2999,7 @@ func _run_fps_probe() -> void:
 		else:
 			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 			vp.scaling_3d_scale = 1.0
-	for view in [["town noon", Vector3(53, 0, -3), 30.0, 10.8], ["farm night", Vector3(8, 0, -2), 23.0, 21.5]]:
+	for view in [["town noon", Vector3(53, 0, -3), 30.0, 10.8], ["farm night", Vector3(8, 0, -2), 23.0, 21.5], ["woods dawn", Lighting.SHOT_TARGET, Lighting.SHOT_DIST, 6.6]]:
 		cam_target = view[1]
 		cam_dist = view[2]
 		Game.hour = view[3]
@@ -3250,7 +3275,8 @@ func _polish_checks() -> void:
 	var built: Array[String] = []
 	for b in find_children("Building_*", "Node3D", true, false):
 		var meshes := b.find_children("*", "MeshInstance3D", true, false).size()
-		var named := false
+		# the name: painted on its board (a Label3D) or a carved hanging sign (art/world_assets/shop_signs)
+		var named := b.find_children("HangingSign", "Node3D", true, false).any(func(s: Node) -> bool: return s.find_children("*", "MeshInstance3D", true, false).size() > 0)
 		for l in b.find_children("*", "Label3D", true, false):
 			named = named or (l as Label3D).text != ""
 		if meshes > 0 and named:
@@ -3259,6 +3285,16 @@ func _polish_checks() -> void:
 	var want: Array[String] = ["bakery", "office", "shop"]
 	_check("town buildings are the modelled Yarn Barn, Heart Bakery, Willow Homes and Builder's Delight, each with its sign (%s)" % ", ".join(built),
 		want.all(func(k: String) -> bool: return k in built))
+	# the carved hanging signs over the shops (town.gd HANGING_SIGNS), on the walls, under the eaves
+	var hung: Array[String] = []
+	for b in find_children("Building_*", "Node3D", true, false):
+		for s in b.find_children("HangingSign", "Node3D", true, false):
+			var top := (s as Node3D).global_position.y - (b as Node3D).global_position.y
+			if top > 2.7 and top < 3.4:
+				hung.append(str(b.get_meta("building_model", "")))
+	hung.sort()
+	_check("the carved signs hang over the Yarn Barn, Heart Bakery, Willow Homes and Builder's Delight (%s)" % ", ".join(hung),
+		["bakery", "office", "shop"].all(func(k: String) -> bool: return k in hung))
 	# crops show their modelled growth stages (art/world_assets/crops); the yarn set is modelled too
 	var pl = plots[plots.size() - 1]
 	var saved: Dictionary = pl.to_dict()
@@ -3424,6 +3460,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=light" in OS.get_cmdline_user_args(): # just the lighting: the bake, the morning mist, dawn, noon and dusk
+		await _wait(1.5)
+		await _light_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=hud" in OS.get_cmdline_user_args(): # just the hotbar, bag, menu and needs checks
 		await _wait(1.5)
 		await _hud_checks()
@@ -3586,9 +3628,56 @@ func _autotest() -> void:
 	await _barn_checks()
 	await _shop_checks()
 	await _flock_checks()
+	await _light_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
+
+
+## The lighting (scripts/lighting.gd, art/world_assets/light_bake): the props carry their Cycles
+## light bake, the morning mist comes and goes with the hour, SDFGI is on at High, and a picture of
+## the same corner of the woods at dawn, noon and dusk (48_light_*.png).
+func _light_checks() -> void:
+	var was_running: bool = Game.time_running
+	Game.time_running = false
+	_set_cam_lock(false)
+	var missing: Array = []
+	for id in Lighting.BAKED:
+		var path := "res://assets/props/%s.glb" % id
+		if not ResourceLoader.exists(path):
+			missing.append(id + " (no model)")
+			continue
+		var inst := (load(path) as PackedScene).instantiate()
+		if Lighting.baked_ao_count(inst) == 0:
+			missing.append(id)
+		inst.free()
+	_check("the %d baked props carry their Cycles light bake (ambient occlusion on UV2)%s" % [Lighting.BAKED.size(), "" if missing.is_empty() else ": missing " + ", ".join(missing)], missing.is_empty())
+	_check("SDFGI is on at High graphics", gfx == 2 and env.sdfgi_enabled)
+	var hours := [["dawn", 6.6], ["noon", 12.5], ["dusk", 18.7]]
+	var mist_at := {}
+	for v in hours:
+		Game.hour = v[1]
+		player.position = Vector3(2.0, 0, 9.0)
+		cam_yaw = deg_to_rad(Lighting.SHOT_YAW)
+		cam_yaw_goal = cam_yaw
+		cam_target = Lighting.SHOT_TARGET
+		cam_dist = Lighting.SHOT_DIST
+		cam_pitch = Lighting.SHOT_PITCH
+		cam_glide = {"pos": Lighting.SHOT_TARGET, "dist": Lighting.SHOT_DIST, "pitch": Lighting.SHOT_PITCH}
+		await _wait(2.5) # the volumetric fog settles over a few frames
+		mist_at[v[0]] = lighting.mist
+		if v[0] == "dawn":
+			var ms := await _frame_ms()
+			print("      dawn, mist and shafts: %.1f ms a frame (%.0f fps), 3D at %d%%" % [ms, 1000.0 / ms, roundi(get_viewport().scaling_3d_scale * 100)])
+			_check("morning mist at 6:36: thick, in volumetric fog, and the sun lights it (%.2f)" % lighting.mist,
+				lighting.mist > 0.8 and lighting.mist_volume.visible and env.volumetric_fog_enabled and sun.light_volumetric_fog_energy > 2.5)
+		await _shot("48_light_%s.png" % v[0])
+		cam_glide = {}
+	_check("the mist has burnt off by noon and stays away at dusk (%.2f, %.2f)" % [mist_at["noon"], mist_at["dusk"]],
+		mist_at["noon"] < 0.01 and mist_at["dusk"] < 0.01 and not lighting.mist_volume.visible)
+	Game.hour = 10.0
+	await _wait(0.2)
+	Game.time_running = was_running
 
 
 ## The furniture of her house (art/world_assets/house_furniture): each of the eleven pieces is its
@@ -3617,6 +3706,16 @@ func _house_checks(showcase: bool) -> void:
 		f.queue_free()
 	_check("her house's furniture is the new models (%d of %d; the fire has %d flames, fire and lamp %d lights)" % [modelled.size(), ids.size(), flames, lights],
 		modelled.size() == ids.size() and flames == 3 and lights == 2)
+	var floors := get_tree().get_nodes_in_group("planks_floor")
+	var linings := get_tree().get_nodes_in_group("planks_wall")
+	var floor_boards := 0
+	for f in floors:
+		floor_boards += int(f.get_meta("boards", 0))
+	var shades := {}
+	for f in floors:
+		shades[str(f.get_meta("shade", ""))] = true
+	_check("every building has a plank floor in its own shade, and the houses boarded walls (%d floors of %d boards in %d shades, %d walls boarded)" % [floors.size(), floor_boards, shades.size(), linings.size()],
+		floors.size() >= 6 and shades.size() == floors.size() and floor_boards > 250 and linings.size() >= 9)
 	if not showcase:
 		return
 	for extra in [["sofa", Vector3(5.5, 0, 3.0), 3], ["armchair", Vector3(3.5, 0, 5.0), 2], ["dining_table", Vector3(6.0, 0, 5.0), 0],
@@ -3767,6 +3866,23 @@ func _shop_checks() -> void:
 		var whole: bool = Interiors.WALLS.keys().all(func(w): return (s.parts["wall_" + w] as Node3D).visible and not (s.parts["wall_%s_low" % w] as Node3D).visible)
 		_check("the %s closes up again when she leaves (door %.0f%% open, roof %s)" % [id, s.open * 100.0, "shown" if (s.parts["roof"] as Node3D).visible else "hidden"],
 			not s.inside and s.open < 0.05 and (s.parts["roof"] as Node3D).visible and whole and player.position.distance_to(out_front) < 0.8)
+	# a picture of each carved hanging sign (art/world_assets/shop_signs) where it hangs, the Mayor's
+	# Office's among them: 46_sign_<building>.png (_polish_checks checks where they hang)
+	for b in find_children("Building_*", "Node3D", true, false):
+		var hs: Array[Node] = b.find_children("HangingSign", "Node3D", true, false)
+		if hs.is_empty():
+			continue
+		var sg := hs[0] as Node3D
+		var front: Vector3 = sg.global_position + (b as Node3D).global_transform.basis.z * 4.5
+		front.y = 0.0
+		hud.hide_dialogue()
+		player.walk([])
+		player.position = front
+		_set_cam_lock(false)
+		cam_target = sg.global_position - Vector3(0, 0.8, 0)
+		cam_dist = 9.0
+		await _wait(1.2)
+		await _shot("46_sign_%s.png" % str(b.get_meta("building_model", "")))
 	_set_cam_lock(true)
 
 
@@ -4763,11 +4879,22 @@ func _tool_checks() -> void:
 		hud.hot_sel = Game.slots.find(tid)
 		await _wait(0.6)
 		var ms: Array = _tool_hand.find_children("*", "MeshInstance3D", true, false) if _tool_hand else []
-		if _held_id == tid and ms.size() >= 1 and _tool_hand.visible:
+		var fist: bool = _grip_meshes.size() > 0 and _grip_meshes[0].get_blend_shape_value(_grip_meshes[0].find_blend_shape_by_name("grip_R")) > 0.99
+		if _held_id == tid and ms.size() >= 1 and _tool_hand.visible and fist:
 			shown.append(tid)
-		if tid != "axe":
-			await _shot("47_in_hand_%s.png" % tid)
-	_check("each of the six tools shows in her hand when picked (%s)" % ", ".join(shown), shown.size() == Game.TOOLS.size())
+		await _shot("47_in_hand_%s.png" % tid)
+	_check("each of the six tools sits in her closed fist when picked (%s)" % ", ".join(shown), shown.size() == Game.TOOLS.size())
+	# a slot with no tool: the tool goes and her hand opens
+	var empty_slot := -1
+	for i in hud.HOTBAR:
+		if not Game.TOOLS.has(str(Game.slots[i])):
+			empty_slot = i
+			break
+	hud.hot_sel = maxi(empty_slot, 0)
+	await _wait(0.3)
+	var open_now: bool = _grip_meshes.size() > 0 and _grip_meshes[0].get_blend_shape_value(_grip_meshes[0].find_blend_shape_by_name("grip_R")) < 0.01
+	_check("her hand opens when no tool is picked (slot %d, open %s, tool shown %s)" % [empty_slot + 1, open_now, _tool_hand.visible],
+		empty_slot >= 0 and open_now and not _tool_hand.visible)
 	cam_dist = dist0
 	# an empty hand, or a tool with nothing to do there, leaves the click alone
 	_check("tools: nothing to do means the click is left alone", not _tool_click("", plots[0], Vector2.ZERO) and not _tool_click("watering_can", sheep_list[0], Vector2.ZERO))

@@ -1,0 +1,52 @@
+{
+  "name": "building_mayor",
+  "triangles": 51124,
+  "materials": [
+    "mayor_stone",
+    "mayor_wall",
+    "mayor_trim",
+    "mayor_frame",
+    "mayor_glow",
+    "mayor_door",
+    "mayor_roof",
+    "mayor_brick",
+    "mayor_redwood",
+    "mayor_gold",
+    "mayor_flag",
+    "mayor_bloom",
+    "mayor_leaf",
+    "mayor_navy",
+    "mayor_iron",
+    "mayor_paving"
+  ],
+  "size_m": [
+    11.5,
+    11.18,
+    10.173
+  ],
+  "min_m": [
+    -5.75,
+    -5.78,
+    -0.081
+  ],
+  "max_m": [
+    5.75,
+    5.4,
+    10.092
+  ],
+  "images": [
+    "mayor_boards",
+    "mayor_boards_n",
+    "mayor_brick",
+    "mayor_brick_n",
+    "mayor_door",
+    "mayor_door_n",
+    "mayor_paving",
+    "mayor_paving_n",
+    "mayor_roof",
+    "mayor_roof_n",
+    "mayor_stone",
+    "mayor_stone_n"
+  ],
+  "glb_bytes": 5868332
+}

@@ -1,0 +1,14 @@
+{
+  "id": "coffee_table",
+  "atlas": 512,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.299,
+  "light_p05": 0.0,
+  "seconds": 95.9,
+  "glb_bytes": 322552,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

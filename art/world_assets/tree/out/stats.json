@@ -1,0 +1,33 @@
+{
+  "name": "tree",
+  "triangles": 5918,
+  "materials": [
+    "bark_mat",
+    "canopy_mat",
+    "card_mat"
+  ],
+  "size_m": [
+    6.27,
+    6.813,
+    6.273
+  ],
+  "min_m": [
+    -2.984,
+    -3.25,
+    0.0
+  ],
+  "max_m": [
+    3.286,
+    3.563,
+    6.273
+  ],
+  "images": [
+    "bark_albedo.png",
+    "bark_normal.png",
+    "canopy_albedo.png",
+    "canopy_normal.png",
+    "tree_card_albedo",
+    "tree_card_normal"
+  ],
+  "glb_bytes": 1963300
+}

@@ -17,7 +17,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 5178,
+      "triangles": 5090,
       "materials": [
         "walls_shop",
         "stone_shop",
@@ -32,7 +32,6 @@
         "awning_shop",
         "iron",
         "timber_shop",
-        "sign_shop",
         "yarn1",
         "needle"
       ]
@@ -131,6 +130,6 @@
       ]
     }
   },
-  "triangles": 13840,
-  "glb_bytes": 3942008
+  "triangles": 13752,
+  "glb_bytes": 3938348
 }

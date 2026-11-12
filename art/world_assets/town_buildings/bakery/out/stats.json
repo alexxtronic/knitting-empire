@@ -12,7 +12,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 5558,
+      "triangles": 5470,
       "materials": [
         "walls_bakery",
         "stone_bakery",
@@ -27,7 +27,6 @@
         "awning_bakery",
         "iron",
         "timber_bakery",
-        "sign_bakery",
         "pretzel"
       ]
     },
@@ -125,6 +124,6 @@
       ]
     }
   },
-  "triangles": 13908,
-  "glb_bytes": 3697228
+  "triangles": 13820,
+  "glb_bytes": 3692784
 }

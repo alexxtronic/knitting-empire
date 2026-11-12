@@ -1,0 +1,14 @@
+{
+  "id": "bench_park",
+  "atlas": 512,
+  "reach": 0.8,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.412,
+  "light_p05": 0.0,
+  "seconds": 7.2,
+  "glb_bytes": 3629240,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

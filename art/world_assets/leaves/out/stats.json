@@ -1,0 +1,28 @@
+{
+  "name": "leaf_green",
+  "triangles": 2788,
+  "materials": [
+    "leaf_green_mat",
+    "leaf_green_stalk"
+  ],
+  "size_m": [
+    0.298,
+    0.317,
+    0.031
+  ],
+  "min_m": [
+    -0.15,
+    -0.08,
+    0.001
+  ],
+  "max_m": [
+    0.148,
+    0.237,
+    0.032
+  ],
+  "images": [
+    "leaf_green_albedo",
+    "leaf_green_normal"
+  ],
+  "glb_bytes": 892588
+}

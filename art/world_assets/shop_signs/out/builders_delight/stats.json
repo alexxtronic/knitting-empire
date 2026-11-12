@@ -1,0 +1,36 @@
+{
+  "name": "sign_builders_delight",
+  "triangles": 9220,
+  "materials": [
+    "shopsign_board",
+    "shopsign_face_builders_delight",
+    "shopsign_rod",
+    "shopsign_iron",
+    "shopsign_bolt",
+    "shopsign_ring"
+  ],
+  "size_m": [
+    1.988,
+    0.175,
+    0.756
+  ],
+  "min_m": [
+    -0.996,
+    -0.175,
+    -0.335
+  ],
+  "max_m": [
+    0.992,
+    0.0,
+    0.421
+  ],
+  "images": [
+    "builders_delight_face.png",
+    "builders_delight_face_n.png",
+    "shopsign_board",
+    "shopsign_board_n",
+    "shopsign_rod",
+    "shopsign_rod_n"
+  ],
+  "glb_bytes": 1861828
+}

@@ -1,0 +1,14 @@
+{
+  "id": "shop_counter",
+  "atlas": 512,
+  "reach": 0.8,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.425,
+  "light_p05": 0.0,
+  "seconds": 50.7,
+  "glb_bytes": 577100,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

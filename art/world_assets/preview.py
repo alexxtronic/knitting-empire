@@ -3,6 +3,7 @@
     Blender -b <asset>.blend --python art/world_assets/preview.py -- <out_dir> [cx,cy,cz] [distance]
 """
 import math
+import os
 import sys
 
 import bpy
@@ -14,7 +15,7 @@ ctr = Vector([float(v) for v in argv[1].split(",")]) if len(argv) > 1 else Vecto
 dist = float(argv[2]) if len(argv) > 2 else 9.0
 sc = bpy.context.scene
 sc.render.engine = "CYCLES"
-sc.cycles.samples = 40
+sc.cycles.samples = int(os.environ.get('PREVIEW_SAMPLES', 40))
 sc.cycles.use_denoising = True
 sc.render.resolution_x = sc.render.resolution_y = 800
 w = bpy.data.worlds.new("w")
@@ -35,7 +36,10 @@ bpy.context.object.data.materials.append(gm)
 cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
 sc.collection.objects.link(cam)
 sc.camera = cam
-for name, az, el in [("hero", -35, 18), ("side", 50, 6), ("top", -35, 55)]:
+import os
+VIEWS = [("hero", -35, 18), ("side", 50, 6), ("top", -35, 55)]
+keep = os.environ.get("PREVIEW_VIEWS")
+for name, az, el in [v for v in VIEWS if not keep or v[0] in keep.split(",")]:
     a, e = math.radians(az), math.radians(el)
     cam.location = ctr + Vector((math.sin(-a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))) * dist
     cam.rotation_euler = (ctr - cam.location).to_track_quat("-Z", "Y").to_euler()

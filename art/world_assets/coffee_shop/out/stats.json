@@ -1,0 +1,63 @@
+{
+  "name": "building_cafe",
+  "triangles": 39806,
+  "materials": [
+    "cafe_stone",
+    "cafe_wall",
+    "cafe_trim",
+    "cafe_roof",
+    "cafe_glow",
+    "cafe_wood",
+    "cafe_leaf",
+    "cafe_bloom",
+    "cafe_door",
+    "cafe_brass",
+    "cafe_mat",
+    "cafe_awning",
+    "cafe_iron",
+    "cafe_bulb",
+    "cafe_plaque",
+    "cafe_leaf_o",
+    "cafe_leaf_y",
+    "cafe_cobble",
+    "cafe_plaid",
+    "cafe_pot",
+    "cafe_lavender",
+    "cafe_chalkframe",
+    "cafe_chalk"
+  ],
+  "size_m": [
+    10.0,
+    8.145,
+    7.12
+  ],
+  "min_m": [
+    -5.0,
+    -3.845,
+    -0.0
+  ],
+  "max_m": [
+    5.0,
+    4.3,
+    7.12
+  ],
+  "images": [
+    "cafe_awning",
+    "cafe_boards",
+    "cafe_boards_n",
+    "cafe_cobble",
+    "cafe_cobble_n",
+    "cafe_door",
+    "cafe_door_n",
+    "cafe_plaid",
+    "cafe_stone",
+    "cafe_stone_n",
+    "cafe_tiles",
+    "cafe_tiles_n",
+    "cafe_wood",
+    "cafe_wood_n",
+    "face_chalkboard.png",
+    "face_plaque.png"
+  ],
+  "glb_bytes": 4754420
+}

@@ -1,0 +1,14 @@
+{
+  "id": "bread_rack",
+  "atlas": 512,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.417,
+  "light_p05": 0.0,
+  "seconds": 47.2,
+  "glb_bytes": 738300,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

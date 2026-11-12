@@ -1,0 +1,14 @@
+{
+  "id": "gran_bed",
+  "atlas": 512,
+  "reach": 0.8,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.336,
+  "light_p05": 0.0,
+  "seconds": 13.5,
+  "glb_bytes": 2184348,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

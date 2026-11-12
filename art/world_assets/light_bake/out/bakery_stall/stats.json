@@ -1,0 +1,14 @@
+{
+  "id": "bakery_stall",
+  "atlas": 512,
+  "reach": 1.0,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.341,
+  "light_p05": 0.0,
+  "seconds": 9.2,
+  "glb_bytes": 1211588,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

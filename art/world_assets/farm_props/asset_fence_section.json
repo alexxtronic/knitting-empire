@@ -1,0 +1,78 @@
+{
+  "title": "fence_section",
+  "subject": "stylised hand-painted cozy farm prop",
+  "collection_prefix": "KE_",
+  "hdri": "",
+  "hdri_strength": 0.07,
+  "hdri_rotation_deg": 215.0,
+  "ground": "asphalt",
+  "ground_z": -0.001,
+  "cameras": {
+    "hero": [
+      [
+        1.3,
+        -1.6,
+        1.0
+      ],
+      [
+        0,
+        0,
+        0.5
+      ],
+      45
+    ],
+    "game": [
+      [
+        2,
+        -2,
+        2.8
+      ],
+      [
+        0,
+        0,
+        0.4
+      ],
+      45
+    ],
+    "side": [
+      [
+        0,
+        -2.2,
+        0.6
+      ],
+      [
+        0,
+        0,
+        0.5
+      ],
+      45
+    ],
+    "detail": [
+      [
+        0.7,
+        -0.7,
+        1.0
+      ],
+      [
+        0.5,
+        0,
+        0.8
+      ],
+      45
+    ]
+  },
+  "final": {
+    "res": [
+      1600,
+      1066
+    ],
+    "samples": 128
+  },
+  "preview": {
+    "res": [
+      960,
+      640
+    ],
+    "samples": 48
+  }
+}
