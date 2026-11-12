@@ -178,9 +178,27 @@ func actor(who: String) -> Node3D:
 	return main._villager(w)
 
 
+## "by <building> x z" in a command's arguments is a spot in that building's own space (its front
+## toward +z; the kinds are Town.built's, such as building_office or market_stall), turned into
+## world x z wherever the world editor has put the building now. A scene that walks round the
+## town keeps working when Alex rearranges it.
+func _by_buildings(args: Array) -> Array:
+	var i := args.find("by")
+	if i < 0 or i + 3 >= args.size():
+		return args
+	var at: Dictionary = main._spot_at({"building": str(args[i + 1]), "pos": [float(args[i + 2]), float(args[i + 3])]})
+	if at.is_empty():
+		push_warning("story: no %s in the world for 'by'" % args[i + 1])
+		return args.slice(0, i) + [str(args[i + 2]), str(args[i + 3])] + args.slice(i + 4)
+	var p: Vector3 = at["pos"]
+	return args.slice(0, i) + [str(p.x), str(p.z)] + args.slice(i + 4)
+
+
 ## Runs one command. Returns a jump target (op index), -1 to end the scene, or null.
 func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 	var a: Array = op["args"]
+	if str(op["cmd"]) in ["walk", "place", "face", "camera", "home", "prop", "prop_move"]:
+		a = _by_buildings(a)
 	match str(op["cmd"]):
 		"camera":
 			var dist := float(main.cam_glide.get("dist", 9.0))
@@ -188,7 +206,13 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			var yaw = null # "yaw 200": which side the camera looks from, in degrees (45 is the usual)
 			var yi := a.find("yaw")
 			if yi >= 0 and yi + 1 < a.size():
-				yaw = deg_to_rad(float(a[yi + 1]))
+				var yv := str(a[yi + 1])
+				if yv.is_valid_float():
+					yaw = deg_to_rad(float(yv))
+				else: # "yaw building_cafe": a three-quarter view of that building's front
+					var front: Dictionary = main._spot_at({"building": yv, "pos": [0.0, 0.0]})
+					if not front.is_empty():
+						yaw = float(front["yaw"]) + deg_to_rad(25.0)
 				a = a.slice(0, yi) + a.slice(yi + 2)
 			var low := not a.is_empty() and str(a[-1]) == "low"
 			if low:

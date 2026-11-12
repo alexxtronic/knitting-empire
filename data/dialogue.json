@@ -1,65 +1,99 @@
 {
-  "_about": "Everything villagers say. 'gift_lines' are what they say to a gift they don't love (by villager, then item); anything missing gets a polite thank-you. {sweater} = Rosa's sweater price today, {cottage} = cottage price, {rent} = cottage rent. 'lines' has three tiers per villager: 0-1 hearts, 2-3 hearts, 4-5 hearts.",
+  "_about": "Everything villagers say (all drafts for Alex). 'gift_lines' are what they say to a gift they don't love (by villager, then item); anything missing gets a polite thank-you. {sweater} = Rosa's sweater price today, {cottage} = cottage price, {rent} = cottage rent. 'lines' has three tiers per villager: 0-1 hearts, 2-3 hearts, 4-5 hearts.",
   "intro": {
-    "rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
-    "theo": "Welcome to the Yarn Barn! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
-    "mabel": "Mabel Finch, Willow Homes. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
+    "rosa": "Oh, a new face! I'm Rosa. The Yarn Barn's mine, and some mornings you'll find me on the market stall instead. Wool, yarn, the odd sheep, and I buy sweaters: {sweater}c each today.",
+    "gary": "Gary. Willow Homes. Property, prospects, and frankly the best hair in the valley. You're Ellie's granddaughter? Lovely. Starter farm. We all start somewhere.",
+    "giorgio": "Come in, come in, out of the cold. Giorgio. Everything in that case I made before the sun was up. Sit down. You look like someone who forgot to eat.",
+    "sabrina": "Hi. Welcome to the Coffee Shop. Yes, that's the actual name. No, I didn't pick it. What do you want?",
+    "steve": "Steve. Builder's Delight. Wood, nails, hinges. Ask.",
     "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably.",
-    "hazel": "Mind the flour, it gets everywhere. I'm Hazel. If it's warm and it came out of that oven, I made it. Croissants are best before nine and gone by ten.",
-    "wren": "Wren. Mayor, for my sins, and chief welcomer. If anything in Maple Grove is broken, it's probably on my list. If it isn't on my list, tell me and it will be.",
-    "pip": "Pip, post. If it's got a stamp on it, it's been through these hands. I know everyone's business and I tell nobody. Mostly.",
-    "gus": "Gus. Builder's Delight. Timber, nails, hinges, mugs, mousetraps. If your house needs it, I've got it, or I know a man. I am the man."
+    "wren": "Wren. Mayor. Sorry, I've got four minutes. If something's broken, tell me. If it's on fire, tell me faster.",
+    "barbara": "Hello, sweetheart. Barbara, with the post. Nine o'clock, every door, rain or shine. Yours too, now. That's how you know you live somewhere."
   },
   "lines": {
     "rosa": [
       [
         "Sweaters are going for {sweater}c today. Prices change every morning, so check the board.",
-        "The tourists from the city go wild for anything hand-knit.",
+        "Out of wool? Three bundles makes one sweater, if you don't drop stitches.",
         "If you ever grow pumpkins, save one for me. I make a mean pie."
       ],
       [
-        "You're becoming my favorite supplier! I pay you a little extra now: {sweater}c a sweater today.",
-        "Theo says your wool is the softest in the valley. Don't tell him I agreed.",
-        "I put one of your sweaters on display. Three people asked who made it!"
+        "You're becoming my favourite supplier! I pay you a little extra now: {sweater}c a sweater today.",
+        "I put one of your sweaters in the Yarn Barn window. Three people asked who made it!",
+        "Stall in the morning, shop in the afternoon. My feet hate me. My till loves me."
       ],
       [
         "Between us, I tell customers your sweaters are 'Birchfield originals.' They pay more for the name!",
         "My late husband would have loved your farm. He always said the best things are made slowly.",
-        "You've got a real knitting empire going, dear. {sweater}c a sweater, just for you."
+        "You've got a real knitting empire going, love. {sweater}c a sweater, just for you."
       ]
     ],
-    "theo": [
+    "gary": [
       [
-        "Out of wool? I sell it in bundles of three. Just enough for one sweater.",
-        "A happy sheep grows better wool. Pet them every day. That's science. Probably.",
-        "I'm learning cable knits. My scarf currently looks like a pretzel."
+        "Real estate is simple: location, location, and me.",
+        "Every piece of furniture in a rental raises the rent. People pay for cozy. I pay for nothing. That's the trick.",
+        "Your farm has character. That's what we say when a place has damp."
       ],
       [
-        "I knock a little off my prices for friends. You count.",
-        "A single sheep grows enough wool for six sweaters a year. Wild, right?",
-        "Rosa pretends she doesn't like my jokes. She laughs on the inside."
+        "You've got a good eye. Not as good as mine, but nobody's perfect. Well. One of us is.",
+        "Eastfield Acres is still on the market. It won't be forever. It will be for a while, at that price.",
+        "I take a little off for friends. Don't tell anyone we're friends. Bad for my image."
       ],
       [
-        "You inspired me. I'm entering the Harvest Knit-Off this year!",
-        "If you ever open a shop in town, I'd put your sweaters in my window. Free of charge.",
-        "Best customer, best neighbor. Don't let it go to your head."
+        "You're my favourite client. I say that to everyone, but this time I nearly mean it.",
+        "One day you'll own half this valley, and I'll have sold you every acre of it.",
+        "Keep this up and they'll name a street after you. I'll handle the sale of the street."
       ]
     ],
-    "mabel": [
+    "giorgio": [
       [
-        "Real estate is simple: make a place cozy, and people will pay to live there.",
-        "Every piece of furniture in a rental raises the rent. People pay for cozy.",
-        "Rosewood Cottage has the best garden light in Maple Grove. I'd know."
+        "Cold butter, warm kitchen, up at four. That's the whole secret. Mostly the up-at-four part.",
+        "Eat first. Whatever it is, it looks smaller after a croissant.",
+        "I came here for the quiet. The quiet stayed. So did I."
       ],
       [
-        "You've got a good eye. I'll take a little off the price of any property for you.",
-        "Turnip stew reminds me of my grandmother's kitchen. Funny what sticks with you.",
-        "There's talk of new lots opening up north of town next season. Keep your coins handy."
+        "I've started saving you the corner pieces. Don't tell anyone or they'll all want corners.",
+        "You flinch when the oven door bangs. I know that flinch. You don't have to explain it to me.",
+        "Your gran liked her loaf dark. 'Burn it a little, Giorgio.' I still bake one her way on Sundays."
       ],
       [
-        "You're my favorite client. Don't tell the mayor.",
-        "One day this whole valley will be wearing your sweaters and renting your houses.",
-        "Keep this up and they'll name a street after you."
+        "Some people run to something. Some people run from something. The bread doesn't care which. Neither do I.",
+        "If you want to learn the croissants, come by at four. I'll have the kettle on.",
+        "You're doing well, cara. Better than you think. I'd tell you if you weren't."
+      ]
+    ],
+    "sabrina": [
+      [
+        "If you're going to stand there, at least order something.",
+        "No, we don't do oat milk. We do milk. From a cow. Welcome to Maple Grove.",
+        "My manager says I have to smile at customers. This is me smiling."
+      ],
+      [
+        "You're here a lot. It's fine. It's not weird. It's a little weird.",
+        "I made a heart in your foam. It's a blob. Don't read into it.",
+        "Okay, fine, your sweater's actually kind of cool. Don't tell anyone I said cool."
+      ],
+      [
+        "I'm saving for art school. Don't laugh. ...You didn't laugh. Okay. Thanks.",
+        "You're like the only person here who doesn't treat me like a kid. Just so you know.",
+        "I saved you the last cinnamon roll. I fought a man for it. Not really. Kind of."
+      ]
+    ],
+    "steve": [
+      [
+        "Measure twice. Cut once.",
+        "Sheep lean. On everything.",
+        "Your gran's broom. Bought it here. Every five years."
+      ],
+      [
+        "Pen holding?",
+        "Got a nice bit of oak out back. Not for sale. Just like looking at it.",
+        "Hm. Good hinge, that. You'll be fine."
+      ],
+      [
+        "You build like your gran knitted. Bit crooked. All heart.",
+        "Kettle's on in the back. If you want. No pressure.",
+        "Anyone gives you trouble, you tell me. ...That's all."
       ]
     ],
     "rowan": [
@@ -71,7 +105,7 @@
       [
         "You've got wool on your sleeve. Suits you.",
         "I walked past your place last night. Light was on late. Knitting, or not sleeping?",
-        "Theo won't stop talking about your work. Takes a lot to get Theo talking. Well. Less than you'd think."
+        "Rosa won't stop talking about your work. Takes a lot to get Rosa talking. Well. Less than you'd think."
       ],
       [
         "I used to hate quiet evenings. Lately I don't mind them.",
@@ -79,106 +113,80 @@
         "You don't have to tell me what you left behind. But I'd listen, if you wanted."
       ]
     ],
-    "hazel": [
-      [
-        "Cold butter, warm kitchen, up at four. That's the whole secret. Mostly the up-at-four part.",
-        "Theo buys a bun every morning and says it's for the sheep. The sheep never see that bun.",
-        "You look hungry. Everyone who walks in here looks hungry. That's the smell doing its job."
-      ],
-      [
-        "I've started saving you the corner pieces. Don't tell anyone or they'll all want corners.",
-        "Your gran liked her loaf dark. 'Burn it a little, Hazel.' I still bake one her way on Sundays.",
-        "Mabel pays in exact change. Every single time. I've never once seen that woman get change."
-      ],
-      [
-        "If you ever want to learn the croissants, come by at four. I'll have the kettle on.",
-        "I'm making a sheep-shaped loaf for the harvest fair. It looks like a cloud with legs. It's perfect.",
-        "Best part of my morning is the bell going and it being you."
-      ]
-    ],
     "wren": [
       [
-        "The fountain's been leaking since spring. It's on the list. Everything's on the list.",
-        "We had a town meeting about the bench by the bakery. Three hours. The bench is fine.",
-        "Your gran ran the harvest fair for twenty years. Nobody's dared take it over."
+        "Fountain's leaking. It's on the list. Everything's on the list.",
+        "Can't stop. Meeting. Probably about the bench.",
+        "Your gran ran the harvest fair. Nobody's dared take it over. Not my problem today."
       ],
       [
-        "People are talking about you. Nicely, for once. You've made a good start.",
-        "If you need a hand with anything at the farm, say the word. I'm terrible with a hammer, but I know who isn't.",
-        "I've put 'help Nora settle in' at the top of my list. It's the only thing on it I enjoy."
+        "You're settling in. Good. One less thing.",
+        "Sorry. Bad week. It's always a bad week. Don't ask.",
+        "If you need a hand at the farm, say so. Quickly. I'm due somewhere."
       ],
       [
-        "Maple Grove's lucky to have you. I'd say it at the fair, but you'd go red.",
-        "Your gran would be proud. She'd never have said so, mind. She'd have knitted you something instead.",
-        "Some mornings I walk past your farm just to see the smoke from the chimney. Feels like the town's whole again."
+        "You're good for this town. I don't say that. I'm saying it. Okay, I have to go.",
+        "Some mornings I walk past your farm just to see the chimney smoke. Then I'm late. Worth it.",
+        "There's something I've been meaning to tell someone. Not today. Soon, maybe."
       ]
     ],
-    "pip": [
+    "barbara": [
       [
-        "Nothing for you today. Nothing's good news, I always say.",
-        "Mabel gets a seed catalogue every week. Every week. Same catalogue.",
+        "Nothing in the bag for you today, sweetheart. No news is often the kindest news.",
+        "Walk slowly in a new town. You'll see more, and you'll be seen.",
         "Rain or shine, the post gets through. Mostly shine round here, thank goodness."
       ],
       [
-        "Your gran used to leave a biscuit on the gatepost for me. Just saying.",
-        "I'm not saying who, but somebody in this town gets letters with hearts on.",
-        "My knees know every cobble in the plaza by name."
+        "Your gran left a biscuit on the gatepost for me every morning. I'm only mentioning it.",
+        "The letters you dread are never as heavy as the waiting for them.",
+        "You don't have to be brave every day. Some days you just have to open the door."
       ],
       [
-        "If a letter comes for you from the city, I'll bring it round myself. Not leave it in the box.",
-        "Best part of my round is the bit past your farm. It smells like hay and woodsmoke.",
-        "You've settled in like you were always here. The post can tell."
-      ]
-    ],
-    "gus": [
-      [
-        "Measure twice, cut once. Or measure once and come back to me for more wood. Either's good for business.",
-        "Hinges, nails and string. Most of life's problems, sorted.",
-        "Your gran bought the same broom off me every five years and complained about the last one each time."
-      ],
-      [
-        "How's that pen holding up? Sheep lean. They're always leaning.",
-        "I've got a lovely bit of oak out back. Not for sale. I just like looking at it.",
-        "Theo says yarn's the backbone of this town. I say it's the fence posts. We've been arguing for eleven years."
-      ],
-      [
-        "You build like your gran knitted. Bit crooked, all heart.",
-        "If you ever want a workbench at the farm, I'll give you mates' rates.",
-        "Pull up a crate. Nobody's in a hurry in here."
+        "If a letter comes for you from the city, I'll bring it to your hand myself. Not leave it in the box.",
+        "Best part of my round is the bit past your farm. It smells like hay and woodsmoke, and hope.",
+        "Forty years I've carried other people's news. Yours is turning into a good story."
       ]
     ]
   },
   "gift_lines": {
     "rosa": {
-      "sweater": "For me? Oh, you'll make me cry on the stall and then nobody buys anything.",
+      "sweater": "For me? Oh, you'll make me cry in front of customers and then nobody buys anything.",
       "turnip": "A good firm turnip. You know the way to a market woman's heart: produce."
     },
-    "theo": {
-      "pumpkin": "A pumpkin! I'll carve a sheep into it. It'll look like a potato. It'll be perfect.",
-      "turnip": "Turnip. Right. Thank you. I'm sure the sheep will love it."
+    "gary": {
+      "pumpkin": "A pumpkin. I'll put it on the office step. Makes the place look settled. Buyers love settled.",
+      "turnip": "A turnip. For me. ...I'll give it to someone who knows what to do with one."
     },
-    "mabel": {
-      "sweater": "Hand-knit! I'll wear it to the next viewing and tell everyone it's local.",
-      "pumpkin": "Lovely. I'll put it on the office step. Makes the place look settled."
+    "giorgio": {
+      "turnip": "A turnip! That's soup. Thank you, cara. It'll be on the counter by lunch.",
+      "sweater": "For me? It's so soft. I'm keeping it well away from the flour."
+    },
+    "sabrina": {
+      "pumpkin": "It's a pumpkin. Cool. I'll put it on the counter. It's... actually kind of cute there.",
+      "turnip": "Why would you give a person a turnip."
+    },
+    "steve": {
+      "turnip": "Turnip. Thanks.",
+      "sweater": "...Warm. Thank you. I'll wear it Sundays."
     },
     "rowan": {
       "pumpkin": "Soup, then. I'll make it badly and eat it anyway. Thanks.",
       "turnip": "A turnip. ... The ewes will think I've gone soft. Thank you."
     },
-    "hazel": {
-      "turnip": "A turnip! That's soup. Thank you, love. It'll be on the counter by lunch.",
-      "sweater": "For me? It's so soft. I'm keeping it well away from the flour."
+    "barbara": {
+      "pumpkin": "Oh, a pumpkin! That's a pie for the sorting room. Bless you.",
+      "sweater": "You made this? I'll wear it on my round and tell every door it's yours."
     }
   },
   "gift_loved": {
     "rosa": "A pumpkin! Oh, you remembered. I'm baking a pie tonight and you're getting the first slice.",
-    "theo": "Is this... one of YOUR sweaters? For me? I'm wearing it every day. Every single day.",
-    "mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy.",
+    "gary": "Is this one of YOUR sweaters? I'll wear it to viewings. Hand-knit, local, authentic. I'll triple my sales.",
+    "giorgio": "Pumpkin! Bread, soup, a tart for the window... Come back tomorrow, there'll be something in it for you.",
+    "sabrina": "Wait, you made this? For me? ...Okay. It's really nice. Like, really nice. Don't look at me.",
+    "steve": "Now that's a pumpkin. Going on the counter. Best-looking thing in the shop.",
     "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill.",
-    "hazel": "Pumpkin! Bread, scones, soup, a pie for the window... Come back tomorrow, there'll be something in it for you.",
-    "wren": "For me? Oh, this is beautiful. I'm wearing it to the next town meeting, and I'm telling everyone who made it.",
-    "pip": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew.",
-    "gus": "Now that's a pumpkin. I'll put it on the counter. Best-looking thing in the shop."
+    "wren": "For me? Oh. Oh, this is beautiful. I haven't got time to cry. I'm going to anyway.",
+    "barbara": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew, sweetheart."
   },
   "new_sheep_names": [
     "Clover",

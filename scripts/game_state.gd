@@ -329,6 +329,12 @@ func market_price(item: String) -> int:
 func friend(id: String) -> Dictionary:
 	if not friends.has(id):
 		friends[id] = {"familiarity": 0, "trust": 0, "romance": 0, "talk": 0, "gift": 0, "n": 0}
+		for d in Data.villagers(): # some start cool: villagers.json "start" (Sabrina's trust)
+			if str(d["id"]) == id:
+				var start: Dictionary = d.get("start", {})
+				for k in start:
+					if STATS.has(k):
+						friends[id][k] = int(start[k])
 	return friends[id]
 
 

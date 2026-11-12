@@ -1,0 +1,68 @@
+# The town's comings and goings. The format is described at the top of scripts/story.gd.
+# Every line here is a draft for Alex.
+#
+# Gary from Willow Homes calls at the farm (main.gd _update_gary_visit fires "gary_visit"): the
+# first time on her second day, while she's home between ten and four, to introduce himself and
+# pitch the three plots on his books (data/economy.json "land"), all far out of her reach; then
+# every two weeks (GARY_EVERY) with another pitch about trading up. Buying land isn't in yet.
+
+== gary_intro
+@trigger event gary_visit
+@once
+@fade out 0.6
+@place nora 9.8 6.6 90
+@place gary 11.6 4.8 270
+@face gary nora
+@face nora gary
+@camera between gary nora 7 yaw 45
+@fade in 0.8
+> A car she hasn't heard before. Shoes far too clean for a farm track pick their way up to the gate.
+Gary (happy): Morning! Don't get up. Well, you're up. Gary, Willow Homes. We met on your tour. You'll remember the hair.
+Nora (wry): I remember the blazer.
+Gary (wry): Everyone does. So. Birchfield. Charming. Rustic. "Character." That's estate-agent for draughty.
+Gary (neutral): I'm not here to sell you anything. I'm here to show you what you'll want to buy. Three listings, exclusive to me.
+Gary (happy): Eastfield Acres, the meadows east of town. Twenty flat acres of sweet grass. Room for a hundred sheep. Twelve and a half thousand.
+Gary (warm): Greyspine Hollow, up in the foothills. A stone cottage, a spring, a view of the whole range. Twenty-one thousand.
+Gary (happy): And Saltmeadow Point. The bluff above the beach, sea on three sides. Thirty-six thousand. The crown jewel.
+? He waits, smiling, like a man who has never once been told no.
+- I've got about forty coins and two sheep. -> broke | familiarity gary +2
+- They sound lovely. Maybe one day. -> dream | familiarity gary +3; trust gary +1
+@label broke
+Gary (wry): Then you're my favourite kind of client: one with a long future. I'll keep them warm for you. Ish.
+@goto bye
+@label dream
+Gary (warm): One day is my favourite day. It's when everyone buys.
+@label bye
+Gary (neutral): I'll swing by every couple of weeks. Keep the porch swept. Buyers judge porches.
+@set gary_met
+@walk gary 24 4.4 nowait
+@wait 1.6
+@home gary off
+@toast Gary's land listings are on his menu at Willow Homes.
+@camera player
+
+== gary_pitch
+@trigger event gary_visit
+@requires gary_met
+@fade out 0.6
+@place nora 9.8 6.6 90
+@place gary 11.6 4.8 270
+@face gary nora
+@face nora gary
+@camera between gary nora 7 yaw 45
+@fade in 0.8
+Gary (happy): Me again! Don't look so thrilled. I was passing. I'm never passing. I came specially.
+@if hearts gary >= 2 -> friendly
+Gary (wry): Still the starter farm, I see. Cozy. Small. Nobody's judging. I'm judging a little.
+@goto pitch
+@label friendly
+Gary (warm): Place is looking good, actually. Don't tell anyone I said that. It ruins my whole approach.
+@label pitch
+Gary (neutral): Eastfield Acres is still on my books. Greyspine Hollow and Saltmeadow Point too. Nobody in this town can afford them. Except, one day, you.
+Gary (happy): Think about it. Trading up. Room to grow. A gate with your name on it.
+Nora (wry): I'll think about it.
+Gary (wry): That's what they all say, right before they do it.
+@walk gary 24 4.4 nowait
+@wait 1.6
+@home gary off
+@camera player

@@ -92,6 +92,13 @@ func talk(seconds := 2.5) -> void:
 	hold_time = maxf(hold_time, seconds)
 
 
+## Where they're working right now changes the line under their name (Rosa at her stall).
+func set_role(text: String) -> void:
+	role = text
+	if tag:
+		tag.text = "%s\n%s" % [title, role]
+
+
 func display_name() -> String:
 	return "%s · %s" % [title, role]
 

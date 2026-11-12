@@ -17,7 +17,7 @@ It is written so that a coding agent can pick up any item without re-reviewing t
 |---|---|---|
 | 1 | Knitting is not a mechanic | `_perform` "knit" in `scripts/main.gd` starts a 5-second timer; `_finish_knit` hands over a sweater |
 | 2 | Quality means nothing | `Game.knit_quality()` (1–5 stars) only feeds warmth; `_ship` and `_rosa_price` pay a flat price |
-| 3 | The economy is solved in one move | Theo sells 3 wool for 36c, Rosa pays about 150c a sweater; a sheep costs 400c and grows about 1 wool a day; nothing limits buying wool |
+| 3 | The economy is solved in one move | Rosa sells 3 wool for 36c, Rosa pays about 150c a sweater; a sheep costs 400c and grows about 1 wool a day; nothing limits buying wool |
 | 4 | The day is 3 minutes | `HOUR_SECONDS := 10.0` in `scripts/game_state.gd`; the walk to town and back takes about a third of it |
 | 5 | Nothing pulls the player into tomorrow | no orders, festivals, collections or goals after Act 1 |
 | 6 | Thin content | 1 product, 2 crops, 4 villagers, 1 romance, 1 property |
@@ -56,7 +56,7 @@ Gather (shear, pick dye plants) → prepare (spin, dye) → knit → place it (s
 
 ### The 15-minute loop: one day
 1. **Morning:** wake, read the order board note and the morning letter (rent, what grew, who is in town). Tend sheep and garden.
-2. **Midday:** knit for today's order. Walk to Maplewood: sell at Rosa's stall, buy from Theo, talk to one or two people, give a gift.
+2. **Midday:** knit for today's order. Walk to Maplewood: sell to Rosa, buy wool from her, talk to one or two people, give a gift.
 3. **Evening:** home by dusk. Decorate, cook, read. One story or relationship beat on most days.
 4. **Bed:** a short end-of-day card: coins earned, best sweater, hearts gained, and **one teaser for tomorrow** ("Rowan said he'd bring the nails", "Market day", "Your pumpkins are nearly ready").
 
@@ -83,12 +83,12 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 
 ## 4. Suggested playthrough, beginning to end
 
-**All of this is a draft for Alex.** One in-game year, four chapters, about 25–30 hours for the story, then open play. Names in use: Nora (heroine, working name), Daniel (ex-husband), Ellie (Gran), Rowan, Theo, Rosa, Mabel.
+**All of this is a draft for Alex.** One in-game year, four chapters, about 25–30 hours for the story, then open play. Names in use: Nora (heroine, working name), Daniel (ex-husband), Ellie (Gran), Rowan, Rosa, Gary, Giorgio, Sabrina, Steve, Wren, Barbara (the cast Alex set on 2026-11-12; Theo, Mabel, Hazel, Pip and Gus are gone).
 
 ### Chapter 1: Cast On (Autumn, hours 0–5)
 *Theme: arriving. Mechanics: the basics.*
-- **Existing Act 1:** the rain bus, Daniel's call, Mabel's keys, Gran's basket and letter, first sweater, the fence and Rowan, first sale to Rosa, the porch voicemail.
-- **Days 2–7:** tutorial by doing. The order board opens with Rosa's first commission. Theo teaches spinning. First dye (onion skins from the garden). Nora knits herself out of the thin city coat.
+- **Existing Act 1:** the rain bus, Daniel's call, Wren's tour, Gran's basket and letter, first sweater, the fence and Rowan, first sale to Rosa, the porch voicemail.
+- **Days 2–7:** tutorial by doing. The order board opens with Rosa's first commission. Rosa teaches spinning. First dye (onion skins from the garden). Nora knits herself out of the thin city coat.
 - **Week 2:** Gran's pattern book is found with most pages missing; villagers each hold a page (the collection begins). Memory thread 2: Ellie teaching her to cast on.
 - **Week 3:** the lawyer's letter: Daniel is contesting the farm as a marital asset. Stakes: she needs to show the farm is a working business by year's end.
 - **Chapter end, Harvest Fair (day 28):** first festival. She enters one sweater in the beginner's class. Whatever she places, the town claps. Rowan's first-date scene can land here.
@@ -98,7 +98,7 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 *Theme: letting people in. Mechanics: warmth, gifts, depth.*
 - Snow. Warmth matters: the town is cold, and Nora's knitting is what keeps people warm. A winter drive: knit hats and scarves for villagers (new item types).
 - New villagers arrive: 3–4 more, including a second romance choice and a rival-turned-friend knitter.
-- Theo's arc: the Knit-Off nerves, his city burnout. Rosa's arc: the stall alone with two kids. Mabel's arc: why Willow Homes matters to her.
+- Rosa's arc: the stall alone with two kids. Giorgio's arc: what he ran from, and helping Nora with hers. Sabrina's arc: winning her over, art school. Gary's arc: the caravan kid behind the blazer. Wren's arc: what she's so stressed about.
 - Rowan's arc deepens: Anna. The darned hat. Evenings by the fire.
 - Memory threads 3–4: the marriage, shown in objects (the navy sweater he threw away, the phone she wasn't allowed to silence). The player learns it slowly, as Alex specified.
 - **Midwinter night (festival):** lanterns, gifts exchanged. The gift Nora knits for her chosen person is designed by the player.
@@ -120,7 +120,7 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 *Theme: owning it. Mechanics: mastery.*
 - Summer: the town's busiest season. A city boutique offers to buy the brand; she can sell, partner, or stay independent (changes the epilogue, not the ending's warmth).
 - The hearing. Outcome depends on what the player built, but no path loses the farm; a weak year means a harder settlement, not a game over.
-- **The Harvest Knit-Off, one year on:** the finale. A three-round stitch game against Theo and the rival, using everything learned. Gran's last pattern page is the final piece.
+- **The Harvest Knit-Off, one year on:** the finale. A three-round stitch game against Rosa and the rival, using everything learned. Gran's last pattern page is the final piece.
 - **Ending:** the porch again, a year after the voicemail. This time her lights are the ones people see from the hill. Wedding or partnership or a full house of friends, by the player's choices.
 
 ### After the credits
@@ -148,7 +148,7 @@ Do these in order. Each is one commit. Run the autotest after each (`AGENTS.md`)
 - Done when: a 5-star sweater sells for more than a 2-star one in a new autotest check, and a v5 save loads.
 
 ### Hour 5: fix the economy and the day
-- `data/economy.json`: wool pack 36 → 75 and limit Theo to 2 packs a day (new `wool_packs_per_day`), so sheep pay off in about a week. Sheep price 400 → 300.
+- `data/economy.json`: wool pack 36 → 75 and limit Rosa to 2 packs a day (new `wool_packs_per_day`), so sheep pay off in about a week. Sheep price 400 → 300.
 - `scripts/game_state.gd`: `HOUR_SECONDS` 10 → 40 (a 12-minute day). Scale the need decay rates in `_process` and crop `hours` in `data/crops.json` by the same factor so balance per day is unchanged. Fix the time-based autotest waits this breaks by setting the clock directly rather than waiting.
 - Done when: the autotest passes and a day from 6 AM to midnight takes about 12 minutes.
 

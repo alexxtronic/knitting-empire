@@ -56,6 +56,8 @@ func load_character(char_id: String) -> bool:
 	brisk_anim_speed = float(info.get("brisk_anim_speed", 0.0))
 	label_height = float(info.get("label_height", 2.1))
 	var path := str(info.get("model", "res://assets/%s.glb" % char_id))
+	if not ResourceLoader.exists(path) and info.has("model_painted_eyes"):
+		path = str(info["model_painted_eyes"]) # the real eyes aren't made yet (tools/add_eyes.py)
 	if not ResourceLoader.exists(path):
 		push_warning("%s: model %s is missing" % [char_id, path])
 		return false

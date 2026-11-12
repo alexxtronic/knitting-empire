@@ -1,13 +1,15 @@
 # Act 1: Cast On. The format is described at the top of scripts/story.gd.
 # Flow (Alex's design, 2026-11-12; every line here is a draft for Alex):
 # act1_arrival: a new game opens on the rain bus. She walks to the Welcome to Maple Grove sign, the
-#   rain stops, the arrival music swells, the camera takes in the town (Hazel at her stall, Pip on
-#   his round) and comes back to her face. Wren the mayor welcomes her ("we've been expecting you"),
-#   walks her past the shops (Gus, Rosa, Theo, Hazel, Mabel) and up to Gran's house.
+#   rain stops, the arrival music swells, the camera takes in the town (Giorgio at his stall, Barbara
+#   on her round) and comes back to her face. Wren the mayor (brisk, busy, stressed) welcomes her,
+#   walks her past the shops (Steve, Rosa, Giorgio, Gary, Sabrina) and up to Gran's house.
+# The cast is Alex's of 2026-11-12: Rosa has the Yarn Barn and the market stall, Gary Willow Homes,
+#   Giorgio Heart Bakery, Steve Builder's Delight, Sabrina the Coffee Shop, Barbara the post.
 # act1_note (inside): Gran's note on the coffee table, kept in her bag; 100 coins; rent to Gran's tin.
-# act1_yarn (her first yarn from Theo) → knit in the rocking chair → act1_knit (memory thread #1,
+# act1_yarn (her first yarn from Rosa) → knit in the rocking chair → act1_knit (memory thread #1,
 #   then bleating: two strays) → act1_strays (find them by the pond; meet Rowan; "you'll want a pen")
-#   → act1_wood (her first wood from Gus: the pen builder, F, and gate crafting, G) → act1_pen (a
+#   → act1_wood (her first wood from Steve: the pen builder, F, and gate crafting, G) → act1_pen (a
 #   closed pen with a gate: "pen_built", the dog's cue) → herd them in → act1_flock ("sheep_penned")
 #   → act1_market (Rosa buys the sweater) → act1_porch (the voicemail, Rowan's lantern) → end card.
 
@@ -19,9 +21,9 @@
 @place nora 31.6 3.3 90
 @prop bus bus 33.8 0.6 0
 @prop suitcase case 32.2 3.6 20
-@place hazel 58.5 -5.2 -45
-@place pip 42.36 -7.6 180
-@face pip 42.36 -9.0
+@place giorgio 58.5 -5.2 -45
+@place barbara 42.36 -7.6 180
+@face barbara 42.36 -9.0
 @place wren 44.6 2.2 270
 @fade out 0.01
 @title Knitting Empire
@@ -59,12 +61,12 @@ Nora (sad): It'll stop. It has to stop eventually.
 @camera 50 -2 19
 @wait 2.5
 > Woodsmoke. Wet cobbles drying in the sun. Somewhere, bread.
-@camera hazel 7 yaw -45
+@camera giorgio 7 yaw -45
 @wait 1.0
-> Hazel the baker is selling the morning's loaves from her stall, still warm enough to steam.
-@camera pip 7
+> Giorgio the baker is selling the morning's loaves from his stall, still warm enough to steam.
+@camera barbara 7
 @wait 1.0
-> Pip the postman is on his round: a letter for every door, and a word for everyone who opens one.
+> Barbara the postwoman is on her round: a letter for every door, and a kind word for everyone who opens one.
 @face nora 38.4 4.6
 @camera nora 3 low yaw 45
 @wait 1.0
@@ -73,66 +75,81 @@ Nora (warm): I think I'm going to like it here.
 @face nora wren
 @face wren nora
 @camera between wren nora 7
-Wren (happy): You must be Nora! Look at you, soaked through. Welcome to Maple Grove.
+Wren (neutral): Nora. Ellie's granddaughter. Good, you're here. Wren, mayor. Sorry, I'm already late for something.
 Nora (surprised): You know who I am?
-Wren (warm): Wren. I'm the mayor, which mostly means I hold the spare keys and all the gossip. We've been expecting you, love.
-Wren (warm): Your gran told the whole town you'd come home one day. Every Sunday, without fail.
+Wren (neutral): Everyone does. Your gran told the whole town you'd come home one day. Every Sunday.
 Nora (sad): Did she.
-Wren (happy): Come on. I'll show you round, and then I'll walk you up to the house. Leave the case, nobody here would dream of touching it.
+Wren (worried): Quick tour, then the house. Ten minutes. Leave the case, nobody here would touch it.
 @set act1_arrived
-@home pip off
-@walk gus 47.7 -9.1 nowait
-@walk wren 45.8 -7.8 nowait
-@walk nora 46.8 -7.6
-@face nora gus
-@face wren nora
-@camera between gus nora 7.5
-Wren (happy): Gus! Come and meet Ellie's granddaughter.
-Gus (neutral): Builder's Delight. Timber, nails, rope, pots, anything that holds something else together. If I haven't got it, you don't need it.
-Wren (wry): And if he has got it, it's under something else.
+@home barbara off
+# the stops are "by <building> x z" (scripts/story.gd), so the tour follows the town wherever
+# the world editor puts it
+@place rosa by market_stall 0 -0.95 45
+@walk wren by market_stall 1.7 2.0 nowait
+@walk nora by market_stall 0 1.7
 @face nora rosa
-@camera between rosa nora 7.5
-Rosa (happy): And I'm Rosa! The market's mine. If you make it, grow it or knit it, I'll sell it for you.
-@walk theo 53.27 -9.2 nowait
-@walk wren 52.2 -7.8 nowait
-@walk nora 53.2 -7.6
-@face nora theo
+@face rosa nora
 @face wren nora
-@camera between theo nora 7.5
-Theo (warm): Ellie's girl. You've got her chin. The Yarn Barn: yarn, needles, patterns, and the only decent kettle on the plaza.
-Theo (wry): Your gran was my best customer for thirty years. And my worst payer.
+@camera between rosa nora 6 low
+Rosa (happy): Ellie's girl! Oh, you've got her chin. I'm Rosa. The Yarn Barn's mine, and the stall when the market's on. Yarn, needles, and I'll buy anything you knit!
+Rosa (wry): Your gran was my best customer for thirty years. And my worst payer.
+Wren (neutral): Next.
 @walk wren 56.0 -5.6 nowait
 @walk nora 56.9 -5.2
-@face nora hazel
-@face hazel nora
-@camera between hazel nora 7.5 yaw -45
-Hazel (happy): New face! Here, this one's on the house. Don't argue, I've already buttered it.
+@face nora giorgio
+@face giorgio nora
+@camera between giorgio nora 7.5 yaw -45
+Giorgio (warm): New face. Here, this one's on the house. Don't argue, cara, I've already buttered it.
 Nora (warm): Thank you. It smells incredible.
-@walk mabel 64.25 -7.4 nowait
-@walk wren 63.0 -6.0 nowait
-@walk nora 64.0 -5.8
-@face nora mabel
+Giorgio (warm): Eat. You've come a long way, I can see it. Whatever it was, it's a long way behind you now.
+@walk gary by building_office 0 3.3 nowait
+@walk wren by building_office 1.6 5.0 nowait
+@walk nora by building_office 0 4.8
+@face nora gary
+@face gary nora
 @face wren nora
-@camera between mabel nora 7.5
-Mabel (warm): And that's Willow Homes, and I'm Mabel, and if you need papers signed or a piece of cake, I'm your woman.
-Mabel (sad): I was sorry about Ellie, love. Half the town turned up for her. She'd knitted for most of us.
+@camera between gary nora 7 yaw building_office
+Gary (wry): Gary, Willow Homes. Property, land, prospects. You must be the new owner of Birchfield. Brave.
+Gary (happy): Don't worry, everyone starts somewhere. I'll drop by and show you where people end up.
+Wren (neutral): He will. Repeatedly. Come on.
+@walk steve by building_homegoods 0 3.2 nowait
+@walk wren by building_homegoods 1.6 4.9 nowait
+@walk nora by building_homegoods 0 4.7
+@face nora steve
+@face steve nora
+@face wren nora
+@camera between steve nora 7 yaw building_homegoods
+Wren (neutral): Steve. Builder's Delight. Wood, nails, hinges.
+Steve (neutral): ...Welcome.
+Wren (wry): That's a speech, from Steve.
+@walk sabrina by building_cafe 1.6 1.9 nowait
+@walk wren by building_cafe 3.2 4.6 nowait
+@walk nora by building_cafe 1.6 4.4
+@face nora sabrina
+@face sabrina nora
+@face wren nora
+@camera between sabrina nora 7 yaw building_cafe
+Wren (neutral): Sabrina. Coffee Shop.
+Sabrina (neutral): Hi. Coffee's six coins. We close at five. That's the tour.
+Wren (wry): She warms up. Eventually. Possibly.
 @fade out 0.8
-@home hazel off
-@home gus off
-@home theo off
-@home mabel off
+@home giorgio off
+@home steve off
+@home rosa off
+@home gary off
+@home sabrina off
 @place nora 10.4 3.0 270
 @place wren 11.2 2.0 270
 @face wren nora
 @face nora 8.0 3.0
-@camera 9.6 2.8 8
+@camera 9.6 2.8 8 yaw 45
 @fade in 1.0
 > Gran's house. Smaller than she remembers, and the roses have gone wild.
 @face nora wren
-Wren (warm): Here we are. Front door sticks: lift it and shove. She never fixed it, said it kept the salesmen out.
-Wren (neutral): She left something for you, inside. I haven't looked. I'll leave you to it.
+Wren (neutral): Here. Front door sticks: lift it and shove. She said it kept the salesmen out.
+Wren (neutral): She left something for you inside. I haven't looked. I have to go.
 Nora (warm): Thank you, Wren. For all of it.
-Wren (happy): Welcome home, Nora.
+Wren (worried): ...Welcome home, Nora. Really. Sorry. Meeting.
 @walk wren 24 4.4 nowait
 @wait 1.5
 @home wren off
@@ -158,13 +175,13 @@ Nora (surprised): "For my Nora."
 @farm note
 > "My darling Nora. I have missed you every single day since you moved away. The kettle still boils for two out of habit, and I let it."
 > "The house is yours now, if you'll have it. Keep it warm for me. Put a little in the tin each week. Not because the house needs the money. Because a home you pay into is a home you stay in."
-> "There's a hundred coins under the lid to start you off. Go and see Theo for some good yarn, and make something with your hands. It always helped me. It will help you."
+> "There's a hundred coins under the lid to start you off. Go and see Rosa for some good yarn, and make something with your hands. It always helped me. It will help you."
 > "Whatever happened out there, love, it stays out there. In here it's just you, and the kettle, and me in every cup. All my love, always. Gran."
 Nora (sad): ...Okay. Okay, Gran.
 > She folds the note into her pocket. Under the lid of the tin: a hundred coins, in neat little paper rolls.
 @toast Gran's note is in your bag. Rent: 20c a week, into her tin on the table.
 @set act1_note
-@goal Buy yarn from Theo at the Yarn Barn | 53.27 -9.6
+@goal Buy yarn from Rosa at the Yarn Barn | 53.27 -9.6
 @camera player
 
 == act1_yarn
@@ -247,7 +264,7 @@ Nora (warm): Thanks.
 @label keep
 Rowan (neutral): If you want them, they're yours. Finders keepers, out here. But you'll want a pen first, or they'll wander back the way they came.
 Nora (worried): Gran's pen is long gone. I've never built anything in my life.
-Rowan (wry): Panels, posts and a gate. Sheep lean on everything, so build it like you mean it. Gus at Builder's Delight sells timber.
+Rowan (wry): Panels, posts and a gate. Sheep lean on everything, so build it like you mean it. Steve at Builder's Delight sells timber.
 ? What do you say?
 - I'll do it. Today. -> deal | familiarity rowan +3
 - Could you help? -> nohelp | trust rowan +1; familiarity rowan +1
@@ -264,7 +281,7 @@ Rowan (warm): I'll talk you through it. It's your pen, though. That matters, wit
 @home rowan off
 @set act1_strays
 @camera player
-@goal Buy wood from Gus at Builder's Delight | 47.7 -9.4
+@goal Buy wood from Steve at Builder's Delight | 47.7 -9.4
 
 == act1_wood
 @trigger event wood_bought
@@ -305,44 +322,49 @@ Nora (warm): Welcome home, you two. That makes three of us.
 @requires act1_fence_done
 @once
 @goal
-@walk nora 48.5 -5.9
+@place rosa by market_stall 0 -0.95 45
+@walk nora by market_stall 0 1.6
 @face rosa nora
 @face nora rosa
-@camera between rosa nora 7
+@camera between rosa nora 6 low
 Rosa (surprised): Hold on. Hold ON. Is that hand-knit?
 Nora (worried): It's nothing. It's a first try, the tension's all over the place—
 Rosa (happy): Honey, I've sold factory jumpers for eleven years. I know nothing when I see it, and this isn't it.
 > Rosa turns the sweater inside out, the way you'd check a melon.
-Rosa (happy): Look at those floats. Look at them! Theo! THEO! Come and look at this!
+Rosa (happy): Look at those floats. Look at them! Steve! Come and look at this! Steve!
 @if has sweater -> sell
 Rosa (warm): You've sold it already? Then bring me the next one, before anybody else sees it.
-@goto theo
+@goto credit
 @label sell
 @take sweater 1
 @give coins 60
 Rosa (warm): Sixty coins, and I want the next one before anybody else sees it.
 @toast Sold your first sweater: +60 coins
-@label theo
-@walk theo 50.4 -6.0
-@face theo nora
-@face nora theo
-@camera between theo nora 7
-Theo (happy): Rosa doesn't shout for anybody. Last time she shouted it was a calf with two heads.
-Theo (neutral): Told you. Ellie's granddaughter, through and through. She bought her wool off me for thirty years. Never once paid on time.
-? Theo holds out a bundle of oatmeal yarn.
-- I can't take that. Let me pay you. -> pay | familiarity theo +2
-- Thank you. Really. -> thanks | trust theo +2; familiarity theo +2
+@label credit
+@place steve by market_stall 5.0 3.4
+@walk steve by market_stall 1.9 1.6
+@face steve nora
+@face nora steve
+@camera between steve nora 6
+Steve (neutral): Hm. Good stitches.
+Rosa (wry): From Steve, that's a standing ovation.
+@face rosa nora
+@face nora rosa
+@camera between rosa nora 6 low
+? Rosa pulls a bundle of oatmeal yarn out from under the counter.
+- I can't take that. Let me pay you. -> pay | familiarity rosa +2
+- Thank you. Really. -> thanks | trust rosa +2; familiarity rosa +2
 @label pay
-Theo (wry): You can. Later. That's what credit is. Ellie invented it, as far as I'm concerned.
+Rosa (wry): You can. Later. That's what credit is. Your gran invented it, as far as I'm concerned.
 @goto give
 @label thanks
-Theo (warm): Pay me when the sweaters sell. They will.
+Rosa (warm): Pay me when the sweaters sell. They will, love.
 @label give
 @give wool 5
-@set theo_credit
+@set rosa_credit
 > Five skeins. More than anyone's handed her in a long time, and it isn't even charity. It's a bet on her.
-Nora (warm): Thank you. Both of you.
-@journal note Market day | Rosa shouted across the whole plaza. Theo gave me wool on credit, like I'm someone worth betting on. Sixty coins for something I made with my own hands.
+Nora (warm): Thank you. Really.
+@journal note Market day | Rosa shouted across the whole plaza. She gave me wool on credit, like I'm someone worth betting on. Sixty coins for something I made with my own hands.
 @time 18.5
 @set act1_market
 @camera player
@@ -394,6 +416,8 @@ Rowan (neutral): Right. Long days are the worst ones.
 Rowan (warm): Ellie's porch light's been broken for years. Keep that. I know the way home in the dark.
 @walk rowan 24 4.4 nowait
 @wait 2.0
+@home rosa off
+@home steve off
 @journal note The porch | Claire called: Daniel wants mediation, in person. Rowan left his lantern by the step. I didn't ask him to.
 @fade out 1.4
 @home rowan off

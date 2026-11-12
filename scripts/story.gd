@@ -35,6 +35,9 @@ extends RefCounted
 ##   @eyes nora closed               shut someone's eyes ("open" to open them), or set the look of
 ##                                   their eyes without a line: happy, warm, wry, sad, worried, angry, sleepy
 ##   @walk rowan 30 4 [nowait]       walk someone to x, z and wait until they arrive (or don't)
+##   @walk steve by building_homegoods 0 4  any x z can be "by <building> x z": a spot in front of
+##                                   that building (its own space, front toward +z), wherever it stands;
+##                                   "@camera ... yaw building_cafe" looks at that building's front
 ##   @place rowan 30 4 [yaw] [height]  put someone at x, z instantly (villagers stay there); a height
 ##                                   seats them up on something, e.g. 0.43 on a rock, for SitIdle
 ##   @give wool 3 / @take wool 1     change the inventory

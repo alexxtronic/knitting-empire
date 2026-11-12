@@ -21,10 +21,10 @@ const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
-const Regions = preload("res://scripts/regions.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const Lighting = preload("res://scripts/lighting.gd")
+const Regions = preload("res://scripts/regions.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
@@ -87,6 +87,7 @@ var pen_rect := PEN # where the sheep pen stands now (god mode can move it)
 const SHEEP_IN := 19.5 # the hour the flock heads for its stalls in the barn
 const SHEEP_OUT := 6.5 # the hour it comes back out to the pen
 var flock_bedtime := true
+var town_rounds := true # the cast's routines (_update_rounds); off in the autotest but for its own check
 var _flock_t := 0.0
 var _flock_seen := false
 var bin: Node3D
@@ -103,14 +104,14 @@ var _knit_clock_was := true
 var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
-var ai: AiChat # typed chat with villagers, voiced by Claude
-var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var minimap: Minimap # the map under the coins (minimap.gd): click it to walk there
+var ai: AiChat # typed chat with villagers, voiced by Claude
 var chat_v = null # the villager you're chatting with
 var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
 var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
+var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var decor_root: Node3D
 var sign_to_town: Landmark
 var sign_to_farm: Landmark
@@ -264,14 +265,14 @@ func _ready() -> void:
 	fireflies.setup(self)
 	hud = Hud.new()
 	add_child(hud)
+	minimap = Minimap.new()
+	minimap.main = self
+	hud.add_minimap(minimap)
 	if _autotest_dir != "":
 		Cinematic.dir = _autotest_dir.path_join("photos") # never the player's own album
 	cinema = Cinematic.new()
 	cinema.main = self
 	add_child(cinema)
-	minimap = Minimap.new()
-	minimap.main = self
-	hud.add_minimap(minimap)
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -313,6 +314,7 @@ func _ready() -> void:
 	_load_display()
 	tips_enabled = _autotest_dir == "" # the autotest turns them on for its own check
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
+	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
 	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
 	Engine.set_meta("ke_skip_title", false)
@@ -1005,6 +1007,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_walls()
 	_update_held_tool()
+	_update_hold(delta)
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
@@ -1013,9 +1016,9 @@ func _process(delta: float) -> void:
 	_update_story_staging(delta)
 	_update_needs(delta)
 	_update_gaze()
-	_update_hold(delta)
 	_update_chat()
 	_update_tips(delta)
+	_update_rounds(delta)
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -1204,6 +1207,8 @@ func _unhandled_input(e: InputEvent) -> void:
 						_build_click(mb.position, mb.shift_pressed)
 					else:
 						_live_click(mb.position)
+				else:
+					hold_release()
 	elif e is InputEventMouseMotion:
 		var mm := e as InputEventMouseMotion
 		_last_mouse = mm.position
@@ -1212,8 +1217,6 @@ func _unhandled_input(e: InputEvent) -> void:
 			_pan_camera(Vector2(-mm.relative.x, -mm.relative.y) * 0.03 * cam_dist / 23.0)
 		if ghost:
 			_update_ghost(mm.position)
-				else:
-					hold_release()
 		else:
 			_update_hover(mm.position)
 	elif e is InputEventGesture and _is_repeat_gesture(e as InputEventGesture):
@@ -1416,19 +1419,11 @@ func _live_click(mpos: Vector2) -> void:
 	if g != null and dog and dog.controlled:
 		dog.walk(_find_path(dog.position, g))
 		_click_marker(g)
+		_hold_t = 0.0 # held down, he keeps going the way the mouse points (_update_hold)
 		return
 	if g != null:
 		player.walk(_find_path(player.position, g))
 		_click_marker(g)
-
-
-var _rclick_from := Vector2(-999, -999)
-
-		_hold_t = 0.0 # held down, he keeps going the way the mouse points (_update_hold)
-
-## A right click: the ring of what she can do there. On a thing, its own actions; on open
-## ground, walking there and (with her hoe) digging a bed. Beds are only ever dug from here, so a
-## plain click never turns the lawn over by accident.
 		_hold_t = 0.0
 
 
@@ -1500,6 +1495,14 @@ func _update_hold(delta: float) -> void:
 		return
 	var to := w.position + d.normalized() * HOLD_AHEAD
 	w.walk(_find_path(w.position, to))
+
+
+var _rclick_from := Vector2(-999, -999)
+
+
+## A right click: the ring of what she can do there. On a thing, its own actions; on open
+## ground, walking there and (with her hoe) digging a bed. Beds are only ever dug from here, so a
+## plain click never turns the lawn over by accident.
 func _right_click(mpos: Vector2) -> void:
 	var t = _ray_target(mpos)
 	if t != null:
@@ -1898,7 +1901,7 @@ func _do_action(t, id: String) -> void:
 				player.walk(_find_path(player.position, dest))
 				_click_marker(dest)
 			"info":
-				hud.show_dialogue("Rosewood Cottage", -1, "A cozy cottage with a garden lot, just off the plaza. For sale: %dc. Mabel at Willow Homes handles the sale. Furnish it and renters pay you every morning." % _cottage_price())
+				hud.show_dialogue("Rosewood Cottage", -1, "A cozy cottage with a garden lot, just off the plaza. For sale: %dc. Gary at Willow Homes handles the sale. Furnish it and renters pay you every morning." % _cottage_price())
 		return
 	if t is Villager:
 		t.hold(15.0)
@@ -2674,7 +2677,7 @@ Rowan (happy): You're alright, {player}.
 		Game.stat("rosa", "familiarity") == 37 and Game.stat("rosa", "trust") == 0 and Game.hearts("rosa") == 1)
 
 
-## Act 1 from a fresh story: the rain bus, Mabel at the gate, Gran's basket, knitting and the
+## Act 1 from a fresh story: the rain bus, Wren's tour of the town, Gran's basket, knitting and the
 ## first memory thread, Rowan at the broken fence, market day in Maplewood, and the porch at
 ## night. The heroine walks between the triggers for real.
 func _act1_checks() -> void:
@@ -2682,8 +2685,8 @@ func _act1_checks() -> void:
 	Game.hour = 9.0
 	Game.energy = 100.0
 	Game.fullness = 100.0
-	for vid in ["rowan", "mabel", "wren", "pip", "hazel", "gus", "theo", "rosa"]:
-		set_home(vid)
+	for d in _villager_defs():
+		set_home(str(d["id"]))
 	mode = Mode.LIVE
 	story.shown.clear()
 	story.auto = true
@@ -2705,14 +2708,16 @@ func _act1_checks() -> void:
 	await _act1_shot("Last stop", "20_act1_rain_bus.png")
 	await _act1_shot("No name", "21_act1_phone.png")
 	await _act1_shot("WELCOME TO MAPLE GROVE", "21_act1_sign.png")
-	await _act1_shot("Hazel the baker", "21_act1_town_hazel.png")
+	await _act1_shot("Giorgio the baker", "21_act1_town_giorgio.png")
 	var tune_on: bool = audio.tune_name == "arrival"
-	await _act1_shot("Pip the postman", "21_act1_town_pip.png")
+	await _act1_shot("Barbara the postwoman", "21_act1_town_barbara.png")
 	await _act1_shot("going to like it here", "21_act1_like_it_here.png")
-	await _act1_shot("expecting you", "22_act1_wren.png")
-	await _act1_shot("Timber, nails", "22_act1_tour_gus.png")
-	await _act1_shot("Ellie's girl", "22_act1_tour_theo.png")
-	await _act1_shot("on the house", "22_act1_tour_hazel.png")
+	await _act1_shot("Good, you're here", "22_act1_wren.png")
+	await _act1_shot("Ellie's girl", "22_act1_tour_rosa.png")
+	await _act1_shot("on the house", "22_act1_tour_giorgio.png")
+	await _act1_shot("Willow Homes. Property", "22_act1_tour_gary.png")
+	await _act1_shot("...Welcome.", "22_act1_tour_steve.png")
+	await _act1_shot("That's the tour", "22_act1_tour_sabrina.png")
 	await _act1_shot("Front door sticks", "23_act1_grans_door.png")
 	await _act1_until_done(120.0)
 	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, hour_end[0]], absf(hour_end[0] - hour0) < 0.001 and Game.time_running)
@@ -2720,10 +2725,11 @@ func _act1_checks() -> void:
 		tune_on and Game.flag("act1_toured") == true and str(Game.flag("weather")) == "clear" and player.position.distance_to(Vector3(10.4, 0, 3.0)) < 0.6
 		and hud.goal_panel.visible and goal_marker.visible and hud.goal_label.text.begins_with("Go inside"))
 	var keepers_back := 0
-	for vid in ["hazel", "gus", "theo", "mabel"]:
+	var keepers := ["giorgio", "steve", "rosa", "gary", "sabrina"]
+	for vid in keepers:
 		if _villager(vid).position.distance_to(_villager_post(vid)) < 1.5:
 			keepers_back += 1
-	_check("the shopkeepers went back to their counters after the tour (%d of 4)" % keepers_back, keepers_back == 4)
+	_check("the shopkeepers went back to work after the tour (%d of %d)" % [keepers_back, keepers.size()], keepers_back == keepers.size())
 	await _wait(0.8)
 	var t0 := Time.get_ticks_msec()
 	player.walk(_find_path(player.position, Vector3(5.6, 0, 3.0)))
@@ -2746,17 +2752,17 @@ func _act1_checks() -> void:
 	await _shot("24_act1_note_paper.png")
 	_check("the note opens on paper", homestead.ui.is_open())
 	homestead.ui.close_all()
-	# her first yarn, from Theo
-	var theo := _villager("theo")
-	var wool_price := _theo_price(Game.WOOL_PACK_PRICE)
+	# her first yarn, from Rosa at the Yarn Barn
+	var rosa := _villager("rosa")
+	var wool_price := _yarn_price(Game.WOOL_PACK_PRICE)
 	t0 = Time.get_ticks_msec()
-	_do_action(theo, "buy_wool")
+	_do_action(rosa, "buy_wool")
 	t = 0.0
 	while story.playing != "act1_yarn" and t < 60.0:
 		await _wait(0.1)
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
-	_check("buying her first yarn from Theo starts the next beat (%s after %.1fs)" % [story.playing, t], story.playing == "act1_yarn")
+	_check("buying her first yarn from Rosa starts the next beat (%s after %.1fs)" % [story.playing, t], story.playing == "act1_yarn")
 	await _act1_until_done(30.0)
 	Game.hour = 9.0 # the test walks fast, but not that fast: keep the act on one day, as a player would sleep between
 	_check("she has the yarn (coins %d, wool %d) and a goal to knit ('%s')" % [Game.coins, Game.count("wool"), hud.goal_label.text],
@@ -2788,15 +2794,15 @@ func _act1_checks() -> void:
 	await _act1_shot("You alright?", "25_act1_rowan.png")
 	await _act1_until_done(60.0)
 	Game.hour = 9.0
-	_check("the strays: met Rowan, opened up (trust %d→%d), off to Gus for wood ('%s')" % [trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
+	_check("the strays: met Rowan, opened up (trust %d→%d), off to Steve for wood ('%s')" % [trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
 		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Buy wood"))
-	# wood from Gus at Builder's Delight
-	var gus := _villager("gus")
-	var acts: Array = _villager_actions(gus).map(func(x): return x["id"])
-	_check("Gus sells wood (%s)" % str(acts), "buy_wood" in acts)
+	# wood from Steve at Builder's Delight
+	var steve := _villager("steve")
+	var acts: Array = _villager_actions(steve).map(func(x): return x["id"])
+	_check("Steve sells wood (%s)" % str(acts), "buy_wood" in acts)
 	var coins1 := Game.coins
 	t0 = Time.get_ticks_msec()
-	_do_action(gus, "buy_wood")
+	_do_action(steve, "buy_wood")
 	t = 0.0
 	while story.playing != "act1_wood" and t < 60.0:
 		await _wait(0.1)
@@ -2804,8 +2810,8 @@ func _act1_checks() -> void:
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("buying wood starts the pen beat (%s)" % story.playing, story.playing == "act1_wood")
 	await _act1_until_done(30.0)
-	_villager_action(gus, "buy_wood")
-	_villager_action(gus, "buy_wood")
+	_villager_action(steve, "buy_wood")
+	_villager_action(steve, "buy_wood")
 	hud.hide_dialogue()
 	_check("three packs of wood (%d wood, coins %d→%d)" % [Game.count("wood"), coins1, Game.coins], Game.count("wood") == 15 and Game.coins == coins1 - 45)
 	# craft the gate, then build a 3 by 3 pen near the strays
@@ -2888,14 +2894,15 @@ func _act1_checks() -> void:
 	await _act1_until_done(30.0)
 	cam_target = cam0
 	_check("off to market ('%s')" % hud.goal_label.text, Game.flag("act1_fence_done") == true and hud.goal_label.text.contains("market"))
-	var buy_ok: bool = _villager_actions(theo).filter(func(x): return x["id"] == "buy_sheep").size() == 1
-	_check("Theo sells sheep now there's a pen", buy_ok)
+	var buy_ok: bool = _villager_actions(rosa).filter(func(x): return x["id"] == "buy_sheep").size() == 1
+	_check("Rosa sells sheep now there's a pen", buy_ok)
 	# market day: walk into Maple Grove to Rosa's stall
 	var coins0 := Game.coins
 	var sweaters0 := Game.count("sweater")
 	var wool1 := Game.count("wool")
-	var theo0 := Game.stat("theo", "trust")
+	var rosa0 := Game.stat("rosa", "trust")
 	t0 = Time.get_ticks_msec()
+	story.pause_on = "Hold ON" # armed before she gets there: the scene's first line comes quickly
 	player.walk(_find_path(player.position, Vector3(48.5, 0, -5.6)))
 	t = 0.0
 	while story.playing != "act1_market" and t < 45.0:
@@ -2904,11 +2911,11 @@ func _act1_checks() -> void:
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("walking to Rosa's stall starts market day (%s after %.1fs)" % [story.playing, t], story.playing == "act1_market")
 	await _act1_shot("Hold ON", "28_act1_market_rosa.png")
-	await _act1_shot("two heads", "29_act1_market_theo.png")
+	await _act1_shot("standing ovation", "29_act1_market_steve.png")
 	await _act1_until_done(60.0)
-	_check("Rosa bought the sweater (coins %d→%d, sweaters %d→%d), Theo's wool on credit (wool %d→%d, trust %d→%d), home by dusk ('%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), theo0, Game.stat("theo", "trust"), hud.goal_label.text],
-		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("theo_credit") == true
-		and Game.stat("theo", "trust") == theo0 + 2 and Game.flag("act1_market") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
+	_check("Rosa bought the sweater (coins %d→%d, sweaters %d→%d) and gave wool on credit (wool %d→%d, trust %d→%d), home by dusk ('%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), rosa0, Game.stat("rosa", "trust"), hud.goal_label.text],
+		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("rosa_credit") == true
+		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
 	# the porch at night
 	day0 = Game.day
 	t0 = Time.get_ticks_msec()
@@ -3455,6 +3462,153 @@ func _act1_shot(sub: String, fname: String) -> void:
 	story.holding = false
 
 
+## The town's cast (Alex's, 2026-11-12) and their routines: the eight villagers and nobody else,
+## the six new faces in their own models, Sabrina starting cool by the Coffee Shop, Rosa's
+## mornings at the market stall and afternoons in the Yarn Barn, Barbara's nine o'clock post round
+## (every door in town and Nora's porch), and Gary's land and his visit on her second day.
+func _cast_checks() -> void:
+	hud.hide_dialogue()
+	hud.tip_panel.visible = false
+	mode = Mode.LIVE
+	var hour0 := Game.hour
+	var day0 := Game.day
+	var auto0: bool = story.auto
+	var ids: Array = villagers.map(func(v): return str(v.vid))
+	ids.sort()
+	_check("the cast is Barbara, Gary, Giorgio, Rosa, Rowan, Sabrina, Steve and Wren (%s)" % ", ".join(ids),
+		ids == ["barbara", "gary", "giorgio", "rosa", "rowan", "sabrina", "steve", "wren"])
+	var bodies: Array = []
+	for id in ["barbara", "gary", "giorgio", "sabrina", "steve", "wren"]:
+		var v := _villager(id)
+		if v != null and v.body != null:
+			bodies.append(id)
+	_check("the six new faces wear their own models (%s)" % ", ".join(bodies), bodies.size() == 6)
+	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id) and ai.has_persona(id)))
+	_check("every villager has an intro, lines and a chat persona (missing: %s)" % str(missing), missing.is_empty())
+	var old_f = Game.friends.get("sabrina")
+	Game.friends.erase("sabrina")
+	_check("Sabrina starts cool (trust %d)" % Game.stat("sabrina", "trust"), Game.stat("sabrina", "trust") == -20)
+	if old_f != null:
+		Game.friends["sabrina"] = old_f
+	for d in _villager_defs():
+		set_home(str(d["id"]))
+	# Sabrina, on the Coffee Shop's terrace wherever the layout puts it
+	var sab := _villager("sabrina")
+	var cafe := _spot_at(_villager_def("sabrina")["at"])
+	_check("Sabrina works on the Coffee Shop's terrace (%.1f m from her spot)" % (sab.position.distance_to(cafe["pos"]) if not cafe.is_empty() else -1.0),
+		not cafe.is_empty() and sab.position.distance_to(cafe["pos"]) < 1.5)
+	var sab_acts: Array = _villager_actions(sab).map(func(a): return a["id"])
+	Game.coins = maxi(Game.coins, 100)
+	var warm0 := Game.warmth
+	Game.warmth = minf(Game.warmth, 60.0)
+	warm0 = Game.warmth
+	_villager_action(sab, "buy_coffee")
+	_check("she sells coffee, and it warms Nora up (%.0f -> %.0f)" % [warm0, Game.warmth], "buy_coffee" in sab_acts and Game.warmth > warm0)
+	hud.hide_dialogue()
+	if not cafe.is_empty():
+		player.position = cafe["talk"]
+		player.face_point(sab.position)
+		await _cast_frame(cafe["pos"], float(cafe["yaw"]), 9.0)
+		await _shot("51_cast_sabrina.png")
+	# Gary's listings
+	var land: Array = _villager_actions(_villager("gary")).filter(func(a): return str(a.get("group", "")) == "Land for sale")
+	_check("Gary lists three plots of land, all out of reach (%s)" % ", ".join(land.map(func(a): return a["label"])),
+		land.size() == 3 and land.all(func(a): return not a["enabled"]))
+	# the town's routines
+	town_rounds = true
+	story.auto = true
+	story.auto_line = 0.2
+	var rosa := _villager("rosa")
+	var stall := _spot_at(_villager_def("rosa")["stall"])
+	var barbara := _villager("barbara")
+	post_day = 0
+	_post_stops.clear()
+	player.position = Vector3(44.0, 0, 1.0) # in town, away from the farm (Gary calls at the farm)
+	Game.hour = 9.0
+	var t := 0.0
+	while not stall.is_empty() and rosa.position.distance_to(stall["pos"]) > 0.4 and t < 40.0:
+		await _wait(0.25)
+		t += 0.25
+	_check("Rosa keeps the market stall in the morning (%.1fs to walk over, at the stall: %s)" % [t, str(rosa_at_stall)],
+		not stall.is_empty() and rosa.position.distance_to(stall["pos"]) <= 0.4 and rosa_at_stall)
+	var stops := _post_stops.size()
+	var kinds: Array = Town.built.filter(func(e): return str(e[1]).begins_with("building_")).map(func(e): return str(e[1]).substr(9))
+	_check("Barbara set out with the post at nine (%d stops for %s, Nora's porch among them: %s)" % [stops, ", ".join(kinds), str(POST_FARM_DOOR in _post_stops)],
+		post_day == Game.day and stops >= 7 and POST_FARM_DOOR in _post_stops)
+	if not stall.is_empty():
+		await _cast_frame(stall["pos"], float(stall["yaw"]), 7.0, CAM_PITCH_LOW) # low, to see her under the awning
+		await _shot("51_cast_rosa_stall.png")
+	t = 0.0
+	while _post_stops.size() >= stops and t < 40.0:
+		await _wait(0.25)
+		t += 0.25
+	_check("she calls at the first door and moves on (%.1fs)" % t, _post_stops.size() < stops and not _post_stops.is_empty())
+	await _cast_frame(barbara.position, cam_yaw, 8.0)
+	await _shot("51_cast_barbara.png")
+	var to_farm := _find_path(Vector3(50.5, 0, 1.6), POST_FARM_DOOR)
+	_check("the post can walk from the plaza to Gran's porch (%d steps)" % to_farm.size(),
+		not to_farm.is_empty() and (to_farm[-1] as Vector3).distance_to(POST_FARM_DOOR) < 0.8)
+	Game.hour = 13.0
+	t = 0.0
+	while Interiors.inside_of(rosa.position) != "shop" and t < 40.0:
+		await _wait(0.25)
+		t += 0.25
+	_check("and she's back behind the Yarn Barn's counter after noon (%.1fs)" % t, Interiors.inside_of(rosa.position) == "shop" and not rosa_at_stall)
+	# Gary calls at the farm on her second day, then every two weeks
+	Game.day = maxi(Game.day, 2)
+	Game.flags.erase("gary_visit_day")
+	Game.flags.erase("gary_met")
+	Game.flags.erase("seen_gary_intro")
+	_post_stops.clear()
+	set_home("barbara")
+	player.position = Vector3(12.0, 0, 4.5)
+	cam_glide = {}
+	_set_cam_lock(true)
+	cam_pitch = CAM_PITCH
+	Game.hour = 11.0
+	t = 0.0
+	while story.playing != "gary_intro" and t < 5.0:
+		await _wait(0.1)
+		t += 0.1
+	_check("Gary calls at the farm on her second day (%s after %.1fs)" % [story.playing, t], story.playing == "gary_intro")
+	await _act1_shot("Three listings", "51_cast_gary_visit.png")
+	await _act1_until_done(40.0)
+	var gary := _villager("gary")
+	_check("he pitches three plots and goes back to Willow Homes (met %s, %.1f m from his desk)" % [str(Game.flag("gary_met")), gary.position.distance_to(_villager_post("gary"))],
+		Game.flag("gary_met") == true and int(Game.flag("gary_visit_day", 0)) == Game.day and gary.position.distance_to(_villager_post("gary")) < 1.5
+		and story.shown.any(func(l): return str(l).contains("Saltmeadow Point")))
+	var due_now := gary_visit_due()
+	Game.day += GARY_EVERY
+	var due_later := gary_visit_due()
+	_check("and comes back every two weeks (due tomorrow: %s, in %d days: %s, then the pitch: %s)" % [str(due_now), GARY_EVERY, str(due_later), Story.find_trigger("event", "gary_visit")],
+		not due_now and due_later and Story.find_trigger("event", "gary_visit") == "gary_pitch")
+	town_rounds = false
+	Game.day = day0
+	Game.hour = hour0
+	story.auto = auto0
+	hud.hide_dialogue()
+	for d in _villager_defs():
+		set_home(str(d["id"]))
+	cam_glide = {}
+	_set_cam_lock(true)
+	cam_yaw = deg_to_rad(45.0)
+	cam_yaw_goal = cam_yaw
+	cam_target = player.position
+
+
+## The cast check's pictures: the camera off Nora, looking at `at` from the side `yaw` faces
+## (a three-quarter view of a front), `dist` away.
+func _cast_frame(at: Vector3, yaw: float, dist: float, pitch := CAM_PITCH) -> void:
+	_set_cam_lock(false)
+	cam_target = at + Vector3(0, 1.0, 0)
+	cam_yaw = yaw + deg_to_rad(25.0)
+	cam_yaw_goal = cam_yaw
+	cam_dist = dist
+	cam_pitch = pitch
+	cam_glide = {"pos": cam_target, "dist": dist, "pitch": pitch}
+	await _wait(1.0)
+
+
 func _act1_until_done(timeout: float) -> void:
 	var t := 0.0
 	while story.is_playing() and t < timeout:
@@ -3651,6 +3805,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=cast" in OS.get_cmdline_user_args(): # just the town's cast and their routines (about a minute)
+		await _wait(1.5)
+		await _cast_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=barn" in OS.get_cmdline_user_args(): # just the barn checks and their pictures
 		await _wait(1.5)
 		await _barn_checks()
@@ -3695,6 +3855,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=minimap" in OS.get_cmdline_user_args(): # just the minimap and walking by holding the mouse down
+		await _wait(1.5)
+		await _minimap_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=photo" in OS.get_cmdline_user_args(): # just cinematic mode: the free camera, photos and the album
 		await _wait(1.5)
 		await _photo_checks()
@@ -3709,12 +3875,6 @@ func _autotest() -> void:
 	await _wait(0.4)
 	_check("action menu opens on rocking chair as a ring (%s)" % str(hud.pie.labels()), hud.is_menu_open() and hud.pie.labels().size() == 2)
 	await _shot("02_menu.png")
-	if "--only=minimap" in OS.get_cmdline_user_args(): # just the minimap and walking by holding the mouse down
-		await _wait(1.5)
-		await _minimap_checks()
-		print("AUTOTEST DONE")
-		get_tree().quit()
-		return
 	hud.hide_menu()
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
 	await _face_checks()
@@ -3877,12 +4037,13 @@ func _autotest() -> void:
 	await _bench_checks()
 	await _barn_checks()
 	await _shop_checks()
+	await _cast_checks()
 	await _flock_checks()
 	await _light_checks()
 	await _world_checks()
-	await _minimap_checks()
 	await _dog_checks()
 	await _photo_checks()
+	await _minimap_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
@@ -4145,7 +4306,7 @@ func _barn_checks() -> void:
 
 ## The shops (scripts/interiors.gd): she walks in through each door and it opens up round her
 ## (door swung in, roof hidden, the walls toward the camera cut down); its shopkeeper is behind
-## the counter, and she talks to them from across it (Hazel sells her a warm croissant). Each
+## the counter, and she talks to them from across it (Giorgio sells her a warm croissant). Each
 ## closes up again when she leaves.
 func _shop_checks() -> void:
 	hud.tip_panel.visible = false
@@ -4184,7 +4345,7 @@ func _shop_checks() -> void:
 		await _shot("46_%s.png" % id)
 		var k: Dictionary = Interiors.keeper(id)
 		var at_post: bool = v.position.distance_to(k["pos"]) < 0.8 and Interiors.inside_of(v.position) == id
-		var price := _hazel_price()
+		var price := _pastry_price()
 		var c0 := Game.coins
 		if id == "bakery":
 			Game.fullness = 40.0
@@ -4204,7 +4365,7 @@ func _shop_checks() -> void:
 		_check("%s is behind the counter inside, and talks to her across it (%.1f m from their post)" % [v.title, v.position.distance_to(k["pos"])],
 			at_post and v.position.distance_to(k["pos"]) < 1.0 and hud.dlg_panel.visible)
 		if id == "bakery":
-			_check("Hazel sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
+			_check("Giorgio sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
 				Game.coins == c0 - price and Game.fullness > 40.0 + PASTRY_FOOD - 3.0) # less what she burned walking over
 		await _shot("46_%s_inside.png" % id)
 		hud.hide_dialogue()
@@ -5940,14 +6101,17 @@ func set_home(vid: String, p = null) -> void:
 		Game.flags.erase("home_" + vid)
 		for d in _villager_defs():
 			if d["id"] == vid:
-				var k: Dictionary = Interiors.keeper(str(d["works_in"])) if d.has("works_in") else {}
+				var k := _work_spot(d)
 				v.settle_at(k.get("pos", d["pos"]))
 				v.roam = k.get("roam", d["roam"])
-				if d.has("route"): # the postman goes back to his round
+				if d.has("route"): # back to their round
 					v.route = d["route"]
 					v._next_stop()
 				if k.has("yaw"):
 					v.rotation.y = float(k["yaw"])
+				if vid == "rosa":
+					rosa_at_stall = false # _update_rounds sends her back out if it's a stall morning
+					v.set_role(str(d["role"]))
 
 
 ## Shopkeepers (villagers.json "works_in") work inside their shops (scripts/interiors.gd): they
@@ -5956,9 +6120,9 @@ func set_home(vid: String, p = null) -> void:
 func _place_shopkeepers() -> void:
 	for d in _villager_defs():
 		var v := _villager(str(d["id"]))
-		if v == null or not d.has("works_in"):
+		if v == null or not (d.has("works_in") or d.has("at")):
 			continue
-		var k: Dictionary = Interiors.keeper(str(d["works_in"]))
+		var k := _work_spot(d)
 		if k.is_empty():
 			continue
 		v.talk_spot = k["talk"]
@@ -5973,9 +6137,205 @@ func _place_shopkeepers() -> void:
 func _villager_post(vid: String) -> Vector3:
 	for d in _villager_defs():
 		if d["id"] == vid:
-			var k: Dictionary = Interiors.keeper(str(d["works_in"])) if d.has("works_in") else {}
-			return k.get("pos", d["pos"])
+			return _work_spot(d).get("pos", d["pos"])
 	return Vector3.ZERO
+
+
+## Where a villager works, wherever the world editor put the building: behind a walk-in shop's
+## counter ("works_in"), or by a building that isn't walk-in ("at"). {"pos", "talk", "yaw",
+## "roam"} like Interiors.keeper; {} for anyone who just has a spot ("pos").
+func _work_spot(d: Dictionary) -> Dictionary:
+	if d.has("works_in"):
+		return Interiors.keeper(str(d["works_in"]))
+	if d.has("at"):
+		var k := _spot_at(d["at"])
+		if not k.is_empty():
+			k["roam"] = d["roam"]
+		return k
+	return {}
+
+
+## A spot by building `at.building` (a Town.built kind): `at.pos` and `at.talk` are [x, z] in the
+## building's own space, its front toward +z. {} if the building isn't there.
+func _spot_at(at: Dictionary) -> Dictionary:
+	for b in Town.built:
+		if str(b[1]) != str(at["building"]) or not is_instance_valid(b[0]) or not (b[0] as Node3D).visible:
+			continue
+		var xf: Transform3D = (b[0] as Node3D).global_transform
+		var p: Vector2 = Data.vec2(at["pos"])
+		var t: Vector2 = Data.vec2(at.get("talk", [p.x, p.y + 1.2]))
+		var pos: Vector3 = xf * Vector3(p.x, 0, p.y)
+		var talk: Vector3 = xf * Vector3(t.x, 0, t.y)
+		var front: Vector3 = xf.basis.z
+		return {"pos": Vector3(pos.x, 0, pos.z), "talk": Vector3(talk.x, 0, talk.z), "yaw": atan2(front.x, front.z), "roam": Vector2.ZERO}
+	return {}
+
+
+## The town's daily routines, checked twice a second (from _process): Rosa keeps the market stall
+## on mornings (villagers.json "stall") and the Yarn Barn the rest of the day; Barbara sets out
+## with the post at nine ("post_round"), door to door round the town and out to Nora's farm, then
+## back to the plaza. A story scene that has sent either somewhere (a "home_" flag) comes first.
+var rosa_at_stall := false
+var _rounds_t := 0.0
+var post_day := 0 # the day Barbara last set out
+var _post_stops: Array = [] # the doors still to call at today (Vector3s), her post spot last
+const POST_FARM_DOOR := Vector3(10.6, 0, 3.0) # Gran's porch step: the post comes to Nora too
+
+
+func _update_rounds(delta: float) -> void:
+	_rounds_t -= delta
+	if _rounds_t > 0.0 or title_on or not town_rounds or story.is_playing():
+		return
+	_rounds_t = 0.5
+	_update_rosa()
+	_update_post()
+	_update_gary_visit()
+
+
+## Gary from Willow Homes calls at the farm: first on her second day (data/scenes/town.scene
+## "gary_intro": he introduces himself and pitches three plots of land she can't afford yet), then
+## every two weeks with another pitch about trading up ("gary_pitch"). He comes while she's home
+## on the farm, mid-morning to mid-afternoon, and not in the middle of something.
+const GARY_EVERY := 14
+
+
+func gary_visit_due() -> bool:
+	var last: int = int(Game.flag("gary_visit_day", 0))
+	if last == 0:
+		return Game.day >= 2
+	return Game.day - last >= GARY_EVERY
+
+
+func _update_gary_visit() -> void:
+	if not gary_visit_due() or Game.hour < 10.0 or Game.hour > 16.0 or mode != Mode.LIVE or sleeping:
+		return
+	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or hud.is_chat_open() or knit.active:
+		return
+	if homestead.story_farm() and not Game.flag("act1_note"):
+		return
+	var id := Story.find_trigger("event", "gary_visit")
+	if id == "":
+		return
+	Game.set_flag("gary_visit_day", Game.day)
+	story.play(id)
+
+
+func _villager_def(vid: String) -> Dictionary:
+	for d in _villager_defs():
+		if str(d["id"]) == vid:
+			return d
+	return {}
+
+
+func _update_rosa() -> void:
+	var v := _villager("rosa")
+	var d := _villager_def("rosa")
+	if v == null or not d.has("stall") or Game.flag("home_rosa", null) != null:
+		return
+	var hours: Array = d["stall"]["hours"]
+	var want: bool = Game.hour >= float(hours[0]) and Game.hour < float(hours[1])
+	if want == rosa_at_stall:
+		return
+	var k := _spot_at(d["stall"]) if want else _work_spot(d)
+	if k.is_empty():
+		return
+	rosa_at_stall = want
+	v.set_role("Market Stall" if want else str(d["role"]))
+	v.walk_to(k["pos"], _find_path(v.position, k["pos"]))
+	v.talk_spot = k["talk"]
+	v.rest_yaw = k["yaw"]
+
+
+## The doors on Barbara's round today, from where she stands: every building in town, nearest
+## first, then Gran's porch, then back to her spot on the plaza.
+func post_round_stops(from: Vector3) -> Array:
+	var doors: Array = []
+	for b in Town.built:
+		var kind := str(b[1])
+		if not kind.begins_with("building_") or not is_instance_valid(b[0]) or not (b[0] as Node3D).visible:
+			continue
+		var id := kind.substr(9)
+		var depth := 0.0
+		if Interiors.shops.has(id):
+			depth = (Interiors.shops[id] as Interiors.Shop).size.y
+		elif id == "cafe":
+			depth = Town.CAFE.size.y
+		elif id == "mayor":
+			depth = Town.MAYOR.size.y
+		else:
+			continue
+		var xf: Transform3D = (b[0] as Node3D).global_transform
+		var p: Vector3 = xf * Vector3(0, 0, depth * 0.5 + 0.9)
+		doors.append(Vector3(p.x, 0, p.z))
+	var out: Array = []
+	var at := from
+	while not doors.is_empty():
+		var best := 0
+		for i in doors.size():
+			if (doors[i] as Vector3).distance_to(at) < (doors[best] as Vector3).distance_to(at):
+				best = i
+		at = doors.pop_at(best)
+		out.append(at)
+	out.append(POST_FARM_DOOR)
+	out.append(_villager_def("barbara").get("pos", from))
+	return out
+
+
+func _update_post() -> void:
+	var v := _villager("barbara")
+	var d := _villager_def("barbara")
+	if v == null or not d.has("post_round") or Game.flag("home_barbara", null) != null:
+		_post_stops.clear()
+		return
+	if _post_stops.is_empty():
+		if post_day != Game.day and Game.hour >= float(d["post_round"]) and Game.hour < 17.0:
+			post_day = Game.day
+			_post_stops = post_round_stops(v.position)
+			_post_next(v)
+		return
+	# at this door: a moment to put the letters through, then on to the next
+	var here: Vector3 = _post_stops[0]
+	if Vector2(v.position.x - here.x, v.position.z - here.z).length() < 0.3 and v._via.is_empty():
+		if v.hold_time <= 0.0 and v.get_meta("posted", false) == false:
+			v.set_meta("posted", true)
+			v.hold(1.5)
+			if here == POST_FARM_DOOR and player.position.distance_to(here) < 14.0:
+				hud.show_toast("Barbara brings the post.")
+		elif v.hold_time <= 0.0:
+			_post_stops.pop_front()
+			if _post_stops.is_empty():
+				v.roam = d["roam"]
+			else:
+				_post_next(v)
+
+
+func _post_next(v) -> void:
+	v.set_meta("posted", false)
+	var p: Vector3 = _post_stops[0]
+	v.walk_to(p, _find_path(v.position, p))
+
+
+## Gary's listings at Willow Homes (data/economy.json "land"): name, where, price, his pitch.
+func land_plots() -> Array:
+	return Data.economy().get("land", [])
+
+
+func _cheapest_plot() -> int:
+	var best := 0
+	for l in land_plots():
+		if best == 0 or int(l["price"]) < best:
+			best = int(l["price"])
+	return best
+
+
+## 12500 -> "12,500".
+static func _thousands(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
 
 
 ## Who lives in Maplewood: res://data/villagers.json.
@@ -5998,20 +6358,23 @@ func _crop_value() -> int:
 	return Game.count("turnip") * Game.market_price("turnip") + Game.count("pumpkin") * Game.market_price("pumpkin")
 
 
-func _theo_price(base: int) -> int:
-	return int(round(base * (1.0 - 0.05 * Game.hearts("theo"))))
+## Rosa's Yarn Barn prices (wool, sheep), a little less for every heart.
+func _yarn_price(base: int) -> int:
+	return int(round(base * (1.0 - 0.05 * Game.hearts("rosa"))))
 
 
-const PASTRY_PRICE := 12 # Hazel's croissants, before her friendship discount
+const PASTRY_PRICE := 12 # Giorgio's croissants, before his friendship discount
 const PASTRY_FOOD := 25.0
+const COFFEE_PRICE := 6 # a coffee from Sabrina: warms her up
+const COFFEE_WARMTH := 15.0
 
 
-func _hazel_price() -> int:
-	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("hazel"))))
+func _pastry_price() -> int:
+	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("giorgio"))))
 
 
 func _cottage_price() -> int:
-	return int(round(Game.COTTAGE_PRICE * (1.0 - 0.04 * Game.hearts("mabel"))))
+	return int(round(Game.COTTAGE_PRICE * (1.0 - 0.04 * Game.hearts("gary"))))
 
 
 func _update_price_board() -> void:
@@ -6024,34 +6387,39 @@ func _villager_actions(v) -> Array:
 	if ai.has_persona(v.vid):
 		acts.append(_act("chat", "Chat..."))
 	match v.vid:
-		"rosa":
+		"rosa": # the Yarn Barn, and some mornings the market stall
 			var sw := Game.count("sweater")
 			acts.append(_act("sell_sweater", "Sell sweaters  (%d, %dc)" % [sw, Game.sweater_worth(_rosa_price())], sw > 0))
 			var crops := _crop_value()
 			acts.append(_act("sell_crops", "Sell crops  (%dc)" % crops, crops > 0))
-		"theo":
-			var wp := _theo_price(Game.WOOL_PACK_PRICE)
+			var wp := _yarn_price(Game.WOOL_PACK_PRICE)
 			acts.append(_act("buy_wool", "Buy 3 wool  (%dc)" % wp, Game.coins >= wp))
 			if homestead.story_farm() and not homestead.has_pen():
 				acts.append(_act("noop", "Buy a sheep  (build a pen first)", false))
 			elif Game.sheep_count < Game.MAX_SHEEP:
-				var sp := _theo_price(Game.SHEEP_PRICE)
+				var sp := _yarn_price(Game.SHEEP_PRICE)
 				acts.append(_act("buy_sheep", "Buy a sheep  (%dc · you have %d)" % [sp, Game.sheep_count], Game.coins >= sp))
 			else:
 				acts.append(_act("noop", "Your pen is full (%d sheep)" % Game.MAX_SHEEP, false))
-		"gus":
+		"steve":
 			var n := homestead.econ("wood_pack", 5)
 			var wp := homestead.econ("wood_pack_price", 15)
 			acts.append(_act("buy_wood", "Buy %d wood  (%dc)" % [n, wp], Game.coins >= wp))
-		"hazel":
-			var pp := _hazel_price()
+		"giorgio":
+			var pp := _pastry_price()
 			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
-		"mabel":
+		"sabrina":
+			acts.append(_act("buy_coffee", "Buy a coffee  (%dc)" % COFFEE_PRICE, Game.coins >= COFFEE_PRICE and Game.warmth < 99.0))
+		"gary":
 			if Game.owns_cottage:
 				acts.append(_act("noop", "Rosewood Cottage rent: %dc a day" % _cottage_rent(), false))
 			else:
 				var cp := _cottage_price()
 				acts.append(_act("buy_cottage", "Buy Rosewood Cottage  (%dc)" % cp, Game.coins >= cp))
+			for l in land_plots(): # his listings: out of reach for now, and not for sale yet
+				var row := _act("noop", "%s, %s  (%sc)" % [l["name"], l["where"], _thousands(int(l["price"]))], false)
+				row["group"] = "Land for sale"
+				acts.append(row)
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
 	else:
@@ -6116,38 +6484,45 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Fresh from Birchfield! %dc it is." % value)
 				hud.show_toast("Sold your crops for %dc!" % value)
 		"buy_wool":
-			if Game.spend(_theo_price(Game.WOOL_PACK_PRICE)):
+			if Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
 				Game.add_item("wool", 3)
-				_say(v, "Three bundles of my finest. Enough for one sweater. Happy knitting!")
+				_say(v, "Three bundles, love, my best oatmeal. Enough for one sweater, if you don't drop stitches.")
 				_story_event_soon("yarn_bought")
 		"buy_wood":
 			if Game.spend(homestead.econ("wood_pack_price", 15)):
 				Game.add_item("wood", homestead.econ("wood_pack", 5))
-				var said: Array = ["Good straight lengths, those. A panel each, and two for a gate.", "Mind your thumbs. Nobody ever does.", "Fencing, is it? Sheep'll lean on anything. Build it like they mean it."]
+				var said: Array = ["Straight lengths. Panel each. Two for a gate.", "Mind your thumbs.", "Sheep lean. Build it like you mean it."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
 				hud.show_toast("+%d wood" % homestead.econ("wood_pack", 5))
 				homestead.ui.refresh()
 				_story_event_soon("wood_bought")
 		"buy_sheep":
-			if Game.sheep_count < Game.MAX_SHEEP and Game.spend(_theo_price(Game.SHEEP_PRICE)):
+			if Game.sheep_count < Game.MAX_SHEEP and Game.spend(_yarn_price(Game.SHEEP_PRICE)):
 				var sheep_name: String = Dialogue.NEW_SHEEP[(Game.sheep_count - Game.START_SHEEP) % Dialogue.NEW_SHEEP.size()]
 				Game.sheep_count += 1
 				_add_sheep()
-				_say(v, "Her name is %s. I walked her over to your pen myself. Be nice to her!" % sheep_name)
+				_say(v, "Her name is %s. I'll have her walked over to your pen by teatime. Be nice to her!" % sheep_name)
 				hud.show_toast("%s the sheep joined your flock! (%d sheep)" % [sheep_name, Game.sheep_count])
 		"buy_pastry":
-			if Game.spend(_hazel_price()):
+			if Game.spend(_pastry_price()):
 				Game.fullness = minf(100.0, Game.fullness + PASTRY_FOOD)
 				Game.add_need("happiness", 4.0)
-				var said: Array = ["Still warm. Eat it here, crumbs and all.", "Ten minutes out of the oven. Mind, it's hot.", "Take the window seat if you like. Nobody's in a hurry in here."]
+				var said: Array = ["Still warm. Sit, eat. The world can wait ten minutes.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take the window seat. Nobody rushes in here."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
 				hud.show_toast("A warm croissant. (+%d food)" % int(PASTRY_FOOD))
+		"buy_coffee":
+			if Game.spend(COFFEE_PRICE):
+				Game.add_need("warmth", COFFEE_WARMTH)
+				Game.add_need("happiness", 2.0)
+				var said: Array = ["One coffee. Don't say it's cute in here.", "It's hot. Obviously. It's coffee.", "Here. You look like you needed it. Whatever."] if Game.stat("sabrina", "trust") < 10 else ["Made it the way you like. Don't make it weird.", "Extra hot. You're always freezing.", "On the house. Kidding. Six coins."]
+				_say(v, said[(Game.day + int(f["n"])) % said.size()])
+				hud.show_toast("A hot coffee. (+%d warmth)" % int(COFFEE_WARMTH))
 		"buy_cottage":
 			if not Game.owns_cottage and Game.spend(_cottage_price()):
 				Game.owns_cottage = true
 				_rebuild_house()
 				_rebuild_grid()
-				_say(v, "Congratulations, homeowner! Here are the keys to Rosewood Cottage. Furnish it in Build mode: the cozier it is, the more rent it brings in every morning.")
+				_say(v, "Look at you, a property owner. Keys to Rosewood Cottage. Furnish it in Build mode: cozier means more rent every morning. You're welcome.")
 				hud.show_toast("You bought Rosewood Cottage!")
 		_:
 			if id.begins_with("gift_"):
@@ -6273,7 +6648,7 @@ func _chat_reaction(v, text: String, mood: String, keep: bool) -> void:
 ## What the villager knows about this moment, for the prompt (ai_chat.gd situation_text).
 func _chat_context(v) -> Dictionary:
 	var f := Game.friend(v.vid)
-	var place := {"rosa": "your market stall on the plaza", "theo": "the Yarn Barn, your shop", "mabel": "Willow Homes, your office", "hazel": "Heart Bakery, your bakery", "gus": "Builder's Delight, your shop"}
+	var place := {"rosa": "the Yarn Barn, your shop" if not rosa_at_stall else "your market stall on the plaza", "gary": "Willow Homes, your office", "giorgio": "Heart Bakery, your bakery", "steve": "Builder's Delight, the shop you work in", "sabrina": "the terrace of the Coffee Shop, where you work"}
 	var where: String = place.get(v.vid, "")
 	if where == "":
 		where = "Maple Grove, near the plaza" if v.position.x > 30.0 else "Birchfield Farm, Nora's place"
@@ -6289,13 +6664,13 @@ func _chat_context(v) -> Dictionary:
 				facts.append("When the gate slammed she flinched hard and said she was fine, it just made her jump. It was more than that.")
 			if Game.flag("act1_done"):
 				facts.append("You owe her a fixed fence; she owes you tea.")
-		"mabel":
-			if Game.flag("asked_about_gran"):
-				facts.append("Nora asked you whether it was bad at the end for Ellie. You told her it was peaceful.")
 		"rosa":
-			facts.append("Today you're paying %dc a sweater." % _rosa_price())
-		"theo":
-			facts.append("Today a bundle of 3 wool costs %dc and a sheep %dc." % [_theo_price(Game.WOOL_PACK_PRICE), _theo_price(Game.SHEEP_PRICE)])
+			facts.append("Today you're paying %dc a sweater, and a bundle of 3 wool costs %dc and a sheep %dc." % [_rosa_price(), _yarn_price(Game.WOOL_PACK_PRICE), _yarn_price(Game.SHEEP_PRICE)])
+		"gary":
+			facts.append("Nora has %dc. The cheapest land you're selling costs %sc." % [Game.coins, _thousands(_cheapest_plot())])
+		"sabrina":
+			if Game.stat("sabrina", "trust") < 0:
+				facts.append("You haven't decided whether you like Nora yet. You're not making it easy for her.")
 	if int(f["gift"]) == Game.day:
 		facts.append("Nora already gave you a gift today.")
 	if Game.knit_xp > 0:
@@ -6452,23 +6827,22 @@ func _town_checks() -> void:
 	_check("sold 2 sweaters at the market for %dc each (market %dc + Rosa's %d-heart bonus)" % [price, Game.market_price("sweater"), Game.hearts("rosa")], Game.coins == c0 + 2 * price and Game.count("sweater") == 0)
 
 	Game.coins += 1000
-	var theo := _villager("theo")
 	var w0 := Game.count("wool")
-	_do_action(theo, "buy_wool")
+	_do_action(rosa, "buy_wool")
 	await _walk_wait()
-	_check("bought 3 wool from Theo", Game.count("wool") == w0 + 3)
+	_check("bought 3 wool from Rosa", Game.count("wool") == w0 + 3)
 	var n0 := sheep_list.size()
-	_do_action(theo, "buy_sheep")
+	_do_action(rosa, "buy_sheep")
 	await _walk_wait()
 	_check("bought a sheep (%d → %d in the pen)" % [n0, sheep_list.size()], sheep_list.size() == n0 + 1 and Game.sheep_count == n0 + 1)
 
 	var blocked := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
 	_check("cottage is locked before buying", blocked.is_empty() or blocked[-1].distance_to(Vector3(61.5, 0, 9.5)) > 0.8)
 	Game.coins += 3000
-	var mabel := _villager("mabel")
-	_do_action(mabel, "buy_cottage")
+	var gary := _villager("gary")
+	_do_action(gary, "buy_cottage")
 	await _walk_wait()
-	_check("bought Rosewood Cottage from Mabel", Game.owns_cottage)
+	_check("bought Rosewood Cottage from Gary", Game.owns_cottage)
 	var into := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
 	_check("can walk into the cottage after buying", into.size() > 0 and into[-1].distance_to(Vector3(61.5, 0, 9.5)) < 0.8)
 

@@ -2,12 +2,12 @@ extends Node
 ## Act 1's farm work (Alex's design, 2026-11-12). A new game starts Nora at Gran's farm with no
 ## pen, no sheep and no money. Gran's note (on the table in the house) leaves her 100 coins and
 ## asks for a little rent in the tin each week. Two stray sheep graze past the pond; to keep them
-## she buys wood from Gus at Builder's Delight, builds a pen panel by panel (the fence builder, F) and
+## she buys wood from Steve at Builder's Delight, builds a pen panel by panel (the fence builder, F) and
 ## crafts a gate (G), then herds them in. Sheep shy away from whoever is herding them: Nora for
 ## now. Alex is making the dog in a separate chat; it herds by joining `herders`.
 ##
-## Story events fired here (data/scenes/act1.scene): "yarn_bought" (her first yarn from Theo),
-## "wood_bought" (her first wood from Gus), "pen_built" (a closed pen with a gate; the dog's cue),
+## Story events fired here (data/scenes/act1.scene): "yarn_bought" (her first yarn from Rosa),
+## "wood_bought" (her first wood from Steve), "pen_built" (a closed pen with a gate; the dog's cue),
 ## "sheep_penned" (both strays inside).
 ##
 ## What survives a save lives in Game.flags: "story_farm", "fences" (edge key -> "fence"/"gate"),
@@ -33,7 +33,7 @@ The house is yours now, if you'll have it: the third stair that creaks, the rose
 
 Put a little in the tin each week, for the house. Not because it needs the money. Because a home you pay into is a home you stay in.
 
-There's a hundred coins under the lid to start you off. Go and see Theo at the Yarn Barn for some good yarn, and make something with your hands. It always helped me. It will help you.
+There's a hundred coins under the lid to start you off. Go and see Rosa at the Yarn Barn for some good yarn, and make something with your hands. It always helped me. It will help you.
 
 Whatever happened out there, love, it stays out there. In here it's just you, and the kettle, and me in every cup.
 
@@ -232,7 +232,7 @@ func place(key: String, kind: String) -> String:
 		if not Game.take_item("gate"):
 			return "You need a gate. Craft one (G): it takes 2 wood."
 	elif not Game.take_item("wood", econ("fence_wood", 1)):
-		return "You need wood. Gus at Builder's Delight sells it."
+		return "You need wood. Steve at Builder's Delight sells it."
 	fences[key] = kind
 	_changed()
 	return ""
@@ -616,7 +616,7 @@ func _process(delta: float) -> void:
 		if sig != _ui_sig: # the reminder buttons come and go with the story and her bag
 			_ui_sig = sig
 			ui.refresh()
-		for s in main.sheep_list: # a sheep Theo walked over stands in the pen, wherever it is
+		for s in main.sheep_list: # a sheep Rosa sold her stands in the pen, wherever it is
 			if not s.housed and not s.heading_in and s.route.is_empty():
 				_put_in_pen(s)
 	# the note in her hand: open it to read

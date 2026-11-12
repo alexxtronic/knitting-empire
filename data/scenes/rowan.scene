@@ -28,7 +28,7 @@ Rowan (neutral): Fair enough.
 Rowan (warm): Offer stands anyway. The hill, past your fence. If you need a hand.
 @goto done
 @label tease
-Rowan (wry): This is me at my friendliest. Ask Theo.
+Rowan (wry): This is me at my friendliest. Ask Steve.
 Nora (happy): I might.
 @label done
 > He tips his head and goes back to watching the road, like he's waiting for something that never comes.

@@ -1,15 +1,16 @@
 {
-  "_about": "Maple Grove residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office / homegoods) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'route' is a round of [x, z] stops they walk all day (the postman's deliveries); 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
+  "_about": "Maple Grove residents (the cast Alex set on 2026-11-12). 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office / homegoods) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'at' puts them by a building that isn't walk-in (its 'building' is a Town.built kind such as building_cafe or market_stall; 'pos' and 'talk' are [x, z] in that building's own space, its front toward +z), so they follow it when the world editor moves it; 'stall' sends them to a stall ('at' format) during its 'hours' [from, to] and back to work after; 'post_round' is the hour the postwoman sets out on her round, door to door and past Nora's farm (main.gd _update_rounds); 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'start' is where their relationship stats begin (trust runs -50..100); 'route' is a round of [x, z] stops walked all day; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
       "name": "Rosa",
-      "role": "Market Stall",
+      "role": "The Yarn Barn",
       "loves": "pumpkin",
-      "likes": ["turnip"],
-      "pos": [48.5, 0.0, -8.15],
-      "roam": [0.9, 0.0],
-      "talk_spot": [48.5, 0.0, -6.15],
+      "likes": ["turnip", "sweater"],
+      "works_in": "shop",
+      "stall": {"building": "market_stall", "pos": [0.0, -0.95], "talk": [0.0, 1.05], "hours": [8, 12]},
+      "pos": [57.2, 0.0, -7.3],
+      "roam": [1.1, 0.35],
       "look": {
         "skin": "#d9a885",
         "hair": "#c7c4cc",
@@ -19,42 +20,21 @@
       }
     },
     {
-      "id": "theo",
-      "name": "Theo",
-      "role": "The Yarn Barn",
-      "loves": "sweater",
-      "likes": ["pumpkin"],
-      "works_in": "shop",
-      "pos": [57.2, 0.0, -7.3],
-      "roam": [1.1, 0.35],
-      "look": {
-        "skin": "#996e4d",
-        "hair": "#1f1712",
-        "top": "#618c6b",
-        "bottom": "#474d6b",
-        "extra": "glasses"
-      }
-    },
-    {
-      "id": "mabel",
-      "name": "Mabel",
+      "id": "gary",
+      "name": "Gary",
       "role": "Willow Homes",
-      "loves": "turnip",
+      "loves": "sweater",
       "likes": ["pumpkin"],
       "works_in": "office",
       "pos": [64.2, 0.0, -7.2],
       "roam": [1.0, 0.35],
       "look": {
-        "skin": "#f2ccad",
-        "hair": "#9e4d24",
-        "top": "#52477a",
-        "bottom": "#333342",
-        "extra": "hat"
+        "model": "gary"
       }
     },
     {
-      "id": "hazel",
-      "name": "Hazel",
+      "id": "giorgio",
+      "name": "Giorgio",
       "role": "Heart Bakery",
       "loves": "pumpkin",
       "likes": ["turnip", "sweater"],
@@ -62,11 +42,34 @@
       "pos": [42.3, 0.0, -7.6],
       "roam": [0.45, 0.0],
       "look": {
-        "skin": "#c98f6b",
-        "hair": "#3b2a20",
-        "top": "#c7745a",
-        "bottom": "#5a4a3c",
-        "extra": "apron"
+        "model": "giorgio"
+      }
+    },
+    {
+      "id": "sabrina",
+      "name": "Sabrina",
+      "role": "The Coffee Shop",
+      "loves": "sweater",
+      "likes": ["pumpkin"],
+      "at": {"building": "building_cafe", "pos": [1.6, 1.9], "talk": [1.6, 3.1]},
+      "start": {"trust": -20},
+      "pos": [51.1, 0.0, 6.4],
+      "roam": [0.5, 0.2],
+      "look": {
+        "model": "sabrina"
+      }
+    },
+    {
+      "id": "steve",
+      "name": "Steve",
+      "role": "Builder's Delight",
+      "loves": "pumpkin",
+      "likes": ["turnip"],
+      "works_in": "homegoods",
+      "pos": [47.7, 0.0, -12.4],
+      "roam": [0.35, 0.0],
+      "look": {
+        "model": "steve"
       }
     },
     {
@@ -95,36 +98,16 @@
       }
     },
     {
-      "id": "pip",
-      "name": "Pip",
-      "role": "Postman",
+      "id": "barbara",
+      "name": "Barbara",
+      "role": "Postwoman",
       "loves": "turnip",
-      "likes": ["pumpkin"],
+      "likes": ["pumpkin", "sweater"],
+      "post_round": 9,
       "pos": [50.5, 0.0, 1.6],
-      "roam": [0.0, 0.0],
-      "route": [[64.25, -7.1], [53.27, -9.5], [47.7, -9.3], [42.36, -8.1], [50.5, 1.6]],
+      "roam": [0.6, 0.4],
       "look": {
-        "skin": "#a8714f",
-        "hair": "#2a1d14",
-        "top": "#3f5f8a",
-        "bottom": "#2c3348",
-        "extra": "hat"
-      }
-    },
-    {
-      "id": "gus",
-      "name": "Gus",
-      "role": "Builder's Delight",
-      "loves": "pumpkin",
-      "likes": ["turnip"],
-      "works_in": "homegoods",
-      "pos": [47.7, 0.0, -12.4],
-      "roam": [0.35, 0.0],
-      "look": {
-        "skin": "#d6a07a",
-        "hair": "#6b4a2e",
-        "top": "#8a5a3a",
-        "bottom": "#3e3a34"
+        "model": "barbara"
       }
     }
   ]

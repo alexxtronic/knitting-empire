@@ -14,10 +14,10 @@ const FOUNTAIN := Vector3(53.0, 0, -1.0)
 const FOUNTAIN_MODEL := "res://assets/props/plaza_fountain.glb"
 const STALL_MODEL := "res://assets/props/market_stall.glb"
 const STALL := Vector3(48.5, 0, -7.2)
-const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # The Yarn Barn (Theo), door on the south side
-const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Willow Homes (Mabel: property and papers)
+const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # The Yarn Barn (Rosa), door on the south side
+const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Willow Homes (Gary: property and land)
 const BAKERY := Rect2(39.0, -13.0, 5.5, 4.5)
-const HOMEGOODS := Rect2(45.2, -14.6, 5.0, 4.4) # Builder's Delight (Gus), in the gap between Heart Bakery and the Yarn Barn
+const HOMEGOODS := Rect2(45.2, -14.6, 5.0, 4.4) # Builder's Delight (Steve), in the gap between Heart Bakery and the Yarn Barn
 const MAYOR := Rect2(40.2, 4.4, 11.6, 11.2) # the Mayor's Office (art/world_assets/mayors_office), south of the road, its front to the camera (south) like the shops
 const CAFE := Rect2(27.4, 4.2, 10.0, 7.8) # the coffee shop (art/world_assets/coffee_shop), terrace included: just past the farm's yard (x < 27) on the way to town, south of the path, its front to the camera (south)
 ## Buildings whose model carries its own name (the café's plaque): no painted label is added.

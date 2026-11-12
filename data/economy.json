@@ -27,12 +27,36 @@
   "cottage_price": 2500,
   "max_hearts": 5,
   "story": {
-    "_about": "Act 1 (scripts/homestead.gd): Nora arrives with nothing; Gran's note leaves her 'gran_coins'. Rent for Gran's house ('rent' coins every 'rent_days' days) goes in Gran's tin. Gus sells 'wood_pack' wood for 'wood_pack_price'. A fence panel takes 'fence_wood' wood; a gate is crafted (data/recipes.json).",
+    "_about": "Act 1 (scripts/homestead.gd): Nora arrives with nothing; Gran's note leaves her 'gran_coins'. Rent for Gran's house ('rent' coins every 'rent_days' days) goes in Gran's tin. Steve at Builder's Delight sells 'wood_pack' wood for 'wood_pack_price'. A fence panel takes 'fence_wood' wood; a gate is crafted (data/recipes.json).",
     "gran_coins": 100,
     "rent": 20,
     "rent_days": 7,
     "wood_pack": 5,
     "wood_pack_price": 15,
     "fence_wood": 1
-  }
+  },
+  "land": [
+    {
+      "id": "eastfield",
+      "name": "Eastfield Acres",
+      "where": "the meadows east of town",
+      "price": 12500,
+      "pitch": "Twenty flat acres of sweet grass. Room for a hundred sheep and a barn you could hold a wedding in."
+    },
+    {
+      "id": "greyspine",
+      "name": "Greyspine Hollow",
+      "where": "the foothills to the north",
+      "price": 21000,
+      "pitch": "A stone cottage, a spring and a view of the whole range. The fog comes in like a postcard."
+    },
+    {
+      "id": "saltmeadow",
+      "name": "Saltmeadow Point",
+      "where": "the bluff above the beach",
+      "price": 36000,
+      "pitch": "Sea on three sides. Sunsets you can sell tickets to. The crown jewel, and I don't say that about everything. I say it about most things."
+    }
+  ],
+  "_about_land": "Gary's listings at Willow Homes (main.land_plots): shown on his menu and pitched on his visits to the farm (data/scenes/town.scene). Out of reach early on by design, and not for sale yet: buying land is still to come. Names, prices and pitches are drafts for Alex."
 }
