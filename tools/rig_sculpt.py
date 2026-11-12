@@ -338,6 +338,30 @@ for side, sx in (("Left", 1), ("Right", -1)):
     seeds_arm = np.where(side_ok & (d_fore < 0.05) & (L[:, 2] > wrist[2] + 0.06))[0]
     seeds_body = np.where(side_ok & (((d_thigh < 0.07) & (L[:, 2] < seg[side + "Hand"][1][2] - 0.03))
                                      | ((np.abs(L[:, 0]) < 0.05) & (np.abs(L[:, 2] - elbow[2]) < 0.1))))[0]
+    # the upper arm: in tripo's pose it is often pressed against the body, its inner side merged with the
+    # torso's, so the forearm alone can't claim the sleeve: half the sleeve went with the arm and half
+    # stayed, and it tore when the arm lifted. Find the whole arm at each height between armpit and
+    # elbow instead: its outer edge is the outermost point on this side, its thickness the front-to-back
+    # depth there, and a round arm that thick fits inside that edge. That tube is arm; the torso inside it is body.
+    upper = side_ok & (L[:, 2] < sh_z - 0.04) & (L[:, 2] > elbow[2] - 0.02)
+    zs, oo, dd, yy = [], [], [], []
+    for z in np.arange(elbow[2] - 0.02, sh_z - 0.03, 0.01):
+        sl = side_ok & (np.abs(L[:, 2] - z) < 0.006)
+        if sl.sum() < 8:
+            continue
+        o = (L[sl, 0] * sx).max()
+        rim = sl & (L[:, 0] * sx > o - 0.012)
+        y0, y1 = L[rim, 1].min(), L[rim, 1].max()
+        zs.append(z); oo.append(o); dd.append(min(y1 - y0, 0.16)); yy.append((y0 + y1) / 2)
+    if len(zs) > 3:
+        o = np.interp(L[:, 2], zs, oo)
+        dia = np.interp(L[:, 2], zs, dd)
+        yc = np.interp(L[:, 2], zs, yy)
+        cx = o - dia / 2
+        tube = upper & ((L[:, 0] * sx - cx) ** 2 + (L[:, 1] - yc) ** 2 < (dia / 2 + 0.006) ** 2)
+        seeds_arm = np.union1d(seeds_arm, np.where(tube)[0])
+        seeds_body = np.union1d(seeds_body, np.where(upper & (L[:, 0] * sx < o - dia - 0.015))[0])
+        print("UPPER ARM", side, "diameter", np.round(np.percentile(dd, [10, 50, 90]), 3), "tube verts", int(tube.sum()))
     if "--wide-body" in argv:
         # a stout body's apron or overalls are further than 7 cm from the thigh bone, so the thigh finds no
         # seeds on them and the arm's skin floods the hip: the body's core (inside the wrist line, knee to
@@ -350,7 +374,7 @@ for side, sx in (("Left", 1), ("Right", -1)):
         print("SPLIT", side, "skipped: no seeds")
         continue
     ga, gb = geodesic(seeds_arm, adj, n), geodesic(seeds_body, adj, n)
-    zone = side_ok & (L[:, 2] < sh_z - 0.15)
+    zone = side_ok & (L[:, 2] < sh_z - 0.08)
     is_arm = zone & (ga < gb)
     is_body = zone & ~is_arm
     moved = 0

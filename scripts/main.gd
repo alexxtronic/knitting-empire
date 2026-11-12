@@ -10,6 +10,7 @@ const Sheep = preload("res://scripts/sheep.gd")
 const Player = preload("res://scripts/player.gd")
 const Data = preload("res://scripts/data.gd")
 const Hud = preload("res://scripts/hud.gd")
+const KnitGame = preload("res://scripts/knit_game.gd")
 const Town = preload("res://scripts/town.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 const Grass = preload("res://scripts/grass.gd")
@@ -26,6 +27,7 @@ const Lighting = preload("res://scripts/lighting.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
+const Dog = preload("res://scripts/dog.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -90,7 +92,11 @@ var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
 var player: Player
+var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var hud: Hud
+var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
+var _knit_chair = null
+var _knit_clock_was := true
 var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
@@ -256,6 +262,10 @@ func _ready() -> void:
 	hud.sfx = audio.play
 	player.footstep.connect(func(): audio.footstep(player.position))
 	player.needle_click.connect(audio.needle)
+	knit = KnitGame.new()
+	hud.root.add_child(knit)
+	knit.stitched.connect(func(_g): audio.needle())
+	knit.finished.connect(_on_knit_finished)
 	story = StoryPlayer.new()
 	story.main = self
 	add_child(story)
@@ -281,6 +291,7 @@ func _ready() -> void:
 	homestead.main = self
 	add_child(homestead)
 	homestead.apply()
+	_setup_dog()
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -1008,8 +1019,9 @@ func _update_needs(delta: float) -> void:
 	player.walk_speed = (1.47 + 0.21 * Game.fitness / 100.0) * 1.25 # a brisk walk; the Walk loop speeds up to match
 	player.run_speed = 2.75 + 0.6 * Game.fitness / 100.0
 	player.running = autotest_jog or _held(KEY_SHIFT)
+	_update_dog()
 	var head := player.head_point()
-	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not cam.is_position_behind(head)
+	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not knit.active and not cam.is_position_behind(head)
 	hud.update_activity(player.activity_text(), player.activity_progress(), cam.unproject_position(head), show, player.activity_text() != "Zzz")
 
 
@@ -1096,7 +1108,7 @@ func _update_camera(delta: float) -> void:
 		cam_target = cam_target.lerp(cam_glide["pos"], k)
 		cam_dist = lerpf(cam_dist, float(cam_glide["dist"]), k)
 	elif cam_follow and mode == Mode.LIVE:
-		cam_target = cam_target.lerp(player.position, 1.0 - exp(-4.0 * delta))
+		cam_target = cam_target.lerp(dog.position if dog and dog.controlled else player.position, 1.0 - exp(-4.0 * delta))
 	cam_yaw = lerp_angle(cam_yaw, cam_yaw_goal, 1.0 - exp(-8.0 * delta))
 	cam_pitch = lerpf(cam_pitch, float(cam_glide.get("pitch", CAM_PITCH)), 1.0 - exp(-2.6 * delta))
 	var pitch := deg_to_rad(cam_pitch)
@@ -1112,6 +1124,8 @@ func _update_camera(delta: float) -> void:
 
 ## Layout-proof key check: matches the key by its label or by its physical position.
 func _held(k: Key) -> bool:
+	if knit != null and knit.active:
+		return false # the game's keys (D F J K) must not pan the camera
 	return Input.is_key_pressed(k) or Input.is_physical_key_pressed(k)
 
 
@@ -1127,7 +1141,7 @@ func _pan_camera(v: Vector2) -> void:
 # --- input ------------------------------------------------------------------------------
 
 func _unhandled_input(e: InputEvent) -> void:
-	if sleeping or story.is_playing() or title_on:
+	if sleeping or story.is_playing() or title_on or knit.active:
 		return
 	if _autotest_dir != "" and e is InputEventMouse:
 		return # the autotest calls _live_click and friends itself; a real mouse would only disturb it
@@ -1198,7 +1212,7 @@ func _is_repeat_gesture(g: InputEventGesture) -> bool:
 
 ## Keys are read here, before the on-screen UI gets a chance to swallow them.
 func _input(e: InputEvent) -> void:
-	if sleeping or title_on or not (e is InputEventKey):
+	if sleeping or title_on or knit.active or not (e is InputEventKey):
 		return
 	if _autotest_dir != "" and not e.has_meta("ke_test"):
 		get_viewport().set_input_as_handled()
@@ -1245,6 +1259,8 @@ func _input(e: InputEvent) -> void:
 			_rotate_ghost()
 		KEY_C:
 			walls_up = not walls_up
+		KEY_TAB:
+			toggle_dog()
 		KEY_SPACE:
 			_set_cam_lock(not cam_follow, true)
 		KEY_B:
@@ -1303,16 +1319,68 @@ func _update_hover(mpos: Vector2) -> void:
 	Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if clickable else Input.CURSOR_ARROW)
 
 
+# --- the dog -------------------------------------------------------------------------
+
+## He is on the farm from the start of a sandbox game or an old save; in Act 1 he turns up once
+## the pen is built (homestead.gd's "pen_done", the "pen_built" story event).
+func dog_here() -> bool:
+	return Game.flag("story_farm") != true or Game.flag("pen_done") == true
+
+
+func _setup_dog() -> void:
+	dog = Dog.new()
+	dog.main = self
+	dog.position = player.position + Vector3(1.2, 0, 0.8)
+	add_child(dog)
+	_update_dog()
+
+
+## Tab: the player's clicks move the dog (Shift gallops him) and the camera follows him; Tab again
+## gives them back to Nora. A story scene or bedtime always hands them back.
+func toggle_dog(on = null) -> void:
+	if dog == null or not dog.visible:
+		return
+	dog.controlled = (not dog.controlled) if on == null else bool(on)
+	dog.path = []
+	if dog.controlled:
+		player.walk([])
+		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, Tab to go back to Nora.")
+	_set_cam_lock(true)
+
+
+func _update_dog() -> void:
+	if dog == null:
+		return
+	var here := dog_here()
+	if here != dog.visible:
+		dog.visible = here
+		dog.process_mode = Node.PROCESS_MODE_INHERIT if here else Node.PROCESS_MODE_DISABLED
+		if here: # he comes running up the lane
+			dog.position = player.position + Vector3(-9.0, 0, 6.0)
+	if not here:
+		dog.controlled = false
+		return
+	if homestead and not homestead.herders.has(dog):
+		homestead.herders.append(dog)
+	if dog.controlled and (story.is_playing() or sleeping):
+		dog.controlled = false
+	dog.running = dog.controlled and (autotest_jog or _held(KEY_SHIFT))
+
+
 func _live_click(mpos: Vector2) -> void:
 	var t = _ray_target(mpos)
-	if _tool_click(hud.selected_item(), t, mpos):
+	if not (dog and dog.controlled) and _tool_click(hud.selected_item(), t, mpos):
 		return
-	if t != null:
+	if t != null and not (dog and dog.controlled):
 		var acts := _actions_for(t)
 		if not acts.is_empty():
 			hud.show_menu(mpos, _name_of(t), acts, func(id): _do_action(t, id))
 			return
 	var g = _ground_point(mpos)
+	if g != null and dog and dog.controlled:
+		dog.walk(_find_path(dog.position, g))
+		_click_marker(g)
+		return
 	if g != null:
 		player.walk(_find_path(player.position, g))
 		_click_marker(g)
@@ -1620,7 +1688,7 @@ func _actions_for(t) -> Array:
 		var crops: int = Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
 		var wool := Game.count("wool")
 		return [
-			_act("ship_sweater", "Ship sweaters (%d × %dc)" % [sw, Game.SELL_PRICES["sweater"]], sw > 0),
+			_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0),
 			_act("ship_crops", "Ship crops (%dc)" % crops, crops > 0),
 			_act("ship_wool", "Ship raw wool (%d × %dc)" % [wool, Game.SELL_PRICES["wool"]], wool > 0),
 		]
@@ -1750,7 +1818,7 @@ func _perform(t, id: String) -> void:
 				hud.show_toast("You need 3 wool to knit a sweater. Shear a sheep!")
 				return
 			if Game.use_energy(10.0):
-				player.start_activity("Knitting", 5.0, _finish_knit, _seat_point(t), t.rotation.y)
+				_begin_knit(t)
 		"rest":
 			var seat = _seat_point(t) if t is Furniture else null
 			player.start_activity("Resting", 4.0, _finish_rest, seat, t.rotation.y)
@@ -1799,16 +1867,44 @@ func _perform(t, id: String) -> void:
 			_ship(id)
 
 
-func _finish_knit() -> void:
+## Sits her in the chair and opens the knitting game. The day waits while she plays.
+func _begin_knit(chair) -> void:
+	_knit_chair = chair
+	_knit_clock_was = Game.time_running
+	Game.time_running = false
+	player.quiet_needles = true # the game makes the clicks now
+	player.start_activity("Knitting", 100000.0, Callable(), _seat_point(chair), chair.rotation.y)
+	var testing := _autotest_dir != ""
+	var opts := {"best": Game.flag("knit_best", {}), "auto": testing, "fast": 11.0 if testing else 1.0, "silent": testing}
+	if testing:
+		opts["song"] = "cast_on"
+	knit.open(opts)
+
+
+func _on_knit_finished(res: Dictionary) -> void:
+	Game.time_running = _knit_clock_was
+	player.quiet_needles = false
+	player.cancel_activity()
+	if bool(res.get("cancelled", false)):
+		Game.energy = minf(100.0, Game.energy + 10.0) # she didn't knit after all
+		hud.show_toast("You put the needles down.")
+		return
+	var best: Dictionary = (Game.flag("knit_best", {}) as Dictionary).duplicate()
+	if int(res["rarity"]) > int(best.get(str(res["song"]), 0)):
+		best[str(res["song"])] = int(res["rarity"])
+		Game.set_flag("knit_best", best)
+	_finish_knit(int(res["rarity"]))
+
+
+func _finish_knit(rarity := 0) -> void:
 	if Game.take_item("wool", 3):
-		Game.add_item("sweater")
 		var worn0 := Game.worn_quality
-		var q := Game.knit_sweater()
+		var q := Game.knit_sweater(rarity)
 		Game.add_need("happiness", 14.0)
 		if q > worn0:
-			hud.show_toast("A %s sweater! Warmer than anything she owns. She'll wear one like it." % Game.stars(q))
+			hud.show_toast("A %s sweater! Warmer than anything she owns. She'll wear one like it." % KnitGame.rarity_name(q))
 		else:
-			hud.show_toast("You knitted a %s sweater! Ship it for %dc." % [Game.stars(q), Game.SELL_PRICES["sweater"]])
+			hud.show_toast("You knitted a %s sweater! Ship it for %dc." % [KnitGame.rarity_name(q), Game.sweater_worth(Game.SELL_PRICES["sweater"]) if Game.count("sweater") == 1 else int(round(Game.SELL_PRICES["sweater"] * float(Game.RARITY_PRICE[q - 1])))])
 		get_tree().create_timer(0.8).timeout.connect(func(): story.trigger("event", "knit_done"))
 
 
@@ -1902,7 +1998,7 @@ func _ship(kind: String) -> void:
 			items = ["wool"]
 	for k in items:
 		var n := Game.count(k)
-		earned += n * int(Game.SELL_PRICES[k])
+		earned += Game.sweater_worth(int(Game.SELL_PRICES[k])) if k == "sweater" else n * int(Game.SELL_PRICES[k]) # sweaters sell by rarity
 		Game.take_item(k, n)
 	if earned > 0:
 		Game.coins += earned
@@ -3473,6 +3569,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
+		await _wait(1.5)
+		await _dog_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -3489,6 +3591,7 @@ func _autotest() -> void:
 	await _graphics_checks()
 	await _character_checks()
 	await _bed_checks()
+	await _knit_checks()
 	_do_action(chair, "knit")
 	await _wait(3.6)
 	_check("heroine sits to knit (%s, needles shown=%s)" % [player.body.current(), player.body.props != null and player.body.props.visible], player.busy and player.position.distance_to(chair.position) < 1.2 and player.body.current() == "SitKnit" and player.body.props != null and player.body.props.visible)
@@ -3501,7 +3604,7 @@ func _autotest() -> void:
 	await _wait(4.8)
 	_check("knit a sweater (sweaters=%d, wool=%d)" % [Game.count("sweater"), Game.count("wool")], Game.count("sweater") == 1 and Game.count("wool") == 0)
 	_check("knitting made her happier and she wears a better sweater (happiness %.0f→%.0f, wearing %s)" % [happy0, Game.happiness, Game.stars(Game.worn_quality)],
-		Game.happiness > happy0 + 8.0 and Game.worn_quality == 2)
+		Game.happiness > happy0 + 8.0 and Game.worn_quality >= 2)
 
 	_do_action(sheep_list[0], "shear")
 	await _wait(15.0)
@@ -3629,6 +3732,7 @@ func _autotest() -> void:
 	await _shop_checks()
 	await _flock_checks()
 	await _light_checks()
+	await _dog_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
@@ -4559,6 +4663,75 @@ func _character_checks() -> void:
 	cam_dist = cd0
 
 
+## The knitting game: rarity from accuracy and how hard the song is, taps and holds, dropped stitches,
+## a whole song played through, and what a sweater of each rarity sells for.
+func _knit_checks() -> void:
+	var rar := [KnitGame.rarity_for(0.5, 1), KnitGame.rarity_for(0.85, 1), KnitGame.rarity_for(1.0, 1), KnitGame.rarity_for(1.0, 2), KnitGame.rarity_for(1.0, 3), KnitGame.rarity_for(0.96, 2), KnitGame.rarity_for(0.96, 3)]
+	_check("rarity comes from accuracy, and harder songs can go higher (%s)" % [rar], rar == [1, 3, 3, 4, 5, 4, 5])
+	var songs := KnitGame.load_songs()
+	var diffs := songs.map(func(s): return int(s["difficulty"]))
+	_check("there are songs from easy to expert, each with notes (%s)" % [diffs], songs.size() >= 4 and diffs[0] == 1 and diffs[-1] == 4 and songs.all(func(s): return s["notes"].size() > 20))
+	var hold_song := ""
+	for sg in songs:
+		if sg["notes"].any(func(n): return float(n[2]) > 0.0):
+			hold_song = str(sg["id"])
+			break
+	knit.open({"auto": false, "fast": 0.0, "silent": true, "song": hold_song, "best": {}})
+	await get_tree().process_frame
+	var ni := 0
+	for i in knit.notes.size():
+		if float(knit.notes[i]["hold"]) > 0.0:
+			ni = i
+			break
+	var hn: Dictionary = knit.notes[ni]
+	var lane := int(hn["lane"])
+	for i in ni: # the notes before it are let go by; they drop
+		knit.notes[i]["state"] = 4
+		knit.ptr[int(knit.notes[i]["lane"])] = maxi(knit.ptr[int(knit.notes[i]["lane"])], knit.lane_notes[int(knit.notes[i]["lane"])].find(i) + 1)
+	knit.now = float(hn["t"]) - 0.5
+	knit.press(lane)
+	_check("pressing a note long before it arrives does nothing (stitches %d)" % knit.stitches.size(), knit.stitches.size() == 0)
+	knit.now = float(hn["t"]) + 0.02
+	knit.press(lane)
+	var made: int = knit.stitches.size()
+	knit.now = float(hn["t"]) + float(hn["hold"]) * 0.5
+	await get_tree().process_frame
+	var mid_hold: bool = knit.holding[lane] == ni
+	knit.now = float(hn["t"]) + float(hn["hold"])
+	knit.release(lane)
+	_check("a hold is two stitches: pressed on the beat and let go at the end (made %d then %d, holding mid-way %s, perfect %d)" % [made, knit.stitches.size(), mid_hold, knit.counts[0]],
+		made == 1 and mid_hold and knit.stitches.size() == 2 and knit.counts[0] == 2 and knit.combo == 2)
+	knit.now = float(hn["t"]) + float(hn["hold"]) + 3.0
+	await get_tree().process_frame
+	_check("notes that go by unplayed are dropped stitches and break the run (dropped %d, run %d)" % [knit.counts[3], knit.combo], knit.counts[3] >= 1 and knit.combo == 0)
+	knit.finished.disconnect(_on_knit_finished)
+	knit._finish(true)
+	knit.finished.connect(_on_knit_finished)
+	# a whole song, played perfectly at speed, on the hardest one
+	var results := []
+	var catcher := func(r): results.append(r)
+	knit.finished.disconnect(_on_knit_finished)
+	knit.finished.connect(catcher)
+	knit.open({"auto": true, "fast": 80.0, "silent": true, "song": str(songs[-1]["id"]), "best": {}})
+	var guard := 0
+	while results.is_empty() and guard < 600:
+		await get_tree().process_frame
+		guard += 1
+	knit.finished.disconnect(catcher)
+	knit.finished.connect(_on_knit_finished)
+	var res: Dictionary = results[0] if not results.is_empty() else {}
+	_check("a whole expert song played perfectly gives a Legendary sweater (accuracy %.3f, rarity %s, run %d)" % [float(res.get("accuracy", 0.0)), res.get("rarity"), int(res.get("max_combo", 0))],
+		float(res.get("accuracy", 0.0)) > 0.99 and int(res.get("rarity", 0)) == 5 and int(res.get("max_combo", 0)) > 50)
+	var sw0 := Game.sweaters.duplicate()
+	var inv0 := Game.count("sweater")
+	Game.add_sweater(5)
+	Game.add_sweater(1)
+	var worth := Game.sweater_worth(100)
+	Game.take_item("sweater", 2) # the lowest go first
+	_check("a sweater sells by rarity: Legendary 240, Common 60 on a base of 100 (worth %d; carrying %d, rarities %s)" % [worth, Game.count("sweater"), Game.sweaters],
+		worth == Game.sweater_worth(100) + 240 + 60 and Game.count("sweater") == inv0 and Game.sweaters == sw0 and Game.sweaters.size() == inv0)
+
+
 ## Napping in the bed: she lies on her back with her head on the pillows under the quilt, the bed's
 ## cushion and folded blanket are put away meanwhile, and everything is back when she gets up.
 func _bed_checks() -> void:
@@ -4603,6 +4776,55 @@ func _anim_bones(a: Animation) -> Array:
 ## and the frame counter and camera buttons off until settings turns them on.
 ## Real eyes (scripts/face.gd, models from tools/add_eyes.py): Nora and Rowan have them, they blink,
 ## take a story line's mood, shut for sleep and turn toward what she looks at.
+## The dog: the model has four legs' worth of loops, Tab hands him the clicks, he trots and gallops
+## at the speeds his strides were keyed for (so his paws don't slide), Tab hands them back and he
+## heads back to Nora's side.
+func _dog_checks() -> void:
+	_check("the dog is on the farm with his model and his four loops (%s)" % [dog.current_loop() if dog else "none"],
+		dog != null and dog.visible and dog.ok())
+	if dog == null or not dog.ok():
+		return
+	autotest_jog = false
+	player.running = false
+	player.walk([])
+	var start := player.position
+	dog.position = start + Vector3(1.2, 0, 0.8)
+	cam_target = dog.position
+	var cd0 := cam_dist
+	cam_dist = 6.0
+	await _wait(1.0)
+	_check("standing by Nora he idles (%s)" % dog.current_loop(), dog.current_loop() == "Idle")
+	await _shot("48_dog.png")
+	await _key_tap(KEY_TAB)
+	_check("Tab hands the clicks to the dog", dog.controlled)
+	var goal := start + Vector3(9.0, 0, 0)
+	if _find_path(dog.position, goal).is_empty():
+		goal = start + Vector3(-9.0, 0, 0)
+	_live_click(cam.unproject_position(goal))
+	await _wait(0.9)
+	var rate_trot := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
+	_check("clicked, he trots off with his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s)" % [dog.current_loop(), dog.speed, rate_trot],
+		dog.current_loop() == "Trot" and dog.speed > 1.2 and absf(rate_trot - dog.speed) < 0.12)
+	_check("Nora stays where she was while you play him", player.path.is_empty() and player.position.distance_to(start) < 0.3)
+	await _shot("48_dog_trot.png")
+	autotest_jog = true # as if Shift were held
+	_live_click(cam.unproject_position(start - (goal - start)))
+	await _wait(1.2)
+	var rate_run := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
+	_check("holding Shift he gallops, his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s)" % [dog.current_loop(), dog.speed, rate_run],
+		dog.current_loop() == "Run" and dog.speed > 3.0 and absf(rate_run - dog.speed) < 0.15)
+	_check("the camera follows the dog", cam_target.distance_to(dog.position) < 2.5)
+	await _shot("48_dog_run.png")
+	autotest_jog = false
+	await _key_tap(KEY_TAB)
+	_check("Tab again gives the clicks back to Nora", not dog.controlled)
+	await _wait(5.0)
+	_check("off the lead he comes back to her side (%.1f m away)" % dog.position.distance_to(player.position),
+		dog.position.distance_to(player.position) < 2.6)
+	_check("he herds: the strays shy from him too", homestead.herders.has(dog) and dog.scare_radius() > Homestead.HERD_RADIUS)
+	cam_dist = cd0
+
+
 func _face_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -5394,7 +5616,7 @@ func _villager_actions(v) -> Array:
 	match v.vid:
 		"rosa":
 			var sw := Game.count("sweater")
-			acts.append(_act("sell_sweater", "Sell sweaters  (%d × %dc)" % [sw, _rosa_price()], sw > 0))
+			acts.append(_act("sell_sweater", "Sell sweaters  (%d, %dc)" % [sw, Game.sweater_worth(_rosa_price())], sw > 0))
 			var crops := _crop_value()
 			acts.append(_act("sell_crops", "Sell crops  (%dc)" % crops, crops > 0))
 		"theo":
@@ -5469,11 +5691,12 @@ func _villager_action(v, id: String) -> void:
 		"sell_sweater":
 			var n := Game.count("sweater")
 			var price := _rosa_price()
+			var worth := Game.sweater_worth(price) # by rarity
 			if n > 0 and Game.take_item("sweater", n):
-				Game.coins += n * price
+				Game.coins += worth
 				var praise: Array = ["Oh, these are gorgeous!", "Lovely work, as always.", "The city folks will snap these up!"]
-				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], n * price, n, "s" if n > 1 else ""])
-				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", n * price])
+				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], worth, n, "s" if n > 1 else ""])
+				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", worth])
 		"sell_crops":
 			var value := _crop_value()
 			if value > 0:

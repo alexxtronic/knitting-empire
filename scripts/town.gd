@@ -19,7 +19,7 @@ const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Willow Homes (Mabel: property and
 const BAKERY := Rect2(39.0, -13.0, 5.5, 4.5)
 const HOMEGOODS := Rect2(45.2, -14.6, 5.0, 4.4) # Builder's Delight (Gus), in the gap between Heart Bakery and the Yarn Barn
 const MAYOR := Rect2(40.2, 4.4, 11.6, 11.2) # the Mayor's Office (art/world_assets/mayors_office), south of the road, its front to the camera (south) like the shops
-const CAFE := Rect2(8.6, 6.0, 10.0, 7.8) # the coffee shop (art/world_assets/coffee_shop), terrace included: by the farmhouse, south of the path, its front to the camera (south)
+const CAFE := Rect2(27.4, 4.2, 10.0, 7.8) # the coffee shop (art/world_assets/coffee_shop), terrace included: just past the farm's yard (x < 27) on the way to town, south of the path, its front to the camera (south)
 ## Buildings whose model carries its own name (the café's plaque): no painted label is added.
 const OWN_SIGN := ["cafe"]
 const MODEL_DIR := "res://assets/props/"
@@ -73,7 +73,7 @@ static func build(root: Node3D) -> Dictionary:
 	blockers.append_array(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "Heart Bakery", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
 	blockers.append_array(building(root, HOMEGOODS, Color(0.85, 0.89, 0.8), Color(0.37, 0.49, 0.36), "Builder's Delight", 47.7, Color(0.89, 0.75, 0.47), "homegoods"))
 	blockers.append_array(building(root, MAYOR, Color(0.64, 0.23, 0.18), Color(0.36, 0.26, 0.23), "Mayor's Office", 46.0, Color(0.94, 0.86, 0.72), "mayor"))
-	blockers.append_array(building(root, CAFE, Color(0.31, 0.42, 0.24), Color(0.69, 0.34, 0.18), "Coffee Shop", 13.6, Color(0.94, 0.87, 0.75), "cafe"))
+	blockers.append_array(building(root, CAFE, Color(0.31, 0.42, 0.24), Color(0.69, 0.34, 0.18), "Coffee Shop", 32.4, Color(0.94, 0.87, 0.75), "cafe"))
 	var to_town := signpost(root, Vector3(25.6, 0, 1.75), "MAPLE GROVE  →", "travel_town", "Signpost: Maple Grove")
 	var to_farm := signpost(root, Vector3(38.2, 0, 1.75), "←  BIRCHFIELD FARM", "travel_farm", "Signpost: Birchfield Farm")
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))

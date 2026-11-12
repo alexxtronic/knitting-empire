@@ -15,7 +15,8 @@ const MAX_HOUSE_LEVEL := 3
 ## v3: friendship points become three relationship stats: familiarity, trust, romance.
 ## v4: adds the needs happiness, love, warmth and fitness, knitting skill and the sweater she wears.
 ## v5: adds typed chats with villagers (the last lines of each conversation).
-const SAVE_VERSION := 5
+## v6: every sweater has a rarity (1 Common .. 5 Legendary), kept in `sweaters` (scripts/knit_game.gd).
+const SAVE_VERSION := 6
 ## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
 const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
@@ -32,6 +33,10 @@ var COTTAGE_PRICE := 0
 var MAX_HEARTS := 5
 var START_COINS := 250
 var START_INVENTORY := {}
+## What a sweater of each rarity sells for, as a fraction of the economy.json price (which is for a Rare one).
+var RARITY_PRICE: Array = [0.6, 0.8, 1.0, 1.5, 2.4]
+## A sweater that wasn't knitted in the game (a gift, a story, an old save) counts as this rarity: Rare.
+const BASE_RARITY := 3
 
 var save_path := "user://knitting_empire_save.json"
 
@@ -53,6 +58,8 @@ var fitness: float = 45.0 # walking and farm work
 var warmth_target: float = 70.0
 ## Knitting skill: sweaters knit so far. Quality (1..5 stars) grows with it.
 var knit_xp: int = 0
+## The rarity (1 Common .. 5 Legendary) of each sweater she carries; its length is inv["sweater"].
+var sweaters: Array = []
 ## Quality of the warmest thing she owns to wear: 1 = the thin city coat she arrived in.
 var worn_quality: int = 1
 const NEEDS := ["energy", "fullness", "happiness", "love", "warmth", "fitness"]
@@ -90,6 +97,7 @@ func load_tuning() -> void:
 	MAX_HEARTS = int(e.get("max_hearts", 5))
 	START_COINS = int(e.get("start_coins", 250))
 	START_INVENTORY = Data.int_dict(e.get("start_inventory", {}))
+	RARITY_PRICE = e.get("rarity_price", RARITY_PRICE)
 
 
 func reset() -> void:
@@ -106,6 +114,8 @@ func reset() -> void:
 	fitness = 45.0
 	knit_xp = 0
 	worn_quality = 1
+	sweaters = []
+	sync_sweaters()
 	day = 1
 	hour = 8.0
 	house_level = 0
@@ -143,15 +153,17 @@ func add_need(need: String, amount: float) -> void:
 	set(need, clampf(float(get(need)) + amount, 0.0, 100.0))
 
 
-## Quality (1..5) of the next sweater she knits: better with every few she's made.
+## Quality (1..5) of the next sweater she knits when it isn't played for: better with every few she's made.
 func knit_quality() -> int:
 	return clampi(2 + knit_xp / 3, 2, 5)
 
 
-## Records a finished sweater. Returns its quality. She wears the best one she's made.
-func knit_sweater() -> int:
-	var q := knit_quality()
+## Records a finished sweater of this rarity (the knitting game's result; 0 = by skill alone) and adds
+## it to what she carries. Returns its rarity. She wears the best one she's made.
+func knit_sweater(rarity := 0) -> int:
+	var q := clampi(rarity, 1, 5) if rarity > 0 else knit_quality()
 	knit_xp += 1
+	add_sweater(q)
 	if q > worn_quality:
 		worn_quality = q
 	return q
@@ -215,6 +227,41 @@ func spend(amount: int) -> bool:
 
 func add_item(id: String, n: int = 1) -> void:
 	inv[id] = int(inv.get(id, 0)) + n
+	if id == "sweater":
+		sync_sweaters()
+
+
+## A sweater she has knitted, of this rarity.
+func add_sweater(rarity: int) -> void:
+	sweaters.append(clampi(rarity, 1, 5))
+	inv["sweater"] = sweaters.size()
+
+
+## Keeps the list of sweater rarities as long as the sweater count: any the list doesn't know about
+## are ordinary ones (BASE_RARITY), and if there are too many, the lowest rarities go first.
+func sync_sweaters() -> void:
+	var n := int(inv.get("sweater", 0))
+	while sweaters.size() < n:
+		sweaters.append(BASE_RARITY)
+	if sweaters.size() > n:
+		sweaters.sort()
+		sweaters = sweaters.slice(sweaters.size() - n)
+
+
+## What all her sweaters would sell for, if a Rare one sells for `unit`.
+func sweater_worth(unit: int) -> int:
+	var total := 0
+	for r in sweaters:
+		total += int(round(float(unit) * float(RARITY_PRICE[clampi(int(r), 1, 5) - 1])))
+	return total
+
+
+## The rarity of the best sweater she carries (0 if none).
+func best_sweater() -> int:
+	var b := 0
+	for r in sweaters:
+		b = maxi(b, int(r))
+	return b
 
 
 ## Gives every carried thing a slot (the first empty one) and empties the slots of things used up.
@@ -257,6 +304,8 @@ func take_item(id: String, n: int = 1) -> bool:
 	if not has_item(id, n):
 		return false
 	inv[id] = count(id) - n
+	if id == "sweater":
+		sync_sweaters() # the lowest rarities go first
 	return true
 
 
@@ -343,7 +392,7 @@ func to_dict() -> Dictionary:
 		"version": SAVE_VERSION, "flags": flags, "chats": chats,
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
-		"knit_xp": knit_xp, "worn_quality": worn_quality,
+		"knit_xp": knit_xp, "worn_quality": worn_quality, "sweaters": sweaters,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
@@ -378,6 +427,9 @@ static func migrate(d: Dictionary) -> Dictionary:
 	if v < 5:
 		d["chats"] = {}
 		v = 5
+	if v < 6:
+		d["sweaters"] = [] # the sweaters she carries are ordinary (Rare) ones; sync_sweaters fills them in
+		v = 6
 	d["version"] = v
 	return d
 
@@ -409,6 +461,10 @@ func from_dict(d: Dictionary) -> void:
 	fitness = float(d.get("fitness", 45.0))
 	knit_xp = int(d.get("knit_xp", 0))
 	worn_quality = clampi(int(d.get("worn_quality", 1)), 1, 5)
+	sweaters = []
+	for r in d.get("sweaters", []):
+		sweaters.append(clampi(int(r), 1, 5))
+	sync_sweaters()
 	day = int(d.get("day", 1))
 	hour = float(d.get("hour", 8.0))
 	house_level = int(d.get("house_level", 0))

@@ -177,13 +177,23 @@ for _ in range(40):
     bmesh.ops.smooth_vert(bm, verts=list(ring), factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
 bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
 bm.faces.index_update()
-PATCH_FACES = [f.index for f in patch_faces()]
+# The fur next to the hole was painted for the leg that grew there (the scarf's shadow, the leg's
+# own shading), so the patch takes in two rings of it; its colour is sampled from the rings beyond.
+near = {v for v in bm.verts if v[tag]}
+for _ in range(2):
+    near |= {e.other_vert(v) for v in list(near) for e in v.link_edges}
+PATCH_FACES = [f.index for f in bm.faces if all(v in near for v in f.verts)]
+outer = set(near)
+for _ in range(4):
+    outer |= {e.other_vert(v) for v in list(outer) for e in v.link_edges}
+rim_uv = [l[uv_layer].uv.copy() for v in outer - near for l in v.link_loops]
+OPEN_EDGES = sum(1 for e in bm.edges if e.is_boundary)
 n_rim = len(rim)
 bm.verts.layers.int.remove(tag)
 bm.to_mesh(me)
 bm.free()
 me.update()
-print("CUT fifth leg: %d vertices removed, hole of %d edges closed with %d faces" % (len(doomed), n_rim, len(PATCH_FACES)))
+print("CUT fifth leg: %d vertices removed, hole of %d edges closed with %d faces, %d open edges left" % (len(doomed), n_rim, len(PATCH_FACES), OPEN_EDGES))
 
 
 # the patch's colour: a spare block of the texture, filled with the fur round the hole
@@ -232,12 +242,16 @@ for kind, img in IMAGES.items():
     if kind == "normal":
         fill = (0.5, 0.5, 1.0, 1.0)
     else:
-        acc = [0.0, 0.0, 0.0]
+        samples = []
         for uv in rim_uv:
             i = (min(h - 1, int(uv.y * h)) * w + min(w - 1, int(uv.x * w))) * 4
-            for c in range(3):
-                acc[c] += px[i + c]
-        fill = tuple(a / len(rim_uv) for a in acc) + (1.0,)
+            c = px[i:i + 3]
+            if kind != "color" or (c[0] > 0.3 and 0.4 < c[1] / c[0] < 0.95 and c[2] < c[1]):  # golden fur, not scarf
+                samples.append(c)
+        samples = samples or [px[0:3]]
+        fill = tuple(sorted(c[k] for c in samples)[len(samples) // 2] for k in range(3)) + (1.0,)
+        if kind == "color":
+            print("PATCH colour from %d of %d samples: %s" % (len(samples), len(rim_uv), tuple(round(c, 2) for c in fill[:3])))
     cell = w // GRID
     for yy in range(gy * cell - cell, gy * cell + 2 * cell):
         for xx in range(gx * cell - cell, gx * cell + 2 * cell):
@@ -245,7 +259,7 @@ for kind, img in IMAGES.items():
             px[i:i + 4] = fill
     img.pixels = px
     img.update()
-print("PATCH texture block (%d,%d) of %d, colour %s" % (gx, gy, GRID, tuple(round(c, 2) for c in fill[:3])))
+print("PATCH texture block (%d,%d) of %d" % (gx, gy, GRID))
 
 for p in me.polygons:
     p.use_smooth = True
@@ -325,6 +339,35 @@ for v in me.vertices:
     cur = sum(g.weight for g in v.groups if g.group != head_g.index)
     head_g.add([v.index], max(0.0, 1.0 - cur) if t < 1.0 else 1.0, "REPLACE")
     rigid += t >= 1.0
+# The scarf is knitted wool round his neck: bone heat lets the shoulders pull its wrap into a wedge,
+# so the wrap follows the Neck bone alone and the tails hanging down his chest the Spine1 bone alone.
+# Scarf vertices are found by their colour in the texture (red wool, not golden fur).
+col = next(n.image for n in me.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image
+           and any(l.to_socket.name == "Base Color" for l in me.materials[0].node_tree.links if l.from_node == n))
+cw, ch = col.size
+cpx = col.pixels[:]
+vuv = {}
+for poly in me.polygons:
+    for vi, li in zip(poly.vertices, poly.loop_indices):
+        vuv.setdefault(vi, me.uv_layers.active.data[li].uv.copy())
+neck_z = J["Neck"].z - 0.03 * S
+scarf = 0
+for v in me.vertices:
+    uv = vuv.get(v.index)
+    if uv is None or (v.co - J["Head"]).dot(HEAD_N) > -HEAD_FADE:
+        continue
+    i = (min(ch - 1, int(uv.y * ch)) * cw + min(cw - 1, int(uv.x * cw))) * 4
+    r, g, b = cpx[i], cpx[i + 1], cpx[i + 2]
+    if not (r > 0.25 and g < 0.45 * r and b < 0.45 * r) and not (r > 0.6 and g > 0.55 and b > 0.4 and v.co.z < neck_z):  # red wool, or the tails' cream stripes
+        continue
+    if v.co.y > J["Neck"].y + 0.1 * S:  # nothing past the shoulders is scarf
+        continue
+    bone_name = "Neck" if v.co.z > neck_z else "Spine1"
+    for g2 in v.groups:
+        g2.weight = 0.0
+    groups[bone_name].add([v.index], 1.0, "REPLACE")
+    scarf += 1
+print("SCARF %d vertices bound rigid (wrap to Neck, tails to Spine1)" % scarf)
 for v in me.vertices:  # normalise, and drop what's too faint to matter
     tot = sum(g.weight for g in v.groups)
     for g in v.groups:
@@ -506,12 +549,12 @@ def body(p, dz=0.0, dx=0.0, dy=0.0, pitch=0.0, roll=0.0, yaw=0.0, arch=0.0, ches
         p.rot["Tail%d" % (i + 1)] = compose(basis_rot("Tail%d" % (i + 1), X, lift), basis_rot("Tail%d" % (i + 1), Z, swing))
 
 
-STILL = {"phase": {"LH": 0, "LF": 0, "RH": 0, "RF": 0}, "duty": 1.0, "step": 0.0, "lift_fore": 0, "lift_hind": 0, "fold_fore": 0, "fold_hind": 0}
-WALK = {"T": 0.60, "duty": 0.64, "step": 0.30 * S, "phase": {"LH": 0.0, "LF": 0.25, "RH": 0.5, "RF": 0.75},
-        "lift_fore": 0.05 * S, "lift_hind": 0.04 * S, "fold_fore": 38, "fold_hind": 14, "crouch": 0.022 * S}
-TROT = {"T": 0.40, "duty": 0.44, "step": 0.34 * S, "phase": {"LH": 0.0, "RF": 0.0, "RH": 0.5, "LF": 0.5},
+STILL = {"phase": {"LH": 0, "LF": 0, "RH": 0, "RF": 0}, "duty": 1.0, "step": 0.0, "lift_fore": 0, "lift_hind": 0, "fold_fore": 0, "fold_hind": 0, "crouch": 0.0, "cap": 0.92}
+WALK = {"T": 0.60, "duty": 0.64, "step": 0.25 * S, "phase": {"LH": 0.0, "LF": 0.25, "RH": 0.5, "RF": 0.75},
+        "lift_fore": 0.07 * S, "lift_hind": 0.055 * S, "fold_fore": 45, "fold_hind": 14, "crouch": 0.022 * S}
+TROT = {"T": 0.40, "duty": 0.44, "step": 0.25 * S, "phase": {"LH": 0.0, "RF": 0.0, "RH": 0.5, "LF": 0.5},
         "lift_fore": 0.075 * S, "lift_hind": 0.06 * S, "fold_fore": 55, "fold_hind": 20, "crouch": 0.03 * S, "carry": 0.25}
-RUN = {"T": 0.36, "duty": 0.27, "step": 0.36 * S, "phase": {"LH": 0.0, "RH": 0.09, "RF": 0.50, "LF": 0.59},
+RUN = {"T": 0.36, "duty": 0.25, "step": 0.30 * S, "phase": {"LH": 0.0, "RH": 0.14, "RF": 0.50, "LF": 0.64},
        "lift_fore": 0.11 * S, "lift_hind": 0.10 * S, "fold_fore": 75, "fold_hind": 30, "crouch": 0.035 * S, "carry": 0.16,
        "fore_y": -0.03 * S, "hind_y": -0.02 * S, "narrow": 0.8}
 
@@ -528,7 +571,7 @@ def idle(t):
     tilt = bump(t, 0.2, 0.03, 0.08, 0.05)
     wag_on = bump(t, 0.3, 0.03, 0.22, 0.06) + 0.7 * bump(t, 0.72, 0.03, 0.14, 0.06)
     wag = wag_on * math.sin(TAU * t * 26)
-    body(p, dz=-0.012 * S + 0.0025 * S * br, dx=0.012 * S * shift + 0.004 * S * wag, roll=1.6 * shift, yaw=1.6 * wag,
+    body(p, dz=-STILL["crouch"] + 0.0025 * S * br, dx=0.012 * S * shift + 0.004 * S * wag, roll=1.6 * shift, yaw=1.6 * wag,
          chest=(-0.8 * br, 0, -1.2 * shift), neck=(-6.0 * lift + 1.0 * br, 20.0 * look, 0),
          head=(-4.0 * lift, 16.0 * look, 9.0 * tilt),
          tail=((-8 * wag_on, 22 * wag), (-4 * wag_on, 26 * math.sin(TAU * t * 26 - 0.6) * wag_on), (0, 24 * math.sin(TAU * t * 26 - 1.2) * wag_on)))
@@ -544,8 +587,8 @@ def walk(t):
     nod = math.sin(TAU * (t * 2 - 0.1))
     sw = math.sin(TAU * (t - 0.15))
     body(p, dz=-g["crouch"] + 0.004 * S * dip, dx=0.007 * S * sway, roll=1.8 * sway, yaw=2.2 * math.sin(TAU * t),
-         chest=(0.8 * dip, -3.4 * math.sin(TAU * t), -2.4 * sway), neck=(3.0 + 3.2 * nod, 1.2 * math.sin(TAU * t), 0),
-         head=(-2.2 * nod, 0, 1.4 * sway),
+         chest=(0.8 * dip, -3.4 * math.sin(TAU * t), -2.4 * sway), neck=(3.0 + 6.0 * nod, 1.2 * math.sin(TAU * t), 0),
+         head=(-4.0 * nod, 0, 1.4 * sway),
          tail=((6, 9 * sw), (2, 12 * math.sin(TAU * (t - 0.25))), (0, 12 * math.sin(TAU * (t - 0.35)))))
     paws(p, g, t)
     return p
@@ -556,7 +599,7 @@ def trot(t):
     p = Pose()
     bob = -math.cos(2 * TAU * (t - g["duty"] / 2))  # lowest as each diagonal pair carries him, highest in the air between
     sway = math.sin(TAU * (t + 0.05))
-    body(p, dz=-g["crouch"] + 0.011 * S * bob, roll=1.4 * sway, yaw=1.6 * math.sin(TAU * t), pitch=0.6 * bob,
+    body(p, dz=-g["crouch"] + 0.018 * S * bob, roll=1.4 * sway, yaw=1.6 * math.sin(TAU * t), pitch=0.6 * bob,
          chest=(0, -2.4 * math.sin(TAU * t), -1.8 * sway), neck=(-5.0 - 1.6 * bob, 0, 0), head=(2.0 + 1.2 * math.sin(2 * TAU * (t - 0.3)), 0, 1.0 * sway),
          tail=((-10 + 3 * bob, 7 * sway), (-6 + 4 * math.sin(2 * TAU * (t - 0.32)), 10 * math.sin(TAU * (t - 0.1))), (-4 + 5 * math.sin(2 * TAU * (t - 0.42)), 10 * math.sin(TAU * (t - 0.2)))))
     paws(p, g, t)
@@ -569,9 +612,9 @@ def run(t):
     through under him (about 0.9)."""
     g = RUN
     p = Pose()
-    arch = 13.0 * math.cos(TAU * (t - 0.93))  # most gathered just before the hind paws land again
+    arch = 18.0 * math.cos(TAU * (t - 0.93))  # most gathered just before the hind paws land again
     pitch = 5.0 * math.sin(TAU * (t - 0.36))  # nose down as the forepaws land, up as the hind ones drive
-    height = 0.016 * S * math.cos(2 * TAU * (t - 0.42)) + 0.008 * S * math.cos(TAU * (t - 0.42))  # up in each flight
+    height = 0.03 * S * math.cos(2 * TAU * (t - 0.42)) + 0.012 * S * math.cos(TAU * (t - 0.42))  # up in each flight
     reach = math.cos(TAU * (t - 0.40))  # the head and neck stretch forward in the long flight
     body(p, dz=-g["crouch"] + height, pitch=pitch, arch=arch, dy=-0.012 * S * reach,
          neck=(4.0 - 0.75 * arch - 0.7 * pitch + 5.0 * reach, 0, 0), head=(-2.0 - 0.3 * pitch - 3.0 * reach, 0, 0),
@@ -581,14 +624,19 @@ def run(t):
 
 
 def make_action(name, seconds, pose_at, gait=None):
-    """Keys the loop, raising the crouch a little at a time until no leg is over-stretched."""
+    """Keys the loop. With a gait, finds the body height first: it starts high and comes down a
+    little at a time until no leg is stretched past the gait's cap (MAX_EXTENSION unless it says),
+    so he stands as tall as his legs allow rather than crouching like a cat stalking."""
     frames = int(round(seconds * FPS))
+    cap = gait.get("cap", MAX_EXTENSION) if gait else MAX_EXTENSION
+    if gait is not None:
+        gait["crouch"] = -0.08 * S
     while True:
         poses = [pose_at(f / frames) for f in range(frames + 1)]
         ext = max(s[0] for p in poses for s in p.stats.values())
-        if ext <= MAX_EXTENSION or gait is None:
+        if ext <= cap or gait is None:
             break
-        gait["crouch"] += 0.003 * S
+        gait["crouch"] += 0.002 * S
     slip = max(s[1] for p in poses for s in p.stats.values())
     assert ext <= MAX_EXTENSION, "%s: a leg reaches %.0f%% of its length" % (name, ext * 100)
     assert slip < 0.001, "%s: a paw misses its spot by %.4f m" % (name, slip)
@@ -613,7 +661,7 @@ def make_action(name, seconds, pose_at, gait=None):
         b.rotation_quaternion = Quaternion()
         b.location = Vector()
     line = "LOOP %s: %d frames, %.2f s, legs at most %.0f%% straight, paws within %.2f mm" % (name, frames, seconds, ext * 100, slip * 1000)
-    if gait:
+    if gait and gait["step"] > 0:
         speed = gait["step"] / (gait["duty"] * gait["T"])
         line += "; crouch %.3f m; STRIDE %.3f m/s" % (gait["crouch"], speed)
         STRIDES[name] = round(speed, 3)
@@ -624,7 +672,7 @@ def make_action(name, seconds, pose_at, gait=None):
 STRIDES = {}
 for b in rig.pose.bones:
     b.rotation_mode = "QUATERNION"
-make_action("Idle", 8.0, idle)
+make_action("Idle", 8.0, idle, STILL)
 make_action("Walk", WALK["T"], walk, WALK)
 make_action("Trot", TROT["T"], trot, TROT)
 make_action("Run", RUN["T"], run, RUN)
@@ -668,6 +716,12 @@ if "--no-export" not in argv:
 # --- optional: review renders -------------------------------------------------------------------
 if RENDER:
     os.makedirs(RENDER, exist_ok=True)
+    if "--debug-patch" in argv:
+        dm = bpy.data.materials.new("patch_debug")
+        dm.diffuse_color = (1, 0, 1, 1)
+        me.materials.append(dm)
+        for fi in PATCH_FACES:
+            me.polygons[fi].material_index = len(me.materials) - 1
     sc = bpy.context.scene
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
     sc.collection.objects.link(cam)
@@ -695,12 +749,13 @@ if RENDER:
     sc.render.resolution_x, sc.render.resolution_y = 560, 420
     sc.render.film_transparent = False
     views = {"side": (Vector((1, 0, 0.12)), 1.25), "front": (Vector((0.45, -1, 0.3)), 1.1), "below": (Vector((0.5, -0.5, -1)), 1.1),
-             "back": (Vector((-0.6, 1, 0.35)), 1.1), "under": (Vector((-0.4, -1, -0.45)), 0.75)}
+             "back": (Vector((-0.6, 1, 0.35)), 1.1), "under": (Vector((-0.4, -1, -0.45)), 0.75),
+             "chest": (Vector((-1, -0.7, 0.1)), 0.45, EXTRA_PAW + Vector((0, 0.06 * S, 0.14 * S)))}
 
     def shot(fname, view, hide_floor=False):
-        d, scale = views[view]
+        d, scale = views[view][:2]
         d = d.normalized()
-        c = Vector((0, 0, HEIGHT * 0.45))
+        c = views[view][2] if len(views[view]) > 2 else Vector((0, 0, HEIGHT * 0.45))
         cam.location = c + d * 4
         cam.data.ortho_scale = scale * HEIGHT / 0.62
         cam.rotation_euler = (c - cam.location).to_track_quat("-Z", "Y").to_euler()
@@ -712,7 +767,7 @@ if RENDER:
     rig.animation_data.action = None
     for tr in rig.animation_data.nla_tracks:
         tr.mute = True
-    for v in ("side", "front", "back", "below", "under"):
+    for v in ("side", "front", "back", "below", "under", "chest"):
         shot("rest_%s.png" % v, v)
     plan = {"Idle": ((0.0, 0.18, 0.35, 0.62), ("side", "front")), "Walk": ([i / 8 for i in range(8)], ("side", "front")),
             "Trot": ([i / 8 for i in range(8)], ("side", "front")), "Run": ([i / 8 for i in range(8)], ("side", "front"))}

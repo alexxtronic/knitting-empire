@@ -18,6 +18,7 @@
     "pumpkin": 105,
     "turnip": 38
   },
+  "rarity_price": [0.6, 0.8, 1.0, 1.5, 2.4],
   "expand_costs": [800, 2000, 4500],
   "wool_pack_price": 36,
   "sheep_price": 400,

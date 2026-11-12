@@ -28,6 +28,7 @@ var _activity_total := 1.0
 var _activity_done := Callable()
 var _return_pos = null
 var _sitting := false
+var quiet_needles := false # the knitting game makes the needle clicks while she plays it
 var _lying := false # in a bed, on her back under the covers (lie_in_bed)
 var _lie_bed: Node3D
 var _lie_shape_wait := 0 # frames to wait for her lying pose to take hold before the quilt is shaped over it
@@ -466,7 +467,7 @@ func _sound_cues(delta: float) -> void:
 		_walk_phase = ph
 	else:
 		_walk_phase = -1.0
-	if cur == "SitKnit":
+	if cur == "SitKnit" and not quiet_needles:
 		_needle_t -= delta
 		if _needle_t <= 0.0:
 			needle_click.emit()
