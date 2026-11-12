@@ -24,5 +24,14 @@
   "start_sheep": 3,
   "max_sheep": 6,
   "cottage_price": 2500,
-  "max_hearts": 5
+  "max_hearts": 5,
+  "story": {
+    "_about": "Act 1 (scripts/homestead.gd): Nora arrives with nothing; Gran's note leaves her 'gran_coins'. Rent for Gran's house ('rent' coins every 'rent_days' days) goes in Gran's tin. Gus sells 'wood_pack' wood for 'wood_pack_price'. A fence panel takes 'fence_wood' wood; a gate is crafted (data/recipes.json).",
+    "gran_coins": 100,
+    "rent": 20,
+    "rent_days": 7,
+    "wood_pack": 5,
+    "wood_pack_price": 15,
+    "fence_wood": 1
+  }
 }

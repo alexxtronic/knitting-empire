@@ -1,124 +1,185 @@
 # Act 1: Cast On. The format is described at the top of scripts/story.gd.
-# Flow: a new game opens on act1_arrival (the rain bus) → walk to the farm gate (act1_cottage,
-# Mabel and the keys) → step inside (act1_basket, Gran's basket and letter) → knit in the
-# rocking chair → act1_fence (memory thread #1, then the sheep are out; meeting Rowan) → take the
-# sweater to Maplewood (act1_market: Rosa buys it, Theo's wool on credit) → home at dusk
-# (act1_porch: the lawyer's voicemail, Rowan's lantern) → end card, next morning.
+# Flow (Alex's design, 2026-11-12; every line here is a draft for Alex):
+# act1_arrival: a new game opens on the rain bus. She walks to the Welcome to Maple Grove sign, the
+#   rain stops, the arrival music swells, the camera takes in the town (Hazel at her stall, Pip on
+#   his round) and comes back to her face. Wren the mayor welcomes her ("we've been expecting you"),
+#   walks her past the shops (Gus, Rosa, Theo, Hazel, Mabel) and up to Gran's house.
+# act1_note (inside): Gran's note on the coffee table, kept in her bag; 100 coins; rent to Gran's tin.
+# act1_yarn (her first yarn from Theo) → knit in the rocking chair → act1_knit (memory thread #1,
+#   then bleating: two strays) → act1_strays (find them by the pond; meet Rowan; "you'll want a pen")
+#   → act1_wood (her first wood from Gus: the pen builder, F, and gate crafting, G) → act1_pen (a
+#   closed pen with a gate: "pen_built", the dog's cue) → herd them in → act1_flock ("sheep_penned")
+#   → act1_market (Rosa buys the sweater) → act1_porch (the voicemail, Rowan's lantern) → end card.
 
 == act1_arrival
 @trigger start
 @once
 @weather rain
 @home rowan 25.6 -5.5
-@home mabel 22.4 4.6
-@place nora 40.2 3.4 180
-@prop bus bus 42.6 0.6 0
-@prop suitcase case 40.8 3.7 20
+@place nora 31.6 3.3 90
+@prop bus bus 33.8 0.6 0
+@prop suitcase case 32.2 3.6 20
+@place hazel 58.5 -5.2 -45
+@place pip 42.36 -7.6 180
+@face pip 42.36 -9.0
+@place wren 44.6 2.2 270
 @fade out 0.01
 @title Knitting Empire
-@camera 41.2 2.2 10
+@camera 32.6 2.2 10
 @fade in 2.0
-> Maplewood. Last stop. The rain has followed her all the way from the city.
-@prop_move bus 52 0.6 5
-> The bus pulls away. One suitcase, and a coat that was never meant for weather like this.
-Nora (sad): Okay. You did it. You actually got on the bus.
-@phone Daniel
-> Her phone buzzes. She doesn't need to look. She looks anyway.
-@camera 40.2 3.4 5
-Nora (worried): Daniel.
+> Last stop. The rain has followed her all the way from the city.
+@prop_move bus 72 0.6 6
+> The bus pulls away and takes the last of the engine noise with it. One suitcase. A coat that was never meant for weather like this.
+Nora (worried): Okay. Nobody followed. Nobody knows you're here.
+@phone Unknown number
+> Her phone buzzes. No name. It doesn't need one.
+@camera nora 5
 ? The phone keeps ringing.
 - Decline the call. -> declined | phone off; set declined_daniel
 - Let it ring out. -> ringout | phone off; set ignored_daniel
 @label declined
-> She presses the red button. It's the smallest thing she's done in months, and her hand shakes doing it.
-Nora (neutral): Not today.
+> She presses the red button, then holds the side button until the screen goes black. Her hand is shaking.
+Nora (neutral): Not today. Not here.
 @goto after
 @label ringout
 > She watches it ring until it stops. Then a little longer, in case.
-Nora (sad): Still can't do it, huh.
+Nora (sad): It'll stop. It has to stop eventually.
 @label after
 @prop_remove bus
-@camera 40.2 3.4 8
-> She hauls the suitcase up by its one good handle.
+> She hauls the suitcase up by its one good handle. Through the rain, up ahead, a painted sign.
 @prop_remove case
-Nora (wry): Gran always said you could smell the sheep from the signpost. Gran, you were not exaggerating.
-@goal Walk down the road to Birchfield Farm | 24.6 3
+@walk nora 36.2 2.4
+@face nora 37.6 -1.2
+@camera 37.6 -1.2 6
+@wait 1.2
+> WELCOME TO MAPLE GROVE. Someone keeps the paint fresh.
+@weather clear
+@music arrival
+> And as she reads it, the rain stops. Just like that, like somebody turned off a tap.
+@camera 50 -2 19
+@wait 2.5
+> Woodsmoke. Wet cobbles drying in the sun. Somewhere, bread.
+@camera hazel 7 yaw -45
+@wait 1.0
+> Hazel the baker is selling the morning's loaves from her stall, still warm enough to steam.
+@camera pip 7
+@wait 1.0
+> Pip the postman is on his round: a letter for every door, and a word for everyone who opens one.
+@face nora 38.4 4.6
+@camera nora 3 low yaw 45
+@wait 1.0
+Nora (warm): I think I'm going to like it here.
+@walk wren 38.0 2.6
+@face nora wren
+@face wren nora
+@camera between wren nora 7
+Wren (happy): You must be Nora! Look at you, soaked through. Welcome to Maple Grove.
+Nora (surprised): You know who I am?
+Wren (warm): Wren. I'm the mayor, which mostly means I hold the spare keys and all the gossip. We've been expecting you, love.
+Wren (warm): Your gran told the whole town you'd come home one day. Every Sunday, without fail.
+Nora (sad): Did she.
+Wren (happy): Come on. I'll show you round, and then I'll walk you up to the house. Leave the case, nobody here would dream of touching it.
 @set act1_arrived
+@home pip off
+@walk gus 47.7 -9.1 nowait
+@walk wren 45.8 -7.8 nowait
+@walk nora 46.8 -7.6
+@face nora gus
+@face wren nora
+@camera between gus nora 7.5
+Wren (happy): Gus! Come and meet Ellie's granddaughter.
+Gus (neutral): Builder's Delight. Timber, nails, rope, pots, anything that holds something else together. If I haven't got it, you don't need it.
+Wren (wry): And if he has got it, it's under something else.
+@face nora rosa
+@camera between rosa nora 7.5
+Rosa (happy): And I'm Rosa! The market's mine. If you make it, grow it or knit it, I'll sell it for you.
+@walk theo 53.27 -9.2 nowait
+@walk wren 52.2 -7.8 nowait
+@walk nora 53.2 -7.6
+@face nora theo
+@face wren nora
+@camera between theo nora 7.5
+Theo (warm): Ellie's girl. You've got her chin. The Yarn Barn: yarn, needles, patterns, and the only decent kettle on the plaza.
+Theo (wry): Your gran was my best customer for thirty years. And my worst payer.
+@walk wren 56.0 -5.6 nowait
+@walk nora 56.9 -5.2
+@face nora hazel
+@face hazel nora
+@camera between hazel nora 7.5 yaw -45
+Hazel (happy): New face! Here, this one's on the house. Don't argue, I've already buttered it.
+Nora (warm): Thank you. It smells incredible.
+@walk mabel 64.25 -7.4 nowait
+@walk wren 63.0 -6.0 nowait
+@walk nora 64.0 -5.8
+@face nora mabel
+@face wren nora
+@camera between mabel nora 7.5
+Mabel (warm): And that's Willow Homes, and I'm Mabel, and if you need papers signed or a piece of cake, I'm your woman.
+Mabel (sad): I was sorry about Ellie, love. Half the town turned up for her. She'd knitted for most of us.
+@fade out 0.8
+@home hazel off
+@home gus off
+@home theo off
+@home mabel off
+@place nora 10.4 3.0 270
+@place wren 11.2 2.0 270
+@face wren nora
+@face nora 8.0 3.0
+@camera 9.6 2.8 8
+@fade in 1.0
+> Gran's house. Smaller than she remembers, and the roses have gone wild.
+@face nora wren
+Wren (warm): Here we are. Front door sticks: lift it and shove. She never fixed it, said it kept the salesmen out.
+Wren (neutral): She left something for you, inside. I haven't looked. I'll leave you to it.
+Nora (warm): Thank you, Wren. For all of it.
+Wren (happy): Welcome home, Nora.
+@walk wren 24 4.4 nowait
+@wait 1.5
+@home wren off
+@set act1_toured
+@goal Go inside Gran's house | 7.2 3.0
 @camera player
 @toast Click the ground to walk. Follow the gold marker.
 
-== act1_cottage
-@trigger area farm_gate
-@requires act1_arrived
-@once
-@goal
-@walk mabel 24.0 4.2 nowait
-@walk nora 25.3 3.0
-@face mabel nora
-@face nora mabel
-@camera between mabel nora 8
-Mabel (happy): There you are! I'd started to think the bus had eaten you.
-Nora (surprised): Mabel? You didn't have to wait out here in this.
-Mabel (warm): Course I did. Ellie would have had my hide. Here. Keys.
-> The keys are old and heavy, on a loop of knitted cord gone grey with handling.
-Mabel (wry): Front door sticks. Lift it a bit and shove. She never fixed it. Said it kept the salesmen out.
-Nora (sad): I should have come back sooner. Before...
-Mabel (neutral): You're here now. That's the bit that counts.
-? What do you say?
-- Thank you. For all of it. The funeral too. -> thanks | familiarity mabel +4; trust mabel +2
-- Was it bad? At the end? -> theend | familiarity mabel +3; set asked_about_gran
-@label thanks
-Mabel (warm): Oh, hush. Half the town turned up. She'd knitted for most of them.
-@goto keys
-@label theend
-Mabel (sad): Quiet. She was in her chair with the radio on. Needles in her lap.
-Mabel (warm): I don't think she minded, love. I think she was just tired.
-@label keys
-Mabel (happy): The Land Office is on the plaza if you need anything. Papers, gossip, cake. Mostly cake.
-@set act1_keys
-@walk mabel 34 3 nowait
-@goal Go inside the cottage | 9.0 3
-@camera player
-
-== act1_basket
+== act1_note
 @trigger area cottage_inside
-@requires act1_keys
+@requires act1_toured
 @once
 @goal
-@home mabel off
 @camera 3.6 2.6 9
 > Dust on everything. The clock on the mantel stopped at twenty past four.
 Nora (sad): Hi, Gran.
 > It still smells like her. Lanolin and woodsmoke and the lemon drops she kept in her apron.
-@walk nora 2.9 2.4
-@face nora 2.25 2.25
-@camera 2.7 2.6 6
-> Her knitting basket sits by the fire where it always did. Half a sleeve, the needles still in it.
-> Tucked under the yarn is an envelope. Gran's handwriting, all loops and hurry.
-Nora (surprised): "For when you come home."
-? The envelope is soft from being handled.
-- Open it now. -> open | set read_gran_letter
-- Not yet. Keep it for later. -> later | set kept_gran_letter
-@label open
-> "Nora, love. If you're reading this, I've gone and done the one thing I always told you not to: left without saying goodbye. Sorry about that."
-> "The flock knows what to do even when you don't. The yarn in the basket is the good stuff. Don't you dare save it for best."
-> "And whatever sent you home, it doesn't get to follow you through that door. Knit something. It helps. It always helped. Gran."
+@walk nora 4.0 3.9
+@face nora 4.0 3.0
+@camera 4.0 3.0 4
+> On the table, propped against an old biscuit tin, a folded note. Gran's handwriting, all loops and hurry.
+Nora (surprised): "For my Nora."
+@farm note
+> "My darling Nora. I have missed you every single day since you moved away. The kettle still boils for two out of habit, and I let it."
+> "The house is yours now, if you'll have it. Keep it warm for me. Put a little in the tin each week. Not because the house needs the money. Because a home you pay into is a home you stay in."
+> "There's a hundred coins under the lid to start you off. Go and see Theo for some good yarn, and make something with your hands. It always helped me. It will help you."
+> "Whatever happened out there, love, it stays out there. In here it's just you, and the kettle, and me in every cup. All my love, always. Gran."
 Nora (sad): ...Okay. Okay, Gran.
-@goto knit
-@label later
-Nora (sad): Not yet. I can't yet.
-> She slips the envelope into her coat pocket, over her heart, where it sits heavy.
-@label knit
-@give wool 3
-@toast Gran's good yarn: +3 wool
-Nora (warm): One row. Just to see if my hands remember.
-@goal Sit in the rocking chair and knit | 2.4 3.6
-@set act1_basket
+> She folds the note into her pocket. Under the lid of the tin: a hundred coins, in neat little paper rolls.
+@toast Gran's note is in your bag. Rent: 20c a week, into her tin on the table.
+@set act1_note
+@goal Buy yarn from Theo at the Yarn Barn | 53.27 -9.6
 @camera player
 
-== act1_fence
+== act1_yarn
+@trigger event yarn_bought
+@requires act1_note
+@once
+@goal
+Nora (warm): Good yarn. Gran would approve. She'd also say I paid too much.
+@set act1_yarn
+@goal Knit your first sweater in Gran's rocking chair | 2.4 3.6
+@toast Click the rocking chair and choose Knit.
+
+== act1_knit
 @trigger event knit_done
-@requires act1_basket
+@requires act1_yarn
 @once
 @goal
 # memory thread #1: the first thing she knits in years brings back the last thing she knit
@@ -134,38 +195,39 @@ Daniel: Don't make that face. It's sweet. It's just not... me.
 @memory off 1.6
 @journal memory The navy sweater | Four months of evenings. A thin cream band, because cream made him look soft. It ended up in the bin under the coffee grounds and I didn't knit again for six years. Today I did.
 Nora (sad): ...Okay. That one still stings.
-> Somewhere outside, very close, something says "baa". Then something else says it louder.
-Nora (surprised): That is... not far enough away.
-@fade out 0.6
-@weather clear
-@sheep out
-@prop rail rail1 18.6 2.3 0
-@home rowan 16.3 2.7
-@place nora 9.4 3.2 90
+@farm strays
+> Somewhere outside, not far off, something says "baa". Then something else says it louder.
+Nora (surprised): Sheep? Gran's flock went years ago.
+@set act1_knit
+@goal Find where that bleating is coming from | 13.5 -14
+@camera player
+
+== act1_strays
+@trigger area strays
+@requires act1_knit
+@once
+@goal
+@home rowan 16.4 -12.2
+@walk nora 12.2 -12.4
+@face nora 13.5 -14
+@camera 13.8 -13.4 8
+> Two sheep, grazing past the pond like they own the place. No ear tags. Burrs in their wool.
 @face rowan nora
-@camera 13.6 2.2 11
-@fade in 0.8
-> The rain has stopped. Three of Gran's sheep are standing in the vegetable beds like they pay rent. A board hangs off the fence.
-> And there's a man with a shepherd's crook watching them, like he's been there a while.
-@walk nora 14.9 4.1
 @face nora rowan
-@face rowan nora
 @camera between rowan nora 6.5
-Rowan (wry): Afternoon. Yours, I think.
-Nora (worried): Are they? I mean, yes. Probably. How can you tell?
-Rowan (neutral): Ellie's blue mark on the ear. And that one's eating your lettuce.
-Nora (wry): I don't have lettuce.
-Rowan (wry): Not anymore.
+Rowan (wry): Afternoon. Friends of yours?
+Nora (surprised): I was about to ask you the same thing.
+Rowan (neutral): Not mine. No marks on them. Strays off the ridge, I'd guess. They turn up every spring, looking for somebody soft.
+Nora (wry): And they found me.
 Rowan (neutral): Rowan. I keep the flock up on the hill. Ellie and I traded favours. Mostly she fed me and I fixed things.
 Nora (neutral): Nora. The granddaughter. The one from the city.
 Rowan (warm): I know. She talked about you. A lot, actually.
-Rowan (neutral): Right. I'll get the gate open, you stand there and look big.
-@walk rowan 16.3 -0.2
+@walk rowan 14.8 -13.0
 @anim rowan Work
-@camera between rowan nora 9.5
+@camera between rowan nora 7
 @wait 0.6
 @shake 0.5
-> The gate slams back in the wind, a crack like a gunshot.
+> A dead branch gives under his boot with a crack like a gunshot.
 Nora (surprised): Ah!
 > Her whole body jerks. Her hands are up before she can stop them.
 @anim rowan off
@@ -177,49 +239,65 @@ Rowan (worried): Hey. You alright?
 - Sorry. Loud noises. Long story. -> honest | trust rowan +3; familiarity rowan +2; set nora_opened
 @label fine
 Rowan (neutral): Right. Course.
-> He doesn't push. He does wedge the gate with a stone so it can't do that again.
-@goto roundup
+> He doesn't push. He does kick the rest of the branch into the long grass, quietly.
+@goto keep
 @label honest
-Rowan (warm): Nothing to be sorry for. I'll keep the gate quiet.
-> He wedges it with a stone, gently, like the gate's the one that needs calming down.
+Rowan (warm): Nothing to be sorry for. I'll tread quieter.
 Nora (warm): Thanks.
-@label roundup
-Rowan (happy): Arms out, walk slow, and whatever you do, don't run. They can smell fear and they think it's funny.
-@fade out 0.8
-> Twenty minutes of slow walking, outstretched arms, and one sheep that would not be told.
-@sheep home
-@prop_remove rail1
-@place nora 14.6 3.8 90
-@home rowan 15.8 2.6
-@face rowan nora
-@face nora rowan
-@camera between rowan nora 5.5
-@fade in 0.8
-Rowan (wry): Not bad. You only fell over once.
-Nora (happy): Twice. You missed the second one.
-Rowan (happy): I didn't.
-> It's the first time she's laughed in a long while. It comes out rusty.
-Rowan (neutral): I'll come by tomorrow and fix that fence properly. I'll bring nails. You bring tea.
+@label keep
+Rowan (neutral): If you want them, they're yours. Finders keepers, out here. But you'll want a pen first, or they'll wander back the way they came.
+Nora (worried): Gran's pen is long gone. I've never built anything in my life.
+Rowan (wry): Panels, posts and a gate. Sheep lean on everything, so build it like you mean it. Gus at Builder's Delight sells timber.
 ? What do you say?
-- Deal. I make terrible tea. -> deal | familiarity rowan +3
-- You don't have to do that. -> nohelp | trust rowan +1; familiarity rowan +1
+- I'll do it. Today. -> deal | familiarity rowan +3
+- Could you help? -> nohelp | trust rowan +1; familiarity rowan +1
 @label deal
-Rowan (wry): Good. Ellie's was terrible too. I'd hate to get used to anything else.
+Rowan (wry): Good. I'll come by and lean on it after. You bring tea.
 @goto bye
 @label nohelp
-Rowan (warm): I know. That's sort of the point.
+Rowan (warm): I'll talk you through it. It's your pen, though. That matters, with sheep.
 @label bye
 @set met_rowan
-Rowan (neutral): That knitting on your chair. Yours?
-Nora (worried): It's nothing. First one in years.
-Rowan (wry): Take it to Rosa at the market. She'll pretend it's nothing too, right up until she pays you.
 > He tips the crook at her like a hat and heads off up the hill, whistling at nothing.
 @walk rowan 24 4.4 nowait
 @wait 2.5
 @home rowan off
-@set act1_fence_done
+@set act1_strays
 @camera player
-@goal Take your sweater to Rosa at the Maplewood market | 48.5 -5.6
+@goal Buy wood from Gus at Builder's Delight | 47.7 -9.4
+
+== act1_wood
+@trigger event wood_bought
+@requires act1_strays
+@once
+@goal
+Nora (neutral): Right. A pen. Panels, posts and a gate. How hard can it be.
+@set act1_wood
+@toast Press F (or Build pen) to lay fence panels: 1 wood each. Craft a gate (G) from 2 wood and set it in the fence.
+@goal Build a pen with a gate, near the strays | 13.5 -14
+
+== act1_pen
+@trigger event pen_built
+@requires act1_wood
+@once
+@goal
+Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing this?
+> Now the hard part. The strays are still out by the pond, and they don't look like they're in any hurry.
+@toast Walk up behind the sheep and they'll move away from you. Steer them in through the gate.
+@goal Herd the two strays into your pen
+
+== act1_flock
+@trigger event sheep_penned
+@requires act1_wood
+@once
+@goal
+@camera player 7
+Nora (happy): Both of them. In!
+> They're already eating the grass inside the pen as if they'd never been anywhere else.
+Nora (warm): Welcome home, you two. That makes three of us.
+@set act1_fence_done
+@goal Take your sweater to Rosa at the Maple Grove market | 48.5 -5.6
+@camera player
 
 == act1_market
 # scene 5: market day. Someone values her work, out loud, in public.
@@ -250,7 +328,7 @@ Rosa (warm): Sixty coins, and I want the next one before anybody else sees it.
 @face nora theo
 @camera between theo nora 7
 Theo (happy): Rosa doesn't shout for anybody. Last time she shouted it was a calf with two heads.
-Theo (neutral): You're Ellie's granddaughter. She bought her wool off me for thirty years. Never once paid on time.
+Theo (neutral): Told you. Ellie's granddaughter, through and through. She bought her wool off me for thirty years. Never once paid on time.
 ? Theo holds out a bundle of oatmeal yarn.
 - I can't take that. Let me pay you. -> pay | familiarity theo +2
 - Thank you. Really. -> thanks | trust theo +2; familiarity theo +2

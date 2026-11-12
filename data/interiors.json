@@ -1,5 +1,5 @@
 {
-  "_about": "Inside Maplewood's shops (scripts/interiors.gd). Keys are the building models (assets/props/building_<id>.glb). Positions are in the building's own space in metres: x across (+x is on your right as you look at the front from the street), z from the back wall (-) to the front wall with the door (+). The door is at x 0 in the front wall. 'furniture': a furniture id (data/furniture.json), 'at' [x, z], 'turn' in degrees (0 = its front toward the door, 90 = toward +x, -90 = toward -x, 180 = toward the back wall). 'keeper': where the shopkeeper (villagers.json 'works_in') stands, where you stand to talk to them, how far they potter about (x, z), and which way they face. 'outside': [x, z, w, d] rects of the things standing in front of the building (baskets, signs, posts), which block the way. 'light': where the lamp hangs.",
+  "_about": "Inside Maple Grove's shops (scripts/interiors.gd). Keys are the building models (assets/props/building_<id>.glb). Positions are in the building's own space in metres: x across (+x is on your right as you look at the front from the street), z from the back wall (-) to the front wall with the door (+). The door is at x 0 in the front wall. 'furniture': a furniture id (data/furniture.json), 'at' [x, z], 'turn' in degrees (0 = its front toward the door, 90 = toward +x, -90 = toward -x, 180 = toward the back wall). 'keeper': where the shopkeeper (villagers.json 'works_in') stands, where you stand to talk to them, how far they potter about (x, z), and which way they face. 'outside': [x, z, w, d] rects of the things standing in front of the building (baskets, signs, posts), which block the way. 'light': where the lamp hangs.",
   "shop": {
     "furniture": [
       {"id": "shop_counter", "at": [1.3, -0.9], "turn": 0},
@@ -40,6 +40,20 @@
     ],
     "keeper": {"spot": [0.4, -1.42], "talk": [0.4, 0.2], "roam": [0.35, 0.0], "face": 0},
     "outside": [[-1.0, 2.9, 0.3, 0.3], [0.7, 2.9, 0.3, 0.3], [1.9, 3.45, 1.0, 0.15], [-2.2, 2.75, 0.4, 0.4]],
+    "light": [0.0, 2.5, 0.0]
+  },
+  "homegoods": {
+    "furniture": [
+      {"id": "shop_counter", "at": [1.0, -0.65], "turn": 0},
+      {"id": "bookshelf", "at": [-1.45, -1.9], "turn": 0},
+      {"id": "bookshelf", "at": [-2.15, 0.35], "turn": 90},
+      {"id": "hay_bale", "at": [-1.5, 1.45], "turn": 0},
+      {"id": "flour_sacks", "at": [1.95, 1.3], "turn": -90},
+      {"id": "plant", "at": [2.1, -1.85], "turn": 0},
+      {"id": "rug_round", "at": [0.1, 0.55], "turn": 0}
+    ],
+    "keeper": {"spot": [1.0, -1.4], "talk": [1.0, 0.1], "roam": [0.3, 0.0], "face": 0},
+    "outside": [],
     "light": [0.0, 2.5, 0.0]
   }
 }

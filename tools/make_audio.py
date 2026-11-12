@@ -335,6 +335,49 @@ def music(bpm=84):
     return normalize(fold_loop(mix, length), 0.7)
 
 
+# --- the arrival: Nora sees the Maple Grove sign, the rain stops ----------------------------------
+# Alex, 2026-11-12: "the rain stops and we hear a pleasant music like she had just found heaven".
+# Not a loop: a soft swell, harp arpeggios climbing, a warm flute line, and a long held last chord.
+ARR_CHORDS = [[50, 57, 62, 66], [43, 50, 55, 59], [47, 54, 59, 62], [45, 52, 57, 61],
+              [43, 50, 55, 59], [50, 57, 62, 66], [45, 52, 57, 64], [50, 57, 62, 66]]
+ARR_MELODY = {2: [(0, 74, 2), (2, 76, 1), (3, 78, 1)], 3: [(0, 79, 3), (3, 78, 1)],
+              4: [(0, 76, 2), (2, 73, 2)], 5: [(0, 74, 1), (1, 76, 1), (2, 79, 2)],
+              6: [(0, 81, 2), (2, 78, 2)], 7: [(0, 76, 2), (2, 73, 1), (3, 76, 1)], 8: [(0, 74, 4)]}
+
+
+def arrival(bpm=66):
+    beat = 60.0 / bpm
+    bars = len(ARR_CHORDS)
+    tail = 6.0
+    n = int((bars * 4 * beat + tail) * SR)
+    harp = np.zeros(n)
+    mel = np.zeros(n)
+    pad = np.zeros(n)
+    for b, tones in enumerate(ARR_CHORDS):
+        t0 = b * 4 * beat
+        last = b == bars - 1
+        # harp: a climbing arpeggio across two octaves, every bar (the last one rolled and left ringing)
+        notes = [tones[0], tones[1], tones[2], tones[3], tones[1] + 12, tones[2] + 12, tones[3] + 12, tones[2] + 24]
+        for k, m in enumerate(notes):
+            s = int((t0 + k * (beat / 2 if not last else 0.09) + rng.normal(0, 0.004)) * SR)
+            p = pluck(m + 12, 3.0 if not last else 6.0, 0.55, 0.998) * (0.5 if k else 0.7)
+            harp[s:s + len(p)] += p[:max(0, n - s)]
+        # a pad that swells in from nothing over the first two bars, like the clouds parting
+        s = int(t0 * SR)
+        m = int((4 * beat + (tail if last else 0.0)) * SR)
+        tt = np.arange(m) / SR
+        chord = sum(np.sin(2 * np.pi * mtof(x + 12) * tt) + 0.3 * np.sin(2 * np.pi * mtof(x + 24) * tt * 1.002) for x in tones)
+        swell = np.clip((t0 + tt) / (8 * beat), 0, 1) ** 1.5
+        pad[s:s + m] += chord * fade(m, 0.6, 1.5 if last else 0.6) * swell * 0.035
+        for (bt, midi, dur) in ARR_MELODY.get(b + 1, []):
+            s = int((t0 + bt * beat) * SR)
+            f = flute(midi, dur * beat * (0.98 if not last else 1.6))
+            mel[s:s + len(f)] += f[:max(0, n - s)] * 0.3
+    mix = stereo(harp, -0.2) + stereo(mel, 0.25) + stereo(pad, 0.0)
+    mix = reverb(mix, 2.8, 0.35)
+    return normalize(mix * fade(len(mix), 0.01, 3.0)[:, None], 0.7)
+
+
 if __name__ == "__main__":
     print("writing to", OUT)
     for i in range(4):
@@ -349,3 +392,4 @@ if __name__ == "__main__":
     write_ogg("amb_night", ambience_night(), 4)
     write_ogg("amb_rain", rain(), 4)
     write_ogg("music_cast_on", music(), 6)
+    write_ogg("music_arrival", arrival(), 6)

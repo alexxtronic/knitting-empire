@@ -396,6 +396,15 @@
       "height": 1.55,
       "id": "filing_cabinet",
       "model": "res://assets/props/filing_cabinet.glb"
+    },
+    {
+      "name": "Welcome Sign",
+      "price": 0,
+      "size": [3.2, 0.8],
+      "where": "out",
+      "height": 3.2,
+      "id": "welcome_sign",
+      "model": "res://assets/props/welcome_sign.glb"
     }
   ]
 }

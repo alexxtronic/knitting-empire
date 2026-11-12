@@ -24,8 +24,16 @@ extends Node3D
 ## scenery, every model in assets/props (a kind that the code never scatters, such as the single
 ## maple leaves, becomes scenery of its own the first time one is placed) and every catalog piece.
 ##
-## Not editable here: Nora's house and Rosewood Cottage (the game's rules are tied to where they
-## stand), the villagers and the sheep. The sheep pen moves as one piece and turns in quarter
+##   "house"    Nora's furniture as a new game starts it: her house and the yard pieces, the
+##              complete list, written once any of it has been arranged here. Her own game's
+##              furniture (bought, moved and sold in Build mode) is in her save, as before
+##
+## Her furniture can be picked up, moved, turned, copied and deleted like anything else, and a
+## catalog piece placed inside the house becomes part of it. Anything new built as a Furniture
+## node is picked up by itself; the autotest's god checks fail if anything in the world can't be.
+##
+## Not editable here: the walls of Nora's house and Rosewood Cottage (the game's rules are tied
+## to where they stand), the villagers and the sheep. The sheep pen moves as one piece and turns in quarter
 ## turns; the sheep and their field go with it.
 
 const Catalog = preload("res://scripts/catalog.gd")
@@ -87,6 +95,7 @@ class El:
 	var xf := Transform3D.IDENTITY # where it is now
 	var deleted := false
 	var added := false # decor copied in the editor
+	var home := false # Nora's furniture (main.furniture): saved as the "house" list, not as a node
 	var tint := Color.WHITE
 	var bounds := AABB() # in its own space
 	var radius := 1.0
@@ -108,6 +117,9 @@ var baked := {} # scenery kinds whose full list goes in the layout file
 var orphans := {} # saved node edits that match nothing the code builds now (kept in the file)
 var unknown_scenery := {} # saved scenery lists for kinds the game no longer has (kept in the file)
 var plots_edited := false
+var home_edited := false # her furniture was arranged here: the layout gets the whole list again
+var house_list: Array = [] # the layout's "house" list, as read ([] = the code's own furnishing)
+var _home := {} # Furniture node -> El
 var unsaved := false
 var loaded := false # a layout file was read and applied at launch
 var selected: El
@@ -205,6 +217,23 @@ func collect() -> void:
 	_pond = null
 	if World.pond != null and is_instance_valid(World.pond):
 		_pond = _collect_node(World.pond, "pond", "Pond", [main.pond_rect])
+	_home.clear()
+	sync_home()
+
+
+## Nora's furniture comes and goes as she buys, moves and sells things (and only exists once a
+## game is loaded), so its list is brought up to date each time the editor opens.
+func sync_home() -> void:
+	for f in _home.keys():
+		var el: El = _home[f]
+		if not is_instance_valid(f) or (not el.deleted and not main.furniture.has(f)):
+			els.erase(el)
+			_home.erase(f)
+	for f in main.furniture:
+		if is_instance_valid(f) and not _home.has(f):
+			var el := _collect_node(f, "home_" + str(f.item_id), f.display_name(), [])
+			el.home = true
+			_home[f] = el
 
 
 func _collect_mmi(mmi: MultiMeshInstance3D, kind: String) -> void:
@@ -342,6 +371,13 @@ func _apply(el: El) -> void:
 		body.collision_layer = 0 if el.deleted else int(body.get_meta("god_layer"))
 	if n is Furniture:
 		n.set("rot", posmod(roundi(_yaw(el.xf) / (PI * 0.5)), 4)) # which way its footprint lies, for sitting and standing by it
+	if el.home:
+		# her furniture blocks the way through main.gd's own list of it, so that list is what changes
+		home_edited = true
+		if el.deleted:
+			main.furniture.erase(n)
+		elif not main.furniture.has(n):
+			main.furniture.append(n)
 	if n.has_meta("water"):
 		(n.get_meta("water") as ShaderMaterial).set_shader_parameter("centre", el.xf.origin)
 	if el.kind == "plot" and (el.deleted or not el.xf.is_equal_approx(el.base)):
@@ -670,7 +706,17 @@ func load_layout() -> void:
 		push_warning("world layout: %d saved changes match nothing in the world now (kept in the file): %s" % [orphans.size() + unknown_scenery.size(), ", ".join(orphans.keys() + unknown_scenery.keys())])
 	if d.has("roads"):
 		_load_roads(d["roads"])
+	house_list = d.get("house", [])
 	unsaved = false
+
+
+## Her furniture as it stands now, for the layout's "house" list: what a new game starts with.
+func home_now() -> Array:
+	var out: Array = []
+	for f in main.furniture:
+		if is_instance_valid(f):
+			out.append(main.furniture_entry(f))
+	return out
 
 
 func _scenery_from(kind: String, item: Array) -> El:
@@ -703,7 +749,7 @@ func layout() -> Dictionary:
 	var nodes := orphans.duplicate()
 	var added: Array = []
 	for el in els:
-		if el.scenery:
+		if el.scenery or el.home:
 			continue
 		var o := el.xf.origin
 		if el.added:
@@ -726,6 +772,10 @@ func layout() -> Dictionary:
 				list.append(_item_of(el))
 		sc[kind] = list
 	var d := {"version": 1, "nodes": nodes, "added": added, "scenery": sc}
+	if home_edited:
+		d["house"] = home_now()
+	elif not house_list.is_empty():
+		d["house"] = house_list
 	if roads_on:
 		var r := Grass.REGION
 		d["roads"] = {"px": ROAD_PX, "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "png": Marshalls.raw_to_base64(road_img.save_png_to_buffer())}
@@ -747,6 +797,11 @@ func save_layout() -> bool:
 	for a in d["added"]:
 		arows.append("\t\t" + JSON.stringify(a))
 	lines.append('\t"added": [%s]' % ("" if arows.is_empty() else "\n" + ",\n".join(arows) + "\n\t"))
+	if d.has("house"):
+		var hrows: Array[String] = []
+		for h in d["house"]:
+			hrows.append("\t\t" + JSON.stringify(h))
+		lines.append('\t"house": [%s]' % ("" if hrows.is_empty() else "\n" + ",\n".join(hrows) + "\n\t"))
 	if d.has("roads"):
 		lines.append('\t"roads": ' + JSON.stringify(d["roads"]))
 	var fa := FileAccess.open(layout_path, FileAccess.WRITE)
@@ -777,6 +832,7 @@ func set_active(on: bool) -> void:
 		return
 	active = on
 	if on:
+		sync_home()
 		if _ui == null:
 			_build_ui()
 		main.set_mode(main.Mode.LIVE)
@@ -1066,6 +1122,8 @@ func duplicate_selected() -> El:
 	var el: El
 	if src.scenery:
 		el = _add_scenery(src.kind, Transform3D(src.xf.basis, at), src.tint)
+	elif src.home:
+		el = _add_home(str(src.node.get("item_id")), at, _yaw(src.xf), src.xf.basis.get_scale().x)
 	elif src.node is Furniture:
 		el = _add_decor(str(src.node.get("item_id")), at, _yaw(src.xf), _size_of(src))
 	else:
@@ -1171,7 +1229,10 @@ func _place_one(at: Vector3, changed: Array) -> El:
 	if place_id.begins_with("decor:"):
 		if not Catalog.ITEMS.has(what):
 			return null
-		el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale)
+		if main.interior_rect().has_point(Vector2(at.x, at.z)):
+			el = _add_home(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale) # into her house: it's hers
+		else:
+			el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale)
 	else:
 		if not _ensure_kind(what):
 			main.hud.show_toast("There's no model for that.")
@@ -1357,6 +1418,18 @@ func _add_decor(id: String, at: Vector3, yaw: float, size := 1.0) -> El:
 	var f: Furniture = main.decor[-1]
 	var el := _collect_node(f, "decor_" + id, f.display_name(), [] if f.is_flat() else [f.footprint()])
 	el.added = true
+	_set_state(el, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * size), at), false)
+	_measure(el)
+	return el
+
+
+## One more piece of her furniture (a copy, or a catalog piece set down in the house).
+func _add_home(id: String, at: Vector3, yaw: float, size := 1.0) -> El:
+	var f: Furniture = main._spawn_furniture(id, at, posmod(roundi(yaw / (PI * 0.5)), 4))
+	var el := _collect_node(f, "home_" + id, f.display_name(), [])
+	el.home = true
+	el.added = true
+	_home[f] = el
 	_set_state(el, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * size), at), false)
 	_measure(el)
 	return el

@@ -1,5 +1,5 @@
 extends RefCounted
-## Maplewood: the little town east of the farm. Layout constants and static scenery
+## Maple Grove: the little town east of the farm. Layout constants and static scenery
 ## (road, plaza, fountain, market stall, shop fronts, signposts). Villagers, the
 ## cottage's walls and gameplay live in main.gd.
 
@@ -14,9 +14,10 @@ const FOUNTAIN := Vector3(53.0, 0, -1.0)
 const FOUNTAIN_MODEL := "res://assets/props/plaza_fountain.glb"
 const STALL_MODEL := "res://assets/props/market_stall.glb"
 const STALL := Vector3(48.5, 0, -7.2)
-const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # Woolly Goods, door on the south side
-const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Land Office
+const SHOP := Rect2(53.5, -14.0, 6.0, 5.0) # The Yarn Barn (Theo), door on the south side
+const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Willow Homes (Mabel: property and papers)
 const BAKERY := Rect2(39.0, -13.0, 5.5, 4.5)
+const HOMEGOODS := Rect2(45.2, -14.6, 5.0, 4.4) # Builder's Delight (Gus), in the gap between Heart Bakery and the Yarn Barn
 const MODEL_DIR := "res://assets/props/"
 const BUILDING_SIGN_Y := 3.02 # the modelled sign board's centre (SIGN_Z in the build script)
 const COTTAGE_LOT := Rect2(56.0, 4.6, 12.0, 9.0) # x 56..68, z 4.6..13.6
@@ -55,14 +56,15 @@ static func build(root: Node3D) -> Dictionary:
 	blockers.append(_fountain(root, FOUNTAIN))
 	var stall := _stall(root, STALL)
 	blockers.append_array(stall["blockers"])
-	blockers.append_array(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "WOOLLY GOODS", 56.5, Color(0.55, 0.65, 0.8), "shop"))
-	blockers.append_array(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "LAND OFFICE", 64.25, Color(0.85, 0.75, 0.45), "office"))
-	blockers.append_array(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "BAKERY", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
-	var to_town := signpost(root, Vector3(25.6, 0, 1.75), "MAPLEWOOD  →", "travel_town", "Signpost: Maplewood")
+	blockers.append_array(building(root, SHOP, Color(0.86, 0.78, 0.62), Color(0.36, 0.42, 0.5), "The Yarn Barn", 56.5, Color(0.55, 0.65, 0.8), "shop"))
+	blockers.append_array(building(root, OFFICE, Color(0.74, 0.55, 0.42), Color(0.3, 0.26, 0.25), "Willow Homes", 64.25, Color(0.85, 0.75, 0.45), "office"))
+	blockers.append_array(building(root, BAKERY, Color(0.95, 0.88, 0.75), Color(0.62, 0.25, 0.2), "Heart Bakery", 41.75, Color(0.95, 0.65, 0.4), "bakery"))
+	blockers.append_array(building(root, HOMEGOODS, Color(0.85, 0.89, 0.8), Color(0.37, 0.49, 0.36), "Builder's Delight", 47.7, Color(0.89, 0.75, 0.47), "homegoods"))
+	var to_town := signpost(root, Vector3(25.6, 0, 1.75), "MAPLE GROVE  →", "travel_town", "Signpost: Maple Grove")
 	var to_farm := signpost(root, Vector3(38.2, 0, 1.75), "←  BIRCHFIELD FARM", "travel_farm", "Signpost: Birchfield Farm")
 	blockers.append(Rect2(25.45, 1.6, 0.3, 0.3))
 	blockers.append(Rect2(38.05, 1.6, 0.3, 0.3))
-	built.append([to_town, "signpost_town", "Signpost to Maplewood", [Rect2(25.45, 1.6, 0.3, 0.3)]])
+	built.append([to_town, "signpost_town", "Signpost to Maple Grove", [Rect2(25.45, 1.6, 0.3, 0.3)]])
 	built.append([to_farm, "signpost_farm", "Signpost to the farm", [Rect2(38.05, 1.6, 0.3, 0.3)]])
 	return {"blockers": blockers, "board": stall["board"], "sign_to_town": to_town, "sign_to_farm": to_farm}
 
@@ -289,20 +291,20 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 	if model_id != "" and ResourceLoader.exists(path) and Catalog.model(path, b) != null:
 		b.name = "Building_" + model_id
 		b.set_meta("building_model", model_id)
-		var label := _sign_label(sign_text, Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095))
+		var label := _sign_label(sign_text.to_upper(), Vector3(0, BUILDING_SIGN_Y, d * 0.5 + 0.095))
 		var rooms := Interiors.furnish(b, model_id, r.size)
 		if rooms.is_empty():
 			b.add_child(label)
 			# the steps and porch stand a little proud of the front wall
 			var porch := Rect2(r.position.x - 0.2, r.position.y - 0.2, w + 0.4, d + 0.75)
-			built.append([b, "building_" + model_id, sign_text.capitalize(), [porch]])
+			built.append([b, "building_" + model_id, sign_text, [porch]])
 			return [porch]
 		# the name goes with the front wall, so it isn't left hanging when the wall is cut down
 		(Interiors.shops[model_id].parts["wall_front"] as Node3D).add_child(label)
 		var rects := []
 		for q in rooms:
 			rects.append(Rect2((q as Rect2).position + c, (q as Rect2).size))
-		built.append([b, "building_" + model_id, sign_text.capitalize(), rects])
+		built.append([b, "building_" + model_id, sign_text, rects])
 		return rects
 	var h := 3.0
 	var gable := 1.6

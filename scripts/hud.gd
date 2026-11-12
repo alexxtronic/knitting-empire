@@ -576,8 +576,10 @@ class Slot extends Button:
 		"sweater": ["Sweater", Color(0.85, 0.25, 0.2)],
 		"wood": ["Wood", Color(0.72, 0.47, 0.25)],
 		"hay": ["Hay", Color(0.94, 0.72, 0.2)],
+		"gate": ["Pen gate", Color(0.6, 0.45, 0.3)],
+		"gran_note": ["Gran's note", Color(0.96, 0.92, 0.82)],
 		# tools: a third entry says what a click does with it in her hand
-		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "click open ground on the farm to dig a new bed"],
+		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "right-click open ground on the farm and pick Dig bed"],
 		"watering_can": ["Watering can", Color(0.45, 0.5, 0.6), "click a growing crop to water it"],
 		"shears": ["Shears", Color(0.8, 0.3, 0.25), "click a woolly sheep to shear it"],
 		"shovel": ["Shovel", Color(0.5, 0.45, 0.45), "click a bed you dug to clear it away"],
@@ -1179,9 +1181,10 @@ func _build_help() -> void:
 [b]Farming:[/b] plant seeds in the soil plots, water them every day, harvest when they glow. Eat crops at the kitchen or ship them.
 [b]Build & Buy[/b] ([b]B[/b], or Build on the bar): pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
 [b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.
-[b]Tools:[/b] with a tool in her hand, a click uses it. The hoe digs new beds on open ground, the watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
+[b]Tools:[/b] with a tool in her hand, a click uses it. To dig a new bed, right-click open ground on her farm and pick Dig bed (never indoors). The watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
 [b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons.
-[b]Maplewood:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
+[b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
+[b]Sheep pen:[/b] in the story, buy wood from Gus at Builder's Delight. [b]F[/b] builds the pen: click to lay a panel (1 wood), right-click to take one up, [b]T[/b] switches to the gate. [b]G[/b] crafts a gate from 2 wood. Walk up behind sheep and they move away from you.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
 [b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (Menu, or [b]Esc[/b]).
 [b]Days:[/b] sleep in your bed to start a new day. Watered crops grow overnight. The game saves when you sleep and when you quit. Sound, music, picture quality and full screen are in [b]Settings[/b]."""

@@ -98,7 +98,7 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 *Theme: letting people in. Mechanics: warmth, gifts, depth.*
 - Snow. Warmth matters: the town is cold, and Nora's knitting is what keeps people warm. A winter drive: knit hats and scarves for villagers (new item types).
 - New villagers arrive: 3–4 more, including a second romance choice and a rival-turned-friend knitter.
-- Theo's arc: the Knit-Off nerves, his city burnout. Rosa's arc: the stall alone with two kids. Mabel's arc: why the Land Office matters to her.
+- Theo's arc: the Knit-Off nerves, his city burnout. Rosa's arc: the stall alone with two kids. Mabel's arc: why Willow Homes matters to her.
 - Rowan's arc deepens: Anna. The darned hat. Evenings by the fire.
 - Memory threads 3–4: the marriage, shown in objects (the navy sweater he threw away, the phone she wasn't allowed to silence). The player learns it slowly, as Alex specified.
 - **Midwinter night (festival):** lanterns, gifts exchanged. The gift Nora knits for her chosen person is designed by the player.

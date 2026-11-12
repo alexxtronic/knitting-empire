@@ -13,6 +13,8 @@ const MUSIC_ON := false # the tune is off for now; ambience and sound effects st
 
 var main: Node
 var music: AudioStreamPlayer
+var tune: AudioStreamPlayer # a story's one-off music cue (@music arrival), on the Music bus
+var tune_name := "" # what it's playing ("" for nothing)
 var amb := {} # "day" / "night" / "rain" -> AudioStreamPlayer
 var music_volume := 0.7 # 0..1, from the Settings panel
 var sound_volume := 0.8
@@ -32,6 +34,9 @@ func setup(m: Node, mute := false) -> void:
 	_load_settings()
 	music = _player("Music", _loop("music_cast_on.ogg"))
 	music.volume_db = MUSIC_DB
+	tune = AudioStreamPlayer.new()
+	tune.bus = "Music"
+	add_child(tune)
 	for k in ["day", "night", "rain"]:
 		amb[k] = _player("Ambience", _loop("amb_%s.ogg" % k))
 		amb[k].volume_db = -80.0
@@ -170,6 +175,28 @@ func _process(delta: float) -> void:
 	AudioServer.set_bus_effect_enabled(AudioServer.get_bus_index("Music"), _memory_fx, memory)
 	_gain["music"] = lerpf(_gain["music"], 0.55 if memory else 1.0, k)
 	music.volume_db = MUSIC_DB + linear_to_db(_gain["music"])
+
+
+## A story music cue (assets/audio/music_<name>.ogg), faded in over a second or two; "off" fades
+## whatever is playing out. Plays once (the score's loop, music_cast_on, is a separate player).
+func play_tune(cue: String, secs := 1.5) -> void:
+	if cue == "off" or cue == "":
+		tune_name = ""
+		if tune.playing:
+			var tw := create_tween()
+			tw.tween_property(tune, "volume_db", -60.0, maxf(secs, 0.05))
+			tw.tween_callback(tune.stop)
+		return
+	var path := DIR + "music_%s.ogg" % cue
+	if not ResourceLoader.exists(path):
+		push_warning("audio: no music cue " + path)
+		return
+	tune_name = cue
+	tune.stream = load(path)
+	tune.volume_db = -40.0
+	tune.play()
+	create_tween().tween_property(tune, "volume_db", MUSIC_DB + 3.0, maxf(secs, 0.05)).set_trans(Tween.TRANS_SINE)
+	tune.finished.connect(func(): tune_name = "", CONNECT_ONE_SHOT)
 
 
 ## For the autotest: the current loudness (0..1) of an ambience layer or the music.

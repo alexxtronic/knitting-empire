@@ -1,0 +1,127 @@
+{
+  "name": "building_homegoods",
+  "parts": {
+    "base": {
+      "triangles": 228,
+      "materials": [
+        "floor_homegoods",
+        "stone_homegoods"
+      ]
+    },
+    "wall_front": {
+      "triangles": 4814,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "glass_homegoods",
+        "frame_homegoods",
+        "trim_homegoods",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "awning_homegoods",
+        "iron",
+        "timber_homegoods",
+        "sign_homegoods",
+        "handle"
+      ]
+    },
+    "wall_front_low": {
+      "triangles": 268,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "timber_homegoods"
+      ]
+    },
+    "wall_back": {
+      "triangles": 1198,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "glass_homegoods",
+        "frame_homegoods",
+        "trim_homegoods",
+        "timber_homegoods"
+      ]
+    },
+    "wall_back_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "timber_homegoods"
+      ]
+    },
+    "wall_left": {
+      "triangles": 1806,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "glass_homegoods",
+        "frame_homegoods",
+        "trim_homegoods",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "timber_homegoods"
+      ]
+    },
+    "wall_left_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "timber_homegoods"
+      ]
+    },
+    "wall_right": {
+      "triangles": 1806,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "glass_homegoods",
+        "frame_homegoods",
+        "trim_homegoods",
+        "soil",
+        "leaf",
+        "bloom_a",
+        "bloom_b",
+        "bloom_c",
+        "timber_homegoods"
+      ]
+    },
+    "wall_right_low": {
+      "triangles": 156,
+      "materials": [
+        "walls_homegoods",
+        "stone_homegoods",
+        "timber_homegoods"
+      ]
+    },
+    "door": {
+      "triangles": 1192,
+      "materials": [
+        "door_homegoods",
+        "glass_homegoods",
+        "timber_homegoods",
+        "brass"
+      ]
+    },
+    "roof": {
+      "triangles": 676,
+      "materials": [
+        "roof_homegoods",
+        "timber_homegoods",
+        "stone_homegoods",
+        "pot"
+      ]
+    }
+  },
+  "triangles": 12456,
+  "glb_bytes": 3574608
+}

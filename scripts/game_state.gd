@@ -419,7 +419,7 @@ func from_dict(d: Dictionary) -> void:
 		friends[id] = {"familiarity": int(e.get("familiarity", 0)), "trust": int(e.get("trust", 0)), "romance": int(e.get("romance", 0)),
 			"talk": int(e.get("talk", 0)), "gift": int(e.get("gift", 0)), "n": int(e.get("n", 0))}
 	owns_cottage = bool(d.get("owns_cottage", false))
-	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), START_SHEEP, MAX_SHEEP)
+	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), 0, MAX_SHEEP) # Act 1 starts with none
 	flags = (d.get("flags", {}) as Dictionary).duplicate(true)
 	chats = {}
 	var saved_chats: Dictionary = d.get("chats", {})

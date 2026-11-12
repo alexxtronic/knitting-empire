@@ -50,6 +50,10 @@ SPECS = {
                    trim="#e3a66d", awning=("#9a2a44", "#f1e8d6"), interior="bread", chimney=-1, extras="bread"),
     "office": dict(w=5.5, d=5.0, walls="brick", timber="#3e2a1d", roof="#4d4946", shingle="slate",
                    trim="#d9c58c", awning=None, interior="office", chimney=1, extras="office"),
+    # the home goods store (2026-11-12: wood for the sheep pen, and the odds and ends a house needs),
+    # narrower, in the gap between Heart Bakery and the Yarn Barn
+    "homegoods": dict(w=5.0, d=4.4, walls="#d9e2cc", timber="#4a3322", roof="#5f7d5b", shingle="tile",
+                      trim="#e3bf78", awning=("#4f7a54", "#f1e8d6"), interior="tools", chimney=-1, extras="tools"),
 }
 S = SPECS[KIND]
 W, D = S["w"], S["d"]
@@ -59,7 +63,7 @@ SIGN_Z = H - 0.38  # the sign board's centre (town.gd puts the name there)
 G = 1.6  # gable rise
 PL = 0.35  # plinth height
 FRONT = -D / 2
-rng = np.random.default_rng({"shop": 3, "bakery": 7, "office": 11}[KIND])
+rng = np.random.default_rng({"shop": 3, "bakery": 7, "office": 11, "homegoods": 17}[KIND])
 
 
 def rgb(h):
@@ -307,7 +311,7 @@ class part:
 LOW = 0.62  # height of a cut-down wall
 DOOR_W, DOOR_H = 1.1, 2.15
 DOOR_TOP = PL + DOOR_H  # the doorway runs from the floor: she walks in on the level
-front_win = (W / 2 - 0.5) * 0.62
+front_win = (W / 2 - 0.5) * (0.68 if KIND == "homegoods" else 0.62)  # the narrow shop: windows clear of the door
 gw = 0.62  # the little window up in the front gable
 TOP_Z = 0.03  # the floor boards' top
 
@@ -389,7 +393,7 @@ def build_wall(side, low):
     if side == "front":
         cut("front", 0, -0.1, DOOR_TOP, DOOR_W)
         for s in (-1, 1):
-            window("front", s * front_win, 0.95, 2.05, 1.15 if KIND != "shop" else 1.35, awning=bool(S["awning"]))
+            window("front", s * front_win, 0.95, 2.05, {"shop": 1.35, "homegoods": 0.86}.get(KIND, 1.15), awning=bool(S["awning"]))
         if CAP is None:
             cut("front", 0, H + 0.35, H + 0.35 + gw, gw)
             # the gable window: a little four-pane window
@@ -421,7 +425,7 @@ def sign_board():
 def front_extras():
     """What hangs off the front wall: the bracket signs, the office's porch canopy."""
     ex = S["extras"]
-    if ex in ("yarn", "bread"):
+    if ex in ("yarn", "bread", "tools"):
         bx, bz = W / 2 - 0.08, 3.12  # off the corner post, above the awnings
         K.box("bracket", (0.05, 0.7, 0.05), (bx, FRONT - 0.35, bz), IRON, bevel=0.01, seg=1)
     if ex == "yarn":
@@ -436,6 +440,12 @@ def front_extras():
         K.torus("pretzel", 0.14, 0.035, (bx, FRONT - 0.6, pz), pm, rot=(90, 0, 0))
         K.torus("pretzel", 0.08, 0.03, (bx - 0.08, FRONT - 0.6, pz + 0.07), pm, rot=(90, 0, 0))
         K.torus("pretzel", 0.08, 0.03, (bx + 0.08, FRONT - 0.6, pz + 0.07), pm, rot=(90, 0, 0))
+    elif ex == "tools":
+        # a hammer hanging off the bracket, the old sign for a hardware shop
+        K.cyl("chain", 0.008, 0.008, 0.12, (bx, FRONT - 0.6, bz - 0.07), IRON, verts=5)
+        hz = bz - 0.36
+        K.cyl("handle", 0.022, 0.026, 0.44, (bx, FRONT - 0.6, hz - 0.06), K.plain("handle", "#b88a57", 0.6), verts=8)
+        K.box("hammerhead", (0.3, 0.075, 0.09), (bx, FRONT - 0.6, hz + 0.17), IRON, bevel=0.012, seg=1)
     elif ex == "office":
         # a little porch: two columns carrying a flat stone canopy over the door, kept below the sign
         for s in (-1, 1):

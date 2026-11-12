@@ -20,6 +20,10 @@ var hold_time := 0.0
 var talk_spot = null # where you stand to talk to them (e.g. in front of a counter); null = beside them
 var rest_yaw = null # the way they face while standing at their post (a shopkeeper faces the counter); null = any
 var _via: Array = [] # the rest of the route they are walking (walk_to)
+## A round of stops they walk all day (villagers.json "route": the postman's deliveries), pausing
+## at each door. Empty for everyone who stays near their post. A story's walk_to/settle_at stops it.
+var route: Array = []
+var _route_i := 0
 var _look = null
 var _target := Vector3.ZERO
 var _wait := 0.0
@@ -51,6 +55,7 @@ func setup(id: String, name_text: String, role_text: String, loved_item: String,
 ## Story scenes: walk to a spot and stay there (no more wandering). `via`: a route to follow on
 ## the way (main._find_path), so a shopkeeper goes out through the door, not the wall.
 func walk_to(p: Vector3, via: Array = []) -> void:
+	route = []
 	home = p
 	roam = Vector2.ZERO
 	_via = via.duplicate()
@@ -63,12 +68,23 @@ func walk_to(p: Vector3, via: Array = []) -> void:
 
 ## Story scenes: stand at a spot from now on.
 func settle_at(p: Vector3) -> void:
+	route = []
 	home = Vector3(p.x, 0.0, p.z) # p may be up on a seat (a story's @place height); home is on the ground
 	roam = Vector2.ZERO
 	_via.clear()
 	_target = home
 	position = p
 	_wait = randf_range(1.0, 3.0)
+
+
+## On a round: off to the next stop after a short pause at this door (a letter in the box).
+func _next_stop() -> void:
+	if route.is_empty():
+		return
+	var p = route[_route_i % route.size()]
+	_route_i += 1
+	_target = Vector3(float(p[0]), 0.0, float(p[1])) if p is Array else p
+	_wait = randf_range(1.2, 2.4)
 
 
 ## Gesture while talking in a scene.
@@ -197,6 +213,7 @@ func _process(delta: float) -> void:
 		position = Vector3(_target.x, 0.0, _target.z)
 		_wait = randf_range(2.0, 6.0)
 		_target = home + Vector3(randf_range(-roam.x, roam.x), 0, randf_range(-roam.y, roam.y))
+		_next_stop()
 		return
 	position += to / d * step
 	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.2)
@@ -243,6 +260,7 @@ func _process_body(delta: float) -> void:
 		_speed = 0.0
 		_wait = randf_range(2.0, 6.0)
 		_target = home + Vector3(randf_range(-roam.x, roam.x), 0, randf_range(-roam.y, roam.y))
+		_next_stop()
 		return
 	position += to / d * step
 	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 7.0))

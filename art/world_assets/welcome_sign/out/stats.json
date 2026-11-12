@@ -1,0 +1,45 @@
+{
+  "name": "welcome_sign",
+  "triangles": 8600,
+  "materials": [
+    "sign_stone",
+    "sign_post",
+    "sign_iron",
+    "sign_bolt",
+    "sign_rafter",
+    "sign_cream",
+    "sign_shingle",
+    "sign_board",
+    "sign_face"
+  ],
+  "size_m": [
+    3.489,
+    0.92,
+    3.354
+  ],
+  "min_m": [
+    -1.745,
+    -0.46,
+    0.0
+  ],
+  "max_m": [
+    1.745,
+    0.46,
+    3.354
+  ],
+  "images": [
+    "board_face.png",
+    "board_face_normal.png",
+    "sign_board",
+    "sign_board_n",
+    "sign_post",
+    "sign_post_n",
+    "sign_rafter",
+    "sign_rafter_n",
+    "sign_shingle",
+    "sign_shingle_n",
+    "sign_stone",
+    "sign_stone_n"
+  ],
+  "glb_bytes": 3449680
+}

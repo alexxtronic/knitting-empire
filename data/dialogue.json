@@ -2,10 +2,13 @@
   "_about": "Everything villagers say. 'gift_lines' are what they say to a gift they don't love (by villager, then item); anything missing gets a polite thank-you. {sweater} = Rosa's sweater price today, {cottage} = cottage price, {rent} = cottage rent. 'lines' has three tiers per villager: 0-1 hearts, 2-3 hearts, 4-5 hearts.",
   "intro": {
     "rosa": "Oh, a new face! I'm Rosa, I run the market stall. Bring me your sweaters. When the market's good I pay better than that old shipping bin. Today it's {sweater}c each.",
-    "theo": "Welcome to Woolly Goods! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
-    "mabel": "Mabel Finch, Maplewood Land Office. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
+    "theo": "Welcome to the Yarn Barn! I'm Theo. Wool, yarn, and the occasional sheep. If your flock needs a new friend, I've got a few ewes out back.",
+    "mabel": "Mabel Finch, Willow Homes. Looking to put down roots? Rosewood Cottage, just south of the plaza, is for sale. {cottage} coins and it's yours.",
     "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably.",
-    "hazel": "Mind the flour, it gets everywhere. I'm Hazel. If it's warm and it came out of that oven, I made it. Croissants are best before nine and gone by ten."
+    "hazel": "Mind the flour, it gets everywhere. I'm Hazel. If it's warm and it came out of that oven, I made it. Croissants are best before nine and gone by ten.",
+    "wren": "Wren. Mayor, for my sins, and chief welcomer. If anything in Maple Grove is broken, it's probably on my list. If it isn't on my list, tell me and it will be.",
+    "pip": "Pip, post. If it's got a stamp on it, it's been through these hands. I know everyone's business and I tell nobody. Mostly.",
+    "gus": "Gus. Builder's Delight. Timber, nails, hinges, mugs, mousetraps. If your house needs it, I've got it, or I know a man. I am the man."
   },
   "lines": {
     "rosa": [
@@ -46,7 +49,7 @@
       [
         "Real estate is simple: make a place cozy, and people will pay to live there.",
         "Every piece of furniture in a rental raises the rent. People pay for cozy.",
-        "Rosewood Cottage has the best garden light in Maplewood. I'd know."
+        "Rosewood Cottage has the best garden light in Maple Grove. I'd know."
       ],
       [
         "You've got a good eye. I'll take a little off the price of any property for you.",
@@ -92,6 +95,57 @@
         "I'm making a sheep-shaped loaf for the harvest fair. It looks like a cloud with legs. It's perfect.",
         "Best part of my morning is the bell going and it being you."
       ]
+    ],
+    "wren": [
+      [
+        "The fountain's been leaking since spring. It's on the list. Everything's on the list.",
+        "We had a town meeting about the bench by the bakery. Three hours. The bench is fine.",
+        "Your gran ran the harvest fair for twenty years. Nobody's dared take it over."
+      ],
+      [
+        "People are talking about you. Nicely, for once. You've made a good start.",
+        "If you need a hand with anything at the farm, say the word. I'm terrible with a hammer, but I know who isn't.",
+        "I've put 'help Nora settle in' at the top of my list. It's the only thing on it I enjoy."
+      ],
+      [
+        "Maple Grove's lucky to have you. I'd say it at the fair, but you'd go red.",
+        "Your gran would be proud. She'd never have said so, mind. She'd have knitted you something instead.",
+        "Some mornings I walk past your farm just to see the smoke from the chimney. Feels like the town's whole again."
+      ]
+    ],
+    "pip": [
+      [
+        "Nothing for you today. Nothing's good news, I always say.",
+        "Mabel gets a seed catalogue every week. Every week. Same catalogue.",
+        "Rain or shine, the post gets through. Mostly shine round here, thank goodness."
+      ],
+      [
+        "Your gran used to leave a biscuit on the gatepost for me. Just saying.",
+        "I'm not saying who, but somebody in this town gets letters with hearts on.",
+        "My knees know every cobble in the plaza by name."
+      ],
+      [
+        "If a letter comes for you from the city, I'll bring it round myself. Not leave it in the box.",
+        "Best part of my round is the bit past your farm. It smells like hay and woodsmoke.",
+        "You've settled in like you were always here. The post can tell."
+      ]
+    ],
+    "gus": [
+      [
+        "Measure twice, cut once. Or measure once and come back to me for more wood. Either's good for business.",
+        "Hinges, nails and string. Most of life's problems, sorted.",
+        "Your gran bought the same broom off me every five years and complained about the last one each time."
+      ],
+      [
+        "How's that pen holding up? Sheep lean. They're always leaning.",
+        "I've got a lovely bit of oak out back. Not for sale. I just like looking at it.",
+        "Theo says yarn's the backbone of this town. I say it's the fence posts. We've been arguing for eleven years."
+      ],
+      [
+        "You build like your gran knitted. Bit crooked, all heart.",
+        "If you ever want a workbench at the farm, I'll give you mates' rates.",
+        "Pull up a crate. Nobody's in a hurry in here."
+      ]
     ]
   },
   "gift_lines": {
@@ -121,7 +175,10 @@
     "theo": "Is this... one of YOUR sweaters? For me? I'm wearing it every day. Every single day.",
     "mabel": "Turnips! Just like my grandmother grew. You've made an old realtor very happy.",
     "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill.",
-    "hazel": "Pumpkin! Bread, scones, soup, a pie for the window... Come back tomorrow, there'll be something in it for you."
+    "hazel": "Pumpkin! Bread, scones, soup, a pie for the window... Come back tomorrow, there'll be something in it for you.",
+    "wren": "For me? Oh, this is beautiful. I'm wearing it to the next town meeting, and I'm telling everyone who made it.",
+    "pip": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew.",
+    "gus": "Now that's a pumpkin. I'll put it on the counter. Best-looking thing in the shop."
   },
   "new_sheep_names": [
     "Clover",

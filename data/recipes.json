@@ -1,0 +1,13 @@
+{
+  "_about": "Crafting (G, scripts/homestead.gd): what each thing takes. 'needs' is item id -> how many.",
+  "recipes": [
+    {
+      "id": "gate",
+      "name": "Pen gate",
+      "needs": {
+        "wood": 2
+      },
+      "about": "A gate for your sheep pen. Place it in the pen builder (F)."
+    }
+  ]
+}

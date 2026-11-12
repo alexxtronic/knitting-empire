@@ -222,8 +222,33 @@ static func model(path: String, r: Node3D) -> Node3D:
 			var mname := sm.resource_name if sm else ""
 			if mname.begins_with("wool_"):
 				m.set_surface_override_material(i, wool(mname.substr(5)))
+			elif mname == "Quilt_patchwork":
+				m.set_surface_override_material(i, tartan()) # the bed's cover: the sofa throw's wool
 	r.add_child(inst)
 	return inst
+
+
+## The red tartan wool of the sofa's throw (art/world_assets/house_furniture/build.py, plaid()),
+## used for the bed's cover too, made and turned down, and over Nora when she lies in it.
+const TARTAN_TEX := "res://assets/props/sofa_sofa_plaid.png"
+const TARTAN_NORMAL := "res://assets/props/sofa_sofa_plaid_n.png"
+const TARTAN_REPEAT := Vector2(2.6, 3.4) # the bed's cover is about 1.45 by 1.9 m; a check is ~0.28 m
+static var _tartan: StandardMaterial3D
+
+
+static func tartan() -> StandardMaterial3D:
+	if _tartan == null:
+		_tartan = StandardMaterial3D.new()
+		_tartan.albedo_texture = load(TARTAN_TEX)
+		_tartan.normal_enabled = true
+		_tartan.normal_texture = load(TARTAN_NORMAL)
+		_tartan.normal_scale = 0.8
+		_tartan.roughness = 1.0
+		_tartan.uv1_scale = Vector3(TARTAN_REPEAT.x, TARTAN_REPEAT.y, 1.0)
+		_tartan.rim_enabled = true
+		_tartan.rim = 0.4
+		_tartan.rim_tint = 0.7
+	return _tartan
 
 
 # --- model builders --------------------------------------------------------------

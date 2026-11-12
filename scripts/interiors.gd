@@ -1,5 +1,5 @@
 extends RefCounted
-## Walk-in shops: Woolly Goods, the bakery and the land office. Their models
+## Walk-in shops: the Yarn Barn, Heart Bakery, Willow Homes and Builder's Delight. Their models
 ## (art/world_assets/town_buildings) come in parts, like the barn: `base` (the plank floor and the
 ## things standing outside), each wall at full height (`wall_front`...) and cut down to a stub
 ## (`wall_front_low`...), a `door` hinged on its left jamb, and the `roof`. While she is inside one

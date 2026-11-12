@@ -44,6 +44,7 @@ var _ring: MeshInstance3D
 const ACCEL := 9.0
 const BRAKE := 9.0
 const TURN := 11.0
+var stay_asleep := false # main.gd sets it for the night's sleep, so getting up doesn't open her eyes
 var walked := 0.0 # metres walked since main.gd last counted them (for fitness)
 signal footstep # a foot lands (from the Walk loop's timing)
 signal needle_click # a stitch while she knits
@@ -118,6 +119,8 @@ func lie_in_bed(bed: Node3D, text: String, duration: float, done: Callable) -> v
 	start_activity(text, duration, done, bed.to_global(LIE_FEET), bed.rotation.y)
 	_lying = true
 	_lie_bed = bed
+	if body:
+		body.set_eyes_closed(true) # asleep, or near enough
 	var tidy := bed.find_child("tidy", true, false) as Node3D
 	if tidy:
 		tidy.visible = false
@@ -162,7 +165,15 @@ func _lie_cover(bed: Node3D) -> Node3D:
 	var shader := preload("res://shaders/quilt_cloth.gdshader")
 	var quilt := ShaderMaterial.new()
 	quilt.shader = shader
-	quilt.set_shader_parameter("albedo_tex", load("res://assets/props/gran_bed_gran_bed_quilt.png"))
+	# the same red tartan wool as the sofa's throw (art/world_assets/house_furniture), in soft
+	# lengthwise baffles like a duvet's
+	quilt.set_shader_parameter("albedo_tex", load(Catalog.TARTAN_TEX))
+	quilt.set_shader_parameter("normal_tex", load(Catalog.TARTAN_NORMAL))
+	quilt.set_shader_parameter("has_normal", true)
+	quilt.set_shader_parameter("normal_strength", 0.6)
+	quilt.set_shader_parameter("tex_scale", Catalog.TARTAN_REPEAT)
+	quilt.set_shader_parameter("patches", Vector2(1.0, 3.0))
+	quilt.set_shader_parameter("puff", 0.35)
 	var sheet := ShaderMaterial.new()
 	sheet.shader = shader
 	sheet.set_shader_parameter("textured", false)
@@ -316,6 +327,8 @@ func _end_activity() -> void:
 	if _lying:
 		_lying = false
 		_model.rotation_degrees.x = 0.0
+		if body and not stay_asleep:
+			body.set_eyes_closed(false)
 		if is_instance_valid(_lie_bed):
 			var tidy := _lie_bed.find_child("tidy", true, false) as Node3D
 			if tidy:

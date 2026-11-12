@@ -36,6 +36,9 @@ var route: Array = [] # Vector3 points still to pass, in order
 var housed := false # in her stall for the night
 var heading_in := false # the route she is on ends in her stall
 var stall_yaw := 0.0 # which way she faces once housed
+## Set each frame by whatever is herding her (scripts/homestead.gd): she trots this way, and it
+## fades when nothing pushes her any more.
+var flee := Vector3.ZERO
 var _target := Vector3.ZERO
 var _wait := 0.0
 var _grazing := false
@@ -183,6 +186,9 @@ func _process(delta: float) -> void:
 		_speed = 0.0
 		_play("Idle")
 		return
+	if flee.length() > 0.05:
+		_shy(delta)
+		return
 	if housed:
 		_speed = 0.0
 		rotation.y = lerp_angle(rotation.y, stall_yaw, 1.0 - exp(-delta * 2.0))
@@ -213,6 +219,18 @@ func _process(delta: float) -> void:
 	_speed = move_toward(_speed, want, 0.7 * delta)
 	position += Vector3(sin(rotation.y), 0, cos(rotation.y)).lerp(to / d, 0.5).normalized() * _speed * delta
 	rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 2.6))
+	_play("Walk", _speed)
+
+
+## Trots off the way she's being pushed, turning quickly, and settles where she ends up.
+func _shy(delta: float) -> void:
+	var dir := flee.normalized()
+	_speed = move_toward(_speed, flee.length(), 3.0 * delta)
+	flee = flee.move_toward(Vector3.ZERO, 2.5 * delta)
+	rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-delta * 7.0))
+	position += dir * _speed * delta
+	_wait = 0.0
+	_target = position + dir * 0.4
 	_play("Walk", _speed)
 
 

@@ -6,6 +6,10 @@ shader_type spatial;
 render_mode cull_disabled, diffuse_burley;
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable; // the wool's relief
+uniform bool has_normal = false;
+uniform vec2 tex_scale = vec2(1.0); // how many times the cloth's texture repeats across and along the cover
+uniform float normal_strength = 1.0;
 uniform bool textured = true;
 uniform vec3 base_color : source_color = vec3(0.93, 0.87, 0.74); // used when not textured (the sheet)
 uniform vec2 patches = vec2(5.0, 7.0); // the quilt texture's patch grid; a padded pillow in each
@@ -34,7 +38,7 @@ void vertex() {
 
 void fragment() {
 	vec2 uv = cloth_uv;
-	vec3 col = textured ? texture(albedo_tex, uv).rgb : base_color;
+	vec3 col = textured ? texture(albedo_tex, uv * tex_scale).rgb : base_color;
 
 	// padded patches: a pillow in each, pinched at the seams
 	vec2 f = fract(uv * patches);
@@ -51,6 +55,10 @@ void fragment() {
 	float weave = sin(a) * sin(b);
 
 	vec2 slope = g_puff * 0.012 + g_weave * 0.0016 * fade;
+	if (has_normal && textured) {
+		vec2 wool = texture(normal_tex, uv * tex_scale).xy * 2.0 - 1.0;
+		slope = g_puff * 0.012 - wool * normal_strength; // the woven wool's own relief in place of the plain weave
+	}
 	NORMAL_MAP = normalize(vec3(-slope, 1.0)) * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = 1.0;
 

@@ -1,5 +1,5 @@
 {
-  "_about": "Maplewood residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
+  "_about": "Maple Grove residents. 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office / homegoods) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'route' is a round of [x, z] stops they walk all day (the postman's deliveries); 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
@@ -21,7 +21,7 @@
     {
       "id": "theo",
       "name": "Theo",
-      "role": "Woolly Goods",
+      "role": "The Yarn Barn",
       "loves": "sweater",
       "likes": ["pumpkin"],
       "works_in": "shop",
@@ -38,7 +38,7 @@
     {
       "id": "mabel",
       "name": "Mabel",
-      "role": "Land Office",
+      "role": "Willow Homes",
       "loves": "turnip",
       "likes": ["pumpkin"],
       "works_in": "office",
@@ -55,7 +55,7 @@
     {
       "id": "hazel",
       "name": "Hazel",
-      "role": "Bakery",
+      "role": "Heart Bakery",
       "loves": "pumpkin",
       "likes": ["turnip", "sweater"],
       "works_in": "bakery",
@@ -80,6 +80,51 @@
       "roam": [0.8, 0.4],
       "look": {
         "model": "rowan"
+      }
+    },
+    {
+      "id": "wren",
+      "name": "Wren",
+      "role": "Mayor",
+      "loves": "sweater",
+      "likes": ["pumpkin"],
+      "pos": [51.6, 0.0, 2.4],
+      "roam": [1.2, 0.6],
+      "look": {
+        "model": "wren"
+      }
+    },
+    {
+      "id": "pip",
+      "name": "Pip",
+      "role": "Postman",
+      "loves": "turnip",
+      "likes": ["pumpkin"],
+      "pos": [50.5, 0.0, 1.6],
+      "roam": [0.0, 0.0],
+      "route": [[64.25, -7.1], [53.27, -9.5], [47.7, -9.3], [42.36, -8.1], [50.5, 1.6]],
+      "look": {
+        "skin": "#a8714f",
+        "hair": "#2a1d14",
+        "top": "#3f5f8a",
+        "bottom": "#2c3348",
+        "extra": "hat"
+      }
+    },
+    {
+      "id": "gus",
+      "name": "Gus",
+      "role": "Builder's Delight",
+      "loves": "pumpkin",
+      "likes": ["turnip"],
+      "works_in": "homegoods",
+      "pos": [47.7, 0.0, -12.4],
+      "roam": [0.35, 0.0],
+      "look": {
+        "skin": "#d6a07a",
+        "hair": "#6b4a2e",
+        "top": "#8a5a3a",
+        "bottom": "#3e3a34"
       }
     }
   ]
