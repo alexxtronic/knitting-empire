@@ -58,5 +58,70 @@
       "pitch": "Sea on three sides. Sunsets you can sell tickets to. The crown jewel, and I don't say that about everything. I say it about most things."
     }
   ],
-  "_about_land": "Gary's listings at Willow Homes (main.land_plots): shown on his menu and pitched on his visits to the farm (data/scenes/town.scene). Out of reach early on by design, and not for sale yet: buying land is still to come. Names, prices and pitches are drafts for Alex."
+  "_about_land": "Gary's listings at Willow Homes (main.land_plots): shown on his menu and pitched on his visits to the farm (data/scenes/town.scene). Out of reach early on by design, and not for sale yet: buying land is still to come. Names, prices and pitches are drafts for Alex.",
+  "jobs": {
+    "_about": "Jobs beside knitting (scripts/jobs.gd): a steady wage for a shift at someone's workplace. She holds one job at a time and works at most one shift a day. 'boss' offers it: the scene 'job_<id>' (data/scenes/jobs.scene) plays the first time she talks to them once the offer is due (after Act 1, and once their trust reaches 'trust' if given); if she says no, the boss's menu keeps a 'Take the job' row. She clocks in by talking to the boss between 'start' [from, to] o'clock. A shift walks her through 'tasks' 'rounds' times ('at' is where she stands and 'face' what she turns to, [x, z] in the 'building's own space, its front toward +z; 'secs' is how long each takes), or with 'round': true to every door in town. The clock moves on 'hours' over the shift, 'drain' comes off her needs spread over it, 'pay' coins at the end (part of it if she stops early), and a full shift adds 'perk' to her needs. 'lines' are what the boss says at the start and the end. Names, pay and lines are drafts for Alex.",
+    "bakery": {
+      "name": "Heart Bakery",
+      "boss": "giorgio",
+      "building": "building_bakery",
+      "start": [6, 9],
+      "hours": 4,
+      "pay": 45,
+      "drain": {"energy": 18, "fullness": 8},
+      "perk": {"fullness": 20, "happiness": 4},
+      "perk_text": "Giorgio sends you home with a warm loaf.",
+      "rounds": 2,
+      "tasks": [
+        {"text": "Feeding the oven", "at": [1.3, -0.55], "face": [1.5, -1.5], "secs": 3.0},
+        {"text": "Hauling flour", "at": [1.2, 0.45], "face": [2.05, 0.45], "secs": 2.5},
+        {"text": "Shelving loaves", "at": [-1.55, -1.15], "face": [-1.55, -1.8], "secs": 2.5},
+        {"text": "Sweeping up", "at": [0.2, 1.2], "face": [0.2, 0.4], "secs": 2.0}
+      ],
+      "lines": {
+        "start": ["Apron's on the hook. Oven first, then the flour, then we'll see who comes in.", "Six on the dot. Good. The dough noticed.", "Wash your hands, cara. Then wash them again. Then bread."],
+        "done": ["Good work. Here, take this loaf. Don't argue, it's already wrapped.", "You were quiet today. Quiet's fine. The bread came out right.", "That's the morning. Go home, eat, sleep. In that order."]
+      }
+    },
+    "cafe": {
+      "name": "the Coffee Shop",
+      "boss": "sabrina",
+      "building": "building_cafe",
+      "trust": 10,
+      "start": [12, 13],
+      "hours": 4,
+      "pay": 40,
+      "drain": {"energy": 15, "fullness": 10},
+      "perk": {"warmth": 15, "happiness": 3},
+      "perk_text": "Sabrina slides you a coffee. 'It was going to waste. Probably.'",
+      "rounds": 2,
+      "tasks": [
+        {"text": "Taking orders", "at": [-1.4, 3.2], "face": [-1.4, 2.4], "secs": 2.5},
+        {"text": "Carrying coffees", "at": [1.2, 3.2], "face": [1.2, 2.4], "secs": 2.5},
+        {"text": "Clearing tables", "at": [-3.0, 3.4], "face": [-1.4, 2.4], "secs": 2.0}
+      ],
+      "lines": {
+        "start": ["You're on the terrace. Don't drop anything. Or do, and I'll watch.", "Tables one and two. That's all of them. Go.", "Okay. Shift. Try to look like you like people."],
+        "done": ["You didn't break anything. Weird. Good weird.", "Here's your money. Don't spend it on yarn. You will, though.", "Same time tomorrow, if you want. I don't care. Come, though."]
+      }
+    },
+    "post": {
+      "name": "the post round",
+      "boss": "barbara",
+      "round": true,
+      "start": [8, 11],
+      "hours": 3,
+      "pay": 38,
+      "drain": {"energy": 16, "fullness": 10},
+      "perk": {"fitness": 6, "happiness": 3},
+      "perk_text": "Barbara tucks a peppermint into your pocket.",
+      "tasks": [
+        {"text": "Delivering the post", "secs": 1.6}
+      ],
+      "lines": {
+        "start": ["Here's your half of the bag, sweetheart. Every door, and a smile for whoever opens it.", "Letters are lighter if you whistle. Try it.", "Good shoes? Good. Off you go."],
+        "done": ["All delivered? That's a town that heard from someone today, thanks to you.", "You walk like you're going somewhere now. That's new.", "The round brings you back, sweetheart. It always does."]
+      }
+    }
+  }
 }

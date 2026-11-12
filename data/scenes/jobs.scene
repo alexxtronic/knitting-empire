@@ -1,0 +1,66 @@
+# Job offers: work beside knitting (scripts/jobs.gd, data/economy.json "jobs"). The format is
+# described at the top of scripts/story.gd. Every line here is a draft for Alex.
+#
+# These have no @trigger: jobs.gd plays "job_<id>" the first time Nora talks to the boss once the
+# offer is due (after Act 1; Sabrina also waits for her trust to reach the job's "trust"). Taking
+# the job is "set job <id>"; she holds one job at a time, so taking a new one leaves the old one.
+# Either way "job_offer_<id>" is set, so a "Take the job" row stays on the boss's menu.
+
+== job_bakery
+@goal
+@face giorgio nora
+@face nora giorgio
+@camera between giorgio nora 6
+Giorgio (warm): Cara. Sit a minute. The oven doesn't need me for ten.
+Giorgio (neutral): Rent on Ellie's place, a tin of coins, a flock that eats more than it grows. I know that arithmetic. I did it once myself, in another city.
+> He doesn't say which city. He wipes the counter where it's already clean.
+Giorgio (warm): So. I need hands at six in the morning. Four hours: the oven, the flour, the shelves. Forty-five coins a shift, and you don't go home hungry.
+Nora (worried): I haven't worked anywhere with people in a long time. I'm not... good, in the mornings. With people.
+Giorgio (warm): Bread doesn't ask questions. That's why I like it. You knead, it rises, nobody needs to talk.
+? A steady wage, any morning she wants one.
+- I'll take it. Six o'clock? | set job bakery; trust giorgio +2; familiarity giorgio +2
+- Can I think about it? -> later | familiarity giorgio +1
+Giorgio (happy): Six. Not five past. The dough knows.
+@goto end
+@label later
+Giorgio (warm): Think as long as you like. The offer keeps better than my bread.
+@label end
+@set job_offer_bakery
+
+== job_cafe
+@face sabrina nora
+@face nora sabrina
+@camera between sabrina nora 6 yaw building_cafe
+Sabrina (neutral): Okay, so. Don't make this weird.
+Sabrina (wry): My aunt needs someone on the terrace after lunch. She asked if I knew anyone who isn't, quote, "a disaster."
+Sabrina (neutral): You're the least disaster person I know. Which is a low bar. It's basically on the floor.
+Nora (happy): Are you offering me a job?
+Sabrina (wry): I'm relaying information. Afternoons, four hours, forty coins. You carry cups, you wipe tables, you don't ask about my feelings.
+? Afternoons on the terrace with Sabrina.
+- Deal. No feelings. | set job cafe; trust sabrina +2
+- Let me think about it. -> later | familiarity sabrina +1
+Sabrina (happy): Cool. I mean. Fine. Whatever. Don't be late.
+@goto end
+@label later
+Sabrina (neutral): Sure. It's not like I'll be sitting here waiting. I'll literally be sitting here. But not waiting.
+@label end
+@set job_offer_cafe
+
+== job_post
+@face barbara nora
+@face nora barbara
+@camera between barbara nora 6
+Barbara (warm): Sweetheart, walk with me a minute. My knees and I have been having words.
+Barbara (neutral): Forty years I've carried this bag round Maple Grove. Either it's getting heavier or I'm getting honest.
+Barbara (warm): I could use someone on the morning round. Every door in town, letters in, a kind word for whoever opens up. Three hours, thirty-eight coins, and all the fresh air you can breathe.
+Nora (wry): I've walked out of a lot of doors lately. Mostly away from things.
+Barbara (warm): Then you'll be good at this. A round always brings you back where you started. That's the comfort of it.
+? Mornings on the post round.
+- I'd like that. | set job post; trust barbara +2; familiarity barbara +2
+- Let me think on it. -> later | familiarity barbara +1
+Barbara (happy): Eight o'clock, by the fountain. Wear good shoes, sweetheart. The cobbles have opinions.
+@goto end
+@label later
+Barbara (warm): No rush. The post comes every day, and so do I.
+@label end
+@set job_offer_post

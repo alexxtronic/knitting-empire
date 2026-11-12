@@ -30,6 +30,7 @@ const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
 const Dog = preload("res://scripts/dog.gd")
 const Cinematic = preload("res://scripts/cinematic.gd")
+const Jobs = preload("res://scripts/jobs.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -98,6 +99,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
+var jobs: Jobs # work beside knitting: the bakery, the Coffee Shop, the post round (jobs.gd)
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
 var _knit_clock_was := true
@@ -286,6 +288,9 @@ func _ready() -> void:
 	story = StoryPlayer.new()
 	story.main = self
 	add_child(story)
+	jobs = Jobs.new()
+	jobs.main = self
+	add_child(jobs)
 	_setup_story_staging()
 	_connect_hud()
 	Game.toast.connect(hud.show_toast)
@@ -315,6 +320,7 @@ func _ready() -> void:
 	tips_enabled = _autotest_dir == "" # the autotest turns them on for its own check
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
+	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
 	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
 	Engine.set_meta("ke_skip_title", false)
@@ -1019,6 +1025,7 @@ func _process(delta: float) -> void:
 	_update_chat()
 	_update_tips(delta)
 	_update_rounds(delta)
+	jobs.update(delta)
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -3598,6 +3605,214 @@ func _cast_checks() -> void:
 
 ## The cast check's pictures: the camera off Nora, looking at `at` from the side `yaw` faces
 ## (a three-quarter view of a front), `dist` away.
+## Jobs beside knitting (scripts/jobs.gd, data/economy.json "jobs", data/scenes/jobs.scene): no
+## offers during Act 1; Giorgio's bakery job after it, and a shift there (the oven, the flour, the
+## shelves, the floor: the clock moves on, she tires, she's paid, and a click away doesn't lose the
+## shift); Sabrina's Coffee Shop once she trusts Nora, which leaves the bakery; Barbara's post round,
+## turned down and then taken from her menu, door to door; one shift a day; stopping early pays part.
+## Saves 52_job_bakery.png, 52_job_cafe.png and 52_job_post.png.
+func _job_checks() -> void:
+	var auto0: bool = story.auto
+	var jog0 := autotest_jog
+	var day0 := Game.day
+	var hour0 := Game.hour
+	var flags0: Dictionary = Game.flags.duplicate(true)
+	var sab_trust0 := Game.stat("sabrina", "trust")
+	story.auto = true
+	story.auto_choices = []
+	autotest_jog = true
+	hud.hide_dialogue()
+	hud.tip_panel.visible = false
+	var defs := Jobs.defs()
+	var bad: Array = []
+	for id in defs:
+		var d: Dictionary = defs[id]
+		if _villager(str(d["boss"])) == null:
+			bad.append("%s: no boss %s" % [id, d["boss"]])
+		if not Story.has_scene("job_" + id):
+			bad.append("%s: no scene job_%s" % [id, id])
+		if jobs.stops(id).is_empty():
+			bad.append("%s: no stops" % id)
+	var ids: Array = defs.keys()
+	ids.sort()
+	_check("three jobs (%s), each with its boss, its offer scene and a shift's stops %s" % [", ".join(ids), str(bad)], ids == ["bakery", "cafe", "post"] and bad.is_empty())
+	for id in defs:
+		Game.flags.erase("job_offer_" + id)
+		Game.flags.erase("seen_job_" + id)
+	Game.flags.erase("job")
+	Game.flags.erase("job_shift_day")
+	Game.set_flag("story_farm")
+	Game.flags.erase("act1_done")
+	var during := Jobs.offer_scene("giorgio")
+	Game.set_flag("act1_done")
+	var after := Jobs.offer_scene("giorgio")
+	Game.flags.erase("story_farm")
+	_check("Giorgio offers no job during Act 1 ('%s') and the bakery job after it ('%s')" % [during, after], during == "" and after == "job_bakery")
+
+	# Giorgio's offer, and a morning at Heart Bakery
+	var talk_to := func(v) -> String:
+		_do_action(v, "talk")
+		var t := 0.0
+		while not story.is_playing() and t < 40.0:
+			await _wait(0.2)
+			t += 0.2
+		var id := story.playing
+		await _act1_until_done(40.0)
+		hud.hide_dialogue()
+		return id
+	var gio := _villager("giorgio")
+	var offer: String = await talk_to.call(gio)
+	var acts: Array = _villager_actions(gio)
+	var row := func(list: Array, id: String) -> Dictionary:
+		for a in list:
+			if str(a["id"]) == id:
+				return a
+		return {}
+	_check("talking to him plays his offer and she takes it (%s, job '%s', rows %s)" % [offer, Jobs.current(), str(acts.filter(func(a): return str(a.get("group", "")) == "Work").map(func(a): return a["label"]))],
+		offer == "job_bakery" and Jobs.current() == "bakery" and Game.flag("job_offer_bakery") == true and not row.call(acts, "job_shift").is_empty() and not row.call(acts, "job_quit").is_empty())
+	Game.hour = 15.0
+	var late: Dictionary = row.call(_villager_actions(gio), "job_shift")
+	_check("no bakery shift in the afternoon (%s)" % str(late.get("label", "")), not late.is_empty() and not bool(late.get("enabled", true)))
+	Game.hour = 6.4
+	Game.energy = 100.0
+	Game.fullness = 50.0
+	var c0 := Game.coins
+	var h0 := Game.hour
+	_do_action(gio, "job_shift")
+	var tw := 0.0
+	while not jobs.working() and tw < 20.0:
+		await _wait(0.2)
+		tw += 0.2
+	var n_bake: int = jobs.shift["stops"].size() if jobs.working() else 0
+	var goal_text := str(Game.flag("goal", ""))
+	var interrupted := false
+	var inside := ""
+	var tasks_seen := {}
+	tw = 0.0
+	while jobs.working() and tw < 150.0:
+		if player.busy:
+			tasks_seen[player.activity_text()] = true
+		if not interrupted and int(jobs.shift["i"]) == 1 and player.busy:
+			interrupted = true # a click away mid-task: she should pick the shift up again
+			player.walk(_find_path(player.position, player.position + Vector3(1.2, 0, 1.2)))
+		if inside == "" and int(jobs.shift["i"]) == 2 and player.busy:
+			inside = Interiors.inside_of(player.position)
+			cam_target = player.position + Vector3(0, 1.0, 0)
+			cam_dist = 11.0
+			await _wait(0.8)
+			await _shot("52_job_bakery.png")
+		await _wait(0.2)
+		tw += 0.2
+	_check("a bakery shift: %d tasks inside Heart Bakery (%s, in '%s'), the goal shows the next ('%s'), picked up again after a click away" % [n_bake, ", ".join(tasks_seen.keys()), inside, goal_text],
+		n_bake == 8 and inside == "bakery" and tasks_seen.has("Feeding the oven") and tasks_seen.has("Sweeping up") and goal_text.contains("Heart Bakery") and interrupted and not jobs.working())
+	_check("the shift pays and takes its hours and her energy (+%dc, %.1fh -> %.1fh, energy %.0f, food %.0f after a warm loaf)" % [Game.coins - c0, h0, Game.hour, Game.energy, Game.fullness],
+		Game.coins == c0 + int(defs["bakery"]["pay"]) and Game.hour >= h0 + float(defs["bakery"]["hours"]) - 0.01 and Game.energy < 90.0 and str(Game.flag("goal", "")) in ["", "false"])
+	Game.hour = 6.5
+	_check("one shift a day ('%s')" % jobs.shift_problem("bakery"), jobs.shift_problem("bakery") == "already worked today")
+
+	# Sabrina's Coffee Shop, once she trusts Nora
+	Game.flags.erase("job_shift_day")
+	Game.hour = 12.1
+	var sab := _villager("sabrina")
+	Game.friend("sabrina")["trust"] = 0
+	var cool := Jobs.offer_scene("sabrina")
+	Game.friend("sabrina")["trust"] = 12
+	var cafe_offer: String = await talk_to.call(sab)
+	_check("Sabrina has no work for her while she's cool on Nora ('%s'), then offers the Coffee Shop at trust 12 (%s); taking it leaves the bakery (job '%s', bakery row %s)" % [cool, cafe_offer, Jobs.current(), str(row.call(_villager_actions(gio), "job_take").get("label", ""))],
+		cool == "" and cafe_offer == "job_cafe" and Jobs.current() == "cafe" and not row.call(_villager_actions(gio), "job_take").is_empty())
+	Game.hour = 12.1
+	Game.warmth = 40.0
+	c0 = Game.coins
+	_do_action(sab, "job_shift")
+	tw = 0.0
+	var cafe_shot := false
+	var cafe_n := 0
+	while (not jobs.working() or not cafe_shot) and tw < 30.0:
+		if jobs.working() and int(jobs.shift["i"]) == 1 and player.busy:
+			cafe_n = jobs.shift["stops"].size()
+			cafe_shot = true
+			await _cast_frame(player.position, cam_yaw, 10.0)
+			await _shot("52_job_cafe.png")
+		await _wait(0.2)
+		tw += 0.2
+	tw = 0.0
+	while jobs.working() and tw < 120.0:
+		await _wait(0.2)
+		tw += 0.2
+	var to_sab := player.position.distance_to(sab.position)
+	_check("a Coffee Shop shift on the terrace: %d tasks, +%dc, a coffee after (warmth 40 -> %.0f, %.1f m from Sabrina at the end)" % [cafe_n, Game.coins - c0, Game.warmth, to_sab],
+		cafe_n == 6 and Game.coins == c0 + int(defs["cafe"]["pay"]) and Game.warmth > 50.0 and to_sab < 8.0 and not jobs.working())
+
+	# Barbara's post round: she thinks about it, then takes it from Barbara's menu
+	Game.flags.erase("job_shift_day")
+	var bar := _villager("barbara")
+	story.auto_choices = [1]
+	var post_offer: String = await talk_to.call(bar)
+	var still := Jobs.current()
+	var take: Dictionary = row.call(_villager_actions(bar), "job_take")
+	_check("Barbara offers the post round and Nora says she'll think (%s, job still '%s', menu '%s')" % [post_offer, still, str(take.get("label", ""))],
+		post_offer == "job_post" and still == "cafe" and not take.is_empty())
+	_do_action(bar, "job_take")
+	await _walk_wait(30.0)
+	hud.hide_dialogue()
+	Game.hour = 8.3
+	c0 = Game.coins
+	_do_action(bar, "job_shift")
+	tw = 0.0
+	while not jobs.working() and tw < 20.0:
+		await _wait(0.2)
+		tw += 0.2
+	var doors: int = jobs.shift["stops"].size() if jobs.working() else 0
+	var delivered := 0
+	var post_shot := false
+	tw = 0.0
+	while jobs.working() and tw < 240.0:
+		delivered = maxi(delivered, int(jobs.shift["i"]))
+		if not post_shot and int(jobs.shift["i"]) == 2 and player.busy:
+			post_shot = true
+			await _cast_frame(player.position, cam_yaw, 14.0)
+			await _shot("52_job_post.png")
+		await _wait(0.2)
+		tw += 0.2
+	_check("the post round: she takes the job from Barbara's menu (job '%s') and delivers to every door in town (%d doors, +%dc)" % [Jobs.current(), doors, Game.coins - c0],
+		Jobs.current() == "post" and doors >= 5 and Game.coins == c0 + int(defs["post"]["pay"]) and not jobs.working())
+
+	# stopping early pays for what she did
+	Game.flags.erase("job_shift_day")
+	_do_action(gio, "job_take")
+	await _walk_wait(30.0)
+	hud.hide_dialogue()
+	Game.hour = 6.3
+	Game.energy = 100.0
+	c0 = Game.coins
+	_do_action(gio, "job_shift")
+	tw = 0.0
+	while (not jobs.working() or int(jobs.shift["i"]) < 2) and tw < 60.0:
+		await _wait(0.2)
+		tw += 0.2
+	var stop_row: Dictionary = row.call(_villager_actions(gio), "job_end")
+	jobs.action(gio, "job_end")
+	var part := int(round(float(defs["bakery"]["pay"]) * 2.0 / 8.0))
+	_check("back at the bakery, she stops after two tasks and is paid for them (row '%s', +%dc of %d)" % [str(stop_row.get("label", "")), Game.coins - c0, part],
+		Jobs.current() == "bakery" and not stop_row.is_empty() and Game.coins == c0 + part and not jobs.working())
+
+	player.walk([])
+	player.cancel_activity()
+	hud.hide_dialogue()
+	Game.flags = flags0
+	Game.friend("sabrina")["trust"] = sab_trust0
+	Game.day = day0
+	Game.hour = hour0
+	_show_goal()
+	await _wait(0.3) # jobs.update sees the job go back to how it was
+	story.auto = auto0
+	story.auto_choices = []
+	autotest_jog = jog0
+	cam_glide = {}
+	_set_cam_lock(true)
+	cam_target = player.position
+
+
 func _cast_frame(at: Vector3, yaw: float, dist: float, pitch := CAM_PITCH) -> void:
 	_set_cam_lock(false)
 	cam_target = at + Vector3(0, 1.0, 0)
@@ -3861,6 +4076,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=jobs" in OS.get_cmdline_user_args(): # just the jobs: the three offers, a shift of each, the pay
+		await _wait(1.5)
+		await _job_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=photo" in OS.get_cmdline_user_args(): # just cinematic mode: the free camera, photos and the album
 		await _wait(1.5)
 		await _photo_checks()
@@ -4038,6 +4259,7 @@ func _autotest() -> void:
 	await _barn_checks()
 	await _shop_checks()
 	await _cast_checks()
+	await _job_checks()
 	await _flock_checks()
 	await _light_checks()
 	await _world_checks()
@@ -6437,6 +6659,7 @@ func _villager_actions(v) -> Array:
 				var row := _act("noop", "%s, %s  (%sc)" % [l["name"], l["where"], _thousands(int(l["price"]))], false)
 				row["group"] = "Land for sale"
 				acts.append(row)
+	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
 	else:
@@ -6465,9 +6688,14 @@ func _talk_line(v) -> String:
 
 func _villager_action(v, id: String) -> void:
 	var f := Game.friend(v.vid)
+	if id.begins_with("job_"):
+		jobs.action(v, id)
+		return
 	match id:
 		"talk":
-			var scene_id := Story.find_trigger("talk", v.vid)
+			var scene_id := Jobs.offer_scene(v.vid) # a job offer comes first, once it's due
+			if scene_id == "":
+				scene_id = Story.find_trigger("talk", v.vid)
 			var line := "" if scene_id != "" else _talk_line(v)
 			f["n"] = int(f["n"]) + 1
 			if int(f["talk"]) != Game.day:
