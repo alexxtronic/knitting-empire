@@ -1,11 +1,12 @@
 {
-  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed', 'brisk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk, Brisk (the Walk with a longer stride, used above a stroll) and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Nora and Rowan play with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
+  "_about": "Skinned characters. All share one 22-bone skeleton and one animation set. 'player' is who you play. 'walk_anim_speed', 'brisk_anim_speed' and 'run_anim_speed' are the ground speeds (m/s) the Walk, Brisk (the Walk with a longer stride, used above a stroll) and Run loops' strides match for that body (tools/retarget_anims.py prints them); 'label_height' is where floating text sits above them. Nora and Rowan play with models made on tripo.ai from their turnarounds, put on their rigs by tools/rig_sculpt.py (Tripo's own UVs and texture, no re-bake). Their eyes are real (tools/add_eyes.py cuts the painted ones out and adds eyeballs, lids and lashes: the '_eyes' models, driven by scripts/face.gd); 'model_painted_eyes' is the model before that. Other bodies on the same rigs are kept for comparison (swap one into 'model' to try it): 'model_procedural' is the generated body from tools/build_character.py; Nora also has 'model_sculpt' from image-to-sculpt (too lumpy) and 'model_triposr' from TripoSR (tools/run_triposr.py; soft face up close).",
   "player": "nora",
   "characters": [
     {
       "id": "nora",
       "name": "Nora",
-      "model": "res://assets/nora_tripo.glb",
+      "model": "res://assets/nora_tripo_eyes.glb",
+      "model_painted_eyes": "res://assets/nora_tripo.glb",
       "model_procedural": "res://assets/nora.glb",
       "model_triposr": "res://assets/nora_tsr.glb",
       "walk_anim_speed": 1.01,
@@ -17,7 +18,8 @@
     {
       "id": "rowan",
       "name": "Rowan",
-      "model": "res://assets/rowan_tripo.glb",
+      "model": "res://assets/rowan_tripo_eyes.glb",
+      "model_painted_eyes": "res://assets/rowan_tripo.glb",
       "model_procedural": "res://assets/rowan.glb",
       "walk_anim_speed": 1.06,
       "brisk_anim_speed": 1.21,

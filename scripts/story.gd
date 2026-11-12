@@ -32,6 +32,8 @@ extends RefCounted
 ##   @wait seconds
 ##   @anim rowan Work                hold someone in an animation loop ("@anim rowan off" to release)
 ##   @face nora rowan                turn someone toward someone (or toward x, z)
+##   @eyes nora closed               shut someone's eyes ("open" to open them), or set the look of
+##                                   their eyes without a line: happy, warm, wry, sad, worried, angry, sleepy
 ##   @walk rowan 30 4 [nowait]       walk someone to x, z and wait until they arrive (or don't)
 ##   @place rowan 30 4 [yaw] [height]  put someone at x, z instantly (villagers stay there); a height
 ##                                   seats them up on something, e.g. 0.43 on a rock, for SitIdle
@@ -57,10 +59,10 @@ extends RefCounted
 ## Text can use {player} for the heroine's name.
 
 const SCENE_DIR := "res://data/scenes"
-const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "walk", "place", "set", "unset",
+const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "eyes", "walk", "place", "set", "unset",
 	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
 	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home",
-	"memory", "journal", "time", "sleep"]
+	"memory", "journal", "time", "sleep", "music", "farm"]
 const HEADERS := ["label", "trigger", "requires", "when", "once", "daily"]
 const STATS := ["familiarity", "trust", "romance"]
 

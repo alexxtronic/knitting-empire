@@ -23,7 +23,6 @@ const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
-const Planks = preload("res://scripts/planks.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -670,7 +669,10 @@ func _rebuild_house() -> void:
 	var D := HOUSE_FRONT
 	var depth := D - z0
 	Catalog.box(house_root, Vector3(W + 0.7, 0.1, depth + 0.7), Vector3(W * 0.5, -0.04, z0 + depth * 0.5), Catalog.STONE)
-	_plank_floor(Rect2(0, z0, W, depth), 11, "house")
+	var plank_cols := [Color(0.55, 0.36, 0.22), Color(0.6, 0.4, 0.25), Color(0.5, 0.33, 0.2), Color(0.57, 0.38, 0.23)]
+	var n := int(W / 0.4)
+	for i in n:
+		Catalog.box(house_root, Vector3(0.385, 0.04, depth), Vector3(0.2 + i * 0.4, 0.0, z0 + depth * 0.5), plank_cols[(i * 7) % 4])
 	var lvl := Game.house_level
 	var left_windows := [4.8]
 	var right_windows := [0.9]
@@ -717,13 +719,8 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	for i in posts + 1:
 		var o := -length * 0.5 + length * i / posts
 		Catalog.box(tall, _sz(horizontal, 0.16, height, WALL_T + 0.05), _at(horizontal, o, height * 0.5), Catalog.WOOD_DARK)
-	var holes: Array = []
 	for wpos in windows:
-		var o := float(wpos) - (mid.x if horizontal else mid.y)
-		_window(tall, o, horizontal)
-		holes.append(Rect2(o - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
-	for side in ([-1.0, 1.0] if divider else [-1.0]): # a room divider is indoors on both sides
-		_wall_boards(tall, horizontal, length, height, normal * side, holes)
+		_window(tall, float(wpos) - (mid.x if horizontal else mid.y), horizontal)
 	Catalog.box(short, _sz(horizontal, length, 0.32, WALL_T), _at(horizontal, 0, 0.16), PLASTER)
 	Catalog.box(short, _sz(horizontal, length + 0.02, 0.06, WALL_T + 0.06), _at(horizontal, 0, 0.33), Catalog.WOOD_DARK)
 	short.visible = false
@@ -734,26 +731,6 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	if divider:
 		divider_rects.append(r)
 	return w
-
-
-## Pale boards over the face of a wall that looks `into` the room, from floor to top, round its
-## windows, with a rail along the top and a skirting board along the floor (scripts/planks.gd).
-func _wall_boards(tall: Node3D, horizontal: bool, length: float, height: float, into: Vector3, holes: Array) -> void:
-	var out := WALL_T * 0.5 + 0.04 # in front of the posts, just behind the window frames
-	var across := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
-	var origin := into * out - across * length * 0.5
-	var seed_from := tall.get_parent() as Node3D
-	Planks.lay(tall, "wall", origin, across, Vector3.UP, Vector2(length, height), into, holes,
-		hash(Vector3i(roundi(seed_from.position.x * 10.0), roundi(seed_from.position.z * 10.0), roundi(into.x + 2.0 * into.z))))
-	var o := (into.z if horizontal else into.x) * (out + 0.015)
-	Catalog.box(tall, _sz(horizontal, length, 0.14, 0.03), _at(horizontal, 0, height - 0.07, o), Planks.TRIM)
-	Catalog.box(tall, _sz(horizontal, length, 0.13, 0.03), _at(horizontal, 0, 0.065, o), Planks.TRIM)
-
-
-## A plank floor over a ground rectangle (x, z): boards run front to back, their ends staggered.
-func _plank_floor(r: Rect2, plank_seed: int, shade: String) -> void:
-	Catalog.box(house_root, Vector3(r.size.x, 0.012, r.size.y), Vector3(r.get_center().x, 0.006, r.get_center().y), Color(0.36, 0.22, 0.12)) # the boards' edge at the door
-	Planks.lay(house_root, "floor", Vector3(r.position.x, 0.02, r.position.y), Vector3(1, 0, 0), Vector3(0, 0, 1), r.size, Vector3.UP, [], plank_seed, shade)
 
 
 func _sz(horizontal: bool, along: float, h: float, thick: float) -> Vector3:
@@ -945,7 +922,6 @@ func _process(delta: float) -> void:
 		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
 	_update_camera(delta)
 	_update_walls()
-	_update_held_tool()
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
@@ -1287,55 +1263,6 @@ const PLOT_GRID := 1.2 # beds sit on the grid the first twelve were laid out on
 const PLOT_ORIGIN := Vector2(11.0, -1.0)
 const CHOP_WOOD := 2
 var _chopped := {} # tree (a god mode element) -> the day it was last chopped: once a day each
-
-
-const TOOL_MODEL := "res://assets/props/%s.glb"
-## How a tool sits in her right hand: the hand bone's own space, the tool's grip at the palm.
-## Tools stand along their +Y from the foot of the handle (art/world_assets/tools/build.py).
-const TOOL_GRIP := 0.2 # metres up the handle
-const TOOL_PALM := Vector3(0.0, 0.07, 0.03) # the palm, in the hand bone's space
-const TOOL_TILT := 35.0 # degrees the handle points up from level, out in front of her
-var _tool_grip: Node3D
-var _tool_fit := 0 # frames until the grip is fitted to her hand (the bone has to have moved first)
-var _tool_hand: BoneAttachment3D
-var _held_id := ""
-
-
-## Shows the hotbar's tool in her hand (once that tool has a model), and takes it away while she
-## sits, sleeps or is in a story scene.
-func _update_held_tool() -> void:
-	var id := hud.selected_item() if not title_on else ""
-	if not Game.TOOLS.has(id) or not ResourceLoader.exists(TOOL_MODEL % id):
-		id = ""
-	if id != _held_id and player.body and player.body.skeleton:
-		_held_id = id
-		if _tool_hand == null:
-			_tool_hand = BoneAttachment3D.new()
-			player.body.skeleton.add_child(_tool_hand)
-			_tool_hand.bone_name = "RightHand"
-		for c in _tool_hand.get_children():
-			c.queue_free()
-		if id != "":
-			_tool_grip = Node3D.new() # the model hangs from its grip point, not its foot
-			_tool_hand.add_child(_tool_grip)
-			_tool_grip.position = TOOL_PALM
-			var m := Catalog.model(TOOL_MODEL % id, _tool_grip)
-			if m:
-				m.position = Vector3(0, -TOOL_GRIP, 0)
-			_tool_fit = 3
-	if _tool_fit > 0 and _held_id != "" and not player.busy:
-		_tool_fit -= 1
-		if _tool_fit == 0:
-			# Carried like a hatchet: the handle out in front of her and tilted up, the blade down.
-			# Fitted once against how her hand hangs now; after that it moves with the hand.
-			var fwd: Vector3 = player.global_transform.basis.z.normalized()
-			var a := deg_to_rad(TOOL_TILT)
-			var handle := (fwd * cos(a) + Vector3.UP * sin(a)).normalized()
-			var blade := (fwd * sin(a) - Vector3.UP * cos(a)).normalized()
-			var want := Basis(blade, handle, blade.cross(handle))
-			_tool_grip.basis = _tool_hand.global_transform.basis.orthonormalized().inverse() * want
-	if _tool_hand:
-		_tool_hand.visible = _held_id != "" and mode == Mode.LIVE and not story.is_playing() and not player.is_sitting() and not player.is_lying()
 
 
 ## Uses the tool on whatever was clicked. False when the tool has nothing to do there, and the
@@ -1793,6 +1720,8 @@ func _go_to_sleep(passed_out: bool) -> void:
 	if sleeping:
 		return
 	sleeping = true
+	if player.body:
+		player.body.set_eyes_closed(true)
 	hud.hide_menu()
 	hud.fade_sleep()
 	await get_tree().create_timer(0.9).timeout
@@ -1803,6 +1732,8 @@ func _go_to_sleep(passed_out: bool) -> void:
 		_save_game()
 	await get_tree().create_timer(0.9).timeout
 	sleeping = false
+	if player.body:
+		player.body.set_eyes_closed(false)
 	hud.show_toast("%s, Day %d. Good morning!%s" % [Game.season_name(), Game.day_of_season(), _morning_note])
 
 
@@ -3135,6 +3066,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=face" in OS.get_cmdline_user_args(): # just the eyes: blink, moods, sleep, where they look
+		await _wait(1.5)
+		await _face_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=hud" in OS.get_cmdline_user_args(): # just the hotbar, bag, menu and needs checks
 		await _wait(1.5)
 		await _hud_checks()
@@ -3152,6 +3089,7 @@ func _autotest() -> void:
 	await _shot("02_menu.png")
 	hud.hide_menu()
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
+	await _face_checks()
 	var happy0 := Game.happiness
 
 	await _graphics_checks()
@@ -3327,16 +3265,6 @@ func _house_checks(showcase: bool) -> void:
 		f.queue_free()
 	_check("her house's furniture is the new models (%d of %d; the fire has %d flames, fire and lamp %d lights)" % [modelled.size(), ids.size(), flames, lights],
 		modelled.size() == ids.size() and flames == 3 and lights == 2)
-	var floors := get_tree().get_nodes_in_group("planks_floor")
-	var linings := get_tree().get_nodes_in_group("planks_wall")
-	var floor_boards := 0
-	for f in floors:
-		floor_boards += int(f.get_meta("boards", 0))
-	var shades := {}
-	for f in floors:
-		shades[str(f.get_meta("shade", ""))] = true
-	_check("every building has a plank floor in its own shade, and the houses boarded walls (%d floors of %d boards in %d shades, %d walls boarded)" % [floors.size(), floor_boards, shades.size(), linings.size()],
-		floors.size() >= 6 and shades.size() == floors.size() and floor_boards > 250 and linings.size() >= 9)
 	if not showcase:
 		return
 	for extra in [["sofa", Vector3(5.5, 0, 3.0), 3], ["armchair", Vector3(3.5, 0, 5.0), 2], ["dining_table", Vector3(6.0, 0, 5.0), 0],
@@ -4054,7 +3982,8 @@ func _character_checks() -> void:
 	# Rowan wears the same skeleton and plays the same loops as the heroine
 	var rowan := _villager("rowan")
 	var rb = rowan.body if rowan else null
-	var same_bones: bool = rb != null and rb.bone_names() == player.body.bone_names() and rb.bone_names().size() == 22
+	# 22 body bones, and two eye bones on models with real eyes (tools/add_eyes.py)
+	var same_bones: bool = rb != null and rb.bone_names() == player.body.bone_names() and rb.bone_names().size() in [22, 24]
 	_check("Rowan is in Maplewood on the heroine's skeleton (%d bones, same names=%s)" % [rb.bone_names().size() if rb else 0, same_bones], same_bones)
 	var shared := 0
 	if rb:
@@ -4145,6 +4074,81 @@ func _anim_bones(a: Animation) -> Array:
 
 ## The pared-down HUD: the hotbar and bag, the menu behind Esc, the need bars top left,
 ## and the frame counter and camera buttons off until settings turns them on.
+## Real eyes (scripts/face.gd, models from tools/add_eyes.py): Nora and Rowan have them, they blink,
+## take a story line's mood, shut for sleep and turn toward what she looks at.
+func _face_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var f = player.body.face if player.body else null
+	_check("Nora's model has real eyes with every lid shape", f != null and f.shape_value("squint") >= 0.0
+		and ["blink_L", "blink_R", "lid_half", "lid_angry", "lid_sad", "squint"].all(func(n): return f._shape.has(n)))
+	if f == null:
+		return
+	var rowan := _villager("rowan")
+	_check("Rowan's model has them too", rowan != null and rowan.body != null and rowan.body.face != null)
+	# a close camera on her face for the pictures
+	var face_cam := Camera3D.new()
+	add_child(face_cam)
+	var eye := player.global_position + Vector3(0, 1.49, 0)
+	var fwd: Vector3 = player.body.global_transform.basis.z.normalized()
+	face_cam.fov = 30.0
+	face_cam.global_position = eye + fwd * 0.75 + Vector3(0, 0.02, 0)
+	face_cam.look_at(eye, Vector3.UP)
+	face_cam.current = true
+	f.blinks = false
+	f.mood = "neutral"
+	player.body.look_target = null
+	await _wait(0.5)
+	await _shot("47_face_rest.png")
+	# a blink shuts the eyes and opens them again within a third of a second
+	f.blink()
+	var peak := 0.0
+	var t := 0.0
+	while t < 0.4:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+		peak = maxf(peak, f.shut())
+	_check("a blink shuts her eyes and opens them again (peak %.2f, now %.2f)" % [peak, f.shut()], peak > 0.95 and f.shut() < 0.05)
+	# moods from story lines
+	player.body.set_mood("sad")
+	await _wait(0.6)
+	var sad: float = f.shape_value("lid_sad")
+	await _shot("47_face_sad.png")
+	player.body.set_mood("happy")
+	await _wait(0.6)
+	var happy: float = f.shape_value("squint")
+	await _shot("47_face_happy.png")
+	_check("her eyes take a mood (sad %.2f, happy %.2f) and an unknown mood is neutral" % [sad, happy], sad > 0.7 and happy > 0.6)
+	player.body.set_mood("no such mood")
+	await _wait(0.6)
+	_check("back to neutral (squint %.2f)" % f.shape_value("squint"), f.shape_value("squint") < 0.05 and f.mood == "neutral")
+	# asleep
+	player.body.set_eyes_closed(true)
+	await _wait(0.5)
+	var shut: float = f.shape_value("blink_L")
+	await _shot("47_face_asleep.png")
+	player.body.set_eyes_closed(false)
+	await _wait(0.4)
+	_check("asleep her eyes are shut, awake they open (shut %.2f, then %.2f)" % [shut, f.shape_value("blink_L")], shut > 0.98 and f.shape_value("blink_L") < 0.05)
+	# the eyes turn toward what she looks at: a point to her left, then one to her right
+	var left: Vector3 = player.body.global_transform.basis.x.normalized()
+	f.hold_gaze = eye + fwd * 1.0 + left * 0.6
+	await _wait(0.5)
+	var gl: Vector2 = f.gaze()
+	await _shot("47_face_look_left.png")
+	f.hold_gaze = eye + fwd * 1.0 - left * 0.6
+	await _wait(0.5)
+	var gr: Vector2 = f.gaze()
+	f.hold_gaze = null
+	_check("her eyes turn toward what she looks at, within their range (left %.0f deg, right %.0f deg)" % [rad_to_deg(gl.x), rad_to_deg(gr.x)],
+		gl.x > deg_to_rad(3.0) and gr.x < deg_to_rad(-3.0) and absf(gl.x) <= f.MAX_YAW + 0.001 and absf(gr.x) <= f.MAX_YAW + 0.001)
+	# a story line carries its mood to the speaker's eyes, and the scene's end clears it
+	f.blinks = true
+	face_cam.queue_free()
+	cam.current = true
+
+
 func _hud_checks() -> void:
 	var inv0: Dictionary = Game.inv.duplicate()
 	Game.add_item("wool", 1)
@@ -4302,18 +4306,6 @@ func _tool_checks() -> void:
 	await _wait(0.5)
 	_check("axe: chops wood from the tree under the click (%s, wood %d), once a day each (asked again %s, wood %d, busy %s)" % [used, wood, again, Game.count("wood"), player.busy],
 		used and wood == CHOP_WOOD and again and Game.count("wood") == wood and not player.busy)
-	# the axe has a model, so it shows in her hand
-	hud.hot_sel = Game.slots.find("axe")
-	player.position = Vector3(9.0, 0, 8.0) # out from under the tree she just chopped
-	player.rotation.y = cam_yaw + 0.5
-	var dist0 := cam_dist
-	cam_dist = 5.0
-	await _wait(1.2)
-	var held: Array = _tool_hand.find_children("*", "MeshInstance3D", true, false) if _tool_hand else []
-	_check("axe: shows in her right hand while it's the tool picked (%d mesh, visible %s)" % [held.size(), _tool_hand != null and _tool_hand.visible],
-		held.size() >= 1 and _tool_hand.visible and _tool_hand.bone_name == "RightHand")
-	await _shot("47_tool_in_hand.png")
-	cam_dist = dist0
 	# an empty hand, or a tool with nothing to do there, leaves the click alone
 	_check("tools: nothing to do means the click is left alone", not _tool_click("", plots[0], Vector2.ZERO) and not _tool_click("watering_can", sheep_list[0], Vector2.ZERO))
 	Game.take_item("wood", Game.count("wood"))
@@ -5008,6 +5000,8 @@ func _chat_reaction(v, text: String, mood: String, keep: bool) -> void:
 	else:
 		hud.chat.add_line("assistant", text)
 	v.speak_time = clampf(text.length() * 0.05, 1.2, 5.0)
+	if v.get("body") != null and v.body:
+		v.body.set_mood(mood) # their eyes show the reply's mood
 
 
 ## What the villager knows about this moment, for the prompt (ai_chat.gd situation_text).
@@ -5096,7 +5090,9 @@ func _build_cottage() -> void:
 	var z1 := c.end.y
 	var dz := Town.COTTAGE_DOOR
 	Catalog.box(house_root, Vector3(c.size.x + 0.7, 0.1, c.size.y + 0.7), Vector3(c.get_center().x, -0.04, c.get_center().y), Catalog.STONE)
-	_plank_floor(c, 23, "cottage")
+	var plank_cols := [Color(0.66, 0.47, 0.3), Color(0.7, 0.5, 0.33), Color(0.62, 0.44, 0.28), Color(0.68, 0.49, 0.31)]
+	for i in int(c.size.x / 0.4):
+		Catalog.box(house_root, Vector3(0.385, 0.04, c.size.y), Vector3(x0 + 0.2 + i * 0.4, 0.0, c.get_center().y), plank_cols[(i * 5) % 4])
 	_wall(Vector2(x0, z0), Vector2(dz.x, z0), Vector3(0, 0, -1), [59.4])
 	_wall(Vector2(dz.y, z0), Vector2(x1, z0), Vector3(0, 0, -1), [63.6])
 	_wall(Vector2(x0, z1), Vector2(x1, z1), Vector3(0, 0, 1), [60.0, 63.0])

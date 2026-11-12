@@ -5,6 +5,7 @@ extends Node3D
 
 const Data = preload("res://scripts/data.gd")
 const Rig = preload("res://scripts/rig.gd")
+const Face = preload("res://scripts/face.gd")
 const ANIMS := ["Idle", "Walk", "SitKnit", "SitIdle", "Work", "Talk"]
 ## Run is a jog, for the player holding Shift; Brisk is the Walk with a longer stride, for walking
 ## faster than a stroll. Bodies without them walk instead.
@@ -28,12 +29,15 @@ var run_anim_speed := 3.0 # the ground speed the Run loop's stride matches
 var brisk_anim_speed := 0.0 # and the Brisk loop's; 0 when the body has none
 var label_height := 2.1
 var rig: Rig # procedural look-at, lean and breathing on top of the loops (rig.gd)
+var face: Face # blinking, eye direction and lid moods, when the model has real eyes (face.gd); else null
 ## Where this character is looking (a world point), or null. Set by main.gd each frame.
 var look_target = null:
 	set(v):
 		look_target = v
 		if rig:
 			rig.look_target = v
+		if face:
+			face.look_target = v
 var _last_pos := Vector3.ZERO
 var _last_yaw := 0.0
 var _last_speed := 0.0
@@ -80,6 +84,14 @@ func load_character(char_id: String) -> bool:
 		rig.body = self
 		rig.seed_t = randf() * 10.0
 		skeleton.add_child(rig)
+	if skeleton:
+		for m in inst.find_children("*Eyes", "MeshInstance3D", true, false):
+			var f := Face.new()
+			if f.setup(m as MeshInstance3D, skeleton, self):
+				face = f
+				add_child(f)
+				break
+			f.free()
 	props = inst.find_child("KnitProps", true, false) as Node3D
 	if props:
 		props.visible = false
@@ -87,6 +99,19 @@ func load_character(char_id: String) -> bool:
 	anim.seek(randf() * anim.get_animation("Idle").length, true) # so no two people stand in step
 	ok = true
 	return true
+
+
+## The mood on her face: a story mood such as "happy" or "sad" (face.gd MOODS). Bodies without
+## real eyes ignore it.
+func set_mood(mood: String) -> void:
+	if face:
+		face.mood = mood
+
+
+## Shuts the eyes and keeps them shut (asleep), or opens them again.
+func set_eyes_closed(shut: bool) -> void:
+	if face:
+		face.closed = shut
 
 
 ## Cross-fades to a loop. For "Walk" and "Run", pass the ground speed so the stride matches it.

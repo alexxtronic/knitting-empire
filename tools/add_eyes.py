@@ -29,9 +29,24 @@ PROBE = "--probe" in argv
 OUT = os.path.join(PROJECT, "tools", "character_build", CID + "_eyes")
 os.makedirs(OUT, exist_ok=True)
 
-# where to look on the face (metres, the model faces -Y): set per character
-REGION = {"nora_tripo": dict(x=(-0.115, 0.105), z=(1.435, 1.535))}[CID]
+# where to look on the face (metres, the model faces -Y): a band above the Head bone, or a box set per character
+REGIONS = {"rowan_tripo": dict(x=(-0.115, 0.115), z=(1.578, 1.678))}      # his eyes sit 12.6 cm above the Head bone
+
+
+def _region():
+    if "--region" in argv:                       # --region x0 x1 z0 z1, to find a new character's eyes
+        i = argv.index("--region")
+        return dict(x=(float(argv[i + 1]), float(argv[i + 2])), z=(float(argv[i + 3]), float(argv[i + 4])))
+    if CID in REGIONS:
+        return REGIONS[CID]
+    arm_ = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    hz = (arm_.matrix_world @ arm_.data.bones["Head"].head_local).z
+    return dict(x=(-0.115, 0.115), z=(hz, hz + 0.105))
+
+
+REGION = _region()
 STEP = 0.00025
+LASH_REACH = float(argv[argv.index("--lash-reach") + 1]) / 1000 if "--lash-reach" in argv else 0.0  # mm, 0: no limit
 
 
 def log(*a):
@@ -179,9 +194,22 @@ def segment(col):
     s, v = hsv(col)
     gr, br = G / np.maximum(R, 1e-6), B / np.maximum(R, 1e-6)
     sclera = (s < 0.45) & (R > 0.33)
-    iris = (R > 0.33) & (s > 0.68) & (gr < 0.62) & (br < 0.30)
+    iris = (R > 0.33) & (s > 0.68) & (gr < 0.62) & (br < 0.30)                    # brown
+    iris |= (B > 0.85 * R) & (s > 0.2) & (R < 0.6) & (v > 0.15)                   # blue, grey, green-grey
     pupil = (R < 0.22) & (s < 0.62)
+    near_iris = iris.copy()                                # dark hair against an eye corner is also "pupil"-dark:
+    for _ in range(24):                                    # keep only dark pixels within 6 mm of an iris
+        near_iris[1:] |= near_iris[:-1]; near_iris[:-1] |= near_iris[1:]
+        near_iris[:, 1:] |= near_iris[:, :-1]; near_iris[:, :-1] |= near_iris[:, 1:]
+    pupil &= near_iris
     core = sclera | iris | pupil
+
+    def grow(m, k):
+        m = m.copy()
+        for _ in range(k):
+            m[1:] |= m[:-1]; m[:-1] |= m[1:]; m[:, 1:] |= m[:, :-1]; m[:, :-1] |= m[:, 1:]
+        return m
+    core &= grow(~grow(~core, 3), 3)                       # an opening: thin strands (a lock of hair) drop out, eyes stay
     lab, n = components(core)
     score = [(int((sclera & (lab == k)).sum()), k) for k in range(1, n + 1)]
     best = sorted(score, reverse=True)[:2]
@@ -220,14 +248,22 @@ def segment(col):
         llab, ln = components(cand)
         keep = set(np.unique(llab[seed & cand])) - {0}
         L = np.isin(llab, list(keep)) if keep else np.zeros_like(E)
+        if LASH_REACH:                                    # only as far as lashes reach from the lid: a lock of hair
+            near = seed & cand                            # touching the eye corner is dark brown too
+            for _ in range(int(LASH_REACH / STEP)):
+                g = near.copy()
+                g[1:] |= near[:-1]; g[:-1] |= near[1:]; g[:, 1:] |= near[:, :-1]; g[:, :-1] |= near[:, 1:]
+                near = g & L
+            L = near
+        Lraw = L.copy()
         for _ in range(6):                                # a 1.5 mm margin of skin goes with them: the cut runs through skin, not paint
             L = L | np.roll(L, 1, 0) | np.roll(L, -1, 0) | np.roll(L, 1, 1) | np.roll(L, -1, 1)
         L &= ~E
         hole = E | L
         ltop = np.array([np.nonzero(hole[:, c])[0].max() if hole[:, c].any() else 0 for c in range(c0, c1 + 1)])
         skin = (R > 0.45) & (s > 0.30) & (s < 0.75) & ~E & ~L
-        eyes.append(dict(E=E, L=L, c0=c0, c1=c1, ebot=smooth1d(ebot, 7), etop=smooth1d(etop, 7), ltop=smooth1d(np.maximum(ltop, etop), 15), skin=skin,
-                         sclera=sclera & E, iris=iris & E, pupil=pupil & E))
+        eyes.append(dict(E=E, L=L, Lraw=Lraw, c0=c0, c1=c1, ebot=smooth1d(ebot, 7), etop=smooth1d(etop, 7), ltop=smooth1d(np.maximum(ltop, etop), 15), skin=skin,
+                         sclera=sclera & E, iris=E & ~sclera & ~pupil & (v < 0.75), pupil=pupil & E))
     eyes.sort(key=lambda e: e["c0"])
     return eyes
 
@@ -254,13 +290,57 @@ if not PROBE:
     LAB = np.zeros((H, W), dtype=np.int8)                   # 1, 2 = openings; 3, 4 = lashes (right eye, left eye)
     for k, e in enumerate(eyes):
         LAB[e["E"]] = 1 + k
-        LAB[e["L"] & ~e["E"]] = 3 + k
         log("eye", k, "columns", e["c0"], e["c1"], "opening %.1f x %.1f mm" % ((e["c1"] - e["c0"]) * STEP * 1000, (e["etop"] - e["ebot"]).max() * STEP * 1000),
             "lash pixels", int(e["L"].sum()))
     dbg = col.copy()
-    for k, tint in ((1, (0, 1, 0)), (2, (0, 1, 0)), (3, (1, 0, 1)), (4, (1, 0, 1))):
-        dbg[LAB == k] = dbg[LAB == k] * 0.45 + np.array(tint) * 0.55
+    for e in eyes:
+        dbg[e["E"]] = dbg[e["E"]] * 0.45 + np.array((0, 1, 0)) * 0.55
+        dbg[e["L"] & ~e["E"]] = dbg[e["L"] & ~e["E"]] * 0.45 + np.array((1, 0, 1)) * 0.55
     save_png(os.path.join(OUT, "_segments.png"), dbg)
+
+    # ---- paint the old eyes out of the head: skin grown in from round them, written back into the albedo.
+    # Nothing painted is left to show round the new parts (no lash fringe, no rim line).
+    col0 = col.copy()                                        # the painted eyes, for the iris and lash colours
+    s_, v_ = hsv(col)
+    darkpx = (col[..., 0] < 0.33) & (s_ > 0.62)
+    hairpx = (s_ > 0.78) & (col[..., 0] > 0.35)
+    M = np.zeros((H, W), dtype=bool)
+    for e in eyes:
+        M |= e["E"] | e["L"]
+    for _ in range(6):                                       # 1.5 mm more: the lower lid line and soft edges
+        M = M | np.roll(M, 1, 0) | np.roll(M, -1, 0) | np.roll(M, 1, 1) | np.roll(M, -1, 1)
+    M &= hit & ~hairpx
+    solve = M | (darkpx & ~M)                                # dark paint next to it (a brow) is not a colour to grow from
+    fill = col.copy()
+    known = ~solve
+    seed = fill[known & (np.roll(solve, 1, 0) | np.roll(solve, -1, 0) | np.roll(solve, 1, 1) | np.roll(solve, -1, 1))]
+    fill[solve] = seed.mean(axis=0) if len(seed) else np.array([0.8, 0.5, 0.35])
+    for _ in range(700):
+        avg = (np.roll(fill, 1, 0) + np.roll(fill, -1, 0) + np.roll(fill, 1, 1) + np.roll(fill, -1, 1)) / 4
+        fill[solve] = avg[solve]
+    col[M] = fill[M]
+    th_, tw_ = tex.shape[:2]
+    jj_, ii_ = np.nonzero(M)
+    ty = (uvm[jj_, ii_, 1] % 1.0 * th_).astype(int) % th_
+    tx = (uvm[jj_, ii_, 0] % 1.0 * tw_).astype(int) % tw_
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            tex[np.clip(ty + dy, 0, th_ - 1), np.clip(tx + dx, 0, tw_ - 1)] = fill[jj_, ii_]
+    px_ = np.ones((th_, tw_, 4), dtype=np.float32)
+    px_[..., :3] = tex
+    img.pixels.foreach_set(px_.ravel())
+    alb = os.path.join(OUT, CID + "_albedo.jpg")                   # kept a JPEG, as it came: a PNG would be five times the size
+    img.filepath_raw = alb
+    img.file_format = "JPEG"
+    img.save(quality=92)
+    if img.packed_file:
+        img.unpack(method="REMOVE")                      # drop the old packed file, or the exporter writes that one
+    img.filepath = alb
+    img.reload()
+    img.pack()
+    os.remove(alb)
+    save_png(os.path.join(OUT, "_front_map_clean.png"), col)
+    log("old eyes painted out:", int(M.sum()), "front pixels,", len(set(zip(ty.tolist(), tx.tolist()))), "texels")
 
     def pix(p):
         return int(round((p[0] - x0) / STEP)), int(round((p[2] - z0) / STEP))
@@ -305,21 +385,29 @@ if not PROBE:
                 edges.update(f.edges)
         bmesh.ops.subdivide_edges(bm, edges=list(edges), cuts=1, use_grid_fill=True)
         bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
-    lash_faces = {3: [], 4: []}
-    kill = []
-    for f in bm.faces:
-        if not near(f):
-            continue
-        k = label_at(f.calc_center_median())
-        if k in (1, 2):
-            kill.append(f)
-        elif k in (3, 4):
-            lash_faces[k].append([(l.vert.co.copy(), l[uvl].uv.copy()) for l in f.loops])
-            kill.append(f)
+    kill = [f for f in bm.faces if near(f) and label_at(f.calc_center_median()) in (1, 2)]
+
+    def inner_eye(p):                                  # a second layer under the painted eye (some Tripo heads model
+        i, j = pix(p)                                  # a socket behind it): it would hide the eyeball, so it goes too
+        return 0 <= i < W and 0 <= j < H and LAB[j, i] in (1, 2) and 0.002 < p[1] - pos[j, i, 1] < 0.05
+
+    def inner_face(f):                                 # a big triangle can span the opening: test its corners and edges too
+        pts = [f.calc_center_median()] + [v.co for v in f.verts] + [(e.verts[0].co + e.verts[1].co) / 2 for e in f.edges]
+        return any(inner_eye(p) for p in pts)
+
+    killed = set(kill)
+    inner = [f for f in bm.faces if near(f) and f not in killed and inner_face(f)]
+    if inner:
+        log("inner layer under the painted eyes: %d faces taken out too" % len(inner))
+    kill += inner
     bmesh.ops.delete(bm, geom=kill, context="FACES")
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-7, edges=bm.edges)
     bm.to_mesh(me)
     bm.free()
-    log("head: triangles", tris_before, "->", len(me.polygons), "lash faces", [len(v) for v in lash_faces.values()])
+    if me.validate():
+        log("head mesh repaired after the cut")
+    me.update()
+    log("head: triangles", tris_before, "->", len(me.polygons))
 
     # ---- the new parts
     V, F, UV, MAT, GRP = [], [], [], [], []          # vertices, faces, per-corner UVs, material, bone of each vertex
@@ -351,7 +439,8 @@ if not PROBE:
 
     TEXN = 256
     STRIP = 32                                       # under the eyeballs: a strip of upper-lid and one of lower-lid skin colours
-    TEXH = TEXN + 2 * STRIP
+    SW = 16                                          # and a swatch of lash colour
+    TEXH = TEXN + 2 * STRIP + SW
     eye_tex = np.zeros((TEXH, TEXN * 2, 3), dtype=np.float32)
     centers, bones = [], []
     for k, e in enumerate(eyes):
@@ -384,9 +473,9 @@ if not PROBE:
 
         # eyeball texture: plain white of the eye, and the iris made whole (its hidden top mirrored from the bottom)
         a_, b_ = ab(Pe)
-        m = 0.016 / Reye                                             # margin round the opening, for looking about
+        m = 0.012 / Reye                                             # margin round the opening, for looking about
         alo, ahi, blo, bhi = a_.min() - m, a_.max() + m, b_.min() - m, b_.max() + m
-        Ce = col[Emask]
+        Ce = col0[Emask]
         ti = np.clip(((a_ - alo) / (ahi - alo) * TEXN).astype(int), 0, TEXN - 1)
         tj = np.clip(((b_ - blo) / (bhi - blo) * TEXN).astype(int), 0, TEXN - 1)
         orig = np.zeros((TEXN, TEXN, 3), dtype=np.float32)
@@ -401,10 +490,18 @@ if not PROBE:
                 have |= fill
         scl = Ce[e["sclera"][Emask] & (Ce[:, 0] > 0.6)]
         white = np.median(scl, axis=0) if len(scl) else np.array([0.8, 0.75, 0.7])
-        pm = e["pupil"][Emask]
-        ac, bc = a_[pm].mean(), b_[pm].mean()
-        im = (e["iris"][Emask] | pm) & (b_ < bc)
-        ri = np.percentile(np.hypot(a_[im] - ac, b_[im] - bc), 97)
+        # the iris: its colour is the median of what is neither white, pupil nor skin; its centre and radius come
+        # from the pixels of that colour, measured sideways (the top of the iris is under the lid). A lid painted
+        # across the eye, or a dark lid line, does not pull any of these.
+        sat_ = (Ce.max(axis=1) - Ce.min(axis=1)) / np.maximum(Ce.max(axis=1), 1e-6)
+        skin_like = (Ce[:, 0] > 0.45) & (sat_ > 0.30) & (sat_ < 0.75)
+        ir_ = e["iris"][Emask] & ~skin_like
+        iris_col = np.median(Ce[ir_], axis=0)
+        alike = ir_ & (np.abs(Ce - iris_col).sum(axis=1) < 0.35)
+        ac = float(np.median(a_[alike]))
+        ri = float(np.percentile(np.abs(a_[alike] - ac), 97))
+        pm = e["pupil"][Emask] & (np.abs(a_ - ac) < 0.6 * ri)
+        bc = float(np.median(b_[pm])) if pm.sum() > 20 else float(np.median(b_[alike]) + 0.15 * ri)
         jj, ii = np.mgrid[0:TEXN, 0:TEXN]
         ta = alo + (ii + 0.5) / TEXN * (ahi - alo)
         tb = blo + (jj + 0.5) / TEXN * (bhi - blo)
@@ -413,15 +510,24 @@ if not PROBE:
         t *= (1.0 - 0.10 * np.clip(dist / (4 * ri), 0, 1))[..., None]
         mirror_j = np.clip(((2 * bc - tb - blo) / (bhi - blo) * TEXN).astype(int), 0, TEXN - 1)
         use_orig = (tb <= bc + 0.10 * ri) & have
+        b_lo, b_hi = np.percentile(b_[alike], (2, 98))
+        if b_hi - b_lo > 1.4 * ri:  # the painted iris is nearly whole (big cartoon eyes): use it as painted, no mirror
+            bc = 0.5 * (b_lo + b_hi)
+            dist = np.hypot(ta - ac, tb - bc)
+            use_orig = have.copy()
+            log(side, "iris: painted whole (%.0f%% of its width tall), not mirrored" % (100 * (b_hi - b_lo) / (2 * ri)))
         src = np.where(use_orig[..., None], orig, orig[mirror_j, ii])
         ok = np.where(use_orig, True, have[mirror_j, ii])
+        # paint that is neither iris nor pupil nor glint (a lid drawn over the iris) becomes plain iris colour
+        off = (np.abs(src - iris_col).sum(axis=-1) > 0.6) & (src.max(axis=-1) > 0.2) & ~((src.min(axis=-1) > 0.7))
+        src = np.where(off[..., None], iris_col.astype(np.float32), src)
         edge = np.clip((ri - dist) / (0.06 * ri), 0, 1)[..., None]
         inside = (dist < ri) & ok
         t = np.where(inside[..., None], src * edge + t * (1 - edge), t)
         s_o, v_o = hsv(orig)
         glint = have & (dist < 0.8 * ri) & (s_o < 0.25) & (orig[..., 0] > 0.75)
         t[glint] = orig[glint]
-        eye_tex[2 * STRIP:, k * TEXN:(k + 1) * TEXN] = t
+        eye_tex[2 * STRIP + SW:, k * TEXN:(k + 1) * TEXN] = t
         log(side, "iris: radius %.1f mm" % (ri * Reye * 1000))
 
         # eyeball: a cap of the sphere, a little bigger than the opening, never through the face
@@ -436,17 +542,27 @@ if not PROBE:
                 d = f + a * r + b * u
                 d /= np.linalg.norm(d)
                 rho = Reye
-                loc, nrm, fi, dd = bvh.ray_cast(Vector(C), Vector(d))
+                # the nearest the face comes to the centre along this direction and along it turned as far as the
+                # eye may look (12 degrees sideways, 8 up or down): the ball stays under the skin through the whole range
+                dd = None
+                for yaw_, pit_ in ((0, 0), (6, 0), (-6, 0), (12, 0), (-12, 0), (0, 8), (0, -8), (12, 8), (-12, 8), (12, -8), (-12, -8)):
+                    ya, pa = math.radians(yaw_), math.radians(pit_)
+                    d2 = d * math.cos(ya) + np.cross(u, d) * math.sin(ya)
+                    d2 = d2 * math.cos(pa) + np.cross(r, d2) * math.sin(pa)
+                    loc, nrm, fi, dist_ = bvh.ray_cast(Vector(C), Vector(d2 / np.linalg.norm(d2)))
+                    if loc is not None:
+                        dd = dist_ if dd is None else min(dd, dist_)
+                loc = None if dd is None else True
                 if loc is not None:
                     # behind the opening it may sit 1.5 mm under the painted surface; under the skin round it,
                     # 6 mm, so the edge stays inside the cheek when the eye turns
                     outside = max(alo + m - a, a - (ahi - m), blo + m - b, b - (bhi - m), 0.0) * Reye
-                    rho = min(rho, dd - (0.0015 + 0.0045 * min(1.0, outside / 0.004)))
+                    rho = min(rho, dd - (0.0015 + 0.0065 * min(1.0, outside / 0.004)))
                 P[j, i] = C + d * rho
-                U_[j, i] = ((k + i / na) / 2.0, (2 * STRIP + j / nb * TEXN) / TEXH)
+                U_[j, i] = ((k + i / na) / 2.0, (2 * STRIP + SW + j / nb * TEXN) / TEXH)
         quad_grid(P, U_, 1, side + "Eye", C)
 
-        # lash line: the faces cut from the head, as they were; they ride down with the lid
+        # lash line: a clean ribbon in the lash colour along the top of the opening; it rides down with the lid
         c0, c1 = e["c0"], e["c1"]
 
         def col_arrays(c):
@@ -467,20 +583,52 @@ if not PROBE:
             return {"blink_" + side[0]: 1.0, "lid_angry": 0.10 + 0.50 * inner, "lid_sad": 0.10 + 0.50 * (1 - inner),
                     "lid_half": 0.45}
 
-        for tri in lash_faces[3 + k]:
-            ids = []
-            for (co, uv) in tri:
-                vi = vert(co, "Head")
-                ids.append(vi)
-                ci, rj = (co.x - x0) / STEP, (co.z - z0) / STEP
-                eb, et, lt, hgt = col_arrays(ci)
-                nrm_ = (np.array(co) - C) / np.linalg.norm(np.array(co) - C)
-                closed = surf(ci, rj - hgt) + nrm_ * 0.0004
-                for name, am in amounts(ci).items():
-                    key(name, vi, (closed - np.array(co)) * am)
-            F.append(ids)
-            UV.append([tuple(uv) for (co, uv) in tri])
-            MAT.append(0)
+        Lr = e["Lraw"]
+        lcols = np.nonzero(Lr.any(axis=0))[0]
+        if len(lcols) > 12:
+            l0, l1 = int(lcols.min()), int(lcols.max())
+            lash_col = np.median(col0[Lr & darkpx], axis=0) if (Lr & darkpx).any() else np.array([0.08, 0.04, 0.02])
+            eye_tex[2 * STRIP:2 * STRIP + SW, k * TEXN:(k + 1) * TEXN] = lash_col
+            cc = np.arange(l0, l1 + 1)
+            lo_ = np.full(len(cc), np.nan)
+            hi_ = np.full(len(cc), np.nan)
+            for n_, c in enumerate(cc):
+                rows_ = np.nonzero(Lr[:, c])[0]
+                if len(rows_):
+                    lo_[n_], hi_[n_] = rows_.min(), rows_.max()
+                if c0 <= c <= c1:                              # over the opening the band starts at its edge
+                    lo_[n_] = col_arrays(c)[1]
+            okc = ~np.isnan(hi_)
+            hi_ = np.interp(cc, cc[okc], hi_[okc])
+            lo_ = np.interp(cc, cc[~np.isnan(lo_)], lo_[~np.isnan(lo_)])
+            hi_ = smooth1d(np.maximum(hi_, lo_ + 1.0), 11)
+            lo_ = smooth1d(lo_, 11)
+            ends = np.clip(np.minimum(cc - l0, l1 - cc) / 10.0, 0, 1)        # to a point at both ends
+            mid_ = (lo_ + hi_) / 2
+            lo_, hi_ = mid_ + (lo_ - mid_) * ends, mid_ + (hi_ - mid_) * ends
+            pick = np.arange(0, len(cc), 3)
+            if pick[-1] != len(cc) - 1:
+                pick = np.append(pick, len(cc) - 1)
+            NRL = 6                                               # rows across the band, so it follows the lid's curve
+            rows3 = [lo_[pick] + (hi_[pick] - lo_[pick]) * q_ / (NRL - 1) for q_ in range(NRL)]
+            Pl_ = np.zeros((NRL, len(pick), 3))
+            Ul_ = np.zeros((NRL, len(pick), 2))
+            Ul_[..., 0], Ul_[..., 1] = (k + 0.5) / 2.0, (2 * STRIP + SW / 2) / TEXH
+            for r_ in range(NRL):
+                for n_, ci in enumerate(cc[pick]):
+                    p_ = surf(ci, rows3[r_][n_])
+                    Pl_[r_, n_] = p_ + (p_ - C) / np.linalg.norm(p_ - C) * 0.0011
+            li = quad_grid(Pl_, Ul_, 1, "Head", C)
+            for r_ in range(NRL):
+                for n_, ci in enumerate(cc[pick]):
+                    eb, et, lt, hgt = col_arrays(ci)
+                    inside_d = float(np.clip(min(ci - c0, c1 - ci) / 14.0, 0, 1))
+                    thin = 1.0 - 0.4 * inside_d * inside_d * (3 - 2 * inside_d)       # the band is 40 % thinner closed
+                    pc_ = surf(ci, (rows3[r_][n_] - et) * thin + et - hgt)
+                    closed = pc_ + (pc_ - C) / np.linalg.norm(pc_ - C) * 0.0011
+                    for name, am in amounts(ci).items():
+                        key(name, li[r_][n_], (closed - Pl_[r_, n_]) * am)
+            log(side, "lash ribbon: %.0f mm long, up to %.1f mm thick" % ((l1 - l0) * STEP * 1000, (hi_ - lo_).max() * STEP * 1000))
 
         # lid skins: folded away behind the rim at rest, unfolded over the eye by the keys
         NC, NR = 28, 6
@@ -496,8 +644,8 @@ if not PROBE:
                     return r_ + 3 * step
                 r_ += step
             return int(round(start))
-        up_rows = [skin_row(c, col_arrays(c)[2] + 6, 1) for c in cs]
-        lo_rows = [skin_row(c, col_arrays(c)[0] - 8, -1) for c in cs]
+        up_rows = [col_arrays(c)[1] + 5 for c in cs]            # the cleaned skin just above and below the opening
+        lo_rows = [col_arrays(c)[0] - 5 for c in cs]
         # the lids take their colour from the skin just above and just below the eye, painted into the strips
         lines = []
         for rows_ in (lo_rows, up_rows):
@@ -507,18 +655,19 @@ if not PROBE:
             lines.append(np.stack([np.interp(xi, np.arange(NC), cols_[:, ch]) for ch in range(3)], axis=1))
         for r_ in range(2 * STRIP):                                   # below-the-eye skin at the bottom, above-the-eye skin at the top
             w_ = r_ / (2 * STRIP - 1)
-            eye_tex[r_, k * TEXN:(k + 1) * TEXN] = lines[0] * (1 - w_) + lines[1] * w_
+            crease = 0.0
+            eye_tex[r_, k * TEXN:(k + 1) * TEXN] = (lines[0] * (1 - w_) + lines[1] * w_) * (1 - crease)
         for i, c in enumerate(cs):
             eb, et, lt, hgt = col_arrays(c)
             s_ = i / (NC - 1)
             for j in range(NR + 1):
                 tt = j / NR
-                top = lt + 6
+                top = lt + 14
                 p = surf(c, top + (et + 1.5 - top) * tt)
                 n_ = (p - C) / np.linalg.norm(p - C)
                 Pu[j, i] = p - n_ * 0.0014
                 pc = surf(c, top + (eb - 5.0 - top) * tt)
-                closed_u[j, i] = pc - (pc - C) / np.linalg.norm(pc - C) * 0.0005
+                closed_u[j, i] = pc - (pc - C) / np.linalg.norm(pc - C) * 0.0002
                 Uu[j, i] = ((k + (i + 0.5) / NC) / 2.0, ((1 - 0.85 * tt) * (2 * STRIP - 1) + 0.5) / TEXH)
                 low = eb - 9
                 p = surf(c, low + (eb - 1.0 - low) * tt)
@@ -526,7 +675,7 @@ if not PROBE:
                 up_to = eb + 0.42 * hgt * (0.55 + 0.45 * math.sin(math.pi * s_))
                 pr = surf(c, low + (up_to - low) * tt)
                 raised_l[j, i] = pr - (pr - C) / np.linalg.norm(pr - C) * 0.0005
-                Ul[j, i] = ((k + (i + 0.5) / NC) / 2.0, (0.35 * tt * (2 * STRIP - 1) + 0.5) / TEXH)
+                Ul[j, i] = ((k + (i + 0.5) / NC) / 2.0, (0.12 * tt * (2 * STRIP - 1) + 0.5) / TEXH)
         iu = quad_grid(Pu, Uu, 1, "Head", C, shape=closed_u)
         il = quad_grid(Pl, Ul, 1, "Head", C, shape=raised_l)
         for i, c in enumerate(cs):

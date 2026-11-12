@@ -48,7 +48,7 @@ func _run(id: String) -> void:
 	playing = id
 	var sc: Dictionary = Story.scenes()[id]
 	var hud = main.hud
-	_cam0 = {"follow": main.cam_follow, "dist": main.cam_dist}
+	_cam0 = {"follow": main.cam_follow, "dist": main.cam_dist, "yaw": main.cam_yaw_goal}
 	var clock_was: bool = Game.time_running
 	Game.time_running = false # the day doesn't slip away while you read
 	main.player.path = []
@@ -100,8 +100,13 @@ func _run(id: String) -> void:
 	Game.time_running = clock_was
 	main.cam_dist = _cam0["dist"]
 	main.cam_follow = _cam0["follow"]
+	main.cam_yaw_goal = _cam0["yaw"] # a scene that turned the camera turns it back
 	if main.cam_follow:
 		main.cam_target = main.player.position
+	for n in [main.player] + main.villagers: # faces go back to neutral, eyes open
+		if n.get("body") != null and n.body:
+			n.body.set_mood("neutral")
+			n.body.set_eyes_closed(false)
 	playing = ""
 	scene_finished.emit(id)
 
@@ -117,6 +122,8 @@ func _say(op: Dictionary) -> void:
 		char_id = Data.player_character()
 		name_text = str(Data.character(char_id).get("name", name_text))
 	var text := _fill(str(op["text"]))
+	if actor and actor.get("body") != null and actor.body:
+		actor.body.set_mood(str(op["mood"])) # the speaker's eyes take the line's mood
 	var tex: Texture2D = null
 	if who != "":
 		for p in ["res://assets/portraits/%s_%s.png" % [char_id, op["mood"]], "res://assets/portraits/%s_neutral.png" % char_id]:
@@ -178,6 +185,11 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 		"camera":
 			var dist := float(main.cam_glide.get("dist", 9.0))
 			var pos = null
+			var yaw = null # "yaw 200": which side the camera looks from, in degrees (45 is the usual)
+			var yi := a.find("yaw")
+			if yi >= 0 and yi + 1 < a.size():
+				yaw = deg_to_rad(float(a[yi + 1]))
+				a = a.slice(0, yi) + a.slice(yi + 2)
 			var low := not a.is_empty() and str(a[-1]) == "low"
 			if low:
 				a = a.slice(0, a.size() - 1)
@@ -202,6 +214,8 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 					pos = n.position + Vector3(0, 0.9, 0)
 				if a.size() > 1:
 					dist = float(a[1])
+			if yaw != null:
+				main.cam_yaw_goal = yaw
 			if pos != null:
 				main.cam_follow = false
 				main.cam_glide = {"pos": pos, "dist": dist}
@@ -228,6 +242,14 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 				n.anim_override = "" if loop == "off" else loop
 				if loop != "off" and not _held.has(n):
 					_held.append(n)
+		"eyes":
+			var who := actor(str(a[0]))
+			if who and who.get("body") != null and who.body and a.size() > 1:
+				var how := str(a[1]).to_lower()
+				if how in ["closed", "open"]:
+					who.body.set_eyes_closed(how == "closed")
+				else:
+					who.body.set_mood(how)
 		"face":
 			var n := actor(str(a[0]))
 			if n and a.size() > 2 and str(a[1]).is_valid_float():
@@ -353,6 +375,22 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			main.shake(float(a[0]) if not a.is_empty() else 0.4)
 		"sheep":
 			main.sheep_out(not a.is_empty() and str(a[0]) == "out")
+		"music":
+			if main.audio:
+				main.audio.play_tune(str(a[0]) if not a.is_empty() else "off", 0.1 if auto and not cinematic else 2.5)
+		"farm":
+			# Act 1's farm (scripts/homestead.gd): @farm note (Gran's note, her 100 coins, rent starts),
+			# @farm strays (two stray sheep graze past the pond)
+			var home = main.homestead
+			match str(a[0]) if not a.is_empty() else "":
+				"note":
+					Game.add_item(home.NOTE_ITEM)
+					Game.coins += home.econ("gran_coins", 100)
+					Game.set_flag("rent_on")
+					home.start_rent()
+					home.take_note()
+				"strays":
+					home.spawn_strays()
 		"home":
 			if a.size() >= 2:
 				if str(a[1]) == "off":
