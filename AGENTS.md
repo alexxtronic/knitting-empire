@@ -22,7 +22,7 @@ If you add or replace files under `assets/`, import them first. This writes thei
 
 ## Test it: the autotest must pass
 
-Every change must keep the autotest green. It opens a real game window (the renderer is needed, so it can't run headless) and plays through the game: farming, building, the town, the story (Act 1) and Rowan's romance scenes, plus sound, the title screen, settings and tips. It prints a `PASS` or `FAIL` line for each check and saves screenshots to the folder you give it. A full run takes about 6 to 8 minutes.
+Every change to the game's code or data must keep the autotest green. A change that only adds or rebuilds an asset (a model, its textures, its `model` line in `data/furniture.json`) doesn't need the full run (Alex, 2026-11-12: "we don't need autotests for every single asset we make"): import it, run the matching quick check if there is one (`--only=house`, `--only=bench` and so on, a few seconds each) and look at its screenshot. The autotest opens a real game window (the renderer is needed, so it can't run headless) and plays through the game: farming, building, the town, the story (Act 1) and Rowan's romance scenes, plus sound, the title screen, settings and tips. It prints a `PASS` or `FAIL` line for each check and saves screenshots to the folder you give it. A full run takes about 6 to 8 minutes.
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path . --resolution 1280x800 -- --autotest=/tmp/ke_shots > /tmp/ke_autotest.log 2>&1
