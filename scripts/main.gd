@@ -1774,7 +1774,7 @@ func _new_world() -> void:
 	_spawn_furniture("fireplace", Vector3(0.6, 0, 2.5), 1)
 	_spawn_furniture("rug_red", Vector3(3.5, 0, 3.0), 0)
 	_spawn_furniture("rocking_chair", Vector3(2.4, 0, 3.6), 3)
-	_spawn_furniture("coffee_table", Vector3(3.6, 0, 3.0), 0)
+	_spawn_furniture("coffee_table", Vector3(4.0, 0, 3.0), 0) # toward where a sofa goes, off the middle of the rug
 	_spawn_furniture("yarn_basket", Vector3(2.25, 0, 2.25), 0)
 	_spawn_furniture("yarn_balls", Vector3(2.0, 0, 4.4), 0)
 	_spawn_furniture("knitting_needles", Vector3(2.85, 0, 1.55), 0)
