@@ -26,7 +26,7 @@ REVIEW = "--review" in argv
 # along y through (HX, HZ), radius R, against the palm just below the finger roots.
 GRIPS = {
     "nora_tripo": dict(zk=0.725, hx=-0.194, hz=0.716, r=0.021, theta_max=3.25,
-                      bands=(-0.034, -0.061, -0.09), thumb=dict(x=-0.212, y=-0.088, z=0.80)),
+                      bands=(-0.034, -0.061, -0.09), thumb=dict(x=-0.212, y=-0.088, z=0.80, root=(-0.196, 0.80), turn=24.0, clear=0.011)),
 }
 G = GRIPS[CID]
 
@@ -83,7 +83,24 @@ def main():
         q = c + Vector((-rad * math.cos(theta), 0.0, -rad * math.sin(theta)))
         q.x += 0.0
         moved[i] = q
-    # nothing passes through the handle: the thumb, the palm and any finger pushed out to its skin
+    # the thumb comes down the other side of the handle, as in a real fist: it swings out from its
+    # root over the handle's inner side and rests on the fingertips there (round 2: it hung straight
+    # down, through the handle). Its turn grows over its first 2.5 cm, so it stays joined to the palm.
+    rx, rz = th["root"]
+    turn = math.radians(th["turn"])
+    for i, p in P.items():
+        if not is_thumb(p) or i in moved:
+            continue
+        s_ = rz - p.z
+        a = turn * min(1.0, max(0.0, s_ / 0.025)) ** 2 * (3 - 2 * min(1.0, max(0.0, s_ / 0.025)))
+        dx, dz = p.x - rx, p.z - rz
+        q = Vector((rx + dx * math.cos(a) - dz * math.sin(a), p.y, rz + dx * math.sin(a) + dz * math.cos(a)))
+        # clear of the fingertips curled up that side: no closer to the handle's middle than this
+        d = Vector((q.x - hx, 0.0, q.z - hz))
+        if d.length < R + th["clear"]:
+            q = Vector((hx, q.y, hz)) + d.normalized() * (R + th["clear"])
+        moved[i] = q
+    # nothing passes through the handle: the palm and any finger pushed out to its skin
     clear = R + 0.003
     for i, p in P.items():
         q = moved.get(i, p.copy())
