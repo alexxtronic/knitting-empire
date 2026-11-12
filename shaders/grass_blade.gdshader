@@ -15,16 +15,21 @@ uniform vec2 wind_dir = vec2(0.82, 0.57);
 uniform vec3 pusher = vec3(0.0, -100.0, 0.0);
 uniform float push_radius = 0.75;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
+uniform float patch_strength : hint_range(0.0, 1.0) = 1.0; // the light and dark patches (grass_patches.gdshaderinc)
+
+#include "res://shaders/grass_patches.gdshaderinc"
 
 varying float h;
 varying float tint;
 varying float rnd;
+varying vec2 gpatch;
 
 void vertex() {
 	h = UV.y;
 	float height = INSTANCE_CUSTOM.r;
 	rnd = INSTANCE_CUSTOM.g;
 	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	gpatch = grass_patches(root.xz);
 	vec3 v = VERTEX;
 	v.y *= height;
 	v.xz *= 0.9 + height * 0.6;
@@ -52,6 +57,7 @@ void fragment() {
 	vec3 tip = mix(tip_lush, tip_dry, clamp(season_dry + (rnd - 0.5) * 0.5, 0.0, 1.0));
 	vec3 col = mix(root_col, tip, smoothstep(0.0, 1.0, h));
 	col *= 0.88 + rnd * 0.22;
+	col = grass_patch_tint(col, gpatch, patch_strength);
 	col *= 1.0 + tint * 0.08; // gusts flash the blades a touch lighter
 	col *= 1.0 - wet * 0.2;
 	ALBEDO = col;

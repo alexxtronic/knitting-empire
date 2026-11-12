@@ -4118,6 +4118,7 @@ func _light_checks() -> void:
 		inst.free()
 	_check("the %d baked props carry their Cycles light bake (ambient occlusion on UV2)%s" % [Lighting.BAKED.size(), "" if missing.is_empty() else ": missing " + ", ".join(missing)], missing.is_empty())
 	_check("SDFGI is on at High graphics", gfx == 2 and env.sdfgi_enabled)
+	Lighting.SkyBodies.clouds_override = 0.15 # a fair sky for the pictures, whatever the day's clouds (_sky_checks puts it back)
 	var hours := [["dawn", 6.6], ["noon", 12.5], ["dusk", 18.7]]
 	var mist_at := {}
 	for v in hours:
@@ -4151,14 +4152,28 @@ func _light_checks() -> void:
 	Game.time_running = was_running
 
 
-## The sun and the moon (scripts/sky_bodies.gd): the moon's phase from the real calendar, the
+## The sun and the moon (scripts/sky_bodies.gd): the moon's phase from the game's days, the clouds' own spells, the
 ## light (and its shadows) coming from the sun by day and the moon by night, brighter at full moon,
 ## and pictures of each in the sky (48_sky_sun.png, 48_sky_full_moon.png, 48_sky_crescent.png).
 func _sky_checks() -> void:
 	const SB = Lighting.SkyBodies
-	var p_full := SB.phase_at(1706205240.0) # 2024-01-25 17:54 UTC, a full moon
-	_check("the moon's phase follows the calendar: full on 2024-01-25 (%.2f, %s); today %s (%.2f)" % [p_full, SB.phase_name(p_full), SB.phase_name(SB.phase()), SB.phase()],
-		absf(p_full - 0.5) < 0.04 and SB.phase_name(p_full) == "Full moon")
+	var names: Array = [1, 8, 15, 22, 29].map(func(d): return Lighting.SkyBodies.phase_name(Lighting.SkyBodies.phase_at(d, 0.0)))
+	_check("the moon goes round once a season, by the game's days: %s on days 1, 8, 15, 22 and 29; today (day %d) %s" % [", ".join(names), Game.day, SB.phase_name(SB.phase())],
+		names == ["New moon", "First quarter", "Full moon", "Last quarter", "New moon"] and SB.phase_at(3, 18.0) > SB.phase_at(3, 6.0))
+	var lo := 1.0
+	var hi := 0.0
+	var spells := 0
+	var was := false
+	for i in 28 * 24:
+		var c := SB.cloudiness(1 + i / 24, float(i % 24))
+		lo = minf(lo, c)
+		hi = maxf(hi, c)
+		var cloudy := c > 0.45
+		if cloudy and not was:
+			spells += 1
+		was = cloudy
+	_check("clouds come and go on their own over a season: from %.2f to %.2f, %d cloudy spells, the same hour gives the same sky" % [lo, hi, spells],
+		lo < 0.2 and hi > 0.55 and spells >= 4 and SB.cloudiness(9, 13.5) == SB.cloudiness(9, 13.5))
 	Game.hour = 12.5
 	await _wait(0.3)
 	var toward_sun: Vector3 = SB.dir_of(SB.sun_angles(12.5))
@@ -4172,8 +4187,9 @@ func _sky_checks() -> void:
 	_check("a full moon lights the night from where it hangs (%.2f, from %.0f deg up); with no moon, faint starlight (%.2f)" % [night[0.5][0], rad_to_deg(asin(night[0.5][1].y)), night[0.0][0]],
 		night[0.5][0] > 0.4 and night[0.0][0] < 0.12 and night[0.5][1].dot(night[0.5][2]) > 0.95)
 	# pictures: the low sun before evening, a full moon rising, a crescent at dusk; the camera looks up at each
-	for v in [["sun", 17.4, -1.0], ["full_moon", 20.7, 0.5], ["crescent", 19.9, 0.12]]:
+	for v in [["sun", 17.4, -1.0], ["clouds", 17.4, -1.0], ["full_moon", 20.7, 0.5], ["crescent", 19.9, 0.12]]:
 		SB.phase_override = v[2]
+		SB.clouds_override = 0.62 if v[0] == "clouds" else 0.1
 		Game.hour = v[1]
 		await _wait(0.2)
 		var d: Vector3 = SB.dir_of(SB.sun_angles(v[1])) if v[0] == "sun" else SB.dir_of(SB.moon_angles(v[1], v[2]))
@@ -4189,6 +4205,7 @@ func _sky_checks() -> void:
 		await _shot("48_sky_%s.png" % v[0])
 		cam_glide = {}
 	SB.phase_override = -1.0
+	SB.clouds_override = -1.0
 
 
 ## The furniture of her house (art/world_assets/house_furniture): each of the eleven pieces is its

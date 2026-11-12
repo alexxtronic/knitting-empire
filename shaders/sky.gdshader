@@ -94,14 +94,14 @@ void sky() {
 		float n = fbm(p * 0.6);
 		float n2 = fbm(p * 1.9 + vec2(n * 1.3, 0.0));
 		float shape = n * 0.7 + n2 * 0.35;
-		float thresh = mix(0.78, 0.36, cloud_cover);
-		float c = smoothstep(thresh, thresh + 0.22, shape);
+		float thresh = mix(0.74, 0.22, cloud_cover);
+		float c = smoothstep(thresh, thresh + 0.14, shape);
 		c *= smoothstep(0.0, 0.18, up);
 		// lit tops toward the sun, greyer bellies
 		float lit = clamp(0.55 + (n2 - n) * 1.6 + pow(sdot, 4.0) * 0.4 * sun_high, 0.0, 1.0);
 		vec3 cc = mix(cloud_shade, cloud_light, lit);
-		cc = mix(cc, cc * sky_horizon_color * 1.25, 0.35);
-		cc *= mix(1.0, 0.18, night);
+		cc = mix(cc, cc * sky_horizon_color * 1.25, 0.15);
+		cc *= mix(1.3, 0.18, night); // bright white puffs by day against the blue
 		col = mix(col, cc, c * 0.92);
 		// stars, faded by cloud and by daylight
 		if (night > 0.01) {

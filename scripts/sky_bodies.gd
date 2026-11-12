@@ -1,18 +1,20 @@
 extends RefCounted
 ## The sun and the moon: where each one is in the sky at an hour of the game's day, the moon's
-## phase from the real calendar, and the light the one DirectionalLight3D (main.sun) gives. By day
+## phase from the game's calendar, the clouds, and the light the one DirectionalLight3D (main.sun) gives. By day
 ## it is the sun's light and its shadows; through dusk it turns to the moon (or, when the moon is
 ## down, a faint high starlight), so shadows always fall away from whatever is lighting the scene.
 ## shaders/sky.gdshader draws both discs from the directions set here (sun_dir, moon_dir), with
 ## the moon's lit side toward the sun and its terminator from the phase.
 ##
-## The moon follows the real one: its phase comes from today's date (a mean synodic month counted
-## from a known new moon), so a full moon outside is a full moon in Maple Grove. Each day it rises
-## later behind the sun, by the phase: a new moon goes round with the sun, a first quarter is high
-## at sunset, a full moon rises as the sun goes down and is up all night.
-
-const SYNODIC := 29.530588853 # days from new moon to new moon
-const NEW_MOON_UNIX := 947182440.0 # 2000-01-06 18:14 UTC, a new moon
+## The moon goes round once a season: new on the 1st, first quarter on the 8th, full on the 15th,
+## last quarter on the 22nd (a season is 28 days), moving on a little every hour of the game's
+## clock. Each day it rises later behind the sun, by the phase: a new moon goes round with the sun,
+## a first quarter is high at sunset, a full moon rises as the sun goes down and is up all night.
+##
+## Clouds come and go on their own: a slow random drift over the game's hours between clear, fair,
+## broken and nearly overcast (cloudiness()), with rain covering the rest. Cloudier skies dim the
+## sun a little and soften its shadows.
+const LUNAR_DAYS := 28.0 # one cycle a season (game_state.gd: 28 days a season)
 const SUNRISE := 6.0
 const SUNSET := 19.5
 const PEAK := 60.0 # the sun's height at midday, degrees
@@ -22,18 +24,35 @@ const MOON_NEW := 0.05
 const STARLIGHT := 0.06
 const MOON_COLOR := Color(0.62, 0.72, 1.0)
 
-## For the autotest and screenshots: a fixed phase (0 new, 0.5 full) instead of the calendar's; -1 is off.
+## For the autotest and screenshots: a fixed phase (0 new, 0.5 full) instead of the game day's; -1 is off.
 static var phase_override := -1.0
 
 
-## The moon's age in the cycle on a given Unix time: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter.
-static func phase_at(unix: float) -> float:
-	var days := (unix - NEW_MOON_UNIX) / 86400.0
-	return fposmod(days / SYNODIC, 1.0)
+## The moon's age in its cycle on a game day and hour: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter.
+static func phase_at(day: int, hour: float) -> float:
+	return fposmod((float(day - 1) + hour / 24.0) / LUNAR_DAYS, 1.0)
 
 
 static func phase() -> float:
-	return phase_override if phase_override >= 0.0 else phase_at(Time.get_unix_time_from_system())
+	return phase_override if phase_override >= 0.0 else phase_at(Game.day, Game.hour)
+
+
+## How cloudy the sky is with no rain, 0 clear .. about 0.75 broken, by the game's day and hour: a
+## slow random drift (a new spell every few hours), the same for the same day and hour every time.
+static func cloudiness(day: int, hour: float) -> float:
+	var t := (float(day) * 24.0 + hour) / 5.0 # a spell every five game hours or so
+	var i := floori(t)
+	var f := t - float(i)
+	f = f * f * (3.0 - 2.0 * f)
+	var a := _spell(i)
+	var b := _spell(i + 1)
+	return lerpf(a, b, f)
+
+
+static func _spell(i: int) -> float:
+	var r := fposmod(sin(float(i) * 12.9898 + 4.1) * 43758.5453, 1.0)
+	# more clear and fair spells than cloudy ones
+	return 0.08 + 0.7 * r * r
 
 
 ## How much of the disc is lit, 0 at new moon to 1 at full.
@@ -73,7 +92,8 @@ var sun: DirectionalLight3D
 var sky_mat: ShaderMaterial
 var moon_up := 0.0 # 0..1: how far over the horizon the moon is (for the autotest, and the light)
 var current_phase := 0.0
-var _phase_t := 999.0
+var clouds := 0.0 # 0..1, the sky's own cloudiness now (without rain)
+static var clouds_override := -1.0 # for the autotest and screenshots
 
 
 func setup(m: Node) -> void:
@@ -84,10 +104,7 @@ func setup(m: Node) -> void:
 
 ## Every frame, after main._update_lighting has set the day's sun energy and colour (dl: daylight).
 func update(h: float, dl: float, rain: float) -> void:
-	_phase_t += main.get_process_delta_time()
-	if _phase_t > 30.0 or phase_override >= 0.0:
-		current_phase = phase()
-		_phase_t = 0.0
+	current_phase = phase()
 	var p := current_phase
 	var lit := illumination(p)
 	var sa := sun_angles(h)
@@ -111,4 +128,11 @@ func update(h: float, dl: float, rain: float) -> void:
 	sky_mat.set_shader_parameter("moon_dir", moon_d)
 	sky_mat.set_shader_parameter("moon_phase", p)
 	sky_mat.set_shader_parameter("moon_lit", lit)
+	# the day's clouds, rain covering the rest of the sky; a cloudier sky dims the sun and softens its shadows
+	clouds = cloudiness(Game.day, h) if clouds_override < 0.0 else clouds_override
+	var cover := lerpf(clouds, 0.92, rain)
+	sky_mat.set_shader_parameter("cloud_cover", cover)
+	var dim := smoothstep(0.35, 0.8, clouds) * (1.0 - rain)
+	sun.light_energy *= 1.0 - 0.3 * dim * k
+	sun.light_angular_distance = lerpf(0.55, 2.5, dim * k)
 	sky_mat.set_shader_parameter("sun_color", Color(1.0, 0.93, 0.8).lerp(Color(1.0, 0.55, 0.3), 1.0 - smoothstep(2.0, 22.0, sa.x)))

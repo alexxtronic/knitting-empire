@@ -16,6 +16,10 @@ uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform sampler2D roads : filter_linear, repeat_disable, hint_default_black;
 uniform vec4 roads_rect = vec4(0.0, 0.0, 1.0, 1.0);
 
+uniform float patch_strength : hint_range(0.0, 1.0) = 1.0;
+
+#include "res://shaders/grass_patches.gdshaderinc"
+
 varying vec3 wpos;
 
 void vertex() {
@@ -84,6 +88,7 @@ void fragment() {
 	g *= 0.8 + 0.35 * mid;
 	g *= 0.88 + 0.22 * speck;
 	g = mix(g, g * vec3(1.1, 1.05, 0.7), smoothstep(0.82, 0.95, fine) * 0.4); // the odd yellow clover
+	g = grass_patch_tint(g, grass_patches(p), patch_strength); // the blades' light and dark patches
 	// earth: packed soil with pebbles and darker damp spots
 	vec3 e = earth * (0.82 + 0.3 * mid) * (0.9 + 0.2 * speck);
 	e = mix(e, vec3(0.55, 0.5, 0.44), smoothstep(0.9, 0.96, vnoise(p * 14.0)) * 0.3);
