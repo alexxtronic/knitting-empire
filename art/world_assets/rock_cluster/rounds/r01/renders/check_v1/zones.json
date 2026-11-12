@@ -1,0 +1,47 @@
+[
+ {
+  "id": "R01",
+  "owner": "KE_rock_cluster",
+  "name": "big",
+  "note": "the largest rock, back right (ref05)",
+  "cam": "top",
+  "box": [
+   597.5154674731293,
+   155.0819254691778,
+   1170.0769866934404,
+   806.8191001385104
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_cluster/rounds/r01/renders/check_v1/crops/R01.jpg",
+  "stops": 3.0
+ },
+ {
+  "id": "R02",
+  "owner": "KE_rock_cluster",
+  "name": "medium",
+  "note": "the medium rock, front left (ref05)",
+  "cam": "detail",
+  "box": [
+   0,
+   131.82457949257486,
+   805.4597546393966,
+   1000
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_cluster/rounds/r01/renders/check_v1/crops/R02.jpg",
+  "stops": 1.7
+ },
+ {
+  "id": "R03",
+  "owner": "KE_rock_cluster",
+  "name": "small",
+  "note": "the low small rock between them (ref05)",
+  "cam": "top",
+  "box": [
+   489.43302553508016,
+   477.9755341808182,
+   810.4692382157972,
+   823.612008261589
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_cluster/rounds/r01/renders/check_v1/crops/R03.jpg",
+  "stops": 3.0
+ }
+]

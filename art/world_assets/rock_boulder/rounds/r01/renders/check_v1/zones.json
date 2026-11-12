@@ -1,0 +1,47 @@
+[
+ {
+  "id": "R01",
+  "owner": "KE_rock_boulder",
+  "name": "body",
+  "note": "the faceted boulder with its warm lit side (ref04)",
+  "cam": "top",
+  "box": [
+   282.81931226573226,
+   32.55190033756804,
+   1112.9331000308525,
+   890.3716552393191
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_boulder/rounds/r01/renders/check_v1/crops/R01.jpg",
+  "stops": 3.0
+ },
+ {
+  "id": "R02",
+  "owner": "KE_rock_boulder",
+  "name": "moss",
+  "note": "moss cushions on the crown and ledges (ref04)",
+  "cam": "detail",
+  "box": [
+   171.1422391903219,
+   4.526597041525747,
+   1400,
+   731.1995831634397
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_boulder/rounds/r01/renders/check_v1/crops/R02.jpg",
+  "stops": 1.7
+ },
+ {
+  "id": "R03",
+  "owner": "KE_rock_boulder",
+  "name": "base",
+  "note": "grass tufts and pebbles round the foot (ref04)",
+  "cam": "top",
+  "box": [
+   274.3924896207146,
+   227.57799725746037,
+   1122.224302824601,
+   957.37433702375
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_boulder/rounds/r01/renders/check_v1/crops/R03.jpg",
+  "stops": 3.0
+ }
+]

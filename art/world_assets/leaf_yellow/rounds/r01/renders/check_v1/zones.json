@@ -1,0 +1,32 @@
+[
+ {
+  "id": "L01",
+  "owner": "KE_leaf_yellow",
+  "name": "body",
+  "note": "the domed leaf with raised veins (ref02)",
+  "cam": "top",
+  "box": [
+   348.1488905759077,
+   125.87063219612804,
+   1028.906381010187,
+   916.5910478112544
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/leaf_yellow/rounds/r01/renders/check_v1/crops/L01.jpg",
+  "stops": 3.0
+ },
+ {
+  "id": "L02",
+  "owner": "KE_leaf_yellow",
+  "name": "stalk",
+  "note": "the curved brown stalk under the notch (ref02)",
+  "cam": "hero",
+  "box": [
+   340.6106981975935,
+   475.2428492931107,
+   753.3038630654507,
+   780.8765634894917
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/leaf_yellow/rounds/r01/renders/check_v1/crops/L02.jpg",
+  "stops": 3.0
+ }
+]

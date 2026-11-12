@@ -1,0 +1,17 @@
+[
+ {
+  "id": "R01",
+  "owner": "KE_rock_single",
+  "name": "body",
+  "note": "the faceted rock with moss on its crown and flank (ref06)",
+  "cam": "top",
+  "box": [
+   359.1761071205201,
+   152.05594527266692,
+   1036.0902277005982,
+   838.9287361939394
+  ],
+  "crop": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/crops/R01.jpg",
+  "stops": 3.0
+ }
+]

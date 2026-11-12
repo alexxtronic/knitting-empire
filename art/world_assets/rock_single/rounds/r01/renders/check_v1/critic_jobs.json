@@ -1,0 +1,38 @@
+[
+  {
+    "owner": "KE_rock_single",
+    "name": "KE_rock_single-1",
+    "prompt_file": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/critic_prompts/KE_rock_single-1.md",
+    "response_file": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/critic_logs/KE_rock_single-1.json",
+    "zones": [
+      "R01"
+    ],
+    "crops": [
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/crops/R01.jpg"
+    ],
+    "refs": [
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/ref/ref01_supplied_design.png"
+    ]
+  },
+  {
+    "owner": "overall",
+    "name": "overall",
+    "prompt_file": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/critic_prompts/overall.md",
+    "response_file": "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/critic_logs/overall.json",
+    "zones": [
+      "ALL-hero",
+      "ALL-side",
+      "ALL-top",
+      "ALL-detail"
+    ],
+    "crops": [
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/hero.png",
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/side.png",
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/top.png",
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/detail.png"
+    ],
+    "refs": [
+      "/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/ref/ref01_supplied_design.png"
+    ]
+  }
+]

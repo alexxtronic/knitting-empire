@@ -1,0 +1,13 @@
+00:07.263  render           | Saved: '/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/hero.png'
+00:14.433  render           | Saved: '/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/side.png'
+00:20.889  render           | Saved: '/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/top.png'
+00:28.877  render           | Saved: '/Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/detail.png'
+[harness] Cycles device: METAL
+[harness] rock_single.blend: ['KE_rock_single']
+[harness] wrote /Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/hero.png
+[harness] wrote /Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/side.png
+[harness] wrote /Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/top.png
+[harness] wrote /Users/alexdamore/Desktop/Vibe_Code/knitting-empire/art/world_assets/rock_single/rounds/r01/renders/check_v1/detail.png
+Blender 5.2.3 LTS Release Candidate (hash e8b7fe175f6f built 2026-10-15 01:35:01)
+
+Blender quit
