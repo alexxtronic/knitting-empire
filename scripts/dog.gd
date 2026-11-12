@@ -16,7 +16,7 @@ extends Node3D
 const Catalog = preload("res://scripts/catalog.gd")
 const MODEL := "res://assets/props/dog.glb"
 const LOOPS := ["Idle", "Walk", "Trot", "Run"]
-const STRIDE := {"Walk": 0.562, "Trot": 1.459, "Run": 3.424}
+const STRIDE := {"Walk": 0.669, "Trot": 1.459, "Run": 3.424}
 ## Walk gives way to Trot above TROT_ABOVE m/s and comes back below WALK_BELOW (two thresholds so
 ## he doesn't flicker between them); Trot gives way to the gallop likewise.
 const TROT_ABOVE := 0.85

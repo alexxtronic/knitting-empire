@@ -746,6 +746,11 @@ if RENDER:
     sc.collection.objects.link(floor)
     sc.view_settings.view_transform = "Standard"
     sc.render.engine = "BLENDER_EEVEE"
+    if "--cpu-render" in argv:  # Cycles on the CPU: EEVEE can stall while a game window holds the GPU
+        sc.render.engine = "CYCLES"
+        sc.cycles.device = "CPU"
+        sc.cycles.samples = 24
+        sc.cycles.use_denoising = True
     sc.render.resolution_x, sc.render.resolution_y = 560, 420
     sc.render.film_transparent = False
     views = {"side": (Vector((1, 0, 0.12)), 1.25), "front": (Vector((0.45, -1, 0.3)), 1.1), "below": (Vector((0.5, -0.5, -1)), 1.1),

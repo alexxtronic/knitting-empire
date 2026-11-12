@@ -39,7 +39,7 @@
 
 ## In the game
 - scripts/dog.gd: follows Nora; Tab plays him (clicks walk him, Shift gallops, the camera follows); the loop is chosen by speed (Walk below 0.85 m/s, Trot to 2.5, Run above) and played at speed ÷ STRIDE
-- STRIDE (rig_dog.py prints it): Walk 0.562, Trot 1.459, Run 3.424 m/s (round 1 values; see the latest run's output)
+- STRIDE (rig_dog.py prints it): Walk 0.669, Trot 1.459, Run 3.424 m/s
 - Autotest: `--only=dog`, `_dog_checks` in scripts/main.gd
 
 ## Not done
