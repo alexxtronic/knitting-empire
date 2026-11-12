@@ -3619,6 +3619,12 @@ func _check(label: String, ok: bool) -> void:
 
 
 func _autotest() -> void:
+	if "--only=knit" in OS.get_cmdline_user_args(): # just the knitting game's checks and its pictures
+		await _wait(1.5)
+		await _knit_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=bench" in OS.get_cmdline_user_args(): # just the bench checks and their two pictures, in seconds
 		await _wait(1.5)
 		await _bench_checks()
@@ -4805,6 +4811,9 @@ func _knit_checks() -> void:
 		if sg["notes"].any(func(n): return float(n[2]) > 0.0):
 			hold_song = str(sg["id"])
 			break
+	knit.open({"auto": false, "fast": 0.0, "silent": true, "best": {"cast_on": 3}}) # the song list
+	await _shot("51_knit_select.png")
+	knit._finish(true)
 	knit.open({"auto": false, "fast": 0.0, "silent": true, "song": hold_song, "best": {}})
 	await get_tree().process_frame
 	var ni := 0
@@ -4826,12 +4835,14 @@ func _knit_checks() -> void:
 	knit.now = float(hn["t"]) + float(hn["hold"]) * 0.5
 	await get_tree().process_frame
 	var mid_hold: bool = knit.holding[lane] == ni
+	await _shot("51_knit_play.png")
 	knit.now = float(hn["t"]) + float(hn["hold"])
 	knit.release(lane)
 	_check("a hold is two stitches: pressed on the beat and let go at the end (made %d then %d, holding mid-way %s, perfect %d)" % [made, knit.stitches.size(), mid_hold, knit.counts[0]],
 		made == 1 and mid_hold and knit.stitches.size() == 2 and knit.counts[0] == 2 and knit.combo == 2)
 	knit.now = float(hn["t"]) + float(hn["hold"]) + 3.0
 	await get_tree().process_frame
+	await get_tree().process_frame # the game's own _process runs after the first signal
 	_check("notes that go by unplayed are dropped stitches and break the run (dropped %d, run %d)" % [knit.counts[3], knit.combo], knit.counts[3] >= 1 and knit.combo == 0)
 	knit.finished.disconnect(_on_knit_finished)
 	knit._finish(true)

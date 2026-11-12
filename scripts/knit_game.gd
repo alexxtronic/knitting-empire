@@ -86,7 +86,7 @@ var _font: Font
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_font = ThemeDB.fallback_font
@@ -593,8 +593,8 @@ func _draw_play() -> void:
 	draw_rect(Rect2(790, 112, 400 * prog, 14), BRASS)
 	var rn := rarity_now()
 	_text("Heading for", Vector2(790, 158), 16, Color(0.85, 0.8, 0.7))
-	_text(rarity_name(rn), Vector2(920, 158), 22, rarity_color(rn))
-	_text("(best on this pattern: %s)" % rarity_name(max_rarity(diff)), Vector2(1190, 158), 14, Color(0.7, 0.66, 0.58), 2)
+	_text(rarity_name(rn), Vector2(790 + _font.get_string_size("Heading for", HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 10.0, 158), 22, rarity_color(rn))
+	_text("(best on this pattern: %s)" % rarity_name(max_rarity(diff)), Vector2(1190, 184), 14, Color(0.7, 0.66, 0.58), 2)
 	_draw_swatch()
 
 
@@ -639,7 +639,7 @@ func _draw_select() -> void:
 		_text(str(s["name"]), Vector2(r.position.x + 30, r.position.y + 46), 32, CREAM)
 		_text("%d BPM · %d stitches" % [int(s["bpm"]), s["notes"].size()], Vector2(r.position.x + 30, r.position.y + 78), 16, Color(0.8, 0.75, 0.66))
 		for k in 4:
-			_yarn_ball(Vector2(r.position.x + 470 + k * 34, r.position.y + 36), 12.0, LANE_COLORS[k] if k < diff else Color(0.35, 0.3, 0.27), 1.0 if k < diff else 0.5)
+			_yarn_ball(Vector2(r.position.x + 360 + k * 34, r.position.y + 36), 12.0, LANE_COLORS[k] if k < diff else Color(0.35, 0.3, 0.27), 1.0 if k < diff else 0.5)
 		var cap := max_rarity(diff)
 		_text("Up to %s" % rarity_name(cap), Vector2(r.end.x - 30, r.position.y + 42), 26, rarity_color(cap), 2)
 		var b := int(best.get(str(s["id"]), 0))
