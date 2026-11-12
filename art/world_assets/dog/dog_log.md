@@ -43,7 +43,16 @@
   5. A hairline crease at the shoulder in one gallop frame, probably the cut (minor): left
   6. Walk and Trot look alike from the side; the trot's hind leg trails long (minor): left
   7. Golden fur close to the orange floor indoors (minor, the game's lighting): left
-- Earlier own rounds: the first loops crouched like a cat stalking (the body kept at its rest height, the steps too long) → each loop now finds its height; the cut showed scarf red and leg shading at its rim → the patch widened and coloured from golden fur only
+- Motion round 3 (a new reviewer; review/motion3_*.jpg): four legs everywhere, Walk and Trot natural, no crumpling
+  1. The scarf tails vanish in two gallop side frames (marked blocking, "MINOR at game distance" by the same reviewer): the tails hang on his right side and the side camera looks at his left; the front tiles of the same frames show them hanging normally, so the near forelegs hide them. Not a skinning fault: left. The tails don't sway (rigid by design since round 2)
+  2. A slit and a ragged end on the scarf roll, streaks on the chest fur, in rest close-ups only (minor, from the Tripo texture): left
+  3. Gallop back still reads straight, no airborne frame sampled (minor): left
+  4. Hind legs read as tubes, hock bend small (minor): left
+  5. A flattened far hind paw in one walk frame (minor): left
+  6. Fur tufts on the thigh slide over the leg (minor): left
+  7-9. Little secondary motion (tail, ears), tail thin seen from behind, Idle nearly still (minor): left
+- Stopped after round 3: no skinning fault left; the minor items above are the list for a polish pass
+ the first loops crouched like a cat stalking (the body kept at its rest height, the steps too long) → each loop now finds its height; the cut showed scarf red and leg shading at its rim → the patch widened and coloured from golden fur only
 
 ## In the game
 - scripts/dog.gd: follows Nora; Tab plays him (clicks walk him, Shift gallops, the camera follows); the loop is chosen by speed (Walk below 0.85 m/s, Trot to 2.5, Run above) and played at speed ÷ STRIDE
