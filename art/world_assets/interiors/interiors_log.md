@@ -51,3 +51,6 @@ Each round used a fresh reviewer with the brief and the lit and clay sheets (`re
 
 ### Final check (mine, `review/<prop>/final_*.png`)
 The fire reads orange in the arch, the bags read as paper, and the sacks have soft mouths. No fourth review round, by the lighter cap above.
+
+## Sign-off
+- 2026-11-12: Alex approved Hazel, the new baker: her name, her dialogue (data/dialogue.json), the "Buy a warm croissant" action and its lines, and the 12c price (+25 food).
