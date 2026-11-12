@@ -2,7 +2,7 @@
 
 Run headless on a character .blend (one made by build_character.py or rig_sculpt.py):
   Blender -b tools/character_build/<id>/<id>.blend -P tools/retarget_anims.py -- \
-      <project_dir> <library.glb> <out_id> [--map Idle=Idle_Loop,Walk=Walk_Loop,...] [--render DIR]
+      <project_dir> <library.glb> <out_id> [--map Idle=Idle_Loop,Walk=Walk_Loop,...] [--arm-spread DEG] [--render DIR]
 
 Made for Quaternius's Universal Animation Library (CC0, Unreal-style bone names, T-pose, 24 fps,
 the in-place file without root motion), but any library on that skeleton works. For each of our
@@ -40,6 +40,9 @@ DEFAULT_MAP = ("Idle=Idle_Loop,Walk=Walk_Loop*1.3,Brisk=Walk_Loop*1.4,Run=Jog_Fw
                "SitIdle=Sitting_Idle_Loop,Work=Fixing_Kneeling:30-118")
 MAP = dict(kv.split("=") for kv in (argv[argv.index("--map") + 1] if "--map" in argv else DEFAULT_MAP).split(","))
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
+# degrees each arm is held further out from the body in every standing loop: the library's arms hang
+# close to a slim body, and on a wide one (an apron, a flared jacket) the hands sink into the hips
+SPREAD = math.radians(float(argv[argv.index("--arm-spread") + 1])) if "--arm-spread" in argv else 0.0
 SEATED = {"SitIdle", "SitKnit"}
 
 # our bone <- library bone (Unreal mannequin names, as Quaternius uses)
@@ -261,6 +264,17 @@ for name, spec in MAP.items():
                     p[b.name] = p[b.parent.name] @ m @ Quaternion(d.axis, d.angle * stride)
         mid = sum((h.z for h in hips[:-1]), 0.0) / n
         hips = [Vector((h.x, h.y, mid + (h.z - mid) * stride)) for h in hips]
+    if SPREAD and name not in SEATED:
+        # turn the whole arm out about the chest's own front-to-back axis, so it stays a sideways
+        # spread however the body leans; forearm and hand turn with it and keep their bend
+        for p in poses:
+            for side, sx in (("Left", 1), ("Right", -1)):
+                ua = side + "UpperArm"
+                par = T[ua].parent.name
+                axis = (p[par] @ rest_rot[par].to_quaternion().inverted()) @ Vector((0, 1, 0))
+                r = Quaternion(axis, -SPREAD * sx)
+                for b in ("UpperArm", "LowerArm", "Hand"):
+                    p[side + b] = r @ p[side + b]
     rot_keys = {b.name: [] for b in order}
     for want in poses:
         want = {k: q.to_matrix() for k, q in want.items()}

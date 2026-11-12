@@ -194,6 +194,7 @@ for pb in temp.pose.bones:  # the copy keeps whatever pose the rig was last eval
     pb.matrix_basis = Matrix.Identity(4)
 bpy.context.view_layer.update()
 swing = {}
+moved_joint = {}  # side -> how far the arm's joint was moved to the sculpt's shoulder (T-pose exports)
 raised = {}  # side -> True when the sculpt's arm is held out (its angle found along the arm)
 select_only(temp)
 bpy.ops.object.mode_set(mode="EDIT")
@@ -218,11 +219,38 @@ for side, sx in (("Left", 1), ("Right", -1)):
     # joint and within half a metre of its height, along its main direction
     far = L[(L[:, 0] * sx > sh.x * sx + 0.12) & (np.abs(L[:, 2] - sh.z) < 0.5)]
     if len(far) > 50 and (far[:, 0] * sx).max() > sh.x * sx + 0.35:
-        c = far.mean(axis=0)
-        ax = np.linalg.svd(far - c, full_matrices=False)[2][0]
+        # start from what is level with the shoulder (only the arm is out there), then take in the
+        # points that lie along that line: a bag or an apron hanging below doesn't pull it down
+        pick = far[np.abs(far[:, 2] - sh.z) < 0.15]
+        for _ in range(3):
+            c = pick.mean(axis=0)
+            ax = np.linalg.svd(pick - c, full_matrices=False)[2][0]
+            off = far - c
+            pick = far[np.linalg.norm(off - np.outer(off @ ax, ax), axis=1) < 0.08]
         ax = ax if ax[0] * sx > 0 else -ax
         want = Vector((ax[0], 0.0, ax[2])).normalized()
         raised[side] = True
+        # the shoulder joint: the rig's sits where its own body's shoulder is, and a slimmer sculpt's
+        # arm then swings down from a point outside her shoulder and hangs away from the body with a
+        # gap under it. Put the joint on the arm's line just inside the side of the torso under the arm.
+        off = pick - c
+        r = float(np.median(np.linalg.norm(off - np.outer(off @ ax, ax), axis=1)))
+        z_at = lambda x: c[2] + (x - c[0]) / ax[0] * ax[2]
+        zp = z_at(sh.x) - r - 0.04
+        under = L[(np.abs(L[:, 2] - zp) < 0.006) & (L[:, 0] * sx > 0) & (L[:, 0] * sx < sh.x * sx + 0.12)]
+        if len(under) > 5:
+            w = (under[:, 0] * sx).max()
+            jx = (w - 0.02) * sx
+            joint = Vector((jx, sh.y, z_at(jx)))
+            shift = joint - sh
+            for b in ("UpperArm", "LowerArm", "Hand"):
+                eb[side + b].transform(Matrix.Translation(shift))
+            eb[side + "Shoulder"].tail = joint
+            moved_joint[side] = shift.copy()
+            print("SHOULDER", side, "arm radius", round(r, 3), "torso side", round(w, 3), "joint moved by",
+                  tuple(round(v, 3) for v in shift))
+            sh = joint
+            tip = eb[side + "Hand"].tail.copy()
     have = Vector((tip.x - sh.x, 0.0, tip.z - sh.z)).normalized()
     ang = math.atan2(have.cross(want).y, have.dot(want))
     R = Matrix.Translation(sh) @ Matrix.Rotation(ang, 4, "Y") @ Matrix.Translation(-sh)
@@ -397,10 +425,38 @@ for e in lo.data.edges:
     adj[j].append((i, w))
 gidx = {g.name: g.index for g in lo.vertex_groups}
 for side, sx in (("Left", 1), ("Right", -1)):
-    if raised.get(side):
-        print("SPLIT", side, "skipped: the arm is held out, clear of the body")
-        continue
     arm_bones = [side + b for b in ("Shoulder", "UpperArm", "LowerArm", "Hand")]
+    if raised.get(side):
+        # nothing touches an arm held out, so the automatic weights stand, except at the shoulder: skin
+        # outside the shoulder joint (the sleeve's top, the deltoid) kept part body weight and stayed up
+        # when the arm came down from the T-pose, flaring the sleeve. Out there it is all arm, blended
+        # over 8 cm across the joint; the arm hangs level, so only skin near the shoulder's height counts.
+        shj = seg[side + "UpperArm"][0]
+        t = np.clip((L[:, 0] * sx - (shj[0] * sx - 0.03)) / 0.08, 0.0, 1.0)
+        t[np.abs(L[:, 2] - shj[2]) > 0.22] = 0.0
+        t[L[:, 0] * sx < 0.0] = 0.0
+        gi_arm = {gidx[b] for b in arm_bones[1:] if b in gidx}
+        changed = 0
+        for i in np.where(t > 0.0)[0]:
+            v = lo.data.vertices[i]
+            ws = [(g.group, g.weight) for g in v.groups if g.weight > 0.0]
+            wa = sum(w for gi, w in ws if gi in gi_arm)
+            wb = sum(w for gi, w in ws if gi not in gi_arm)
+            if wa + wb <= 0.0 or wa / (wa + wb) >= t[i]:
+                continue
+            if wa <= 0.0:   # no arm weight yet: the nearest arm bone gets the share
+                b = min(arm_bones[1:], key=lambda b: seg_dist(L[i:i + 1], *seg[b])[0])
+                lo.vertex_groups[gidx[b]].add([int(i)], 1e-6, "REPLACE")
+                ws.append((gidx[b], 1e-6))
+                wa = 1e-6
+            tot = wa + wb
+            for gi, w in ws:
+                nw = w / wa * t[i] * tot if gi in gi_arm else w / wb * (1.0 - t[i]) * tot if wb > 0 else 0.0
+                lo.vertex_groups[gi].add([int(i)], max(nw, 0.0), "REPLACE")
+            changed += 1
+        print("SPLIT", side, "arm held out: no split; shoulder skin moved to the arm", changed)
+        continue
+
     sh_z = seg[side + "UpperArm"][0][2]
     wrist = seg[side + "Hand"][0]
     elbow = seg[side + "LowerArm"][0]
@@ -515,6 +571,15 @@ bpy.data.objects.remove(temp)
 
 # ----------------------------------------------------------------------------- 4. onto the real rig, export
 bpy.data.objects.remove(old_body)
+if moved_joint:  # the real rig's arms move to the same shoulder joints the mesh now hangs from
+    select_only(rig)
+    bpy.ops.object.mode_set(mode="EDIT")
+    for side, shift in moved_joint.items():
+        reb = rig.data.edit_bones
+        for b in ("UpperArm", "LowerArm", "Hand"):
+            reb[side + b].transform(Matrix.Translation(shift))
+        reb[side + "Shoulder"].tail = reb[side + "UpperArm"].head
+    bpy.ops.object.mode_set(mode="OBJECT")
 lo.parent = rig
 am = lo.modifiers.new("Armature", "ARMATURE")
 am.object = rig
