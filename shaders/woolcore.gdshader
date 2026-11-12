@@ -12,6 +12,8 @@ uniform int pattern = 0;
 uniform float stitch = 0.3;
 uniform float fuzz : hint_range(0.0, 1.0) = 1.0;
 uniform float contrast : hint_range(0.0, 1.0) = 0.7; // how dark the gaps between stitches are
+// the prop's own Cycles light bake (art/world_assets/light_bake), on UV2; white where there's none
+uniform sampler2D baked_ao : hint_default_white, filter_linear_mipmap;
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -94,7 +96,7 @@ void fragment() {
 	ALBEDO = albedo.rgb * s.x;
 	ROUGHNESS = roughness;
 	SPECULAR = 0.25;
-	AO = mix(0.55, 1.0, s.y);
+	AO = mix(0.55, 1.0, s.y) * texture(baked_ao, UV2).r;
 	AO_LIGHT_AFFECT = pattern == 1 ? 0.45 : 0.1;
 	RIM = 0.35 * fuzz;
 	RIM_TINT = 0.6;

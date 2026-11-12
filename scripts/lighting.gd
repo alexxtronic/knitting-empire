@@ -14,8 +14,8 @@ extends Node
 ## for the mist volume's soft edges.
 const MIST_CENTRE := Vector3(34.0, 2.5, -3.0)
 const MIST_SIZE := Vector3(150.0, 7.0, 100.0)
-const MIST_DENSITY := 0.16 # at its thickest, at ground level
-const SHAFT_FOG := 0.007 # thin fog in the air above the mist, for the shafts to show in
+const MIST_DENSITY := 0.06 # at its thickest, at ground level
+const SHAFT_FOG := 0.0035 # thin fog in the air above the mist, for the shafts to show in
 
 ## The props that carry the Cycles light bake (art/world_assets/light_bake/build.py, PROPS): the
 ## autotest checks each one still does, since rebuilding a prop with its own build.py drops it.
@@ -110,14 +110,29 @@ func update(rain: float, dl: float) -> void:
 	env.volumetric_fog_density += SHAFT_FOG * mist
 	env.volumetric_fog_enabled = gfx >= 1 and (env.volumetric_fog_density > 0.0006 or mist > 0.01)
 	# shafts: the low sun lights the mist strongly, mostly forward (towards the camera when you look at the sun)
-	sun.light_volumetric_fog_energy = lerpf(_sun_fog_energy, 3.2, mist * lit)
+	sun.light_volumetric_fog_energy = lerpf(_sun_fog_energy, 4.5, mist * lit)
 	env.volumetric_fog_anisotropy = lerpf(_anisotropy, 0.72, mist)
+	# main.gd tints the haze toward the horizon's colour (pink at dawn): the mist stays a pale cream
+	env.volumetric_fog_albedo = env.volumetric_fog_albedo.lerp(Color(0.95, 0.93, 0.88), mist)
 	# a little of the sky's light in the mist, so it glows softly in the shade rather than going dark
-	env.volumetric_fog_ambient_inject = lerpf(_ambient_inject, 0.35, mist)
+	env.volumetric_fog_ambient_inject = lerpf(_ambient_inject, 0.1, mist)
 	# Low graphics has no volumetric fog: a plain ground fog gives the look of the mist from afar
 	env.fog_height = 0.6
-	env.fog_height_density = (0.32 if gfx == 0 else 0.1) * mist
+	env.fog_height_density = (0.32 if gfx == 0 else 0.03) * mist
 	env.fog_sun_scatter = 0.25 * mist * lit
+
+
+## A surface's Cycles light bake: the ambient occlusion texture its GLB material carries on the
+## second UV map, or null. Godot's glTF import doesn't always mark that texture as UV2 (it missed it
+## on the props without other textures), so this sets the flag when the mesh has a UV2.
+static func bake_of(mesh: Mesh, surface: int) -> Texture2D:
+	var mat := mesh.surface_get_material(surface) as BaseMaterial3D
+	if mat == null or not mat.ao_enabled or mat.ao_texture == null:
+		return null
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2):
+		return null
+	mat.ao_on_uv2 = true
+	return mat.ao_texture
 
 
 ## How many of a model's surfaces carry the Cycles light bake (ambient occlusion on UV2): for the autotest.
@@ -128,7 +143,6 @@ static func baked_ao_count(root: Node) -> int:
 		if mesh == null:
 			continue
 		for s in mesh.get_surface_count():
-			var mat := mesh.surface_get_material(s) as BaseMaterial3D
-			if mat and mat.ao_enabled and mat.ao_texture and mat.ao_on_uv2:
+			if bake_of(mesh, s) != null:
 				n += 1
 	return n

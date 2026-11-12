@@ -4,6 +4,7 @@ extends RefCounted
 ## Every model faces +Z and sits centered on its footprint at floor level.
 
 const Data = preload("res://scripts/data.gd")
+const Lighting = preload("res://scripts/lighting.gd")
 
 ## Lamps, lanterns and the hearth cast shadows unless the graphics setting is Low (main.gd).
 static var lamp_shadows := true
@@ -185,9 +186,25 @@ static func palette() -> Dictionary:
 
 
 ## The Woolcore material for a palette colour: knitted if the palette says so, otherwise felt.
-static func wool(pid: String) -> Material:
+## baked: a prop's Cycles light bake (its ambient occlusion on UV2), which then gets its own copy.
+static func wool(pid: String, baked: Texture2D = null) -> Material:
 	var p: Array = palette().get(pid, [Color.MAGENTA, 0.0])
 	var key := "wool_" + pid
+	if baked:
+		var plain := wool(pid)
+		key += "@" + baked.resource_path
+		if not _mats.has(key):
+			if plain is ShaderMaterial:
+				var own := (plain as ShaderMaterial).duplicate() as ShaderMaterial
+				own.set_shader_parameter("baked_ao", baked)
+				_mats[key] = own
+			else:
+				var own3 := (plain as BaseMaterial3D).duplicate() as BaseMaterial3D
+				own3.ao_enabled = true
+				own3.ao_texture = baked
+				own3.ao_on_uv2 = true
+				_mats[key] = own3
+		return _mats[key]
 	if _mats.has(key):
 		return _mats[key]
 	var c: Color = p[0]
@@ -220,8 +237,9 @@ static func model(path: String, r: Node3D) -> Node3D:
 		for i in m.mesh.get_surface_count():
 			var sm := m.mesh.surface_get_material(i)
 			var mname := sm.resource_name if sm else ""
+			var baked := Lighting.bake_of(m.mesh, i)
 			if mname.begins_with("wool_"):
-				m.set_surface_override_material(i, wool(mname.substr(5)))
+				m.set_surface_override_material(i, wool(mname.substr(5), baked))
 			elif mname == "Quilt_patchwork":
 				m.set_surface_override_material(i, tartan()) # the bed's cover: the sofa throw's wool
 	r.add_child(inst)

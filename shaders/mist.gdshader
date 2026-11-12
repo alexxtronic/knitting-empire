@@ -5,7 +5,7 @@ shader_type fog;
 // the low sun's shadows through it are the light shafts between the trees.
 
 uniform float density = 0.0;
-uniform float falloff = 0.8; // per metre: the mist halves about every 0.9 m of height
+uniform float falloff = 1.1; // per metre: the mist halves about every 0.6 m of height
 uniform vec3 albedo : source_color = vec3(1.0, 0.96, 0.92);
 uniform sampler3D noise : filter_linear, repeat_enable;
 uniform float noise_scale = 0.045; // patches about 20 m across
