@@ -14,8 +14,10 @@ tools/build_character.py, then:
      a .glb keeps its own UVs and base-colour texture;
   3. aims a copy of the rig's arms along the sculpt's arms (found from the arm's outer outline;
      generated turnarounds stand in a wider A-pose than the rig), binds the mesh to it with automatic
-     weights, then splits arm skin from body skin by distance along the surface so a hand resting on
-     a thigh doesn't move with the leg (or the arm sink into the body), swings the arms back to the
+     weights, then splits arm skin from body skin (by the gap between them seen from the front, else by
+     distance along the surface) so a hand resting on a thigh doesn't move with the leg (or the arm sink
+     into the body); an export with the arms held out (T-pose, best for clean armpits) needs no split;
+     swings the arms back to the
      rig's rest pose and applies that, so the mesh now matches the real rig's rest pose; the head is made
      one rigid piece from the jaw line up (tools/rigid_head.py), so it doesn't bend when it turns;
   4. swaps the procedural body for the sculpt on the real rig (bones, animations and knitting
@@ -192,6 +194,7 @@ for pb in temp.pose.bones:  # the copy keeps whatever pose the rig was last eval
     pb.matrix_basis = Matrix.Identity(4)
 bpy.context.view_layer.update()
 swing = {}
+raised = {}  # side -> True when the sculpt's arm is held out (its angle found along the arm)
 select_only(temp)
 bpy.ops.object.mode_set(mode="EDIT")
 eb = temp.data.edit_bones
@@ -210,6 +213,16 @@ for side, sx in (("Left", 1), ("Right", -1)):
     pts = np.array(pts)
     slope = np.polyfit(pts[:, 0], pts[:, 1], 1)[0]  # outward x per metre of height
     want = Vector((-slope * sx, 0.0, -1.0)).normalized()
+    # arms held out (a T-pose or wide A-pose export: the way to get clean armpits): horizontal slices
+    # don't follow the arm, so take its line from the arm itself, everything well outside the shoulder
+    # joint and within half a metre of its height, along its main direction
+    far = L[(L[:, 0] * sx > sh.x * sx + 0.12) & (np.abs(L[:, 2] - sh.z) < 0.5)]
+    if len(far) > 50 and (far[:, 0] * sx).max() > sh.x * sx + 0.35:
+        c = far.mean(axis=0)
+        ax = np.linalg.svd(far - c, full_matrices=False)[2][0]
+        ax = ax if ax[0] * sx > 0 else -ax
+        want = Vector((ax[0], 0.0, ax[2])).normalized()
+        raised[side] = True
     have = Vector((tip.x - sh.x, 0.0, tip.z - sh.z)).normalized()
     ang = math.atan2(have.cross(want).y, have.dot(want))
     R = Matrix.Translation(sh) @ Matrix.Rotation(ang, 4, "Y") @ Matrix.Translation(-sh)
@@ -318,6 +331,63 @@ if "--nearest-weights" in argv or heat_failed():
 # against the sweater, skin of one is bound to the other's bones and the arm sinks into the body when
 # it moves. Split arm skin from body skin by distance along the surface instead: grown out from the
 # forearm on one side and from the thigh and waist on the other, the two only meet where they touch.
+def gap_line(sx, sh_z, elbow, hand):
+    """For every vertex: the x (times sx) that splits arm from body at its height, or nan.
+    Found slice by slice from the surface itself: each triangle the slice plane crosses covers a stretch
+    of x; walking in from the outermost point on this side, the first uncovered stretch wider than GAP,
+    after at least 3 cm of arm, is the gap. Heights with no gap get the line from the heights around
+    them; under the lowest gap (the fingertips) and above the armpit band, nan."""
+    GAP = 0.006
+    top = sh_z - 0.10
+    bottom = hand[1][2] - 0.25    # a sculpt's hand often hangs below the rig's; below the fingers no gap is found
+    lo.data.calc_loop_triangles()
+    T = np.array([t.vertices[:] for t in lo.data.loop_triangles])
+    U = L[:, 0] * sx
+    tz = L[T, 2]
+    zs, cs = [], []
+    for z in np.arange(top, bottom, -0.01):
+        cross = (tz.min(1) <= z) & (tz.max(1) >= z)
+        iv = []
+        for tri in T[cross]:
+            pts = []
+            for i, j in ((0, 1), (1, 2), (2, 0)):
+                za, zb = L[tri[i], 2], L[tri[j], 2]
+                if (za - z) * (zb - z) <= 0 and za != zb:
+                    f = (z - za) / (zb - za)
+                    pts.append(U[tri[i]] + f * (U[tri[j]] - U[tri[i]]))
+            if pts and max(pts) > 0.0:
+                iv.append((min(pts), max(pts)))
+        if len(iv) < 6:
+            continue
+        iv.sort(key=lambda t: -t[1])
+        o = iv[0][1]
+        reach = iv[0][0]           # how far in the covered stretch from the outside goes so far
+        found = None
+        for a_, b_ in iv[1:]:
+            if b_ < reach - GAP and reach < o - 0.03:
+                found = (b_ + reach) / 2
+                break
+            reach = min(reach, a_)
+        if found is not None and found > o - 0.30:
+            zs.append(z)
+            cs.append(found)
+    cutv = np.full(len(L), np.nan)
+    if len(zs) < 0.3 * (top - bottom) / 0.01:
+        print("GAP", "few gaps", len(zs), "- falling back to the surface walk")
+        return cutv
+    zs, cs = np.array(zs[::-1]), np.array(cs[::-1])
+    # a gap far off the trend is a fold in the clothes, not the arm's edge: drop it and refit
+    for _ in range(2):
+        fit = np.polyval(np.polyfit(zs, cs, 2), zs)
+        keep = np.abs(cs - fit) < 0.03
+        zs, cs = zs[keep], cs[keep]
+    band = (L[:, 2] >= zs.min() - 0.03) & (L[:, 2] <= top + 0.02)
+    cutv[band] = np.interp(L[band, 2], zs, cs)
+    print("GAP", "slices", len(zs), "of", int((top - bottom) / 0.01), "cut x", np.round(np.percentile(cs, [5, 50, 95]), 3),
+          "z", round(float(zs.min()), 2), "-", round(float(zs.max()), 2))
+    return cutv
+
+
 n = len(L)
 adj = [[] for _ in range(n)]
 for e in lo.data.edges:
@@ -327,6 +397,9 @@ for e in lo.data.edges:
     adj[j].append((i, w))
 gidx = {g.name: g.index for g in lo.vertex_groups}
 for side, sx in (("Left", 1), ("Right", -1)):
+    if raised.get(side):
+        print("SPLIT", side, "skipped: the arm is held out, clear of the body")
+        continue
     arm_bones = [side + b for b in ("Shoulder", "UpperArm", "LowerArm", "Hand")]
     sh_z = seg[side + "UpperArm"][0][2]
     wrist = seg[side + "Hand"][0]
@@ -375,17 +448,44 @@ for side, sx in (("Left", 1), ("Right", -1)):
         continue
     ga, gb = geodesic(seeds_arm, adj, n), geodesic(seeds_body, adj, n)
     zone = side_ok & (L[:, 2] < sh_z - 0.08)
-    is_arm = zone & (ga < gb)
+    # Seen from the front there is daylight between the arm and the body at most heights: at each
+    # height, everything outside the gap is arm. Where the hand or forearm touches the clothes there is
+    # no gap; the cut line carries on from the heights above and below. The walk along the surface
+    # (ga < gb) is only used where no gap was found anywhere.
+    cut = gap_line(sx, sh_z, elbow, seg[side + "Hand"])
+    arm_side = np.where(np.isnan(cut), ga < gb, L[:, 0] * sx > cut)
+    is_arm = zone & arm_side
+    # islands: a patch on the inside of the forearm that fell on the body's side of the line, with arm
+    # all round it, would stay behind at the hip as a sliver. Body skin must join the body (the thigh
+    # and waist seeds) through body skin, arm skin the forearm through arm skin; flip whatever doesn't.
+    def reach(seeds, member):
+        seen = np.zeros(n, bool)
+        st = [int(i) for i in seeds if member[i]]
+        seen[st] = True
+        while st:
+            i = st.pop()
+            for j, _ in adj[i]:
+                if member[j] and not seen[j]:
+                    seen[j] = True
+                    st.append(j)
+        return seen
+    body_ok = reach(seeds_body, zone & ~is_arm)
+    stray_body = zone & ~is_arm & ~body_ok
+    is_arm |= stray_body
+    arm_ok = reach(np.where(is_arm & (d_fore < 0.12))[0], is_arm)
+    stray_arm = is_arm & ~arm_ok
+    is_arm &= ~stray_arm
+    print("ISLANDS", side, "body->arm", int(stray_body.sum()), "arm->body", int(stray_arm.sum()))
     is_body = zone & ~is_arm
     moved = 0
     for i in np.where(zone)[0]:
         v = lo.data.vertices[i]
         keep_arm = bool(is_arm[i])
-        for g in list(v.groups):
-            name = lo.vertex_groups[g.group].name
-            if (name in arm_bones) != keep_arm and g.weight > 0.0:
-                lo.vertex_groups[g.group].remove([int(i)])
-                moved += 1
+        # read the groups first: removing one while walking v.groups shifts the rest under the loop
+        drop = [g.group for g in v.groups if (lo.vertex_groups[g.group].name in arm_bones) != keep_arm and g.weight > 0.0]
+        for gi in drop:
+            lo.vertex_groups[gi].remove([int(i)])
+            moved += 1
         if not any(g.weight > 1e-4 for g in v.groups):  # stripped bare: give it the nearest allowed bone
             names = arm_bones[1:] if keep_arm else ["Hips", side + "UpperLeg", "Spine"]
             best = min(names, key=lambda b: seg_dist(L[i:i + 1], *seg[b])[0])
