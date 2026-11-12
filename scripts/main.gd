@@ -3870,17 +3870,18 @@ func _shop_checks() -> void:
 	# Office's among them: 46_sign_<building>.png (_polish_checks checks where they hang)
 	for b in find_children("Building_*", "Node3D", true, false):
 		var hs: Array[Node] = b.find_children("HangingSign", "Node3D", true, false)
-		if hs.is_empty():
+		var own: bool = str(b.get_meta("building_model", "")) in Town.OWN_SIGN # the café wears its own plaque
+		if hs.is_empty() and not own:
 			continue
-		var sg := hs[0] as Node3D
-		var front: Vector3 = sg.global_position + (b as Node3D).global_transform.basis.z * 4.5
+		var sg := (b as Node3D) if own else (hs[0] as Node3D)
+		var front: Vector3 = sg.global_position + (b as Node3D).global_transform.basis.z * (9.0 if own else 4.5)
 		front.y = 0.0
 		hud.hide_dialogue()
 		player.walk([])
 		player.position = front
 		_set_cam_lock(false)
-		cam_target = sg.global_position - Vector3(0, 0.8, 0)
-		cam_dist = 9.0
+		cam_target = sg.global_position + (Vector3(0, 2.8, 0) if own else Vector3(0, -0.8, 0))
+		cam_dist = 16.0 if own else 9.0
 		await _wait(1.2)
 		await _shot("46_sign_%s.png" % str(b.get_meta("building_model", "")))
 	_set_cam_lock(true)
