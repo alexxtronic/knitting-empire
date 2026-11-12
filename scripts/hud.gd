@@ -17,6 +17,7 @@ signal god_time(hour: float) # god mode (settings): jump the clock
 signal god_weather(weather: String) # "clear" or "rain"
 signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
+signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
 signal rotate_pressed
 signal sell_pressed
@@ -191,8 +192,19 @@ var toast_panel: PanelContainer
 var toast_label: Label
 var toast_tween: Tween
 var toast_meter: Meter
-var live_btn: Button
-var build_btn: Button
+var build_btn: Button # at the end of the hotbar
+var menu_btn: Button
+var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
+var needs_panel: PanelContainer
+var needs_all := false # show every need, not only the low ones (Tab does the same while held)
+var cam_pad: PanelContainer
+var fps_check: CheckButton
+var cam_pad_check: CheckButton
+var hotbar: PanelContainer
+var bag_panel: PanelContainer
+var slot_btns: Array[Slot] = [] # Game.slots, in order: the first HOTBAR are the bar, the rest the bag
+var hot_sel := 0 # the hotbar slot in her hand
+var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it with
 var expand_btn: Button
 var graphics_btn: Button
 var settings_panel: PanelContainer
@@ -275,12 +287,12 @@ func _ready() -> void:
 	_build_vignette()
 	_build_memory()
 	var first := root.get_child_count()
-	_build_title()
+	_build_menu_button()
 	_build_resources()
-	_build_left()
 	_build_needs()
 	_build_clock()
 	_build_camera_pad()
+	_build_hotbar()
 	for i in range(first, root.get_child_count()):
 		if root.get_child(i) != act_bubble:
 			chrome.append(root.get_child(i))
@@ -292,6 +304,8 @@ func _ready() -> void:
 	_build_chat()
 	_build_help()
 	_build_journal()
+	_build_game_menu()
+	_build_bag()
 	fade = ColorRect.new()
 	fade.color = Color(0.02, 0.02, 0.06, 0.0)
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -479,75 +493,228 @@ func _button(text: String, cb: Callable) -> Button:
 
 # --- widgets -------------------------------------------------------------------
 
-func _build_title() -> void:
-	var pc := PanelContainer.new()
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 0)
-	vb.add_child(_label("Knitting Empire", 26, GOLD))
-	vb.add_child(_label("Birchfield Farm", 14, Color(0.85, 0.8, 0.7)))
-	pc.add_child(vb)
-	root.add_child(pc)
-	_place(pc, 0.0, 0.0, Vector2(16, 16))
+## The one button left of the old side menu: everything else is behind it (see _build_game_menu).
+func _build_menu_button() -> void:
+	menu_btn = _button("Menu", func(): toggle_game_menu())
+	menu_btn.tooltip_text = "Save, settings, journal and help (Esc)"
+	root.add_child(menu_btn)
+	_place(menu_btn, 0.0, 0.0, Vector2(16, 16))
 
 
+## Coins, top right. Everything else she carries is in the hotbar and the bag.
 func _build_resources() -> void:
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 8)
-	var specs := [["coins", "Coins", GOLD], ["wool", "Wool", Color(0.97, 0.97, 0.94)],
-		["turnip", "Turnips", Color(0.82, 0.62, 0.9)], ["pumpkin", "Pumpkins", Color(0.98, 0.55, 0.15)],
-		["sweater", "Sweaters", Color(0.85, 0.25, 0.2)]]
-	for spec in specs:
-		var chip := PanelContainer.new()
-		chip.tooltip_text = spec[1]
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 7)
-		var dot := Panel.new()
-		dot.custom_minimum_size = Vector2(14, 14)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		dot.add_theme_stylebox_override("panel", _sb(spec[2], 7, Color(0, 0, 0, 0), 0.0))
-		row.add_child(dot)
-		var l := _label("0", 16)
-		row.add_child(l)
-		chip.add_child(row)
-		hb.add_child(chip)
-		res_labels[spec[0]] = l
-	root.add_child(hb)
-	_place(hb, 1.0, 0.0, Vector2(16, 16))
-	# frames per second, under the resource chips (updated twice a second)
+	var chip := PanelContainer.new()
+	chip.tooltip_text = "Coins"
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 7)
+	var dot := Panel.new()
+	dot.custom_minimum_size = Vector2(14, 14)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dot.add_theme_stylebox_override("panel", _sb(GOLD, 7, Color(0, 0, 0, 0), 0.0))
+	row.add_child(dot)
+	var l := _label("0", 16)
+	row.add_child(l)
+	chip.add_child(row)
+	root.add_child(chip)
+	res_labels["coins"] = l
+	_place(chip, 1.0, 0.0, Vector2(16, 16))
+	# frames per second, under the coins (updated twice a second); off unless switched on in settings
 	fps_label = _label("-- FPS", 14, Color(1, 1, 1, 0.85))
 	fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	fps_label.add_theme_constant_override("outline_size", 4)
 	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fps_label.visible = false
 	root.add_child(fps_label)
 	_place(fps_label, 1.0, 0.0, Vector2(20, 58))
 
 
-func _build_left() -> void:
+## What used to be the left-hand column, opened by the Menu button or Esc.
+func _build_game_menu() -> void:
+	game_menu = PanelContainer.new()
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	var group := ButtonGroup.new()
-	live_btn = _button("Live", func(): mode_selected.emit(false))
-	build_btn = _button("Build & Buy", func(): mode_selected.emit(true))
-	for b in [live_btn, build_btn]:
-		b.toggle_mode = true
-		b.button_group = group
-		vb.add_child(b)
-	live_btn.button_pressed = true
-	expand_btn = _button("Expand House", func(): expand_pressed.emit())
-	vb.add_child(expand_btn)
-	vb.add_child(_button("Walls Up / Down", func(): walls_pressed.emit()))
-	vb.add_child(_button("Save Game", func(): save_pressed.emit()))
-	vb.add_child(_button("Settings", func(): open_settings()))
-	vb.add_child(_button("Journal", func(): open_journal()))
-	vb.add_child(_button("How to Play", func(): help_panel.visible = true))
+	vb.add_theme_constant_override("separation", 8)
+	var title := _label("Knitting Empire", 24, GOLD)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+	var shut := func(): game_menu.visible = false
+	vb.add_child(_button("Back to the farm", shut))
+	vb.add_child(_button("Save Game", func(): shut.call(); save_pressed.emit()))
+	vb.add_child(_button("Settings", func(): shut.call(); open_settings()))
+	vb.add_child(_button("Journal", func(): shut.call(); open_journal()))
+	vb.add_child(_button("How to Play", func(): shut.call(); help_panel.visible = true))
 	var new_btn := _button("New Game", func(): pass)
-	new_btn.pressed.connect(_confirm_then.bind(new_btn, "Click again: lose this farm", func(): new_game_pressed.emit()))
+	new_btn.pressed.connect(_confirm_then.bind(new_btn, "Click again: lose this farm", func(): shut.call(); new_game_pressed.emit()))
 	vb.add_child(new_btn)
 	for c in vb.get_children():
-		(c as Button).custom_minimum_size = Vector2(170, 0)
-		(c as Button).alignment = HORIZONTAL_ALIGNMENT_LEFT
-	root.add_child(vb)
-	_place(vb, 0.0, 0.0, Vector2(16, 104))
+		if c is Button:
+			(c as Button).custom_minimum_size = Vector2(240, 38)
+	game_menu.add_child(vb)
+	game_menu.visible = false
+	root.add_child(game_menu)
+	_place(game_menu, 0.5, 0.5, Vector2.ZERO)
+
+
+func toggle_game_menu() -> void:
+	game_menu.visible = not game_menu.visible
+	if game_menu.visible:
+		click("ui_open")
+		game_menu.move_to_front()
+
+
+# --- hotbar and bag ------------------------------------------------------------
+
+const HOTBAR := 9
+
+
+## One square of the hotbar or the bag: a token for the thing in it, how many, and (on the bar)
+## the number key that picks it.
+class Slot extends Button:
+	## What each thing she can carry is called, and the colour of its token until it has a picture.
+	const ITEM_INFO := {
+		"wool": ["Wool", Color(0.97, 0.97, 0.94)],
+		"turnip": ["Turnip", Color(0.82, 0.62, 0.9)],
+		"pumpkin": ["Pumpkin", Color(0.98, 0.55, 0.15)],
+		"sweater": ["Sweater", Color(0.85, 0.25, 0.2)],
+	}
+
+	static func item_name(item: String) -> String:
+		return str(ITEM_INFO[item][0]) if ITEM_INFO.has(item) else item.capitalize()
+
+	var id := ""
+	var n := 0
+	var key := 0 # 1..9 on the hotbar, 0 in the bag
+	var chosen := false # in her hand
+	var picked := false # clicked in the bag, about to be swapped
+
+	func show_item(item: String, count: int, in_hand: bool, is_picked: bool) -> void:
+		if item == id and count == n and in_hand == chosen and is_picked == picked:
+			return
+		id = item
+		n = count
+		chosen = in_hand
+		picked = is_picked
+		tooltip_text = "" if id == "" else "%s × %d" % [item_name(id), n]
+		queue_redraw()
+
+	func _draw() -> void:
+		var f := get_theme_default_font()
+		if chosen or picked:
+			draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(0.95, 0.80, 0.46) if chosen else Color(0.6, 0.85, 1.0), false, 3.0)
+		if id != "":
+			var col: Color = ITEM_INFO[id][1] if ITEM_INFO.has(id) else Color.from_hsv(float(id.hash() % 360) / 360.0, 0.45, 0.85)
+			draw_circle(size * 0.5 + Vector2(0, 1.5), size.x * 0.27, Color(0, 0, 0, 0.35))
+			draw_circle(size * 0.5, size.x * 0.27, col)
+			var t := str(n)
+			var w := f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+			draw_string_outline(f, Vector2(size.x - w - 5, size.y - 5), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+			draw_string(f, Vector2(size.x - w - 5, size.y - 5), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1))
+		if key > 0:
+			draw_string(f, Vector2(5, 14), str(key), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.55))
+
+
+func _slot(i: int) -> Slot:
+	var b := Slot.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(48, 48)
+	b.key = i + 1 if i < HOTBAR else 0
+	b.pressed.connect(func(): click(); _slot_clicked(i))
+	slot_btns.append(b)
+	return b
+
+
+## The bar along the bottom: nine slots (keys 1 to 9), then the bag and Build & Buy.
+func _build_hotbar() -> void:
+	hotbar = PanelContainer.new()
+	hotbar.add_theme_stylebox_override("panel", _sb(BG, 12, BORDER, 6.0))
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 4)
+	for i in HOTBAR:
+		hb.add_child(_slot(i))
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(6, 0)
+	hb.add_child(gap)
+	var bag := _button("Bag", func(): toggle_bag())
+	bag.tooltip_text = "Everything she carries (I)"
+	hb.add_child(bag)
+	build_btn = _button("Build", func(): mode_selected.emit(build_btn.button_pressed))
+	build_btn.toggle_mode = true
+	build_btn.tooltip_text = "Build & Buy (B)"
+	hb.add_child(build_btn)
+	for b in [bag, build_btn]:
+		b.custom_minimum_size = Vector2(0, 48)
+	hotbar.add_child(hb)
+	root.add_child(hotbar)
+	_place(hotbar, 0.5, 1.0, Vector2(0, 14))
+
+
+## The bag: the other 27 slots. With it open, click one slot and then another to swap them
+## (the hotbar's slots too).
+func _build_bag() -> void:
+	bag_panel = PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	vb.add_child(_label("Bag", 20, GOLD))
+	var grid := GridContainer.new()
+	grid.columns = HOTBAR
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	for i in range(HOTBAR, Game.SLOTS):
+		grid.add_child(_slot(i))
+	vb.add_child(grid)
+	vb.add_child(_label("Click a slot, then another, to swap them · I or Esc closes", 11, Color(0.85, 0.8, 0.7)))
+	bag_panel.add_child(vb)
+	bag_panel.visible = false
+	root.add_child(bag_panel)
+	_place(bag_panel, 0.5, 1.0, Vector2(0, 96))
+
+
+func toggle_bag() -> void:
+	bag_panel.visible = not bag_panel.visible
+	_picked = -1
+	if bag_panel.visible:
+		click("ui_open")
+		bag_panel.move_to_front()
+
+
+func _slot_clicked(i: int) -> void:
+	if not bag_panel.visible:
+		hot_sel = i # only the hotbar can be clicked with the bag shut
+		return
+	if _picked < 0:
+		if Game.slots[i] != "":
+			_picked = i
+	else:
+		Game.swap_slots(_picked, i)
+		_picked = -1
+
+
+## Number keys 1 to 9 (main.gd): puts that hotbar slot in her hand.
+func hotbar_key(n: int) -> void:
+	hot_sel = clampi(n - 1, 0, HOTBAR - 1)
+	click()
+
+
+## The id of the thing in her hand ("" for an empty slot).
+func selected_item() -> String:
+	return str(Game.slots[hot_sel])
+
+
+func _update_slots() -> void:
+	Game.sync_slots()
+	for i in slot_btns.size():
+		var id := str(Game.slots[i])
+		slot_btns[i].show_item(id, Game.count(id) if id != "" else 0, i == hot_sel, i == _picked)
+
+
+## Settings switches for the parts of the HUD that are off by default ("fps", "camera_pad").
+func set_option(option: String, on: bool) -> void:
+	match option:
+		"fps":
+			fps_label.visible = on
+			fps_check.set_pressed_no_signal(on)
+		"camera_pad":
+			cam_pad.visible = on
+			cam_pad_check.set_pressed_no_signal(on)
 
 
 ## A small bar for progress (crop growth, wool, an action), Sims-green unless given a colour.
@@ -565,10 +732,14 @@ const NEED_INFO := {
 }
 
 
-## The needs panel: six needs in two columns, each an icon badge, a name and a bar whose arrows
-## show which way it's heading. Above them, while she's busy, what she's doing and a Stop button.
+const NEED_LOW := 35.0
+
+## The needs panel: each need is an icon badge, a name and a bar whose arrows show which way it's
+## heading. A need only shows while it is low (under NEED_LOW); hold Tab to see all six. Above
+## them, while she's busy, what she's doing and a Stop button.
 func _build_needs() -> void:
 	var pc := PanelContainer.new()
+	needs_panel = pc
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
 	now_row = HBoxContainer.new()
@@ -586,8 +757,7 @@ func _build_needs() -> void:
 	now_row.visible = false
 	vb.add_child(now_row)
 	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 16)
+	grid.columns = 1
 	grid.add_theme_constant_override("v_separation", 8)
 	for need in Game.NEEDS:
 		var info: Array = NEED_INFO[need]
@@ -656,6 +826,9 @@ func _update_needs(delta: float) -> void:
 		elif r < -0.04:
 			t = -1
 		needs_meters[need].set_value(v / 100.0, t)
+		needs_cells[need].visible = needs_all or v < NEED_LOW or Input.is_key_pressed(KEY_TAB)
+	# only what needs her attention: the low needs, and what she's doing
+	needs_panel.visible = now_row.visible or needs_cells.values().any(func(c): return c.visible)
 	if sample:
 		_need_t = 0.0
 		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("her thin city coat" if Game.worn_quality <= 1 else "a %s sweater she knit" % Game.stars(Game.worn_quality))
@@ -719,6 +892,8 @@ func _sum_pad() -> void:
 
 func _build_camera_pad() -> void:
 	var pc := PanelContainer.new()
+	cam_pad = pc
+	pc.visible = false # off unless switched on in settings: the keys and the trackpad do it all
 	pc.add_theme_stylebox_override("panel", _sb(BG, 12, BORDER, 6.0))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
@@ -772,7 +947,13 @@ func _build_catalog() -> void:
 	catalog_panel = PanelContainer.new()
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
-	vb.add_child(_label("Build & Buy", 20, GOLD))
+	var head := HBoxContainer.new()
+	var title := _label("Build & Buy", 20, GOLD)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	expand_btn = _button("Expand House", func(): expand_pressed.emit())
+	head.add_child(expand_btn)
+	vb.add_child(head)
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 6)
 	vb.add_child(tabs)
@@ -842,7 +1023,7 @@ func _build_holding() -> void:
 	holding_bar.add_child(_button("Cancel  (Esc)", func(): cancel_pressed.emit()))
 	holding_bar.visible = false
 	root.add_child(holding_bar)
-	_place(holding_bar, 0.5, 1.0, Vector2(0, 24))
+	_place(holding_bar, 0.5, 1.0, Vector2(0, 96)) # above the hotbar
 
 
 func _build_toast() -> void:
@@ -897,7 +1078,7 @@ func _build_dialogue() -> void:
 		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dlg_panel.visible = false
 	root.add_child(dlg_panel)
-	_place(dlg_panel, 0.5, 1.0, Vector2(0, 24))
+	_place(dlg_panel, 0.5, 1.0, Vector2(0, 96))
 
 
 ## A villager speaks: name, 0..5 friendship hearts and their line.
@@ -932,7 +1113,7 @@ func _build_chat() -> void:
 	chat = preload("res://scripts/chat_panel.gd").new()
 	chat.build(self)
 	root.add_child(chat)
-	_place(chat, 0.5, 1.0, Vector2(0, 24))
+	_place(chat, 0.5, 1.0, Vector2(0, 96))
 
 
 func is_chat_open() -> bool:
@@ -960,11 +1141,12 @@ func _build_help() -> void:
 
 [b]Live mode:[/b] click the ground to walk; hold [b]Shift[/b] to jog. Click things (chair, bed, kitchen, soil plots, sheep, shipping bin) for a menu of actions.
 [b]Farming:[/b] plant seeds in the soil plots, water them every day, harvest when they glow. Eat crops at the kitchen or ship them.
-[b]Build & Buy:[/b] pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
-[b]Camera:[/b] use the camera pad (bottom left), WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · the [b]lock[/b] button (or [b]Space[/b]) locks the camera onto your character · [b]C[/b] toggles walls.
+[b]Build & Buy[/b] ([b]B[/b], or Build on the bar): pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
+[b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag. Her needs show up bottom left when one runs low; hold [b]Tab[/b] to see them all.
+[b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons.
 [b]Maplewood:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa at the market for today's price, buy wool and sheep from Theo, and buy Rosewood Cottage from Mabel. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
-[b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (left menu).
+[b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (Menu, or [b]Esc[/b]).
 [b]Days:[/b] sleep in your bed to start a new day. Watered crops grow overnight. The game saves when you sleep and when you quit. Sound, music, picture quality and full screen are in [b]Settings[/b]."""
 	vb.add_child(rt)
 	var go := _button("Let's knit!", func(): help_panel.visible = false)
@@ -982,7 +1164,6 @@ func _build_help() -> void:
 func set_build_mode(on: bool) -> void:
 	catalog_panel.visible = on
 	build_btn.set_pressed_no_signal(on)
-	live_btn.set_pressed_no_signal(not on)
 	if not on:
 		set_holding(false)
 
@@ -1037,28 +1218,18 @@ func fade_sleep() -> void:
 
 func _process(_delta: float) -> void:
 	_fps_t -= _delta
-	if _fps_t <= 0.0:
+	if _fps_t <= 0.0 and fps_label.visible:
 		_fps_t = 0.5
 		var fps := Engine.get_frames_per_second()
 		fps_label.text = "%d FPS" % fps
 		fps_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if fps >= 50 else (Color(1.0, 0.85, 0.4) if fps >= 30 else Color(1.0, 0.5, 0.45)))
 	res_labels["coins"].text = "%d" % Game.coins
-	for k in ["wool", "turnip", "pumpkin", "sweater"]:
-		res_labels[k].text = "%d %s" % [Game.count(k), _pretty(k, Game.count(k))]
+	_update_slots()
 	_update_needs(_delta)
 	clock_label.text = "%s, Day %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.clock_text()]
 	if catalog_panel.visible:
 		for id in item_buttons:
 			item_buttons[id].disabled = Game.coins < int(Catalog.ITEMS[id]["price"])
-
-
-func _pretty(k: String, n: int) -> String:
-	match k:
-		"wool": return "wool"
-		"turnip": return "turnip" if n == 1 else "turnips"
-		"pumpkin": return "pumpkin" if n == 1 else "pumpkins"
-		"sweater": return "sweater" if n == 1 else "sweaters"
-	return k
 
 
 # --- story scenes ----------------------------------------------------------------
@@ -1514,6 +1685,16 @@ func _build_settings() -> void:
 	fullscreen_check.focus_mode = Control.FOCUS_NONE
 	fullscreen_check.toggled.connect(func(on): click(); fullscreen_toggled.emit(on))
 	vb.add_child(fullscreen_check)
+	fps_check = CheckButton.new()
+	fps_check.text = "Show frames per second"
+	cam_pad_check = CheckButton.new()
+	cam_pad_check.text = "On-screen camera buttons"
+	for pair in [[fps_check, "fps"], [cam_pad_check, "camera_pad"]]:
+		var cb: CheckButton = pair[0]
+		var option: String = pair[1]
+		cb.focus_mode = Control.FOCUS_NONE
+		cb.toggled.connect(func(on): click(); set_option(option, on); hud_option.emit(option, on))
+		vb.add_child(cb)
 	vb.add_child(_label("Music and sounds are placeholders made in code (tools/make_audio.py).", 12, Color(TEXT, 0.55)))
 	_build_god_mode(vb)
 	var close := _button("Close", func(): settings_panel.visible = false)
@@ -1719,7 +1900,7 @@ func _build_tip() -> void:
 			tip_panel.visible = false)
 	tip_panel.visible = false
 	root.add_child(tip_panel)
-	_place(tip_panel, 0.5, 1.0, Vector2(0, 26))
+	_place(tip_panel, 0.5, 1.0, Vector2(0, 98))
 
 
 func show_tip(text: String, secs := 11.0) -> void:

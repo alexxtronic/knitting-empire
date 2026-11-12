@@ -37,6 +37,10 @@ var save_path := "user://knitting_empire_save.json"
 
 var coins: int = 250
 var inv := {}
+## Where each carried thing sits: item ids, "" for an empty slot. The first nine are the hotbar,
+## the rest the bag (hud.gd). Counts stay in `inv`; sync_slots() keeps the two in step.
+const SLOTS := 36
+var slots: Array = []
 # --- needs, 0..100 (100 = fully met). Shown in the needs panel (hud.gd). ---------
 var energy: float = 100.0
 var fullness: float = 80.0 # shown as "Hunger"
@@ -89,6 +93,7 @@ func load_tuning() -> void:
 func reset() -> void:
 	coins = START_COINS
 	inv = START_INVENTORY.duplicate()
+	slots = []
 	energy = 100.0
 	fullness = 80.0
 	happiness = 70.0
@@ -209,6 +214,29 @@ func add_item(id: String, n: int = 1) -> void:
 	inv[id] = int(inv.get(id, 0)) + n
 
 
+## Gives every carried thing a slot (the first empty one) and empties the slots of things used up.
+func sync_slots() -> void:
+	if slots.size() != SLOTS:
+		slots.resize(SLOTS)
+		for i in SLOTS:
+			if slots[i] == null:
+				slots[i] = ""
+	for i in SLOTS:
+		if slots[i] != "" and count(str(slots[i])) <= 0:
+			slots[i] = ""
+	for id in inv:
+		if int(inv[id]) > 0 and not slots.has(id):
+			var free := slots.find("")
+			if free >= 0:
+				slots[free] = id
+
+
+func swap_slots(a: int, b: int) -> void:
+	var t = slots[a]
+	slots[a] = slots[b]
+	slots[b] = t
+
+
 func count(id: String) -> int:
 	return int(inv.get(id, 0))
 
@@ -305,7 +333,7 @@ func add_journal(kind: String, title: String, text: String) -> void:
 func to_dict() -> Dictionary:
 	return {
 		"version": SAVE_VERSION, "flags": flags, "chats": chats,
-		"coins": coins, "inv": inv, "energy": energy, "fullness": fullness,
+		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
 		"knit_xp": knit_xp, "worn_quality": worn_quality,
 		"day": day, "hour": hour, "house_level": house_level,
@@ -355,6 +383,14 @@ func from_dict(d: Dictionary) -> void:
 	var saved_inv: Dictionary = d.get("inv", {})
 	for k in saved_inv:
 		inv[str(k)] = int(saved_inv[k])
+	slots = []
+	var seen := {}
+	for id in d.get("slots", []):
+		var sid := str(id)
+		slots.append(sid if not seen.has(sid) else "") # an id sits in one slot only
+		if sid != "":
+			seen[sid] = true
+	sync_slots()
 	energy = float(d.get("energy", 100.0))
 	fullness = float(d.get("fullness", 80.0))
 	happiness = float(d.get("happiness", 70.0))

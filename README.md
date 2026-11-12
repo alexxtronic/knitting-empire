@@ -22,18 +22,18 @@ Controls:
 - C toggles the walls.
 - B toggles Build mode. In Build mode, R rotates a piece, X sells it and Esc cancels.
 
-The game opens on a title screen (Continue, New Game, Settings, Quit) over the farm. **Settings** (also in the left menu) has the picture quality, music and sound volumes, and full screen, all kept per computer in `user://settings.cfg`.
+The game opens on a title screen (Continue, New Game, Settings, Quit) over the farm. **Settings** (also behind the Menu button, or Esc) has the picture quality, music and sound volumes, full screen, and switches for the frame counter and the on-screen camera buttons, all kept per computer in `user://settings.cfg`.
 
 ## What's in it
 
-- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. Fixing the fence with him brings back the first memory thread (a sepia flashback to the navy sweater her ex threw away). She sells her first sweater to Rosa at the market, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. It takes about ten minutes, with choices that set flags and relationship stats for later. Memories and notes go into the **Journal** (left menu). Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
+- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. Fixing the fence with him brings back the first memory thread (a sepia flashback to the navy sweater her ex threw away). She sells her first sweater to Rosa at the market, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. It takes about ten minutes, with choices that set flags and relationship stats for later. Memories and notes go into the **Journal** (Menu, or Esc). Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
 - **Home and farm:** a house you can expand, furniture to place, sheep to shear, crops to plant, water and harvest, and a shipping bin.
 - **Maplewood:**
   - three villagers (Rosa, Theo, Mabel) with friendship hearts, gifts and dialogue
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out
-- **Life-sim UI:** actions open in a ring round whatever you click, with progress bars on things that take time (crops, wool, knitting). A needs panel shows Energy, Hunger, Happiness, Love, Warmth and Fitness as bars with trend arrows. Build mode shows furniture as picture cards rendered in the game.
+- **Life-sim UI:** actions open in a ring round whatever you click, with progress bars on things that take time (crops, wool, knitting). The screen is kept bare: a Menu button, her coins, the clock, and a hotbar along the bottom with what she carries (keys 1 to 9 pick a slot, I opens the bag of 27 more, and Build at its end opens Build & Buy). Energy, Hunger, Happiness, Love, Warmth and Fitness are bars with trend arrows that show only while a need is low; hold Tab to see all six. Build mode shows furniture as picture cards rendered in the game.
 - **Needs:** Warmth follows the weather, the time of day, being indoors and the best sweater she owns (knitting gets better with practice). Love fills from time with people. Fitness grows with walking and farm work and makes her walk a little faster.
 - **Rowan (romance v1):** after Act 1, talking to Rowan opens one new topic a day as he warms up: his sheep, Gran (and Nora's memory of Gran's burnt bread), the long evenings on the hill. Gifts land differently with each villager (loved, liked, anything else), and with Rowan they can grow romance; the first sweater you give him has its own scene. At three hearts he asks Nora up to the rock in the back field at sunset, where she darns the hat Gran knit him and decides how close to let him. Later, if he trusts her, he tells her about Anna.
 - **Talking to villagers:** besides **Talk** (hand-written lines), **Chat...** lets you type to Rosa, Theo, Mabel and Rowan, who answer in character (see [Chatting with villagers](#chatting-with-villagers)).
@@ -66,7 +66,7 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/data.gd` | loads and cross-checks the data files |
 | `scripts/main.gd` | world, input, camera, actions, building, autotest |
 | `scripts/game_state.gd` | autoloaded save data, economy and story flags |
-| `scripts/hud.gd` | HUD, menus, camera pad, dialogue |
+| `scripts/hud.gd` | HUD, hotbar and bag, menus, camera pad, dialogue |
 | `scripts/town.gd`, `villager.gd`, `dialogue.gd` | Maplewood |
 | `scripts/player.gd` | the character you play and her activity states |
 | `scripts/body.gd` | a skinned character body; picks and cross-fades animation loops |

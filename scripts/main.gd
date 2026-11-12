@@ -319,6 +319,7 @@ func _connect_hud() -> void:
 	hud.volumes_changed.connect(audio.set_volumes)
 	hud.music_slider.get_parent().visible = GameAudio.MUSIC_ON
 	hud.fullscreen_toggled.connect(set_fullscreen)
+	hud.hud_option.connect(_save_hud_option)
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -455,7 +456,7 @@ const MIN_3D_SCALE := [0.25, 0.3, 0.35]
 const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 
 # --- graphics setting ----------------------------------------------------------------
-## Low / Medium / High, cycled from the left-hand menu and kept in user://settings.cfg (not the
+## Low / Medium / High, set in Settings and kept in user://settings.cfg (not the
 ## save file: it belongs to the computer, not the farm). The autotest always runs on High.
 const GFX_NAMES := ["Low", "Medium", "High"]
 const SETTINGS_PATH := "user://settings.cfg"
@@ -1168,8 +1169,14 @@ func _input(e: InputEvent) -> void:
 	if god.active and god.handle_key(kc, k):
 		get_viewport().set_input_as_handled()
 		return
+	if kc >= KEY_1 and kc <= KEY_9 and not god.active:
+		hud.hotbar_key(kc - KEY_0)
+		get_viewport().set_input_as_handled()
+		return
 	var handled := true
 	match kc:
+		KEY_I:
+			hud.toggle_bag()
 		KEY_Q:
 			cam_yaw_goal -= PI * 0.5
 		KEY_E:
@@ -1191,8 +1198,16 @@ func _input(e: InputEvent) -> void:
 				hud.hide_menu()
 			elif hud.help_panel.visible:
 				hud.help_panel.visible = false
+			elif hud.bag_panel.visible:
+				hud.toggle_bag()
+			elif hud.settings_panel.visible:
+				hud.settings_panel.visible = false
+			elif hud.journal_panel.visible:
+				hud.journal_panel.visible = false
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
+			else:
+				hud.toggle_game_menu()
 		_:
 			handled = false
 	if handled:
@@ -1889,10 +1904,23 @@ func _title_new_game() -> void:
 	_begin_new_story()
 
 
+## The frame counter and the on-screen camera buttons are off unless switched on in settings.
+func _save_hud_option(option: String, on: bool) -> void:
+	if _autotest_dir == "":
+		var cfg := ConfigFile.new()
+		cfg.load(SETTINGS_PATH)
+		cfg.set_value("hud", option, on)
+		cfg.save(SETTINGS_PATH)
+
+
 func _load_display() -> void:
 	if _autotest_dir != "":
 		return
 	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		for option in ["fps", "camera_pad"]:
+			hud.set_option(option, bool(cfg.get_value("hud", option, false)))
+	cfg = ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK and bool(cfg.get_value("display", "fullscreen", false)):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
@@ -2878,6 +2906,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=hud" in OS.get_cmdline_user_args(): # just the hotbar, bag, menu and needs checks
+		await _wait(1.5)
+		await _hud_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -2888,6 +2922,7 @@ func _autotest() -> void:
 	await _shot("02_menu.png")
 	hud.hide_menu()
 	_check("the needs panel shows six needs", hud.needs_meters.size() == 6)
+	await _hud_checks()
 	var happy0 := Game.happiness
 
 	await _graphics_checks()
@@ -3043,7 +3078,7 @@ func _house_checks(showcase: bool) -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
 	Game.hour = 11.0
-	var ids := ["rocking_chair", "fireplace", "kitchen", "sofa", "armchair", "spinning_wheel", "dining_table", "bookshelf", "wardrobe", "lamp", "plant"]
+	var ids := ["rocking_chair", "fireplace", "kitchen", "sofa", "armchair", "spinning_wheel", "dining_table", "bookshelf", "wardrobe", "lamp", "plant", "rug_red"]
 	var modelled: Array = []
 	var flames := 0
 	var lights := 0
@@ -3865,6 +3900,77 @@ func _anim_bones(a: Animation) -> Array:
 		out.append(str(a.track_get_path(i).get_concatenated_subnames()) + ":" + str(a.track_get_type(i)))
 	out.sort()
 	return out
+
+
+## The pared-down HUD: the hotbar and bag, the menu behind Esc, needs that show only when low,
+## and the frame counter and camera buttons off until settings turns them on.
+func _hud_checks() -> void:
+	var inv0: Dictionary = Game.inv.duplicate()
+	var energy0 := Game.energy
+	Game.add_item("wool", 1)
+	await _wait(0.1)
+	var wool_at: int = Game.slots.find("wool")
+	_check("hotbar: nine slots and a bag of 27, wool in slot %d showing %d" % [wool_at + 1, hud.slot_btns[maxi(wool_at, 0)].n],
+		hud.slot_btns.size() == 36 and wool_at >= 0 and wool_at < 9 and hud.slot_btns[wool_at].n == Game.count("wool") and hud.hotbar.visible)
+	await _key_tap(KEY_3)
+	var third := hud.hot_sel
+	await _key_tap(KEY_1)
+	_check("hotbar: number keys pick the slot in her hand (3 gave slot %d, 1 gave slot %d holding '%s')" % [third + 1, hud.hot_sel + 1, hud.selected_item()],
+		third == 2 and hud.hot_sel == 0 and hud.selected_item() == str(Game.slots[0]))
+	await _shot("46_hud.png")
+	# something new takes the first empty slot, and leaves it when it's used up
+	Game.add_item("test_thing", 2)
+	await _wait(0.1)
+	var thing_at: int = Game.slots.find("test_thing")
+	Game.take_item("test_thing", 2)
+	await _wait(0.1)
+	Game.inv.erase("test_thing")
+	_check("hotbar: a new thing gets a slot (%d) and gives it up when it's gone" % (thing_at + 1), thing_at >= 0 and not Game.slots.has("test_thing"))
+	# the bag: I opens it, two clicks swap slots, Esc shuts it
+	await _key_tap(KEY_I)
+	var bag_open := hud.bag_panel.visible
+	hud.slot_btns[wool_at].pressed.emit()
+	hud.slot_btns[20].pressed.emit()
+	await _wait(0.1)
+	var moved: bool = Game.slots[20] == "wool" and hud.slot_btns[20].n == Game.count("wool")
+	await _shot("46_bag.png")
+	hud.slot_btns[20].pressed.emit()
+	hud.slot_btns[wool_at].pressed.emit()
+	await _key_tap(KEY_ESCAPE)
+	_check("bag: I opens it (%s), clicking two slots swaps them (%s) and back, Esc shuts it" % [bag_open, moved],
+		bag_open and moved and Game.slots[wool_at] == "wool" and not hud.bag_panel.visible)
+	# Esc with nothing else open is the menu
+	await _key_tap(KEY_ESCAPE)
+	var menu_open := hud.game_menu.visible
+	await _key_tap(KEY_ESCAPE)
+	_check("menu: Esc opens it (%s) and shuts it again" % menu_open, menu_open and not hud.game_menu.visible)
+	# B and the Build button on the bar
+	await _key_tap(KEY_B)
+	var build_on := mode == Mode.BUILD and hud.build_btn.button_pressed and hud.catalog_panel.visible
+	await _key_tap(KEY_B)
+	_check("build: B opens Build & Buy and lights the bar's button (%s), B again leaves" % build_on, build_on and mode == Mode.LIVE and not hud.build_btn.button_pressed)
+	# needs only show while low
+	for need in Game.NEEDS:
+		Game.set(need, 80.0)
+	Game.energy = 20.0
+	await _wait(0.2)
+	var low: Array = Game.NEEDS.filter(func(n): return hud.needs_cells[n].visible)
+	hud.needs_all = true
+	await _wait(0.2)
+	var all: Array = Game.NEEDS.filter(func(n): return hud.needs_cells[n].visible)
+	hud.needs_all = false
+	_check("needs: only the low one shows (%s), all six on request (%d)" % [str(low), all.size()], low == ["energy"] and all.size() == 6 and hud.needs_panel.visible)
+	Game.energy = energy0
+	# the frame counter and the camera buttons are off until settings turns them on
+	var off := not hud.fps_label.visible and not hud.cam_pad.visible
+	hud.set_option("fps", true)
+	hud.set_option("camera_pad", true)
+	var on := hud.fps_label.visible and hud.cam_pad.visible and hud.fps_check.button_pressed
+	hud.set_option("fps", false)
+	hud.set_option("camera_pad", false)
+	_check("settings: frame counter and camera buttons start hidden (%s) and can be shown (%s)" % [off, on], off and on)
+	Game.inv = inv0
+	await _wait(0.1)
 
 
 func _key_tap(kc: Key, hold := 0.0) -> void:
