@@ -17,6 +17,7 @@ signal god_time(hour: float) # god mode (settings): jump the clock
 signal god_weather(weather: String) # "clear" or "rain"
 signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
+signal cinematic_pressed # Menu > Cinematic camera (cinematic.gd)
 signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
 signal rotate_pressed
@@ -27,6 +28,7 @@ signal cam_rotate(dir: int)
 signal cam_zoom(dir: int)
 
 const Catalog = preload("res://scripts/catalog.gd")
+const PhotoAlbum = preload("res://scripts/photo_album.gd")
 
 
 ## Small vector icons drawn in code, so they never depend on a font having the glyph.
@@ -195,6 +197,7 @@ var toast_meter: Meter
 var build_btn: Button # at the end of the hotbar
 var menu_btn: Button
 var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
+var album: PhotoAlbum # the photo album (photo_album.gd): what cinematic mode took
 var needs_panel: PanelContainer
 var cam_pad: PanelContainer
 var fps_check: CheckButton
@@ -304,6 +307,10 @@ func _ready() -> void:
 	_build_help()
 	_build_journal()
 	_build_game_menu()
+	album = PhotoAlbum.new()
+	album.setup(self)
+	root.add_child(album)
+	_place(album, 0.5, 0.5, Vector2.ZERO)
 	_build_bag()
 	fade = ColorRect.new()
 	fade.color = Color(0.02, 0.02, 0.06, 0.0)
@@ -540,6 +547,8 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Save Game", func(): shut.call(); save_pressed.emit()))
 	vb.add_child(_button("Settings", func(): shut.call(); open_settings()))
 	vb.add_child(_button("Journal", func(): shut.call(); open_journal()))
+	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
+	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))
 	vb.add_child(_button("How to Play", func(): shut.call(); help_panel.visible = true))
 	var new_btn := _button("New Game", func(): pass)
 	new_btn.pressed.connect(_confirm_then.bind(new_btn, "Click again: lose this farm", func(): shut.call(); new_game_pressed.emit()))

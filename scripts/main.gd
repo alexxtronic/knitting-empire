@@ -28,6 +28,7 @@ const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
 const Dog = preload("res://scripts/dog.gd")
+const Cinematic = preload("res://scripts/cinematic.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -94,6 +95,7 @@ var astar := AStarGrid2D.new()
 var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var hud: Hud
+var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
 var _knit_clock_was := true
@@ -256,6 +258,11 @@ func _ready() -> void:
 	fireflies.setup(self)
 	hud = Hud.new()
 	add_child(hud)
+	if _autotest_dir != "":
+		Cinematic.dir = _autotest_dir.path_join("photos") # never the player's own album
+	cinema = Cinematic.new()
+	cinema.main = self
+	add_child(cinema)
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -343,6 +350,7 @@ func _connect_hud() -> void:
 	hud.music_slider.get_parent().visible = GameAudio.MUSIC_ON
 	hud.fullscreen_toggled.connect(set_fullscreen)
 	hud.hud_option.connect(_save_hud_option)
+	hud.cinematic_pressed.connect(func(): cinema.enter())
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -1079,6 +1087,8 @@ func warmth_target() -> float:
 
 
 func _update_camera(delta: float) -> void:
+	if cinema.active:
+		return # cinematic.gd flies the camera
 	if not _photo_dof.is_empty():
 		_apply_photo_dof()
 	# close-ups get a soft background
@@ -1145,6 +1155,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if _autotest_dir != "" and e is InputEventMouse:
 		return # the autotest calls _live_click and friends itself; a real mouse would only disturb it
+	if cinema.active:
+		cinema.handle_mouse(e)
+		return
 	if god.active and god.handle_mouse(e):
 		return # the world editor: clicks pick things up and paint roads instead of walking Nora
 	if e is InputEventMouseButton:
@@ -1236,6 +1249,10 @@ func _input(e: InputEvent) -> void:
 			close_chat()
 			get_viewport().set_input_as_handled()
 		return
+	if cinema.active:
+		cinema.handle_key(kc) # every key belongs to the free camera while it flies
+		get_viewport().set_input_as_handled()
+		return
 	if hud.is_menu_open() and kc >= KEY_1 and kc <= KEY_9:
 		hud.pie.key(kc - KEY_0)
 		get_viewport().set_input_as_handled()
@@ -1261,6 +1278,8 @@ func _input(e: InputEvent) -> void:
 			walls_up = not walls_up
 		KEY_TAB:
 			toggle_dog()
+		KEY_P:
+			cinema.enter()
 		KEY_SPACE:
 			_set_cam_lock(not cam_follow, true)
 		KEY_B:
@@ -1284,6 +1303,8 @@ func _input(e: InputEvent) -> void:
 				hud.settings_panel.visible = false
 			elif hud.journal_panel.visible:
 				hud.journal_panel.visible = false
+			elif hud.album.visible:
+				hud.album.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -3575,6 +3596,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=photo" in OS.get_cmdline_user_args(): # just cinematic mode: the free camera, photos and the album
+		await _wait(1.5)
+		await _photo_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -3748,6 +3775,7 @@ func _autotest() -> void:
 	await _flock_checks()
 	await _light_checks()
 	await _dog_checks()
+	await _photo_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
@@ -5172,6 +5200,163 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 	up.set_meta("ke_test", true)
 	Input.parse_input_event(up)
 	await get_tree().process_frame
+
+
+## Cinematic mode (cinematic.gd): P frees the camera from Nora and stops the clock, it flies close
+## to the ground and no higher than 300 m, F saves a photo to the album (the autotest's own folder,
+## never the player's), the album lists, shows and deletes it, and Esc brings the camera back to Nora.
+## The minimap under the coins: where it sits, that it shows the world, a click on it walks her
+## there, it zooms; and a click held down on the ground walks her the way the mouse points until
+## the button comes up.
+func _minimap_checks() -> void:
+	var mm := hud.minimap
+	_check("there is a minimap", mm != null)
+	if mm == null:
+		return
+	_set_cam_lock(true)
+	hold_release()
+	player.cancel_activity()
+	player.walk([])
+	player.position = Vector3(4.6, 0, 4.9)
+	await _wait(0.8)
+	var vw := get_viewport().get_visible_rect().size
+	var r := mm.get_global_rect()
+	var coins := (hud.res_labels["coins"] as Control).get_global_rect()
+	_check("it sits in the top right corner under the coins (map %s, coins %s, screen %s)" % [r, coins, vw],
+		mm.is_visible_in_tree() and absf(r.end.x - (vw.x - 16.0)) < 2.0 and r.position.y > coins.end.y and r.size.x >= 150.0)
+	var img := mm._sv.get_texture().get_image()
+	var lo := 9.0
+	var hi := -9.0
+	for i in 64:
+		var c := img.get_pixel(int(i % 8) * 31 + 8, int(i / 8) * 31 + 8)
+		lo = minf(lo, c.get_luminance())
+		hi = maxf(hi, c.get_luminance())
+	_check("it shows the world from above, not a blank square (brightness %.2f..%.2f)" % [lo, hi], hi - lo > 0.08)
+	await _shot("50_minimap.png")
+	var crop := get_viewport().get_texture().get_image().get_region(Rect2i(Vector2i(r.position) - Vector2i(8, 60), Vector2i(r.size) + Vector2i(16, 68)))
+	crop.save_png(_autotest_dir.path_join("50_minimap_close.png"))
+	# a click on it walks her there
+	var goal := Vector3(10.5, 0, 6.5)
+	var m := mm.to_map(goal)
+	_check("the map and the world agree (%s back to %s)" % [m, mm.to_world(m)], mm.to_world(m).distance_to(goal) < 0.05)
+	_check("a click off the map does nothing", not mm.click(Vector2(-5, -5)))
+	var went := mm.click(m)
+	var t := 0.0
+	while t < 9.0 and player.position.distance_to(goal) > 0.6:
+		await _wait(0.25)
+		t += 0.25
+	_check("a click on the map walks her there (set off %s, %.1f m from it after %.1f s)" % [went, player.position.distance_to(goal), t],
+		went and player.position.distance_to(goal) < 0.8)
+	var s0 := mm.span()
+	mm.set_zoom(1)
+	await _wait(0.4)
+	_check("it zooms out and back (%.0f m -> %.0f m across)" % [s0, mm.span()], mm.span() > s0)
+	mm.set_zoom(-1)
+	# held down: she walks the way the mouse points until it comes up
+	player.walk([])
+	player.position = Vector3(4.6, 0, 4.9)
+	await _wait(0.6)
+	var p0 := player.position
+	var aim := Vector3(9.6, 0, 4.9) # 5 m east of her
+	_last_mouse = cam.unproject_position(aim)
+	_live_click(_last_mouse)
+	await _wait(1.8)
+	var gone := player.position - p0
+	_check("held down on the ground, she keeps walking toward the mouse (steering %s, %.1f m east)" % [_hold_steering, gone.x],
+		_hold_steering and gone.x > 1.2 and absf(gone.z) < 1.0)
+	await _shot("50_hold_walk.png")
+	hold_release()
+	await _wait(0.3)
+	var p1 := player.position
+	await _wait(0.6)
+	_check("let go and she stops where she is (%.2f m more, path %d)" % [player.position.distance_to(p1), player.path.size()],
+		player.position.distance_to(p1) < 0.25 and player.path.is_empty())
+	# a quick click still walks her all the way
+	_last_mouse = cam.unproject_position(player.position + Vector3(0, 0, 3.0))
+	_live_click(_last_mouse)
+	await _wait(0.05)
+	hold_release()
+	await _wait(0.5)
+	_check("a quick click still sends her all the way (path %d)" % player.path.size(), not player.path.is_empty() and not _hold_steering)
+	player.walk([])
+
+
+func _photo_checks() -> void:
+	_check("the photos go to the autotest's own folder (%s)" % Cinematic.dir, Cinematic.dir == _autotest_dir.path_join("photos"))
+	for f in Cinematic.list_photos():
+		Cinematic.delete_photo(f)
+	cinema.last_photo = ""
+	_set_cam_lock(true)
+	await _wait(0.5)
+	var clock0: bool = Game.time_running
+	var p0 := player.position
+	var hour0: float = Game.hour
+	await _key_tap(KEY_P)
+	await _wait(0.3)
+	_check("cinematic mode: P frees the camera, hides the HUD and stops the clock (active %s, HUD %s, clock %s)" % [cinema.active, hud.visible, Game.time_running],
+		cinema.active and not hud.visible and not Game.time_running)
+	var c0 := cam.global_position
+	await _key_tap(KEY_W, 1.0)
+	await _wait(0.8)
+	var moved := cam.global_position.distance_to(c0)
+	_check("WASD flies it and it glides to a stop (%.1f m; still moving at %.2f m/s); Nora and the clock stay put" % [moved, cinema.vel.length()],
+		moved > 2.0 and cinema.vel.length() < 0.3 and player.position.distance_to(p0) < 0.05 and Game.hour == hour0)
+	# right down to the ground
+	cinema.pos = Vector3(14.0, 1.5, 6.0)
+	await _key_tap(KEY_Q, 1.5)
+	_check("it sinks right down to the grass and no lower (%.2f m)" % cinema.pos.y, absf(cinema.pos.y - Cinematic.GROUND_CLEAR) < 0.001)
+	# up to the ceiling
+	cinema.pos = Vector3(42.0, 280.0, 12.0) # over the farm and the town, looking nearly straight down
+	cinema.yaw_goal = 0.0
+	cinema.pitch_goal = deg_to_rad(-78.0)
+	cinema.key_down[KEY_SHIFT] = true
+	await _key_tap(KEY_E, 2.0)
+	cinema.key_down.clear()
+	await _wait(0.6)
+	var far := cinema.clamp_pos(Vector3(5000, 0, -5000))
+	_check("Shift and E climb it to 300 m and it stops there (%.2f m, camera %.2f m); far away is clamped to the map (%s)" % [cinema.pos.y, cam.global_position.y, far],
+		absf(cinema.pos.y - Cinematic.MAX_HEIGHT) < 0.001 and absf(cam.global_position.y - Cinematic.MAX_HEIGHT) < 0.01
+		and far.x == Cinematic.BOUNDS.end.x and far.z == Cinematic.BOUNDS.position.y)
+	await _key_tap(KEY_F)
+	var t := 0.0
+	while cinema.last_photo == "" and t < 8.0: # it waits two drawn frames, so the hint is off the picture
+		await _wait(0.1)
+		t += 0.1
+	var high: String = cinema.last_photo
+	var img: Image = Image.load_from_file(high) if high != "" else null
+	_check("F takes a photo from up high: %s (%s)" % [high.get_file(), str(img.get_size()) if img else "missing"],
+		high != "" and FileAccess.file_exists(high) and img != null and img.get_width() >= 640 and img.get_height() >= 400)
+	await _shot("49_cinematic_high.png")
+	# a close one: low over the farm, looking toward the house
+	cinema.pos = Vector3(9.0, 1.2, 9.5)
+	cinema.yaw_goal = deg_to_rad(10.0)
+	cinema.pitch_goal = deg_to_rad(-6.0)
+	await _wait(1.0)
+	var low: String = await cinema.take_photo()
+	await _shot("49_cinematic_low.png")
+	_check("a second photo, close to the ground: %s" % low.get_file(), low != "" and low != high and FileAccess.file_exists(low))
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.5)
+	var back := cam.global_position.distance_to(player.position)
+	_check("Esc goes back to Nora: the camera follows her again, the HUD is back, the clock runs (%.1f m from her, near plane %.2f)" % [back, cam.near],
+		not cinema.active and hud.visible and Game.time_running == clock0 and absf(back - cam_dist) < 3.0 and is_equal_approx(cam.near, 0.5))
+	# the album
+	hud.album.open()
+	await _wait(0.4)
+	_check("the photo album lists both photos, newest first (%d)" % hud.album.paths.size(),
+		hud.album.visible and hud.album.paths.size() == 2 and hud.album.paths[0] == low and hud.album.paths[1] == high and hud.album._grid.get_child_count() == 2)
+	await _shot("49_album.png")
+	hud.album.show_photo(1)
+	await _wait(0.3)
+	_check("a click shows a photo full size", hud.album._viewer.visible and hud.album._big.texture != null and hud.album.current == 1)
+	await _shot("49_album_photo.png")
+	hud.album.delete_current()
+	await _wait(0.2)
+	_check("Delete takes it out of the album and off the disk (%d left)" % hud.album.paths.size(),
+		not FileAccess.file_exists(high) and hud.album.paths.size() == 1 and hud.album.paths[0] == low and hud.album.current == 0)
+	await _key_tap(KEY_ESCAPE)
+	_check("Esc closes the album", not hud.album.visible)
+	Cinematic.delete_photo(low)
 
 
 func _camera_checks() -> void:
