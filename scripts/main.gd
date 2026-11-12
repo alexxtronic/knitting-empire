@@ -4884,6 +4884,20 @@ func _tool_checks() -> void:
 		if _held_id == tid and ms.size() >= 1 and _tool_hand.visible and fist:
 			shown.append(tid)
 		await _shot("47_in_hand_%s.png" % tid)
+		# and close up, from her right and a little in front, to see her fingers round it
+		var hand_at: Vector3 = _tool_hand.global_position
+		var fist_cam := Camera3D.new()
+		add_child(fist_cam)
+		var right: Vector3 = -player.global_transform.basis.x.normalized()
+		var front: Vector3 = player.global_transform.basis.z.normalized()
+		fist_cam.fov = 40.0
+		fist_cam.global_position = hand_at + right * 0.9 + front * 0.5 + Vector3(0, 0.15, 0)
+		fist_cam.look_at(hand_at + Vector3(0, -0.1, 0), Vector3.UP)
+		fist_cam.current = true
+		await _wait(0.2)
+		await _shot("47_fist_%s.png" % tid)
+		fist_cam.queue_free()
+		cam.current = true
 	_check("each of the six tools sits in her closed fist when picked (%s)" % ", ".join(shown), shown.size() == Game.TOOLS.size())
 	# a slot with no tool: the tool goes and her hand opens
 	var empty_slot := -1
