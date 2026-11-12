@@ -55,8 +55,12 @@ GRIPS = {
 # The knitting loop: extra twist (radians) about each bone's own length, right side; the left is
 # mirrored. The upper arm turns out (spreads the hands), the forearm and wrist turn palm down.
 KNIT_TWIST = {"nora_tripo": dict(UpperArm=0.3, LowerArm=-0.5, Hand=-0.5)}
+# How much of the loop's stroke to keep: the forearms rock in turn, one up while the other comes
+# down, and at full swing the needle tips part by several centimetres. Each arm key is scaled
+# about its mean, so the tips stay together and the hands still work.
+KNIT_SWING = {"nora_tripo": 0.2}
 # The needles: length past the index side and past the little-finger side, radius.
-NEEDLE = dict(tip=0.13, butt=0.075, r=0.0042)
+NEEDLE = dict(tip=0.15, butt=0.075, r=0.0042)
 
 
 def body_mesh():
@@ -192,7 +196,20 @@ def twist_knit_loop(rig):
             for f in comp.values():
                 f.update()
     act["knit_twist"] = dict(want)
-    print("[grip] SitKnit arms turned", want)
+    # the stroke: every arm curve scaled about its mean (by the ratio to what a past run left)
+    swing = KNIT_SWING[CID]
+    k = swing / float(act.get("knit_swing", 1.0))
+    if abs(k - 1.0) > 1e-9:
+        for f in fcs:
+            if any(('"%s%s"' % (side, b)) in f.data_path for side in ("Left", "Right") for b in ("UpperArm", "LowerArm", "Hand")):
+                vals = [p.co[1] for p in f.keyframe_points]
+                mean = sum(vals) / len(vals)
+                for p, v in zip(f.keyframe_points, vals):
+                    p.co[1] = mean + (v - mean) * k
+                    p.handle_left_type = p.handle_right_type = "AUTO_CLAMPED"
+                f.update()
+    act["knit_swing"] = swing
+    print("[grip] SitKnit arms turned", want, "stroke kept", swing)
 
 
 def hand_deform(rig, side):
