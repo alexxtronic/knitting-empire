@@ -139,6 +139,10 @@ func _set_cloth(bed: Node3D, age: float) -> void:
 		(m as ShaderMaterial).set_shader_parameter("breath", clampf((age - 1.0) / 1.5, 0.0, 1.0))
 
 
+func is_sitting() -> bool:
+	return _sitting
+
+
 func is_lying() -> bool:
 	return busy and _lying
 

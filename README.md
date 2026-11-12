@@ -1,6 +1,6 @@
 # Knitting Empire
 
-A cozy life-sim prototype built in Godot 4. Raise sheep, knit sweaters, grow crops, decorate your house, make friends in the town of Maplewood and buy property to rent out.
+A cozy life-sim prototype built in Godot 4. Raise sheep, knit sweaters, grow crops, decorate your house, make friends in the town of Maple Grove and buy property to rent out.
 
 ![Rowan and Nora](tools/character_build/lineup.png)
 
@@ -26,14 +26,14 @@ The game opens on a title screen (Continue, New Game, Settings, Quit) over the f
 
 ## What's in it
 
-- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus into Maplewood in the rain, walks down the road to her late grandmother's farm, gets the keys from Mabel, finds Gran's knitting basket and a letter, and meets Rowan when three sheep get out. Fixing the fence with him brings back the first memory thread (a sepia flashback to the navy sweater her ex threw away). She sells her first sweater to Rosa at the market, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. It takes about ten minutes, with choices that set flags and relationship stats for later. Memories and notes go into the **Journal** (Menu, or Esc). Old saves skip it; start a **New Game** to see it. A recording of the whole opening is in [`docs/opening.mp4`](docs/opening.mp4).
+- **Act 1: Cast On.** A new game opens on the story. Nora steps off the last bus in the rain, running from something she won't name, and walks up to the Welcome to Maple Grove sign. The rain stops, the arrival music swells, and the camera takes in the town (Hazel at her stall, Pip the postman on his round) before coming back to her: "I think I'm going to like it here." Wren the mayor welcomes her ("we've been expecting you"), walks her past the shops to meet Gus, Rosa, Theo, Hazel and Mabel, and leaves her at Gran's door. Inside, Gran's note on the coffee table goes into her bag, with 100 coins and a request: a little rent in Gran's tin each week (20c every 7 days, `data/economy.json` "story"). She buys yarn from Theo, knits her first sweater in the rocking chair (the first memory thread, a sepia flashback to the navy sweater her ex threw away), then follows the bleating to two stray sheep by the pond, where she meets Rowan. To keep them she buys wood from Gus at Home Goods, builds a pen panel by panel (**F**, or the Build pen button: click to lay a panel for 1 wood, right-click to take one up, drag to lay a run) and crafts a gate (**G**: 2 wood, `data/recipes.json`), then herds the strays in: they shy away from her. She sells the sweater to Rosa, where Theo pays her in wool, and ends the day on the porch with a voicemail from her lawyer and Rowan's lantern. Choices set flags and relationship stats for later. Memories and notes go into the **Journal** (Menu, or Esc). Old saves skip it; start a **New Game** to see it. The farm part is `scripts/homestead.gd`. A recording of the old opening is in [`docs/opening.mp4`](docs/opening.mp4).
 - **Home and farm:** a house you can expand, furniture to place, sheep to shear, crops to plant, water and harvest, and a shipping bin.
-- **Maplewood:**
-  - three villagers (Rosa, Theo, Mabel) with friendship hearts, gifts and dialogue
+- **Maple Grove:**
+  - villagers with friendship hearts, gifts and dialogue: Rosa (the market), Theo (Woolly Goods), Mabel (the Land Office), Hazel (the bakery), Gus (Home Goods: wood), Wren (the mayor) and Pip (the postman, who walks a round of the town's doors)
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out
-- **Life-sim UI:** actions open in a ring round whatever you click, with progress bars on things that take time (crops, wool, knitting). The screen is kept bare: a Menu button, her coins, the clock, and a hotbar along the bottom with what she carries (keys 1 to 9 pick a slot, I opens the bag of 27 more, and Build at its end opens Build & Buy). She owns six tools (hoe, watering can, shears, shovel, axe, scythe): with one in her hand a click uses it, so the hoe digs new beds on open ground, the shovel clears them, the axe takes wood from a tree once a day and the scythe cuts hay. Their hotbar pictures in `assets/icons` are cut from the reference sheet in `art/world_assets/tools` (`make_icons.py`). Energy, Hunger, Happiness, Love, Warmth and Fitness are bars with trend arrows, top left under the Menu button. Build mode shows furniture as picture cards rendered in the game.
+- **Life-sim UI:** actions open in a ring round whatever you click, with progress bars on things that take time (crops, wool, knitting). The screen is kept bare: a Menu button, her coins, the clock, and a hotbar along the bottom with what she carries (keys 1 to 9 pick a slot, I opens the bag of 27 more, and Build at its end opens Build & Buy). She owns six tools (hoe, watering can, shears, shovel, axe, scythe): with one in her hand a click uses it, so the hoe digs new beds on open ground, the shovel clears them, the axe takes wood from a tree once a day and the scythe cuts hay. A tool with a model (the axe so far, `assets/props/axe.glb`) shows in her right hand while it is picked. Their hotbar pictures in `assets/icons` are cut from the reference sheet in `art/world_assets/tools` (`make_icons.py`). Energy, Hunger, Happiness, Love, Warmth and Fitness are bars with trend arrows, top left under the Menu button. Build mode shows furniture as picture cards rendered in the game.
 - **Needs:** Warmth follows the weather, the time of day, being indoors and the best sweater she owns (knitting gets better with practice). Love fills from time with people. Fitness grows with walking and farm work and makes her walk a little faster.
 - **Rowan (romance v1):** after Act 1, talking to Rowan opens one new topic a day as he warms up: his sheep, Gran (and Nora's memory of Gran's burnt bread), the long evenings on the hill. Gifts land differently with each villager (loved, liked, anything else), and with Rowan they can grow romance; the first sweater you give him has its own scene. At three hearts he asks Nora up to the rock in the back field at sunset, where she darns the hat Gran knit him and decides how close to let him. Later, if he trusts her, he tells her about Anna.
 - **Talking to villagers:** besides **Talk** (hand-written lines), **Chat...** lets you type to Rosa, Theo, Mabel and Rowan, who answer in character (see [Chatting with villagers](#chatting-with-villagers)).
@@ -67,7 +67,8 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/main.gd` | world, input, camera, actions, building, autotest |
 | `scripts/game_state.gd` | autoloaded save data, economy and story flags |
 | `scripts/hud.gd` | HUD, hotbar and bag, menus, camera pad, dialogue |
-| `scripts/town.gd`, `villager.gd`, `dialogue.gd` | Maplewood |
+| `scripts/town.gd`, `villager.gd`, `dialogue.gd` | Maple Grove |
+| `scripts/homestead.gd`, `play_ui.gd`, `data/recipes.json` | Act 1's farm: the pen builder, gate crafting, the strays and herding, Gran's note and rent |
 | `scripts/player.gd` | the character you play and her activity states |
 | `scripts/body.gd` | a skinned character body; picks and cross-fades animation loops |
 | `scripts/story.gd`, `story_player.gd` | reads and plays the plain-text story scenes in `data/scenes/` |
@@ -150,12 +151,13 @@ Rowan (neutral): Fair enough.
 - `?` starts a choice, followed by `- option -> label | effects`.
 - Other commands move the camera, fade, show title cards, walk and animate characters, set flags, and change relationship stats.
 - `@memory on` / `@memory off` fade the sepia flashback look in and out. `@journal memory Title | text` (or `note`) writes to the Journal.
+- `@music arrival` plays `assets/audio/music_arrival.ogg` over the scene (`@music off` fades it). `@farm note` hands over Gran's note and her 100 coins and starts the rent; `@farm strays` puts the two stray sheep out by the pond.
 - `@time 21:30` sets the clock, `@sleep` ends the day, `give`/`take` also work with `coins`, and `@if has sweater -> label` branches on what's in the bag.
 - `@when hearts rowan >= 3` (or any stat, `hour < 17`, `has sweater`) holds a scene back until it's true. `@daily` lets at most one such scene play a day, which paces a run of talk topics. `@trigger gift rowan sweater` plays after a gift.
 - `@camera between rowan nora 4.5 low` drops the camera to a low, close angle for intimate moments.
 - Rowan's romance is in `data/scenes/rowan.scene`. Gift reactions are `likes` and `romance` in `villagers.json` and `gift_lines` in `dialogue.json`.
 - Staging commands set the goal shown at the top of the screen (with a marker on the map), make it rain, put down props like a bus or a suitcase, ring the phone, shake the camera, let the sheep out, and park a villager somewhere until a later scene sends them home.
-- A scene plays when you talk to someone (`@trigger talk rowan`), on a new game (`@trigger start`), when you walk into a named place from `data/areas.json` (`@trigger area farm_gate`), or after an event such as finishing a knit (`@trigger event knit_done`).
+- A scene plays when you talk to someone (`@trigger talk rowan`), on a new game (`@trigger start`), when you walk into a named place from `data/areas.json` (`@trigger area farm_gate`), or after an event such as finishing a knit (`@trigger event knit_done`). Act 1's farm fires `yarn_bought`, `wood_bought`, `pen_built` (a closed pen with a gate) and `sheep_penned`.
 - Act 1 is in `data/scenes/act1.scene`, which is a good worked example.
 - Relationships have three stats: **familiarity** (shown as hearts), **trust** and **romance**.
 - The autotest checks every scene file, so a typo or a jump to a missing label shows up as a failed check.

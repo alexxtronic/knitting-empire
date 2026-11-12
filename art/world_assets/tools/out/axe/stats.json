@@ -1,0 +1,41 @@
+{
+  "name": "axe",
+  "triangles": 6740,
+  "materials": [
+    "tool_wood",
+    "tool_endgrain",
+    "tool_iron",
+    "tool_rivet",
+    "tool_band",
+    "tool_knot"
+  ],
+  "size_m": [
+    0.306,
+    0.119,
+    0.649
+  ],
+  "min_m": [
+    -0.1,
+    -0.061,
+    -0.041
+  ],
+  "max_m": [
+    0.206,
+    0.058,
+    0.608
+  ],
+  "images": [
+    "tool_band",
+    "tool_band_n",
+    "tool_endgrain",
+    "tool_endgrain_n",
+    "tool_iron",
+    "tool_iron_n",
+    "tool_iron_r",
+    "tool_knot",
+    "tool_knot_n",
+    "tool_wood",
+    "tool_wood_n"
+  ],
+  "glb_bytes": 1354112
+}

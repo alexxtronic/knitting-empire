@@ -737,7 +737,7 @@ func _announce_tool() -> void:
 
 ## The id of the thing in her hand ("" for an empty slot).
 func selected_item() -> String:
-	return str(Game.slots[hot_sel])
+	return str(Game.slots[hot_sel]) if hot_sel < Game.slots.size() else "" # empty until the first sync
 
 
 func _update_slots() -> void:
