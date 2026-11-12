@@ -11,6 +11,7 @@ extends RefCounted
 
 const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
+const Planks = preload("res://scripts/planks.gd")
 
 const WALLS := {"front": Vector3(0, 0, 1), "back": Vector3(0, 0, -1), "left": Vector3(-1, 0, 0), "right": Vector3(1, 0, 0)}
 const T := 0.2 # wall thickness
@@ -58,6 +59,8 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 	]
 	for o in s.info.get("outside", []):
 		rects.append(Rect2(float(o[0]), float(o[1]), float(o[2]), float(o[3])))
+	# the same plank floor as the houses, in this shop's own shade, over the model's boards
+	Planks.lay(b, "floor", Vector3(-w + T, 0.0315, -d + T), Vector3(1, 0, 0), Vector3(0, 0, 1), size - Vector2(2 * T, 2 * T), Vector3.UP, [], hash(id), id)
 	var room := Node3D.new()
 	room.name = "Furnishings"
 	b.add_child(room)

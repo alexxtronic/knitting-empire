@@ -23,6 +23,7 @@ const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
+const Planks = preload("res://scripts/planks.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-8.0, -22.0)
@@ -669,10 +670,7 @@ func _rebuild_house() -> void:
 	var D := HOUSE_FRONT
 	var depth := D - z0
 	Catalog.box(house_root, Vector3(W + 0.7, 0.1, depth + 0.7), Vector3(W * 0.5, -0.04, z0 + depth * 0.5), Catalog.STONE)
-	var plank_cols := [Color(0.55, 0.36, 0.22), Color(0.6, 0.4, 0.25), Color(0.5, 0.33, 0.2), Color(0.57, 0.38, 0.23)]
-	var n := int(W / 0.4)
-	for i in n:
-		Catalog.box(house_root, Vector3(0.385, 0.04, depth), Vector3(0.2 + i * 0.4, 0.0, z0 + depth * 0.5), plank_cols[(i * 7) % 4])
+	_plank_floor(Rect2(0, z0, W, depth), 11, "house")
 	var lvl := Game.house_level
 	var left_windows := [4.8]
 	var right_windows := [0.9]
@@ -719,8 +717,13 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	for i in posts + 1:
 		var o := -length * 0.5 + length * i / posts
 		Catalog.box(tall, _sz(horizontal, 0.16, height, WALL_T + 0.05), _at(horizontal, o, height * 0.5), Catalog.WOOD_DARK)
+	var holes: Array = []
 	for wpos in windows:
-		_window(tall, float(wpos) - (mid.x if horizontal else mid.y), horizontal)
+		var o := float(wpos) - (mid.x if horizontal else mid.y)
+		_window(tall, o, horizontal)
+		holes.append(Rect2(o - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
+	for side in ([-1.0, 1.0] if divider else [-1.0]): # a room divider is indoors on both sides
+		_wall_boards(tall, horizontal, length, height, normal * side, holes)
 	Catalog.box(short, _sz(horizontal, length, 0.32, WALL_T), _at(horizontal, 0, 0.16), PLASTER)
 	Catalog.box(short, _sz(horizontal, length + 0.02, 0.06, WALL_T + 0.06), _at(horizontal, 0, 0.33), Catalog.WOOD_DARK)
 	short.visible = false
@@ -731,6 +734,26 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	if divider:
 		divider_rects.append(r)
 	return w
+
+
+## Pale boards over the face of a wall that looks `into` the room, from floor to top, round its
+## windows, with a rail along the top and a skirting board along the floor (scripts/planks.gd).
+func _wall_boards(tall: Node3D, horizontal: bool, length: float, height: float, into: Vector3, holes: Array) -> void:
+	var out := WALL_T * 0.5 + 0.04 # in front of the posts, just behind the window frames
+	var across := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
+	var origin := into * out - across * length * 0.5
+	var seed_from := tall.get_parent() as Node3D
+	Planks.lay(tall, "wall", origin, across, Vector3.UP, Vector2(length, height), into, holes,
+		hash(Vector3i(roundi(seed_from.position.x * 10.0), roundi(seed_from.position.z * 10.0), roundi(into.x + 2.0 * into.z))))
+	var o := (into.z if horizontal else into.x) * (out + 0.015)
+	Catalog.box(tall, _sz(horizontal, length, 0.14, 0.03), _at(horizontal, 0, height - 0.07, o), Planks.TRIM)
+	Catalog.box(tall, _sz(horizontal, length, 0.13, 0.03), _at(horizontal, 0, 0.065, o), Planks.TRIM)
+
+
+## A plank floor over a ground rectangle (x, z): boards run front to back, their ends staggered.
+func _plank_floor(r: Rect2, plank_seed: int, shade: String) -> void:
+	Catalog.box(house_root, Vector3(r.size.x, 0.012, r.size.y), Vector3(r.get_center().x, 0.006, r.get_center().y), Color(0.36, 0.22, 0.12)) # the boards' edge at the door
+	Planks.lay(house_root, "floor", Vector3(r.position.x, 0.02, r.position.y), Vector3(1, 0, 0), Vector3(0, 0, 1), r.size, Vector3.UP, [], plank_seed, shade)
 
 
 func _sz(horizontal: bool, along: float, h: float, thick: float) -> Vector3:
@@ -3304,6 +3327,16 @@ func _house_checks(showcase: bool) -> void:
 		f.queue_free()
 	_check("her house's furniture is the new models (%d of %d; the fire has %d flames, fire and lamp %d lights)" % [modelled.size(), ids.size(), flames, lights],
 		modelled.size() == ids.size() and flames == 3 and lights == 2)
+	var floors := get_tree().get_nodes_in_group("planks_floor")
+	var linings := get_tree().get_nodes_in_group("planks_wall")
+	var floor_boards := 0
+	for f in floors:
+		floor_boards += int(f.get_meta("boards", 0))
+	var shades := {}
+	for f in floors:
+		shades[str(f.get_meta("shade", ""))] = true
+	_check("every building has a plank floor in its own shade, and the houses boarded walls (%d floors of %d boards in %d shades, %d walls boarded)" % [floors.size(), floor_boards, shades.size(), linings.size()],
+		floors.size() >= 6 and shades.size() == floors.size() and floor_boards > 250 and linings.size() >= 9)
 	if not showcase:
 		return
 	for extra in [["sofa", Vector3(5.5, 0, 3.0), 3], ["armchair", Vector3(3.5, 0, 5.0), 2], ["dining_table", Vector3(6.0, 0, 5.0), 0],
@@ -5063,9 +5096,7 @@ func _build_cottage() -> void:
 	var z1 := c.end.y
 	var dz := Town.COTTAGE_DOOR
 	Catalog.box(house_root, Vector3(c.size.x + 0.7, 0.1, c.size.y + 0.7), Vector3(c.get_center().x, -0.04, c.get_center().y), Catalog.STONE)
-	var plank_cols := [Color(0.66, 0.47, 0.3), Color(0.7, 0.5, 0.33), Color(0.62, 0.44, 0.28), Color(0.68, 0.49, 0.31)]
-	for i in int(c.size.x / 0.4):
-		Catalog.box(house_root, Vector3(0.385, 0.04, c.size.y), Vector3(x0 + 0.2 + i * 0.4, 0.0, c.get_center().y), plank_cols[(i * 5) % 4])
+	_plank_floor(c, 23, "cottage")
 	_wall(Vector2(x0, z0), Vector2(dz.x, z0), Vector3(0, 0, -1), [59.4])
 	_wall(Vector2(dz.y, z0), Vector2(x1, z0), Vector3(0, 0, -1), [63.6])
 	_wall(Vector2(x0, z1), Vector2(x1, z1), Vector3(0, 0, 1), [60.0, 63.0])

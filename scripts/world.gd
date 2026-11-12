@@ -2,6 +2,7 @@ extends RefCounted
 ## Static scenery: ground, paths, trees, barn, pond, sheep pen, shipping bin.
 
 const Catalog = preload("res://scripts/catalog.gd")
+const Planks = preload("res://scripts/planks.gd")
 
 const GRASS := Color(0.43, 0.58, 0.28)
 const PATH := Color(0.62, 0.50, 0.34)
@@ -274,6 +275,8 @@ static func build_barn(root: Node3D, pos: Vector3) -> Array:
 	for side in BARN_WALLS:
 		if barn_parts.has("wall_%s_low" % side):
 			(barn_parts["wall_%s_low" % side] as Node3D).visible = false
+	# the same plank floor as the houses, in the barn's weathered shade, under the straw
+	Planks.lay(b, "floor", Vector3(-BARN_SIZE.x * 0.5 + 0.12, 0.032, -BARN_SIZE.y * 0.5 + 0.12), Vector3(1, 0, 0), Vector3(0, 0, 1), BARN_SIZE - Vector2(0.24, 0.24), Vector3.UP, [], 31, "barn")
 	# the lantern on the end wall lights the inside after dark (update_barn sets how bright)
 	_barn_light = Catalog.omni(b, Vector3(0, 2.0, -1.9), Color(1.0, 0.74, 0.42), 6.5, 0.0, 1.3)
 	_barn_light.shadow_enabled = false
