@@ -1,6 +1,6 @@
 """The furniture of Nora's house, rebuilt from reference images in the style of Alex's prop references
 (chunky, hand-painted, warm orange wood): rocking chair, fireplace, kitchen counter, sofa, armchair,
-spinning wheel, dining table, bookshelf, wardrobe, floor lamp and potted fern. Each stands in for a
+spinning wheel, dining table, bookshelf, wardrobe, floor lamp, potted fern and knitted rug. Each stands in for a
 box model in scripts/catalog.gd, on the same footprint (data/furniture.json), facing the same way.
 
 The references (ref/<id>.png) were made in ChatGPT, one per piece, on white. Wood, cloth and
@@ -27,6 +27,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import craftlib as CL  # noqa: E402
 import kelib as K  # noqa: E402
+sys.path.insert(0, HERE)
+import knit  # noqa: E402
 
 ITEM = ""
 TEX = ""
@@ -330,6 +332,71 @@ def sofa():
     drape("throw", (0.74, 1.04), (xs[0] - 0.13, 0.25, 1.0), 6.0, p, floor=SEAT + 0.012)
     pillow("cushion", (0.36, 0.13, 0.36), (xs[1] - 0.12, 0.05, 0.63), p, rot=(-20, 0, 6))
     pillow("cushion_green", (0.36, 0.13, 0.36), (xs[1] + 0.2, 0.10, 0.65), cloth("green", "#7f8f45"), rot=(-18, 0, -14))
+
+
+# --- knitted rug ---------------------------------------------------------------------------------------
+
+def rug_red():
+    """The wool rug (3 x 2 m with its tassels), knitted: red stockinette with cream colourwork (a
+    Nordic star, sprigs, daisies and diamonds; knit.py), a twisted cord round the edge and a row of
+    cream tassels at each end. It lies flat: she walks over it, so nothing is draped or rumpled."""
+    length, width, top = 2.5, 1.826, 0.034
+    pat = knit.rug_pattern()
+    fibre = web_map("knitted_fleece/knitted_fleece_diff_1k.jpg", 512).mean(axis=2)
+    fibre = np.clip(1.0 + (fibre / fibre.mean() - 1.0) * 2.5, 0.8, 1.2)
+    rgb, hgt = knit.stitch_maps(pat, (CL.C("#bf2a21"), CL.C("#f2e0b9")), px=12, fibre=fibre)
+    img = K.save_image(ITEM + "_knit", rgb, TEX)
+    nm = K.save_image(ITEM + "_knit_n", K.normal_from_height(hgt, 2.2), TEX)
+    mat = K.textured(ITEM + "_knit", img, rough=1.0, normal=nm, normal_strength=1.0)
+
+    # the knitted slab: a gently uneven top and a skirt down to the floor under the cord
+    nx, ny = 10, 7
+    rng = random.Random(4)
+    verts, uv_v = [], []
+    for j in range(ny + 1):
+        for i in range(nx + 1):
+            x, y = (i / nx - 0.5) * length, (j / ny - 0.5) * width
+            edge = i in (0, nx) or j in (0, ny)
+            verts.append((x, y, top + (0.0 if edge else rng.uniform(-0.003, 0.004))))
+            uv_v.append((0.5 - y / width, 0.5 + x / length))
+    faces = [(i + j * (nx + 1), i + 1 + j * (nx + 1), i + 1 + (j + 1) * (nx + 1), i + (j + 1) * (nx + 1))
+             for j in range(ny) for i in range(nx)]
+    ring = ([i for i in range(nx)] + [nx + j * (nx + 1) for j in range(ny)]
+            + [ny * (nx + 1) + nx - i for i in range(nx)] + [(ny - j) * (nx + 1) for j in range(ny)])
+    low = len(verts)
+    for k in ring:
+        x, y, _ = verts[k]
+        verts.append((x + math.copysign(0.012, x) * (abs(x) > length / 2 - 1e-6), y + math.copysign(0.012, y) * (abs(y) > width / 2 - 1e-6), 0.002))
+        uv_v.append(uv_v[k])
+    for n, k in enumerate(ring):
+        k2, n2 = ring[(n + 1) % len(ring)], (n + 1) % len(ring)
+        faces.append((k2, k, low + n, low + n2))
+    CL._finish_mesh("knit", verts, faces, [uv_v[k] for f in faces for k in f], mat, recalc=False)
+
+    # the cord round the edge
+    ci, cn = CL.yarn_maps(ITEM + "_cord", TEX, "#a82219", plies=3, twists=2)
+    cord = K.textured(ITEM + "_cord", ci, rough=1.0, normal=cn, normal_strength=1.0)
+    hx, hy, rc, r = length / 2, width / 2, 0.07, 0.03
+    path = []
+    for qx, qy, a0 in ((1, 1, 0), (-1, 1, 90), (-1, -1, 180), (1, -1, 270)):
+        for k in range(5):
+            a = math.radians(a0 + 90 * k / 4)
+            path.append((qx * (hx - rc) + rc * math.cos(a), qy * (hy - rc) + rc * math.sin(a), r))
+    path.append(path[0])
+    CL.tube("cord", path, [r] * len(path), cord, sides=8, v_scale=7.0, caps=False)
+
+    # tassels: a wrapped head and a skirt of strands, lying on the floor, each a little askew
+    ti, tn = CL.yarn_maps(ITEM + "_tassel", TEX, "#f0dcb2", plies=9, twists=0.5)
+    yarn = K.textured(ITEM + "_tassel", ti, rough=1.0, normal=tn, normal_strength=1.0)
+    count = 11
+    for end in (-1, 1):
+        for k in range(count):
+            y = (k / (count - 1) - 0.5) * (width - 0.1)
+            long = rng.uniform(0.2, 0.225)
+            prof = [(0.0, 0.0), (0.034, 0.014), (0.038, 0.05), (0.022, 0.07), (0.042, 0.115), (0.058, long), (0.0, long)]
+            t = K.lathe("tassel", prof, yarn, steps=8, loc=(end * (hx + 0.02), y, 0.036), sharp=60)
+            t.rotation_euler = (0.0, math.radians(90) * end, math.radians(rng.uniform(-8, 8)))
+            t.scale = (0.62, 1.0, 1.0)      # flattened where it lies (its own X is up once turned)
 
 
 # --- kitchen counter -----------------------------------------------------------------------------------
@@ -689,7 +756,7 @@ def plant():
 
 BUILDERS = {"rocking_chair": rocking_chair, "fireplace": fireplace, "kitchen": kitchen, "sofa": sofa, "armchair": armchair,
             "spinning_wheel": spinning_wheel, "dining_table": dining_table, "bookshelf": bookshelf, "wardrobe": wardrobe,
-            "lamp": lamp, "plant": plant}
+            "lamp": lamp, "plant": plant, "rug_red": rug_red}
 
 
 def main(item):

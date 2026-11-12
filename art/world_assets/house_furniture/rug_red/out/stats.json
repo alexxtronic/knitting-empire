@@ -1,0 +1,33 @@
+{
+  "name": "rug_red",
+  "triangles": 2288,
+  "materials": [
+    "rug_red_knit",
+    "rug_red_cord",
+    "rug_red_tassel"
+  ],
+  "size_m": [
+    2.997,
+    1.886,
+    0.072
+  ],
+  "min_m": [
+    -1.499,
+    -0.943,
+    0.0
+  ],
+  "max_m": [
+    1.498,
+    0.943,
+    0.072
+  ],
+  "images": [
+    "rug_red_cord",
+    "rug_red_cord_n",
+    "rug_red_knit",
+    "rug_red_knit_n",
+    "rug_red_tassel",
+    "rug_red_tassel_n"
+  ],
+  "glb_bytes": 1751260
+}

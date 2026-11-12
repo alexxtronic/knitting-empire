@@ -159,7 +159,8 @@
       "flat": true,
       "height": 0.06,
       "id": "rug_red",
-      "shop": "indoors"
+      "shop": "indoors",
+      "model": "res://assets/props/rug_red.glb"
     },
     {
       "name": "Round Braided Rug",
