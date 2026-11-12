@@ -21,6 +21,7 @@ const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
 const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
+const Regions = preload("res://scripts/regions.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const Lighting = preload("res://scripts/lighting.gd")
@@ -31,8 +32,8 @@ const Dog = preload("res://scripts/dog.gd")
 const Cinematic = preload("res://scripts/cinematic.gd")
 
 const CELL := 0.5
-const GRID_ORIGIN := Vector2(-8.0, -22.0)
-const GRID_SIZE := Vector2i(200, 84) # covers x -8..92, z -22..20 (farm, road, Maple Grove and room round it)
+const GRID_ORIGIN := Vector2(-96.0, -100.0)
+const GRID_SIZE := Vector2i(480, 324) # covers x -96..144, z -100..62: the farm, Maple Grove and the lands round them (Regions.BOUNDS)
 const HOUSE_W := 8.0
 const HOUSE_FRONT := 6.0
 const WALL_H := 2.6
@@ -45,7 +46,7 @@ const PEN_GATE := Vector2(-1.6, -0.4)
 const BIN_POS := Vector3(10.2, 0, 4.6)
 const CAM_PITCH := 48.0
 const CAM_PITCH_LOW := 20.0 # story close-ups ("@camera ... low")
-const CAM_BOUNDS := Rect2(-5, -19, 75, 33) # farm + town
+const CAM_BOUNDS := Regions.BOUNDS # the farm, the town and the lands round them
 const PLASTER := Color(0.92, 0.86, 0.74)
 
 enum Mode { LIVE, BUILD }
@@ -103,6 +104,7 @@ var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
 var ai: AiChat # typed chat with villagers, voiced by Claude
+var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var minimap: Minimap # the map under the coins (minimap.gd): click it to walk there
 var chat_v = null # the villager you're chatting with
 var _chat_clock_was := true
@@ -196,6 +198,9 @@ func _ready() -> void:
 	nature = Nature.new()
 	add_child(nature)
 	grid_blockers.append_array(nature.build(self, _nature_keep()))
+	regions = Regions.new()
+	add_child(regions)
+	grid_blockers.append_array(regions.build(self))
 	var town := Town.build(self)
 	grid_blockers.append_array(town["blockers"])
 	price_board = town["board"]
@@ -675,6 +680,7 @@ func _rebuild_grass(replant := true) -> void:
 		dirt.append_array(World.PATHS)
 		dirt.append_array(Town.PATHS)
 	dirt.append_array(god.bed_rects() if god != null else [GodMode.BEDS])
+	dirt.append_array(regions.trails) # the trails out to the swamp, the mountains, the beach and the meadows
 	for p in plots:
 		if p.tilled: # the beds she dug herself
 			dirt.append(Rect2(p.position.x - 0.75, p.position.z - 0.75, 1.5, 1.5))
@@ -895,6 +901,7 @@ func _rebuild_grid() -> void:
 	var rects := []
 	rects.append_array(wall_rects)
 	rects.append_array(grid_blockers)
+	rects.append_array(regions.trunk_blocks())
 	for f in furniture:
 		if not f.is_flat():
 			rects.append(f.footprint())
@@ -906,6 +913,7 @@ func _rebuild_grid() -> void:
 ## the world editor has put it, so a shop moved to the edge of town can still be walked into.
 func walk_areas() -> Array:
 	var areas: Array = [LOT, Town.ROAD, Town.TOWN]
+	areas.append_array(regions.walk_areas())
 	for b in Town.built:
 		var n := b[0] as Node3D
 		if is_instance_valid(n) and n.visible:
@@ -3662,6 +3670,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=world" in OS.get_cmdline_user_args(): # just the lands round the farm: paths there and a picture of each
+		await _wait(1.5)
+		await _world_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=light" in OS.get_cmdline_user_args(): # just the lighting: the bake, the morning mist, dawn, noon and dusk
 		await _wait(1.5)
 		await _light_checks()
@@ -3865,11 +3879,63 @@ func _autotest() -> void:
 	await _shop_checks()
 	await _flock_checks()
 	await _light_checks()
+	await _world_checks()
+	await _minimap_checks()
 	await _dog_checks()
 	await _photo_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
+
+
+## The lands round the farm (scripts/regions.gd, data/regions.json): she can walk from her door to
+## each one, their scenery is in the world editor's lists, the sea and the mountains are there,
+## and a picture of each (49_world_<id>.png) with the frame time printed.
+func _world_checks() -> void:
+	var was_running: bool = Game.time_running
+	Game.time_running = false
+	_set_cam_lock(false)
+	var peaks: AABB = regions.mountains.get_aabb() if is_instance_valid(regions.mountains) else AABB()
+	_check("the mountains rise to %.0f m over %.0f m of the north; the sea meets the sand at z %.1f" % [peaks.end.y, peaks.size.x, regions.shore_z],
+		peaks.end.y > 40.0 and peaks.size.x > 300.0 and is_instance_valid(regions.sea) and regions.shore_z > Regions.SAND_FLAT_TO)
+	var home := Vector3(4.6, 0, 4.9)
+	for id in regions.defs:
+		var walk: Rect2 = Regions._rect(regions.defs[id]["walk"])
+		var goal := Vector3(walk.get_center().x, 0, walk.get_center().y)
+		var path := _find_path(home, goal)
+		var end: Vector3 = path[path.size() - 1] if not path.is_empty() else home
+		var off := Vector2(end.x, end.z).distance_to(Vector2(goal.x, goal.z))
+		var kinds: Array = god.scenery.keys().filter(func(k): return str(k).begins_with(id + "-"))
+		var things: int = kinds.reduce(func(n, k): return n + god.scenery[k].size(), 0)
+		_check("%s: walkable from her door (%d steps, ends %.1f m from the middle) and its scenery is in the world editor (%d kinds, %d things)" % [regions.display_name(id), path.size(), off, kinds.size(), things],
+			off < 6.0 and regions.region_at(end.x, end.z) == id and kinds.size() >= 2)
+		# each from the side that shows it off: the swamp westward, the mountains northward, the sea southward
+		var view: Array = {"swamp": [90.0, 32.0, 30.0], "mountains": [0.0, 44.0, 20.0], "beach": [180.0, 36.0, 24.0]}.get(id, [-90.0, 34.0, 30.0])
+		Game.hour = 8.0 if id == "swamp" else 11.0
+		player.position = end
+		cam_yaw = deg_to_rad(float(view[0]))
+		cam_yaw_goal = cam_yaw
+		cam_target = end
+		cam_dist = float(view[1])
+		cam_pitch = float(view[2])
+		cam_glide = {"pos": end, "dist": view[1], "pitch": view[2]}
+		await _wait(3.0)
+		var ms := await _frame_ms()
+		print("      %s: %.1f ms a frame (%.0f fps), 3D at %d%%" % [id, ms, 1000.0 / ms, roundi(get_viewport().scaling_3d_scale * 100)])
+		await _shot("49_world_%s.png" % id)
+		cam_glide = {}
+	# the range from the foothills, wide
+	cam_yaw = 0.0
+	cam_yaw_goal = 0.0
+	cam_glide = {"pos": Vector3(35.0, 0.0, -70.0), "dist": 60.0, "pitch": 12.0}
+	await _wait(3.0)
+	await _shot("49_world_range.png")
+	cam_glide = {}
+	player.position = home
+	cam_target = home
+	Game.hour = 10.0
+	await _wait(0.5)
+	Game.time_running = was_running
 
 
 ## The lighting (scripts/lighting.gd, art/world_assets/light_bake): the props carry their Cycles
@@ -3882,7 +3948,6 @@ func _light_checks() -> void:
 	var missing: Array = []
 	for id in Lighting.BAKED:
 		var path := "res://assets/props/%s.glb" % id
-	await _minimap_checks()
 		if not ResourceLoader.exists(path):
 			missing.append(id + " (no model)")
 			continue
@@ -3911,12 +3976,58 @@ func _light_checks() -> void:
 			_check("morning mist at 6:36: thick, in volumetric fog, and the sun lights it (%.2f)" % lighting.mist,
 				lighting.mist > 0.8 and lighting.mist_volume.visible and env.volumetric_fog_enabled and sun.light_volumetric_fog_energy > 2.5)
 		await _shot("48_light_%s.png" % v[0])
+		if v[0] == "noon": # the same without the day's warm key and cool fill, to compare
+			lighting.depth_enabled = false
+			await _wait(1.0)
+			await _shot("48_light_noon_flat.png")
+			lighting.depth_enabled = true
 		cam_glide = {}
 	_check("the mist has burnt off by noon and stays away at dusk (%.2f, %.2f)" % [mist_at["noon"], mist_at["dusk"]],
 		mist_at["noon"] < 0.01 and mist_at["dusk"] < 0.01 and not lighting.mist_volume.visible)
+	await _sky_checks()
 	Game.hour = 10.0
 	await _wait(0.2)
 	Game.time_running = was_running
+
+
+## The sun and the moon (scripts/sky_bodies.gd): the moon's phase from the real calendar, the
+## light (and its shadows) coming from the sun by day and the moon by night, brighter at full moon,
+## and pictures of each in the sky (48_sky_sun.png, 48_sky_full_moon.png, 48_sky_crescent.png).
+func _sky_checks() -> void:
+	const SB = Lighting.SkyBodies
+	var p_full := SB.phase_at(1706205240.0) # 2024-01-25 17:54 UTC, a full moon
+	_check("the moon's phase follows the calendar: full on 2024-01-25 (%.2f, %s); today %s (%.2f)" % [p_full, SB.phase_name(p_full), SB.phase_name(SB.phase()), SB.phase()],
+		absf(p_full - 0.5) < 0.04 and SB.phase_name(p_full) == "Full moon")
+	Game.hour = 12.5
+	await _wait(0.3)
+	var toward_sun: Vector3 = SB.dir_of(SB.sun_angles(12.5))
+	_check("at noon the light comes from the sun in the sky (%.2f)" % sun.global_basis.z.dot(toward_sun), sun.global_basis.z.dot(toward_sun) > 0.98)
+	var night := {}
+	for ph in [0.5, 0.0]:
+		SB.phase_override = ph
+		Game.hour = 23.0
+		await _wait(0.3)
+		night[ph] = [sun.light_energy, sun.global_basis.z, SB.dir_of(SB.moon_angles(23.0, ph))]
+	_check("a full moon lights the night from where it hangs (%.2f, from %.0f deg up); with no moon, faint starlight (%.2f)" % [night[0.5][0], rad_to_deg(asin(night[0.5][1].y)), night[0.0][0]],
+		night[0.5][0] > 0.4 and night[0.0][0] < 0.12 and night[0.5][1].dot(night[0.5][2]) > 0.95)
+	# pictures: the low sun before evening, a full moon rising, a crescent at dusk; the camera looks up at each
+	for v in [["sun", 17.4, -1.0], ["full_moon", 20.7, 0.5], ["crescent", 19.9, 0.12]]:
+		SB.phase_override = v[2]
+		Game.hour = v[1]
+		await _wait(0.2)
+		var d: Vector3 = SB.dir_of(SB.sun_angles(v[1])) if v[0] == "sun" else SB.dir_of(SB.moon_angles(v[1], v[2]))
+		cam_yaw = atan2(-d.x, -d.z)
+		cam_yaw_goal = cam_yaw
+		var up := rad_to_deg(asin(d.y))
+		var aim := Vector3(30.0, 30.0, -10.0)
+		cam_target = aim
+		cam_dist = 30.0
+		cam_pitch = -up + 4.0
+		cam_glide = {"pos": aim, "dist": 30.0, "pitch": -up + 4.0}
+		await _wait(2.5)
+		await _shot("48_sky_%s.png" % v[0])
+		cam_glide = {}
+	SB.phase_override = -1.0
 
 
 ## The furniture of her house (art/world_assets/house_furniture): each of the eleven pieces is its

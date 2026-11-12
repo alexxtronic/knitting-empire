@@ -9,6 +9,7 @@ uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable
 uniform float wind = 0.18;
 uniform vec2 wind_dir = vec2(0.82, 0.57);
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 tint : source_color = vec3(1.0); // a whole stand of trees: the swamp's are dark and olive (scripts/regions.gd)
 
 void vertex() {
 	vec3 root = MODEL_MATRIX[3].xyz;
@@ -25,7 +26,7 @@ void vertex() {
 
 void fragment() {
 	vec4 c = texture(albedo_tex, UV);
-	ALBEDO = c.rgb * COLOR.rgb * (1.0 - wet * 0.15);
+	ALBEDO = c.rgb * COLOR.rgb * tint * (1.0 - wet * 0.15);
 	ALPHA = c.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	// the crown's normals are bent round it on purpose: keep them on the back of a card too

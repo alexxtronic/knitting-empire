@@ -67,7 +67,7 @@ const TILE := Vector2(4.0, 2.0)
 const TILE_ORIGIN := Vector2(1.0, 0.0)
 const BEDS := Rect2(10.25, -1.75, 5.1, 3.9) # worn earth under the crop plots where the code puts them
 const BEDS_NO_BUILD := Rect2(10.4, -1.6, 4.8, 3.6) # main.gd keeps furniture off the plots
-const ROAM := Rect2(-30, -42, 122, 78) # how far the camera may go while editing (the trees reach this far)
+const ROAM := Rect2(-104, -108, 256, 178) # how far the camera may go while editing: every land (Regions.BOUNDS) and a margin
 const SMALL := ["tuft_small", "tuft_mid", "tuft_tall", "flowers_daisy", "flowers_buttercup", "flowers_wild", "flowers_poppy", "clover_patch"]
 const TITLES := {
 	"tree_maple_autumn": "Maple tree (autumn)", "tree_maple_green": "Maple tree (green)", "tree_spruce": "Spruce tree",
@@ -77,7 +77,7 @@ const TITLES := {
 	"flowers_buttercup": "Buttercups", "flowers_wild": "Wild flowers", "flowers_poppy": "Poppies", "clover_patch": "Clover",
 	"barn": "Barn", "bin": "Shipping bin", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
 	"leaf_yellow": "Maple leaf (gold)", "leaf_red": "Maple leaf (red)", "leaf_green": "Maple leaf (green)",
-	"maple_tree": "Maple tree (large)", "maplewood_bus": "Maplewood bus",
+	"maplewood_bus": "Maplewood bus",
 }
 
 

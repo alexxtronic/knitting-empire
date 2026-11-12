@@ -10,6 +10,8 @@ extends Node
 ## The other half is baked: art/world_assets/light_bake/build.py path-traces each prop's own contact
 ## shadows and bounce light in Cycles into an atlas the prop's material reads as ambient occlusion.
 
+const SkyBodies = preload("res://scripts/sky_bodies.gd")
+
 ## The map's extent (World and Town scatter from about x -24 to 92, z -40 to 34), plus a margin
 ## for the mist volume's soft edges.
 const MIST_CENTRE := Vector3(34.0, 2.5, -3.0)
@@ -40,6 +42,8 @@ var sun: DirectionalLight3D
 var mist_volume: FogVolume
 var mist_mat: ShaderMaterial
 var mist := 0.0 # 0..1, how much morning mist there is now
+var local_fog := false # regions.gd: the camera is near the swamp, whose mist needs volumetric fog on
+var bodies := SkyBodies.new() # the sun and the moon (sky_bodies.gd)
 var mist_enabled := true # the frame-cost probe (--fpsprobe) switches it off to time it
 var gfx := 2
 var _sun_fog_energy := 1.3
@@ -80,6 +84,7 @@ func setup(m: Node) -> void:
 	mist_volume.position = MIST_CENTRE
 	mist_volume.material = mist_mat
 	add_child(mist_volume)
+	bodies.setup(m)
 
 
 func apply_graphics(level: int) -> void:
@@ -100,6 +105,12 @@ func apply_graphics(level: int) -> void:
 ## dl: Game.daylight().
 func update(rain: float, dl: float) -> void:
 	var h: float = Game.hour
+	# the light comes from the sun by day and the moon (or starlight) by night; the moon's phase
+	# sets how bright the night is, its sky light too
+	bodies.update(h, dl, rain)
+	var moon := lerpf(0.72, 1.12, SkyBodies.illumination(bodies.current_phase) * bodies.moon_up)
+	env.ambient_light_energy *= lerpf(1.0, moon, 1.0 - dl)
+	_depth(dl, rain)
 	# rain brings its own grey haze; the morning mist burns off in it too
 	mist = morning(h) * (1.0 - 0.7 * rain) if mist_enabled else 0.0
 	var lit := clampf(dl * 1.5, 0.0, 1.0) # before sunrise the mist is there but nothing shines through it
@@ -108,7 +119,7 @@ func update(rain: float, dl: float) -> void:
 	mist_mat.set_shader_parameter("albedo", tint)
 	mist_volume.visible = mist > 0.01
 	env.volumetric_fog_density += SHAFT_FOG * mist
-	env.volumetric_fog_enabled = gfx >= 1 and (env.volumetric_fog_density > 0.0006 or mist > 0.01)
+	env.volumetric_fog_enabled = gfx >= 1 and (env.volumetric_fog_density > 0.0006 or mist > 0.01 or local_fog)
 	# shafts: the low sun lights the mist strongly, mostly forward (towards the camera when you look at the sun)
 	sun.light_volumetric_fog_energy = lerpf(_sun_fog_energy, 4.5, mist * lit)
 	env.volumetric_fog_anisotropy = lerpf(_anisotropy, 0.72, mist)
@@ -120,6 +131,32 @@ func update(rain: float, dl: float) -> void:
 	env.fog_height = 0.6
 	env.fog_height_density = (0.32 if gfx == 0 else 0.03) * mist
 	env.fog_sun_scatter = 0.25 * mist * lit
+
+
+## Against the flat look by day: a stronger, warmer sun over a cool blue fill (the shade under the
+## trees and on the sides away from the sun turns bluish instead of the same green, just darker),
+## and a clearer sky at midday rather than the same cream haze from dawn to dusk. Dawn and dusk
+## keep their warm glow; rain keeps its grey. depth_enabled off gives the old look (the autotest's
+## before-and-after picture, 48_light_noon_flat.png).
+var depth_enabled := true
+
+
+func _depth(dl: float, rain: float) -> void:
+	var k := dl * (1.0 - rain) if depth_enabled else 0.0
+	# the distance fog left the whole sky its own flat colour (Godot fogs the sky fully by default):
+	# only a little now, so the sky's gradient, clouds, stars, sun and moon show through
+	env.fog_sky_affect = 0.15 if depth_enabled else 1.0
+	env.volumetric_fog_sky_affect = 0.2 if depth_enabled else 1.0
+	env.ambient_light_sky_contribution = lerpf(1.0, 0.68, k)
+	env.ambient_light_color = Color(0.5, 0.62, 0.92)
+	sun.light_energy *= lerpf(1.0, 1.2, k)
+	var high := k * smoothstep(15.0, 40.0, SkyBodies.sun_angles(Game.hour).x)
+	if high > 0.001:
+		var hz: Color = main.sky_mat.get_shader_parameter("sky_horizon_color")
+		hz = hz.lerp(Color(0.8, 0.87, 0.92), 0.55 * high)
+		main.sky_mat.set_shader_parameter("sky_horizon_color", hz)
+		main.sky_mat.set_shader_parameter("ground_horizon_color", hz)
+		env.fog_light_color = env.fog_light_color.lerp(hz, 0.55 * high)
 
 
 ## A surface's Cycles light bake: the ambient occlusion texture its GLB material carries on the

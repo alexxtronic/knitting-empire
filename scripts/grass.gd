@@ -30,10 +30,12 @@ func _ready() -> void:
 	blade_mat.shader = preload("res://shaders/grass_blade.gdshader")
 	_ground = MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(180, 180)
+	# out past every land (scripts/regions.gd) to the horizon, and south only as far as the beach,
+	# where the sand runs down under the sea
+	pm.size = Vector2(720, 395)
 	_ground.mesh = pm
 	_ground.material_override = ground_mat
-	_ground.position = Vector3(10, -0.01, -5)
+	_ground.position = Vector3(25, -0.01, 55.0 - 197.5)
 	add_child(_ground)
 	_blade_mesh = _make_blade()
 

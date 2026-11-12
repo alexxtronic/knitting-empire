@@ -77,6 +77,7 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/thumbs.gd` | renders the Build mode picture cards |
 | `scripts/ai_chat.gd`, `chat_panel.gd`, `data/personas.json` | typed chat with villagers |
 | `scripts/cinematic.gd`, `photo_album.gd` | cinematic mode (the free camera and its photos) and the photo album |
+| `scripts/regions.gd`, `data/regions.json` | the lands round the farm: Mirewood Swamp, Greyspine Foothills and the mountains, Saltmeadow Beach and the sea, Eastfield Meadows, and the trails out to them |
 | `scripts/god_mode.gd`, `data/world_layout.json` | the admin's world editor (Settings > God mode) and the map layout it saves |
 | `scripts/audio.gd` | music, ambience and sound effects on three buses (Music, Ambience, SFX) |
 | `tools/make_audio.py` | makes every sound in `assets/audio/` (footsteps, needles, UI, ambience loops, the music) |
