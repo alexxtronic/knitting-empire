@@ -384,12 +384,12 @@ Nora (warm): Thank you. Really.
 @camera 11.2 3.0 6
 @fade in 1.2
 > Night comes down fast out here. No streetlights. Just stars, and a porch light Gran never got round to fixing.
-@phone Voicemail: Claire Moss, family law
+@phone Voicemail: Daniel
 > One new voicemail. Her thumb hovers over it for a while. Then she plays it.
-Voicemail: Hi Nora, it's Claire. Daniel's side has filed to contest the sale of the house.
-Voicemail: It doesn't change much, honestly. But they want mediation. In person, in the city. Call me when you can. And take care of yourself, okay?
+Voicemail: Nora. It's me. Your mum says you're "taking some time." Okay. Take it.
+Voicemail: The house is so quiet. Just... call me back. Please. I miss you.
 @phone off
-Nora (sad): In person.
+Nora (sad): Please. He never used to say please.
 > She sits down by the bottom step. The wood is cold through her jeans.
 @place rowan 15.0 4.8 270
 @walk rowan 11.3 2.5
@@ -400,7 +400,7 @@ Nora (sad): In person.
 Rowan (neutral): Checking your fence. It's holding. Mostly out of spite.
 Rowan (worried): You okay?
 ? She could tell him. Some of it. Or none of it.
-- Not really. My ex wants to drag this out. I thought I'd left it in the city. -> open | trust rowan +3; romance rowan +1; familiarity rowan +2; set nora_opened_porch
+- Not really. My ex keeps calling. I thought I'd left all that in the city. -> open | trust rowan +3; romance rowan +1; familiarity rowan +2; set nora_opened_porch
 - I'm fine. Long day. -> deflect | familiarity rowan +1; set nora_deflected_porch
 @label open
 Rowan (neutral): Some things follow you. Took me two years to stop setting the table for two.
@@ -419,7 +419,7 @@ Rowan (warm): Ellie's porch light's been broken for years. Keep that. I know the
 @wait 2.0
 @home rosa off
 @home steve off
-@journal note The porch | Claire called: Daniel wants mediation, in person. Rowan left his lantern by the step. I didn't ask him to.
+@journal note The porch | Daniel left a voicemail. He misses me, he says. Rowan left his lantern by the step. I didn't ask him to.
 @fade out 1.4
 @home rowan off
 @set act1_done
