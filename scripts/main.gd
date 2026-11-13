@@ -6118,6 +6118,16 @@ func _hud_checks() -> void:
 	_check("hotbar: number keys pick the slot in her hand (3 gave slot %d, 1 gave slot %d holding '%s')" % [third + 1, hud.hot_sel + 1, hud.selected_item()],
 		third == 2 and hud.hot_sel == 0 and hud.selected_item() == str(Game.slots[0]))
 	await _shot("46_hud.png")
+	# coins earned pop up beside the coin chip with the cha-ching; spending them doesn't
+	var pops0 := hud.coin_pops
+	var chings0 := int(audio.played.get("coins", 0))
+	Game.coins += 25
+	await _wait(0.75) # risen, the coin's turn done
+	await _shot("46_coin_pop.png")
+	Game.coins -= 25
+	await _wait(0.1)
+	_check("coins: +25 pops up once with the cha-ching (%d pop, %d sound), spending them doesn't" % [hud.coin_pops - pops0, int(audio.played.get("coins", 0)) - chings0],
+		hud.coin_pops == pops0 + 1 and int(audio.played.get("coins", 0)) == chings0 + 1 and hud.coin_chip.get_child(0).get_child(0) is TextureRect)
 	# something new takes the first empty slot, and leaves it when it's used up
 	Game.add_item("test_thing", 2)
 	await _wait(0.1)

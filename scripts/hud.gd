@@ -31,6 +31,8 @@ signal cam_zoom(dir: int)
 const Catalog = preload("res://scripts/catalog.gd")
 const PhotoAlbum = preload("res://scripts/photo_album.gd")
 const LettersPanel = preload("res://scripts/letters_panel.gd")
+## The coin (art/world_assets/coin/build.py renders it): on the coin chip and in each "+N" pop-up.
+const COIN_ICON := preload("res://assets/icons/coin.png")
 
 
 ## Small vector icons drawn in code, so they never depend on a font having the glyph.
@@ -196,6 +198,8 @@ var toast_panel: PanelContainer
 var toast_label: Label
 var toast_tween: Tween
 var toast_meter: Meter
+var coin_chip: PanelContainer
+var coin_pops := 0 # how many "+N" pop-ups have shown (for the autotest)
 var build_btn: Button # at the end of the hotbar
 var menu_btn: Button
 var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
@@ -521,16 +525,19 @@ func _build_resources() -> void:
 	chip.tooltip_text = "Coins"
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 7)
-	var dot := Panel.new()
-	dot.custom_minimum_size = Vector2(14, 14)
-	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	dot.add_theme_stylebox_override("panel", _sb(GOLD, 7, Color(0, 0, 0, 0), 0.0))
-	row.add_child(dot)
+	var icon := TextureRect.new()
+	icon.texture = COIN_ICON
+	icon.custom_minimum_size = Vector2(22, 22)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
 	var l := _label("0", 16)
 	row.add_child(l)
 	chip.add_child(row)
 	root.add_child(chip)
 	res_labels["coins"] = l
+	coin_chip = chip
 	_place(chip, 1.0, 0.0, Vector2(16, 16))
 	# frames per second, under the coins (updated twice a second); off unless switched on in settings
 	fps_label = _label("-- FPS", 14, Color(1, 1, 1, 0.85))
@@ -1265,6 +1272,51 @@ func show_toast(text: String, progress := -1.0) -> void:
 	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, 0.6)
 
 
+## Coins earned: the coin and "+N" pop up beside the coin chip, rise and fade, with the cha-ching.
+## Called by _process whenever the count goes up, wherever the coins came from.
+func coin_pop(n: int) -> void:
+	coin_pops += 1
+	if sfx.is_valid():
+		sfx.call("coins", -4.0)
+	var pop := HBoxContainer.new()
+	pop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pop.add_theme_constant_override("separation", 4)
+	var icon := TextureRect.new()
+	icon.texture = COIN_ICON
+	icon.custom_minimum_size = Vector2(34, 34)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.pivot_offset = Vector2(17, 17)
+	pop.add_child(icon)
+	var l := _label("+%d" % n, 22, GOLD)
+	l.add_theme_color_override("font_outline_color", Color(0.25, 0.14, 0.02, 0.9))
+	l.add_theme_constant_override("outline_size", 6)
+	pop.add_child(l)
+	root.add_child(pop)
+	pop.reset_size()
+	# just left of the chip, a little lower each when several come at once
+	var at := Vector2(16, 60)
+	if coin_chip:
+		at = Vector2(coin_chip.global_position.x - pop.size.x - 10.0, coin_chip.global_position.y + 4.0)
+	pop.position = at + Vector2(0, 26)
+	pop.modulate.a = 0.0
+	var tw := pop.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(pop, "modulate:a", 1.0, 0.12)
+	tw.tween_property(pop, "position:y", at.y, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# the coin turns once on its way up
+	tw.tween_property(icon, "scale:x", -1.0, 0.25).set_delay(0.05)
+	tw.chain().tween_property(icon, "scale:x", 1.0, 0.25)
+	tw.chain().tween_interval(0.9)
+	tw.chain().tween_property(pop, "modulate:a", 0.0, 0.5)
+	tw.chain().tween_callback(pop.queue_free)
+	if coin_chip:
+		coin_chip.pivot_offset = coin_chip.size * 0.5
+		var bump := coin_chip.create_tween()
+		bump.tween_property(coin_chip, "scale", Vector2(1.12, 1.12), 0.08)
+		bump.tween_property(coin_chip, "scale", Vector2.ONE, 0.2)
+
+
 ## Opens the action ring at a screen point. actions: Array of {"id", "label", "enabled"} and
 ## optional "group", "progress", "hint" (see pie_menu.gd); cb receives the chosen id.
 func show_menu(screen_pos: Vector2, title: String, actions: Array, cb: Callable) -> void:
@@ -1294,6 +1346,10 @@ func _process(_delta: float) -> void:
 		fps_label.text = "%d FPS" % fps
 		fps_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if fps >= 50 else (Color(1.0, 0.85, 0.4) if fps >= 30 else Color(1.0, 0.5, 0.45)))
 	res_labels["coins"].text = "%d" % Game.coins
+	if Game.coins != Game.coins_shown: # earned (or spent) since the last frame
+		if Game.coins > Game.coins_shown:
+			coin_pop(Game.coins - Game.coins_shown)
+		Game.coins_shown = Game.coins
 	_update_slots()
 	_update_needs(_delta)
 	clock_label.text = "%s, Day %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.clock_text()]

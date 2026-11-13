@@ -18,7 +18,7 @@ from scipy.signal import butter, fftconvolve, lfilter, sosfilt
 
 SR = 44100
 rng = np.random.default_rng(7)
-ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "assets", "audio")
 os.makedirs(OUT, exist_ok=True)
 
@@ -211,6 +211,38 @@ def journal_chime():
     return normalize(reverb(x, 1.2, 0.3)[: int(1.6 * SR)], 0.4)
 
 
+def cha_ching():
+    """Coins earned: a cash register's clack ("cha"), then a bright ringing coin ("ching") with a
+    second, smaller coin a moment after. Its own random stream, so it can be made on its own."""
+    r = np.random.default_rng(11)
+    n = int(1.3 * SR)
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    # cha: a mechanical clack, a burst of mid noise over a short low thunk
+    k = int(0.07 * SR)
+    clack = band(r.standard_normal(k), 900, 4200) * expdec(k, 0.012)
+    thunk = np.sin(2 * np.pi * 180 * t[:k]) * expdec(k, 0.02) * 0.6
+    x[:k] += clack + thunk
+    # ching: inharmonic partials like a struck coin or small bell, a quick bright attack
+    def ring(start, f0, amp, decay):
+        s0 = int(start * SR)
+        m = n - s0
+        tt = t[:m]
+        y = np.zeros(m)
+        for ratio, a, d in [(1.0, 1.0, 1.0), (2.32, 0.55, 0.7), (4.25, 0.35, 0.45), (6.8, 0.2, 0.3)]:
+            y += a * np.sin(2 * np.pi * f0 * ratio * tt + r.uniform(0, 6.28)) * np.exp(-tt / (decay * d))
+        y *= 1 - np.exp(-tt / 0.002)
+        y *= 1 + 0.25 * np.sin(2 * np.pi * 7.0 * tt)  # a little shimmer
+        x[s0:] += amp * y
+    ring(0.075, 1975.0, 0.8, 0.45)
+    ring(0.16, 2637.0, 0.45, 0.35)
+    tick = int(0.004 * SR)
+    for st in (0.075, 0.16):  # the strike itself
+        s0 = int(st * SR)
+        x[s0:s0 + tick] += band(r.standard_normal(tick), 3000, 9000) * 0.5
+    return normalize(reverb(x, 0.9, 0.18)[:n], 0.5)
+
+
 # --- ambience loops ----------------------------------------------------------------------------
 
 def wind(secs, level=1.0, low=420):
@@ -380,6 +412,9 @@ def arrival(bpm=66):
 
 if __name__ == "__main__":
     print("writing to", OUT)
+    if "--only" in sys.argv:  # one effect, leaving the rest as they are: --only coins
+        {"coins": lambda: write_wav("coins", cha_ching())}[sys.argv[sys.argv.index("--only") + 1]]()
+        sys.exit(0)
     for i in range(4):
         write_wav("step_grass_%d" % (i + 1), footstep_grass(i))
         write_wav("step_wood_%d" % (i + 1), footstep_wood(i))
@@ -388,6 +423,7 @@ if __name__ == "__main__":
     write_wav("ui_click", ui_click())
     write_wav("ui_open", ui_open())
     write_wav("journal", journal_chime())
+    write_wav("coins", cha_ching())
     write_ogg("amb_day", ambience_day(), 4)
     write_ogg("amb_night", ambience_night(), 4)
     write_ogg("amb_rain", rain(), 4)

@@ -54,7 +54,7 @@ func setup(m: Node, mute := false) -> void:
 			var path := DIR + "%s_%d.wav" % [group, i]
 			if ResourceLoader.exists(path):
 				_sfx[group].append(load(path))
-	for one in ["ui_click", "ui_open", "journal"]:
+	for one in ["ui_click", "ui_open", "journal", "coins"]:
 		if ResourceLoader.exists(DIR + one + ".wav"):
 			_sfx[one] = [load(DIR + one + ".wav")]
 	apply_volumes()

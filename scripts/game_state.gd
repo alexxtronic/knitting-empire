@@ -42,6 +42,9 @@ const BASE_RARITY := 3
 var save_path := "user://knitting_empire_save.json"
 
 var coins: int = 250
+## The count the HUD last showed: when coins rise past it, hud.gd pops up "+N" with the cha-ching.
+## A new game and a loaded save set it, so a save's coins don't pop up.
+var coins_shown: int = 250
 var inv := {}
 ## Where each carried thing sits: item ids, "" for an empty slot. The first nine are the hotbar,
 ## the rest the bag (hud.gd). Counts stay in `inv`; sync_slots() keeps the two in step.
@@ -105,6 +108,7 @@ func load_tuning() -> void:
 
 func reset() -> void:
 	coins = START_COINS
+	coins_shown = coins
 	inv = START_INVENTORY.duplicate()
 	give_tools()
 	slots = []
@@ -479,6 +483,7 @@ static func _rename_daniel(f: Dictionary) -> void:
 func from_dict(d: Dictionary) -> void:
 	d = migrate(d)
 	coins = int(d.get("coins", START_COINS))
+	coins_shown = coins
 	inv = START_INVENTORY.duplicate()
 	for k in inv.keys():
 		inv[k] = 0

@@ -242,8 +242,8 @@ func read(l: Dictionary) -> String:
 		got.append("%d %s" % [int(l.get("item_n", 1)), str(l["item"])])
 	if got.is_empty():
 		return ""
-	if main and main.audio:
-		main.audio.play("coins" if int(l.get("coins", 0)) > 0 else "journal", -6.0)
+	if main and main.audio and int(l.get("coins", 0)) <= 0: # coins enclosed: the HUD's pop-up rings them in
+		main.audio.play("journal", -6.0)
 	return "Enclosed: " + " and ".join(got)
 
 
