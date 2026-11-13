@@ -1121,7 +1121,7 @@ func _process(delta: float) -> void:
 	_update_gaze()
 	_update_chat()
 	_update_tips(delta)
-	if not title_on and not get_tree().paused: # how long she has played this save (Daniel's visit waits for it)
+	if not title_on and not get_tree().paused: # how long she has played this save (Max's visit waits for it)
 		Game.flags["play_secs"] = float(Game.flags.get("play_secs", 0.0)) + delta
 	_update_rounds(delta)
 	jobs.update(delta)
@@ -3062,7 +3062,7 @@ func _act1_checks() -> void:
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("walking home to the porch starts the night scene (%s after %.1fs)" % [story.playing, t], story.playing == "act1_porch")
 	await _act1_shot("Nora. It's me.", "30_act1_voicemail.png")
-	_check("it's night on the porch and Daniel's voicemail is on her phone (%.1fh, '%s')" % [Game.hour, hud.phone_label.text],
+	_check("it's night on the porch and Max's voicemail is on her phone (%.1fh, '%s')" % [Game.hour, hud.phone_label.text],
 		Game.hour > 21.0 and hud.phone_panel.visible and hud.phone_label.text.begins_with("Voicemail"))
 	await _act1_shot("You okay?", "31_act1_porch_rowan.png")
 	await _act1_shot("Morning.", "32_act1_morning.png")
@@ -4000,14 +4000,14 @@ func _mail_checks() -> void:
 	var defs := Data.load_json("mail")
 	var custom: Array = defs.get("orders", {}).get("customers", [])
 	var ids: Array = defs.get("letters", []).map(func(d): return str(d["id"]))
-	_check("data/mail.json: Gran's letters from Florida, Daniel's and %d sweater customers (%s)" % [custom.size(), ", ".join(ids)],
-		ids.has("gran_florida_1") and ids.has("gran_florida_2") and ids.has("daniel_1") and custom.size() >= 3
+	_check("data/mail.json: Gran's letters from Florida, Max's and %d sweater customers (%s)" % [custom.size(), ", ".join(ids)],
+		ids.has("gran_florida_1") and ids.has("gran_florida_2") and ids.has("max_1") and custom.size() >= 3
 		and custom.all(func(c): return str(c.get("thanks", "")) != "" and int(c.get("pay", 0)) > 0))
 	var box: Node3D = mail.box
 	var in_editor: bool = god.els.any(func(e): return e.node == box and e.kind == "mailbox")
 	_check("a mailbox stands by the porch, flag down, and the world editor can move it (%s, editor %s, %s)" % [str(box.global_position), str(in_editor), mail.actions()[0]["label"]],
 		box.visible and box.global_position.distance_to(POST_FARM_DOOR) < 4.0 and in_editor and not mail.flag_up() and not mail.actions()[0]["enabled"])
-	# Barbara brings the post on day 4: Gran's first letter, Daniel's, and the first order
+	# Barbara brings the post on day 4: Gran's first letter, Max's, and the first order
 	Game.day = 4
 	Game.sweaters.clear()
 	Game.inv["sweater"] = 0
@@ -4021,7 +4021,7 @@ func _mail_checks() -> void:
 	var came := await _mail_round()
 	var box_ids: Array = mail.letters_in_box().map(func(l): return str(l["id"]))
 	_check("Barbara calls at the mailbox on her round and leaves three letters, flag up (%s; '%s')" % [", ".join(box_ids), hud.toast_label.text],
-		came and box_ids == ["gran_florida_1", "daniel_1", "order_1"] and mail.flag_up() and hud.toast_label.text.contains("Barbara brings the post"))
+		came and box_ids == ["gran_florida_1", "max_1", "order_1"] and mail.flag_up() and hud.toast_label.text.contains("Barbara brings the post"))
 	await _shot("53_mail_barbara.png")
 	# the order wants a sweater she hasn't got yet
 	var post_act: Array = mail.actions().filter(func(a): return str(a["id"]) == "post:order_1")
@@ -4041,7 +4041,7 @@ func _mail_checks() -> void:
 		and hud.letters._meta.text.contains("Florida") and hud.letters._list.get_child_count() == 3)
 	await _shot("53_mail_letter.png")
 	hud.letters.show_letter(1)
-	_check("Daniel's letter asks her to come home", hud.letters._from.text == "From Daniel" and hud.letters._body.text.contains("Come home"))
+	_check("Max's letter asks her to come home", hud.letters._from.text == "From Max" and hud.letters._body.text.contains("Come home"))
 	hud.letters.show_letter(2)
 	_check("the order letter says what it wants and pays ('%s')" % hud.letters._note.text,
 		hud.letters._note.text.contains("Common or better") and hud.letters._body.text.contains("170 coins") and mail.unread() == 0)
@@ -4138,18 +4138,18 @@ func _mail_round() -> bool:
 	return _post_stops.size() == 1
 
 
-## Daniel's visit (data/scenes/daniel.scene): play time counts up, he isn't due before the hours are
-## played or before Act 1, then he drives up to the farm in his placeholder body (a visitor, not one
+## Max's visit (data/scenes/max.scene): play time counts up, he isn't due before the hours are
+## played or before Act 1, then he drives up to the farm in his own model (a visitor, not one
 ## of the town's cast). Say yes and he shows his true colours; say no and his temper comes out;
 ## either way she sends him away, and he's gone when the scene ends. Pictures:
-## 54_daniel_arrives.png and 54_daniel_true_colours.png.
-func _daniel_checks() -> void:
+## 54_max_arrives.png and 54_max_true_colours.png.
+func _max_checks() -> void:
 	hud.hide_dialogue()
 	hud.tip_panel.visible = false
 	mode = Mode.LIVE
 	var hour0 := Game.hour
 	var auto0: bool = story.auto
-	var keys := ["play_secs", "act1_done", "seen_daniel_visit", "daniel_accepted", "daniel_refused", "daniel_visit_done", "journal", "gary_visit_day"]
+	var keys := ["play_secs", "act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done", "journal", "gary_visit_day"]
 	var saved := {}
 	for k in keys:
 		saved[k] = Game.flags.get(k, null)
@@ -4157,17 +4157,17 @@ func _daniel_checks() -> void:
 	await _wait(0.5)
 	var p1 := float(Game.flags.get("play_secs", 0.0))
 	_check("play time counts up while she plays (%.2f → %.2f s)" % [p0, p1], p1 > p0 + 0.3)
-	var hours: float = float(Data.economy().get("story", {}).get("daniel_visit_hours", 4.0))
-	for k in ["act1_done", "seen_daniel_visit", "daniel_accepted", "daniel_refused", "daniel_visit_done"]:
+	var hours: float = float(Data.economy().get("story", {}).get("max_visit_hours", 4.0))
+	for k in ["act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done"]:
 		Game.flags.erase(k)
 	Game.flags["play_secs"] = hours * 3600.0 + 10.0
-	var before_act1 := daniel_visit_due()
+	var before_act1 := max_visit_due()
 	Game.set_flag("act1_done")
 	Game.flags["play_secs"] = hours * 3600.0 - 60.0
-	var short := daniel_visit_due()
+	var short := max_visit_due()
 	Game.flags["play_secs"] = hours * 3600.0 + 1.0
-	_check("Daniel is due after %.0f hours of play and Act 1 (before Act 1 %s, a minute short %s, after %s)" % [hours, str(before_act1), str(short), str(daniel_visit_due())],
-		not before_act1 and not short and daniel_visit_due())
+	_check("Max is due after %.0f hours of play and Act 1 (before Act 1 %s, a minute short %s, after %s)" % [hours, str(before_act1), str(short), str(max_visit_due())],
+		not before_act1 and not short and max_visit_due())
 	# he comes: she's home on the farm in the late morning
 	Game.flags["gary_visit_day"] = Game.day # Gary isn't calling today
 	post_day = Game.day # nor is the post
@@ -4180,37 +4180,47 @@ func _daniel_checks() -> void:
 	Game.hour = 11.0
 	_rounds_t = 0.0
 	var t := 0.0
-	while story.playing != "daniel_visit" and t < 5.0:
+	while story.playing != "max_visit" and t < 5.0:
 		await _wait(0.1)
 		t += 0.1
-	var dan := _villager("daniel")
-	_check("he drives up to the farm (%s after %.1fs), a visitor in a placeholder body, not one of the town's cast" % [story.playing, t],
-		story.playing == "daniel_visit" and dan != null and not villagers.has(dan) and dan.visible)
-	await _act1_shot("Hey, Nor.", "54_daniel_arrives.png")
-	await _act1_shot("tea cosy", "54_daniel_true_colours.png")
+	var ex := _villager("max")
+	_check("he drives up to the farm (%s after %.1fs), a visitor in his own model, not one of the town's cast" % [story.playing, t],
+		story.playing == "max_visit" and ex != null and ex.body != null and not villagers.has(ex) and ex.visible)
+	await _act1_shot("Hey, Nor.", "54_max_arrives.png")
+	await _act1_shot("tea cosy", "54_max_true_colours.png")
 	await _act1_until_done(60.0)
 	await _wait(0.3)
 	var j: Array = Game.journal()
-	_check("say yes and he shows his true colours; she sends him away and he's gone (accepted %s, done %s, journal '%s', still here %s)" % [str(Game.flag("daniel_accepted")), str(Game.flag("daniel_visit_done")), j[-1]["title"] if not j.is_empty() else "", str(_villager("daniel") != null)],
-		Game.flag("daniel_accepted") == true and Game.flag("daniel_visit_done") == true and not j.is_empty() and str(j[-1]["title"]) == "Daniel came"
-		and _villager("daniel") == null and visitors.is_empty() and story.shown.any(func(l): return str(l).contains("tea cosy")))
-	_check("he comes only once", not daniel_visit_due())
+	_check("say yes and he shows his true colours; she sends him away and he's gone (accepted %s, done %s, journal '%s', still here %s)" % [str(Game.flag("max_accepted")), str(Game.flag("max_visit_done")), j[-1]["title"] if not j.is_empty() else "", str(_villager("max") != null)],
+		Game.flag("max_accepted") == true and Game.flag("max_visit_done") == true and not j.is_empty() and str(j[-1]["title"]) == "Max came"
+		and _villager("max") == null and visitors.is_empty() and story.shown.any(func(l): return str(l).contains("tea cosy")))
+	_check("he comes only once", not max_visit_due())
 	# the other choice
-	for k in ["seen_daniel_visit", "daniel_accepted", "daniel_visit_done"]:
+	for k in ["seen_max_visit", "max_accepted", "max_visit_done"]:
 		Game.flags.erase(k)
 	story.auto_choices = [1]
 	story.shown.clear()
 	player.position = Vector3(9.6, 0, 4.2)
 	_rounds_t = 0.0
 	t = 0.0
-	while story.playing != "daniel_visit" and t < 5.0:
+	while story.playing != "max_visit" and t < 5.0:
 		await _wait(0.1)
 		t += 0.1
 	await _act1_until_done(60.0)
 	await _wait(0.3)
-	_check("say no and his temper comes out; she sends him away (refused %s, accepted %s)" % [str(Game.flag("daniel_refused")), str(Game.flag("daniel_accepted"))],
-		Game.flag("daniel_refused") == true and Game.flag("daniel_accepted") != true and Game.flag("daniel_visit_done") == true
-		and story.shown.any(func(l): return str(l).contains("six hours for this")) and _villager("daniel") == null)
+	_check("say no and his temper comes out; she sends him away (refused %s, accepted %s)" % [str(Game.flag("max_refused")), str(Game.flag("max_accepted"))],
+		Game.flag("max_refused") == true and Game.flag("max_accepted") != true and Game.flag("max_visit_done") == true
+		and story.shown.any(func(l): return str(l).contains("six hours for this")) and _villager("max") == null)
+	# a save from before he was renamed (he was Daniel) keeps its place in his story
+	var old_save := {"version": 6, "flags": {"seen_daniel_visit": true, "daniel_refused": true, "declined_daniel": true,
+		"mail": {"box": [], "got": [{"id": "daniel_1", "from": "Daniel", "body": "Call me.\n\nD.", "read": true}], "sent": {"daniel_1": 4}},
+		"journal": [{"kind": "note", "title": "Daniel came", "text": "Daniel left a voicemail.", "day": 5}]}}
+	var of: Dictionary = Game.migrate(old_save)["flags"]
+	var old_letter: Dictionary = of["mail"]["got"][0]
+	_check("a save from before the rename says Max: his flags, his letter (not posted again) and her journal (%s)" % ", ".join(of.keys().filter(func(k): return k != "mail" and k != "journal")),
+		of.get("seen_max_visit") == true and of.get("max_refused") == true and of.get("declined_max") == true and not of.has("seen_daniel_visit")
+		and (of["mail"]["sent"] as Dictionary).has("max_1") and str(old_letter["from"]) == "Max" and str(old_letter["body"]).ends_with("M.")
+		and str(of["journal"][0]["title"]) == "Max came" and str(of["journal"][0]["text"]).begins_with("Max "))
 	# put everything back
 	town_rounds = false
 	for k in saved:
@@ -4445,9 +4455,9 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
-	if "--only=daniel" in OS.get_cmdline_user_args(): # just Daniel's visit: when he's due, both choices
+	if "--only=max" in OS.get_cmdline_user_args(): # just Max's visit: when he's due, both choices
 		await _wait(1.5)
-		await _daniel_checks()
+		await _max_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -4700,7 +4710,7 @@ func _autotest() -> void:
 	await _shop_checks()
 	await _cast_checks()
 	await _mail_checks()
-	await _daniel_checks()
+	await _max_checks()
 	await _job_checks()
 	await _flock_checks()
 	await _light_checks()
@@ -7144,7 +7154,7 @@ func _update_rounds(delta: float) -> void:
 	_update_post()
 	mail.update()
 	_update_gary_visit()
-	_update_daniel_visit()
+	_update_max_visit()
 
 
 ## Gary from Willow Homes calls at the farm: first on her second day (data/scenes/town.scene
@@ -7175,40 +7185,40 @@ func _update_gary_visit() -> void:
 	story.play(id)
 
 
-## Daniel's visit (data/scenes/daniel.scene; Alex, 2026-11-13): once she has played
-## "daniel_visit_hours" hours of this save (data/economy.json "story"; counted in the flag
+## Max's visit (data/scenes/max.scene; Alex, 2026-11-13): once she has played
+## "max_visit_hours" hours of this save (data/economy.json "story"; counted in the flag
 ## play_secs), he drives out to the farm to win her back. He comes while she's home on the farm,
 ## mid-morning to late afternoon, after Act 1, and only once.
-func daniel_visit_due() -> bool:
-	if Game.flag("act1_done") != true or Game.flag("seen_daniel_visit") == true:
+func max_visit_due() -> bool:
+	if Game.flag("act1_done") != true or Game.flag("seen_max_visit") == true:
 		return false
-	var hours: float = float(Data.economy().get("story", {}).get("daniel_visit_hours", 4.0))
+	var hours: float = float(Data.economy().get("story", {}).get("max_visit_hours", 4.0))
 	return float(Game.flags.get("play_secs", 0.0)) >= hours * 3600.0
 
 
-func _update_daniel_visit() -> void:
-	if not daniel_visit_due() or story.is_playing() or Game.hour < 10.0 or Game.hour > 17.0 or mode != Mode.LIVE or sleeping:
+func _update_max_visit() -> void:
+	if not max_visit_due() or story.is_playing() or Game.hour < 10.0 or Game.hour > 17.0 or mode != Mode.LIVE or sleeping:
 		return
 	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or hud.is_chat_open() or knit.active:
 		return
-	var id := Story.find_trigger("event", "daniel_visit")
+	var id := Story.find_trigger("event", "max_visit")
 	if id == "":
 		return
-	visitor("daniel")
+	visitor("max")
 	story.play(id)
 
 
-## People who come for one scene and go (Daniel): story scenes find them by id like the villagers
-## (_villager), but they aren't in the town's cast and leave when their scene ends. Daniel has the
-## simple villager body, in city clothes, until he has a model of his own.
+## People who come for one scene and go (Max): story scenes find them by id like the villagers
+## (_villager), but they aren't in the town's cast and leave when their scene ends. Max plays in
+## his own model (data/characters.json "max"); the colours are only a fallback if it won't load.
 var visitors := {} # id -> Villager
 
 
 func _visitor_def(id: String) -> Dictionary:
 	match id:
-		"daniel":
-			return {"name": "Daniel", "role": "Visitor", "pos": Vector3(18.0, 0, 4.3),
-				"look": {"skin": Color(0.9, 0.74, 0.62), "hair": Color(0.33, 0.23, 0.15), "top": Color(0.22, 0.24, 0.29), "bottom": Color(0.15, 0.16, 0.19)}}
+		"max":
+			return {"name": "Max", "role": "Visitor", "pos": Vector3(18.0, 0, 4.3),
+				"look": {"model": "max", "skin": Color(0.9, 0.74, 0.62), "hair": Color(0.33, 0.23, 0.15), "top": Color(0.22, 0.24, 0.29), "bottom": Color(0.15, 0.16, 0.19)}}
 	return {}
 
 
@@ -7371,7 +7381,7 @@ func _villager(id: String) -> Villager:
 	for v in villagers:
 		if v.vid == id:
 			return v
-	var w: Variant = visitors.get(id) # someone here for one scene (Daniel)
+	var w: Variant = visitors.get(id) # someone here for one scene (Max)
 	return w as Villager if w != null and is_instance_valid(w) else null
 
 

@@ -48,7 +48,7 @@ extends RefCounted
 ##   @prop bus bus1 40 6 90          put a prop down: bus, suitcase, rail, letter, lantern, rock; name, x, z, yaw
 ##   @prop_move bus1 70 6 4          slide it to x, z over some seconds (doesn't wait)
 ##   @prop_remove bus1
-##   @phone Daniel / @phone off      a phone ringing on screen
+##   @phone Max / @phone off      a phone ringing on screen
 ##   @shake 0.4                      shake the camera
 ##   @sheep out / @sheep home        three sheep get out by the south fence, or go back in
 ##   @home rowan 21 5                a villager stays at x, z (survives saves); "@home rowan off"

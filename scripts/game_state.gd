@@ -17,7 +17,7 @@ const MAX_HOUSE_LEVEL := 3
 ## v4: adds the needs happiness, love, warmth and fitness, knitting skill and the sweater she wears.
 ## v5: adds typed chats with villagers (the last lines of each conversation).
 ## v6: every sweater has a rarity (1 Common .. 5 Legendary), kept in `sweaters` (scripts/knit_game.gd).
-const SAVE_VERSION := 6
+const SAVE_VERSION := 7
 ## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
 const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
@@ -441,8 +441,39 @@ static func migrate(d: Dictionary) -> Dictionary:
 	if v < 6:
 		d["sweaters"] = [] # the sweaters she carries are ordinary (Rare) ones; sync_sweaters fills them in
 		v = 6
+	if v < 7:
+		_rename_daniel(d.get("flags", {})) # Nora's ex is Max now (Alex, 2026-11-13), not Daniel
+		v = 7
 	d["version"] = v
 	return d
+
+
+## Saves from before Nora's ex was renamed keep their place in his story: his flags, his letter (so
+## it isn't posted again) and the journal pages that name him all say Max.
+static func _rename_daniel(f: Dictionary) -> void:
+	for k in f.keys():
+		var nk := str(k).replace("daniel", "max")
+		if nk != str(k):
+			if not f.has(nk):
+				f[nk] = f[k]
+			f.erase(k)
+	var m: Variant = f.get("mail")
+	if m is Dictionary:
+		var sent: Dictionary = (m as Dictionary).get("sent", {})
+		if sent.has("daniel_1"):
+			sent["max_1"] = sent["daniel_1"]
+			sent.erase("daniel_1")
+		for key in ["box", "got"]:
+			for l in (m as Dictionary).get(key, []):
+				if l is Dictionary and str(l.get("id", "")) == "daniel_1":
+					l["id"] = "max_1"
+					l["from"] = "Max"
+					l["body"] = str(l.get("body", "")).replace("\n\nD.", "\n\nM.")
+	for e in f.get("journal", []):
+		if e is Dictionary:
+			for key in ["title", "text"]:
+				if (e as Dictionary).has(key):
+					e[key] = str(e[key]).replace("Daniel", "Max")
 
 
 func from_dict(d: Dictionary) -> void:

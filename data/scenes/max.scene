@@ -1,0 +1,64 @@
+# Max's visit (Alex, 2026-11-13; every line here is a DRAFT for Alex). The format is described at
+# the top of scripts/story.gd.
+# After about four hours of play (data/economy.json "story" max_visit_hours; main.gd
+# _update_max_visit) Max drives out to the farm to win Nora back. She chooses whether to give
+# him a chance. Either way he shows his true colours before he's gone: say yes and he's soon
+# selling Gran's farm and joking about her sweater; say no and the temper comes out. She sends him
+# away. Flags: max_accepted or max_refused, then max_visit_done. He is a visitor
+# (main.gd visitor()) in his own model, only here for this scene. Max is the ex who was called
+# Daniel in earlier drafts (Alex, 2026-11-13).
+
+== max_visit
+@trigger event max_visit
+@requires act1_done
+@once
+@fade out 0.8
+@place nora 9.8 3.0 90
+@place max 18.0 4.3 270
+@camera 12.4 3.2 9
+@fade in 1.0
+> A car she knows pulls up at the end of the lane. Grey, clean, completely wrong out here.
+Nora (surprised): No. No, no, no.
+@walk max 11.3 2.6
+@face max nora
+@face nora max
+@camera between max nora 6
+Max (warm): Hey, Nor.
+Nora (worried): Max. What are you doing here?
+Max (warm): Your mum gave me the address. Don't be angry with her. I asked nicely.
+Max (sad): You didn't answer my letter. Or the calls. So I drove. Six hours.
+Max (wry): Look at you. Sheep. Actual sheep.
+Nora (neutral): It's Gran's farm. I'm looking after it while she's in Florida.
+Max (sad): I've been doing a lot of thinking. I've been seeing someone. A therapist, I mean. Not... someone.
+Max (warm): I know I wasn't easy to live with. I know about the sweater. I'm sorry about the sweater.
+Max (warm): Come home, Nora. Not today, I'm not stupid. But soon. Let me show you I've changed.
+? He looks like the man she married. Almost.
+- ...Okay. One chance. Show me. -> accept | set max_accepted
+- No. I'm not coming back, Max. -> refuse | set max_refused
+@label accept
+Nora (sad): One chance. I mean it. One.
+Max (happy): That's all I need. That's all I ever needed.
+> He pulls her into a hug. Over her shoulder, he's already looking at the house.
+Max (neutral): We'll get this place on the market. Your gran's not coming back from Florida, let's be honest.
+Nora (surprised): It isn't mine to sell.
+Max (wry): Then talk her round. You're good at that. And Nor? Lose the jumper. You look like a tea cosy.
+> And there it is. The little laugh after, so it's a joke if she minds.
+Nora (angry): No. Get in your car, Max.
+Max (surprised): Nora, come on. I was joking.
+Nora (angry): You're always joking. Go home. I am home.
+@journal note Max came | I said yes. For about a minute. Then he was selling Gran's farm and laughing at my sweater, and I saw him the way I should have years ago. I sent him home.
+@goto leaves
+@label refuse
+Max (sad): You don't mean that. You're upset. It's all the fresh air.
+Nora (neutral): I mean it. I'm staying.
+Max (angry): Six hours, Nora. I drove six hours for this.
+> And there it is. The edge she spent years learning to step around.
+Nora (neutral): Then you'd better start back before it's dark.
+@journal note Max came | He drove six hours to tell me he'd changed, and it took him about two minutes to show me he hadn't. I told him no. My hands didn't even shake.
+@label leaves
+@walk max 18.0 4.3 nowait
+> He walks back down the lane to the grey car. He doesn't look back. He never did.
+@wait 2.0
+Nora (sad): ...Okay.
+@set max_visit_done
+@camera player

@@ -83,14 +83,14 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 
 ## 4. Suggested playthrough, beginning to end
 
-**All of this is a draft for Alex.** One in-game year, four chapters, about 25–30 hours for the story, then open play. Names in use: Nora (heroine, working name), Daniel (ex-husband), Ellie (Gran), Rowan, Rosa, Gary, Giorgio, Sabrina, Steve, Wren, Barbara (the cast Alex set on 2026-11-12; Theo, Mabel, Hazel, Pip and Gus are gone).
+**All of this is a draft for Alex.** One in-game year, four chapters, about 25–30 hours for the story, then open play. Names in use: Nora (heroine, working name), Max (her ex, who was abusive; Daniel in earlier drafts), Ellie (Gran), Rowan, Rosa, Gary, Giorgio, Sabrina, Steve, Wren, Barbara (the cast Alex set on 2026-11-12; Theo, Mabel, Hazel, Pip and Gus are gone), Lars (the farmer next door, 2026-11-13).
 
 ### Chapter 1: Cast On (Autumn, hours 0–5)
 *Theme: arriving. Mechanics: the basics.*
-- **Existing Act 1:** the rain bus, Daniel's call, Wren's tour, Gran's basket and letter, first sweater, the fence and Rowan, first sale to Rosa, the porch voicemail.
+- **Existing Act 1:** the rain bus, Max's call, Wren's tour, Gran's basket and letter, first sweater, the fence and Rowan, first sale to Rosa, the porch voicemail.
 - **Days 2–7:** tutorial by doing. The order board opens with Rosa's first commission. Rosa teaches spinning. First dye (onion skins from the garden). Nora knits herself out of the thin city coat.
 - **Week 2:** Gran's pattern book is found with most pages missing; villagers each hold a page (the collection begins). Memory thread 2: Ellie teaching her to cast on.
-- **Week 3:** (Alex, 2026-11-13: no legal fight over the house or the farm; Gran is alive, in Florida, and the farm is still hers. Daniel's visit at about four hours of play replaces the lawyer's letter: he comes to win her back, and whether she says yes or no, he shows his true colours and she sends him away.) Stakes: she needs to show the farm is a working business by year's end.
+- **Week 3:** (Alex, 2026-11-13: no legal fight over the house or the farm; Gran is alive, in Florida, and the farm is still hers. Max's visit at about four hours of play replaces the lawyer's letter: he comes to win her back, and whether she says yes or no, he shows his true colours and she sends him away.) Stakes: she needs to show the farm is a working business by year's end.
 - **Chapter end, Harvest Fair (day 28):** first festival. She enters one sweater in the beginner's class. Whatever she places, the town claps. Rowan's first-date scene can land here.
 - Player has by the end: stitch game, 3 patterns, 3 colours, orders, 2-heart friendships.
 
@@ -102,7 +102,7 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 - Rowan's arc deepens: Anna. The darned hat. Evenings by the fire.
 - Memory threads 3–4: the marriage, shown in objects (the navy sweater he threw away, the phone she wasn't allowed to silence). The player learns it slowly, as Alex specified.
 - **Midwinter night (festival):** lanterns, gifts exchanged. The gift Nora knits for her chosen person is designed by the player.
-- **Chapter end:** Daniel turns up in Maplewood in person. She does not fold. The town closes ranks, quietly.
+- **Chapter end:** Max turns up in Maplewood in person. She does not fold. The town closes ranks, quietly.
 - Player has: 8 patterns, dyeing, hats and scarves, buys Rosewood Cottage.
 
 ### Chapter 3: Pattern (Spring, hours 12–20)
@@ -166,7 +166,7 @@ Goal: a 60–90 minute Steam demo of Chapter 1, good enough for Steam Next Fest 
 | 1 | Foundations | Split `scripts/main.gd`: tests to `scripts/autotest.gd`, building to `build_mode.gd`, saves to `save.gd`, villager trade to `shop.gd`. All input through Godot input actions (controller and Steam Deck work). Atomic saves (write a temp file, then rename; keep one backup). Fix the two save risks in section 1. A headless unit-test run for pure logic (economy, migrations, story parser) that takes seconds; keep the windowed autotest for the rest. | no file over about 1,000 lines; the game is playable start to finish on a controller; quick tests run in under 30 seconds |
 | 2 | Knitting depth | 3 pattern types with their own rhythm (rib, cable, Fair Isle). Dyeing: 6 colours from garden plants. Sweater = pattern × colour, shown on the model and in the inventory. Pattern book UI with missing pages. | a player can make 18 visibly different sweaters |
 | 3 | Daily life | Full order board (villager tastes, deadlines of several days, never punishing). End-of-day card finished. Saturday market. Villager schedules (home, work, plaza by hour). 3 more crops and dye plants; generalise the crop code that names turnips and pumpkins. | adding a crop is a JSON edit only; a week of play has no two identical days |
-| 4 | Chapter 1 content | Write and stage days 2–28 (section 4): about 12 new scenes, memory thread 2, Daniel's visit, the Harvest Fair as a playable festival. 2 new villagers with models through the Tripo pipeline (rigid heads, `AGENTS.md` rule). | Chapter 1 plays from the bus to the Fair with no dead days |
+| 4 | Chapter 1 content | Write and stage days 2–28 (section 4): about 12 new scenes, memory thread 2, Max's visit, the Harvest Fair as a playable festival. 2 new villagers with models through the Tripo pipeline (rigid heads, `AGENTS.md` rule). | Chapter 1 plays from the bus to the Fair with no dead days |
 | 5 | Feel and performance | Find the town's 18 FPS cause with `--fpsprobe` and reach 60 FPS on the M4 Air at Medium and 30 FPS on Steam Deck settings. Animation pass on knitting, shearing, gifting. Real music (2–3 tracks) and replaced key sounds. UI pass: inventory, journal and pattern book in the stitched style. Onboarding without text walls. | a new player needs no explanation for the first 15 minutes |
 | 6 | Ship the demo | Export presets for macOS and Windows; a GitHub Actions build. Steam page: capsule art, 5 screenshots, a 45-second trailer led by the stitch game. Playtest with 10 people from the target audience; fix the top 5 problems they hit. AI chat off in the demo unless the proxy exists. | a stranger can download, play 60 minutes and wishlist |
 

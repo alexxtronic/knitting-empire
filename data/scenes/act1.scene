@@ -38,8 +38,8 @@ Nora (worried): Okay. Nobody followed. Nobody knows you're here.
 > Her phone buzzes. No name. It doesn't need one.
 @camera nora 5
 ? The phone keeps ringing.
-- Decline the call. -> declined | phone off; set declined_daniel
-- Let it ring out. -> ringout | phone off; set ignored_daniel
+- Decline the call. -> declined | phone off; set declined_max
+- Let it ring out. -> ringout | phone off; set ignored_max
 @label declined
 > She presses the red button, then holds the side button until the screen goes black. Her hand is shaking.
 Nora (neutral): Not today. Not here.
@@ -205,9 +205,9 @@ Nora (warm): Good yarn. Gran would approve. She'd also say I paid too much.
 @memory on 1.6
 > The last stitch closes. She holds the piece up to the window, and her hands remember another sweater.
 > Navy, with a cream band across the chest. He'd said cream made him look soft, so she made the band thin.
-Daniel: You made this? Babe. You know I don't really do wool.
+Max: You made this? Babe. You know I don't really do wool.
 > Four months of it. Evenings, mostly, after he'd gone to bed, so it would be a surprise.
-Daniel: Don't make that face. It's sweet. It's just not... me.
+Max: Don't make that face. It's sweet. It's just not... me.
 > In the morning it was in the bin by the back door, under the coffee grounds. He said it must have fallen in.
 > She didn't knit again for six years.
 @memory off 1.6
@@ -384,7 +384,7 @@ Nora (warm): Thank you. Really.
 @camera 11.2 3.0 6
 @fade in 1.2
 > Night comes down fast out here. No streetlights. Just stars, and a porch light Gran never got round to fixing.
-@phone Voicemail: Daniel
+@phone Voicemail: Max
 > One new voicemail. Her thumb hovers over it for a while. Then she plays it.
 Voicemail: Nora. It's me. Your mum says you're "taking some time." Okay. Take it.
 Voicemail: The house is so quiet. Just... call me back. Please. I miss you.
@@ -419,7 +419,7 @@ Rowan (warm): Ellie's porch light's been broken for years. Keep that. I know the
 @wait 2.0
 @home rosa off
 @home steve off
-@journal note The porch | Daniel left a voicemail. He misses me, he says. Rowan left his lantern by the step. I didn't ask him to.
+@journal note The porch | Max left a voicemail. He misses me, he says. Rowan left his lantern by the step. I didn't ask him to.
 @fade out 1.4
 @home rowan off
 @set act1_done
