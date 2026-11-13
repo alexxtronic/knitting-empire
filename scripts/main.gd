@@ -3642,6 +3642,12 @@ func _cast_checks() -> void:
 		if v != null and v.body != null and v.body.face != null:
 			bodies.append(id)
 	_check("the eight new faces wear their own models, with real eyes (%s)" % ", ".join(bodies), bodies.size() == 8)
+	var no_portrait: Array = [] # tools/render_portraits.py makes them; a story line shows them beside the text
+	for c in Data.load_json("characters").get("characters", []):
+		for mood in ["neutral", "happy", "warm", "sad", "wry", "surprised", "worried", "angry"]:
+			if not ResourceLoader.exists("res://assets/portraits/%s_%s.png" % [str(c.get("id", "")), mood]):
+				no_portrait.append("%s_%s" % [str(c.get("id", "")), mood])
+	_check("every character has a portrait for each story mood (missing: %s)" % str(no_portrait), no_portrait.is_empty())
 	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id) and ai.has_persona(id)))
 	_check("every villager has an intro, lines and a chat persona (missing: %s)" % str(missing), missing.is_empty())
 	var old_f = Game.friends.get("sabrina")
