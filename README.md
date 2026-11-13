@@ -41,7 +41,8 @@ The game opens on a title screen (Continue, New Game, Settings, Quit) over the f
     - **Wren**: the mayor, brisk, busy and always stressed
     - **Barbara**: the postwoman, kind and full of wise advice. At nine every morning she walks the post to every door in town and out to Nora's mailbox
     - **Rowan**: the shepherd (below)
-  - The six new faces wear their Tripo models (`data/characters.json`), with painted eyes until their real eyes are made
+    - **Lars**: the farmer next door, very chill and easygoing, and a possible romance. He lives in the loft of the big barn by Nora's farm and rents her its stalls for her sheep: 60c a month from the day her first sheep are penned, paid to him in person (`data/economy.json` "story" `barn_rent`, `scripts/homestead.gd`). He has a simple stand-in body until his rig is in
+  - The seven new faces (Rosa's since 2026-11-13) wear their Tripo models (`data/characters.json`), with painted eyes until Alex approves their real eyes (`model_eyes`)
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out
@@ -239,6 +240,15 @@ To see what each graphics effect costs, the frame-cost probe times the town at n
 ```
 
 Pictures are in `art/turnarounds/nora/tripo/` and `art/turnarounds/rowan/tripo/`. For the next character, Tripo's Clean Topology (quad) mode should bend better at elbows and knees; Generate in Parts and 8K textures don't help here. A turnaround with the arms a little away from the body keeps hands from fusing to hips.
+
+**Mixamo (Sabrina, Rosa and Max; Lars next).** For a Tripo model that rigs badly on our own skeleton, Mixamo's auto-rigger does better:
+
+1. `tools/to_mixamo.py` makes a light copy (welded, lightly smoothed, cut to 30k faces, unwrapped afresh, colours baked from the full model) and zips it as OBJ, MTL and texture: `Blender -b --factory-startup -P tools/to_mixamo.py -- <tripo.glb> <out.zip> <height_m>`.
+2. Upload the zip to mixamo.com, place the markers, and download the rigged T-pose as FBX.
+3. `Blender -b --factory-startup -P tools/import_mixamo.py -- "$PWD" <T-Pose.fbx> <id> --rig-name <Name>` renames the bones to ours, makes the head rigid and saves `tools/character_build/<id>/<id>.blend`.
+4. A long skirt or dress: `Blender -b tools/character_build/<id>/<id>.blend -P tools/skirt_weights.py -- "$PWD" <id>`, so it swings as one bell instead of two trouser legs (Mixamo splits it down the middle and hangs the hem from the feet).
+5. The loops: `tools/retarget_anims.py` with Quaternius's library (it grounds each standing loop by the body's soles and sits a new rig with its seat on the origin), then again with `--same-bones --map SitKnit=lib_SitKnit` and `assets/nora_tripo.glb` to borrow the knitting loop. Put the stride speeds it prints in `data/characters.json`.
+6. Real eyes with `tools/add_eyes.py` (below), then import and add the character to `data/characters.json`.
 
 **TripoSR (one picture).** `tools/run_triposr.py` makes a mesh from a single cut-out picture with [TripoSR](https://github.com/VAST-AI-Research/TripoSR) in about a minute on the Mac GPU, and writes a `rig_ready.ply` for step 4. Nora's try is `assets/nora_tsr.glb` (`model_triposr`): a good silhouette at playing distance, but soft up close. Pictures are in `art/turnarounds/nora/triposr/`. The pictures, report and timelapse are in `art/turnarounds/nora/sculpt/`.
 

@@ -27,14 +27,16 @@
   "cottage_price": 2500,
   "max_hearts": 5,
   "story": {
-    "_about": "Act 1 (scripts/homestead.gd): Nora arrives with nothing; Gran's note leaves her 'gran_coins'. Rent for Gran's house ('rent' coins every 'rent_days' days) goes in Gran's tin. Steve at Builder's Delight sells 'wood_pack' wood for 'wood_pack_price'. A fence panel takes 'fence_wood' wood; a gate is crafted (data/recipes.json). Daniel visits the farm once she has played 'daniel_visit_hours' hours (main.gd _update_daniel_visit, data/scenes/daniel.scene).",
+    "_about": "Act 1 (scripts/homestead.gd): Nora arrives with nothing; Gran's note leaves her 'gran_coins'. Rent for Gran's house ('rent' coins every 'rent_days' days) goes in Gran's tin. Steve at Builder's Delight sells 'wood_pack' wood for 'wood_pack_price'. A fence panel takes 'fence_wood' wood; a gate is crafted (data/recipes.json). Daniel visits the farm once she has played 'daniel_visit_hours' hours (main.gd _update_daniel_visit, data/scenes/daniel.scene). Lars, next door, rents her the barn for her animals: 'barn_rent' coins every 'barn_rent_days' days (a month), from the day her first sheep are penned; she pays him in person (homestead.gd).",
     "gran_coins": 100,
     "rent": 20,
     "rent_days": 7,
     "wood_pack": 5,
     "wood_pack_price": 15,
     "fence_wood": 1,
-    "daniel_visit_hours": 4
+    "daniel_visit_hours": 4,
+    "barn_rent": 60,
+    "barn_rent_days": 28
   },
   "land": [
     {

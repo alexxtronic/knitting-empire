@@ -6,7 +6,7 @@ a Tripo sculpt: its arms bend at the elbow and stay round, where ours curved lik
 colour only) and auto-rigging it on mixamo.com (Standard Skeleton, 65 bones); download FBX Binary, With
 Skin, T-pose.
 
-  Blender -b --factory-startup -P tools/import_mixamo.py -- <project_dir> <mixamo.fbx> <out_id> [--like <old.blend>]
+  Blender -b --factory-startup -P tools/import_mixamo.py -- <project_dir> <mixamo.fbx> <out_id> [--like <old.blend>] [--rig-name Name]
 
 It:
   1. imports the FBX and bakes Mixamo's centimetre scale and Y-up turn into the armature, so the rig sits at
@@ -18,7 +18,8 @@ It:
   4. makes the head rigid (tools/rigid_head.py);
   5. keeps the seated anchor of --like (the old rig's SitIdle hips, moved by how far Mixamo put the hip
      joint from the old one, so the body still lands on the chair: tools/retarget_anims.py reads
-     rig["seat_SitIdle"]) and its armature's name;
+     rig["seat_SitIdle"]) and its armature's name (a new character has no --like: --rig-name names the
+     armature, and tools/retarget_anims.py seats its loops on the origin);
   6. saves tools/character_build/<out_id>/<out_id>.blend and exports assets/<out_id>.glb (no loops yet:
      run tools/retarget_anims.py on the blend next).
 """
@@ -28,6 +29,7 @@ from mathutils import Matrix, Vector
 argv = sys.argv[sys.argv.index("--") + 1:]
 PROJECT, FBX, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[2]
 LIKE = argv[argv.index("--like") + 1] if "--like" in argv else None
+RIG_NAME = argv[argv.index("--rig-name") + 1] if "--rig-name" in argv else "Rig"
 
 NAMES = {
     "Hips": "Hips", "Spine": "Spine", "Spine1": "Chest", "Spine2": "UpperChest", "Neck": "Neck", "Head": "Head",
@@ -38,7 +40,7 @@ NAMES = {
 }
 
 # ---- what to keep from the old rig
-rig_name, seat, old_hips, fps = "Rig", None, None, 30
+rig_name, seat, old_hips, fps = RIG_NAME, None, None, 30
 if LIKE:
     with bpy.data.libraries.load(LIKE) as (src, dst):
         dst.objects = list(src.objects)

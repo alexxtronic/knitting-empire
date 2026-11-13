@@ -11,7 +11,8 @@ extends Node
 ## "sheep_penned" (both strays inside).
 ##
 ## What survives a save lives in Game.flags: "story_farm", "fences" (edge key -> "fence"/"gate"),
-## "strays" ([[x, z], ...] still loose), "rent_due" (the day rent is next added), "rent_owed".
+## "strays" ([[x, z], ...] still loose), "rent_due" (the day rent is next added), "rent_owed",
+## "barn_rent_due" and "barn_rent_owed" (Lars's barn rent, the same way).
 ## The autotest's sandbox farm (the old pen and three sheep) is put back by reset_sandbox().
 
 const Catalog = preload("res://scripts/catalog.gd")
@@ -698,6 +699,7 @@ func _pen_stray(s) -> void:
 	main.hud.show_toast("One's in! (%d in the pen)" % main.sheep_list.size())
 	if strays.is_empty():
 		Game.set_flag("act1_flock")
+		start_barn_rent()
 		main.story.trigger("event", "sheep_penned")
 
 
@@ -716,6 +718,7 @@ func rent_owed() -> int:
 
 
 func _on_day(day: int) -> void:
+	_barn_rent_day(day)
 	if Game.flag("rent_on") != true:
 		return
 	var due := int(Game.flag("rent_due", day + econ("rent_days", 7)))
@@ -733,6 +736,47 @@ func pay_rent() -> bool:
 	Game.set_flag("rent_owed", 0)
 	main.hud.show_toast("Paid %dc into Gran's tin." % owed)
 	ui.refresh()
+	return true
+
+
+# --- the barn's rent: Lars's monthly fee -------------------------------------------------
+
+## Lars, next door, owns the barn and rents Nora its stalls for her animals: 'barn_rent' coins every
+## 'barn_rent_days' days (data/economy.json "story"). It starts the day her first sheep are penned (a farm
+## that already has its flock, the sandbox's or an old save's, starts on its next morning), and she pays
+## him in person (his menu in main.gd). Nothing happens if she's late yet: it just adds up.
+func barn_rent_on() -> bool:
+	return Game.flag("barn_rent_due", null) != null
+
+
+func start_barn_rent() -> void:
+	if not barn_rent_on():
+		Game.set_flag("barn_rent_due", Game.day + econ("barn_rent_days", 28))
+		Game.set_flag("barn_rent_owed", 0)
+
+
+func barn_rent_owed() -> int:
+	return int(Game.flag("barn_rent_owed", 0))
+
+
+func _barn_rent_day(day: int) -> void:
+	if not barn_rent_on():
+		if not story_farm() and Game.sheep_count > 0:
+			start_barn_rent()
+		return
+	var due := int(Game.flag("barn_rent_due", day))
+	if day >= due:
+		Game.set_flag("barn_rent_owed", barn_rent_owed() + econ("barn_rent", 60))
+		Game.set_flag("barn_rent_due", due + econ("barn_rent_days", 28))
+		main.hud.show_toast("The barn rent is due: %dc to Lars, next door." % barn_rent_owed())
+
+
+func pay_barn_rent() -> bool:
+	var owed := barn_rent_owed()
+	if owed <= 0 or not Game.spend(owed):
+		return false
+	Game.set_flag("barn_rent_owed", 0)
+	main.hud.show_toast("Paid Lars %dc for the barn." % owed)
 	return true
 
 

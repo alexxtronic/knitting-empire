@@ -3597,10 +3597,11 @@ func _act1_shot(sub: String, fname: String) -> void:
 	story.holding = false
 
 
-## The town's cast (Alex's, 2026-11-12) and their routines: the eight villagers and nobody else,
-## the six new faces in their own models, Sabrina starting cool by the Coffee Shop, Rosa's
-## mornings at the market stall and afternoons in the Yarn Barn, Barbara's nine o'clock post round
-## (every door in town and Nora's porch), and Gary's land and his visit on her second day.
+## The town's cast (Alex's, 2026-11-12, and Lars next door, 2026-11-13) and their routines: the nine
+## villagers and nobody else, the seven new faces in their own models (Rosa's since 2026-11-13),
+## Sabrina starting cool by the Coffee Shop, Rosa's mornings at the market stall and afternoons in the
+## Yarn Barn, Barbara's nine o'clock post round (every door in town and Nora's porch), Gary's land and
+## his visit on her second day, and Lars by his barn, renting her its stalls by the month.
 func _cast_checks() -> void:
 	hud.hide_dialogue()
 	hud.tip_panel.visible = false
@@ -3610,14 +3611,14 @@ func _cast_checks() -> void:
 	var auto0: bool = story.auto
 	var ids: Array = villagers.map(func(v): return str(v.vid))
 	ids.sort()
-	_check("the cast is Barbara, Gary, Giorgio, Rosa, Rowan, Sabrina, Steve and Wren (%s)" % ", ".join(ids),
-		ids == ["barbara", "gary", "giorgio", "rosa", "rowan", "sabrina", "steve", "wren"])
+	_check("the cast is Barbara, Gary, Giorgio, Lars, Rosa, Rowan, Sabrina, Steve and Wren (%s)" % ", ".join(ids),
+		ids == ["barbara", "gary", "giorgio", "lars", "rosa", "rowan", "sabrina", "steve", "wren"])
 	var bodies: Array = []
-	for id in ["barbara", "gary", "giorgio", "sabrina", "steve", "wren"]:
+	for id in ["barbara", "gary", "giorgio", "rosa", "sabrina", "steve", "wren"]:
 		var v := _villager(id)
 		if v != null and v.body != null:
 			bodies.append(id)
-	_check("the six new faces wear their own models (%s)" % ", ".join(bodies), bodies.size() == 6)
+	_check("the seven new faces wear their own models (%s)" % ", ".join(bodies), bodies.size() == 7)
 	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id) and ai.has_persona(id)))
 	_check("every villager has an intro, lines and a chat persona (missing: %s)" % str(missing), missing.is_empty())
 	var old_f = Game.friends.get("sabrina")
@@ -3649,6 +3650,38 @@ func _cast_checks() -> void:
 	var land: Array = _villager_actions(_villager("gary")).filter(func(a): return str(a.get("group", "")) == "Land for sale")
 	_check("Gary lists three plots of land, all out of reach (%s)" % ", ".join(land.map(func(a): return a["label"])),
 		land.size() == 3 and land.all(func(a): return not a["enabled"]))
+	# Lars, by his barn next door, and the barn's rent
+	var lars := _villager("lars")
+	var by_barn := _spot_at(_villager_def("lars")["at"])
+	_check("Lars stands by the barn doors next door (%.1f m from his spot)" % (lars.position.distance_to(by_barn["pos"]) if lars != null and not by_barn.is_empty() else -1.0),
+		lars != null and not by_barn.is_empty() and lars.position.distance_to(by_barn["pos"]) < 1.5)
+	if not by_barn.is_empty():
+		player.position = by_barn["talk"]
+		player.face_point(lars.position)
+		await _cast_frame(by_barn["pos"], float(by_barn["yaw"]), 8.0)
+		await _shot("51_cast_lars.png")
+	var rent0 := {}
+	for k in ["barn_rent_due", "barn_rent_owed"]:
+		rent0[k] = Game.flags.get(k)
+		Game.flags.erase(k)
+	var pay_row := func() -> bool: return _villager_actions(lars).any(func(a): return str(a["id"]) == "pay_barn_rent" and a["enabled"])
+	var before: bool = pay_row.call()
+	homestead.start_barn_rent()
+	var month := homestead.econ("barn_rent_days", 28)
+	homestead._barn_rent_day(Game.day + month)
+	var owed := homestead.barn_rent_owed()
+	Game.coins = maxi(Game.coins, owed + 10)
+	var row: bool = pay_row.call()
+	var coins0 := Game.coins
+	_villager_action(lars, "pay_barn_rent")
+	_check("he rents her the barn's stalls: %dc due after %d days, paid to him (row before: %s, then: %s; coins %d -> %d, owed now %d)" % [owed, month, str(before), str(row), coins0, Game.coins, homestead.barn_rent_owed()],
+		not before and owed == homestead.econ("barn_rent", 60) and row and Game.coins == coins0 - owed and homestead.barn_rent_owed() == 0)
+	hud.hide_dialogue()
+	for k in rent0:
+		if rent0[k] == null:
+			Game.flags.erase(k)
+		else:
+			Game.flags[k] = rent0[k]
 	# the town's routines
 	town_rounds = true
 	story.auto = true
@@ -3661,12 +3694,16 @@ func _cast_checks() -> void:
 	player.position = Vector3(44.0, 0, 1.0) # in town, away from the farm (Gary calls at the farm)
 	Game.hour = 9.0
 	var t := 0.0
+	while post_day != Game.day and t < 5.0: # Barbara sets out on the hour: count her stops before Rosa's walk
+		await _wait(0.1)
+		t += 0.1
+	var stops := _post_stops.size()
+	t = 0.0
 	while not stall.is_empty() and rosa.position.distance_to(stall["pos"]) > 0.4 and t < 40.0:
 		await _wait(0.25)
 		t += 0.25
 	_check("Rosa keeps the market stall in the morning (%.1fs to walk over, at the stall: %s)" % [t, str(rosa_at_stall)],
 		not stall.is_empty() and rosa.position.distance_to(stall["pos"]) <= 0.4 and rosa_at_stall)
-	var stops := _post_stops.size()
 	var kinds: Array = Town.built.filter(func(e): return str(e[1]).begins_with("building_")).map(func(e): return str(e[1]).substr(9))
 	_check("Barbara set out with the post at nine (%d stops for %s, Nora's porch among them: %s)" % [stops, ", ".join(kinds), str(post_farm_stop() in _post_stops)],
 		post_day == Game.day and stops >= 7 and post_farm_stop() in _post_stops)
@@ -7062,9 +7099,18 @@ func _work_spot(d: Dictionary) -> Dictionary:
 	return {}
 
 
-## A spot by building `at.building` (a Town.built kind): `at.pos` and `at.talk` are [x, z] in the
-## building's own space, its front toward +z. {} if the building isn't there.
+## A spot by building `at.building` (a Town.built kind, or "barn" for the farm's barn): `at.pos` and
+## `at.talk` are [x, z] in the building's own space, its front toward +z. {} if the building isn't there.
 func _spot_at(at: Dictionary) -> Dictionary:
+	if str(at["building"]) == "barn": # the farm's barn (world.gd), wherever the world editor has put it
+		if not is_instance_valid(World.barn) or not World.barn.visible:
+			return {}
+		var bx: Transform3D = World.barn.global_transform
+		var bp: Vector2 = Data.vec2(at["pos"])
+		var bt: Vector2 = Data.vec2(at.get("talk", [bp.x, bp.y + 1.2]))
+		var bpos: Vector3 = bx * Vector3(bp.x, 0, bp.y)
+		var btalk: Vector3 = bx * Vector3(bt.x, 0, bt.y)
+		return {"pos": Vector3(bpos.x, 0, bpos.z), "talk": Vector3(btalk.x, 0, btalk.z), "yaw": atan2(bx.basis.z.x, bx.basis.z.z), "roam": Vector2.ZERO}
 	for b in Town.built:
 		if str(b[1]) != str(at["building"]) or not is_instance_valid(b[0]) or not (b[0] as Node3D).visible:
 			continue
@@ -7399,6 +7445,13 @@ func _villager_actions(v) -> Array:
 				var row := _act("noop", "%s, %s  (%sc)" % [l["name"], l["where"], _thousands(int(l["price"]))], false)
 				row["group"] = "Land for sale"
 				acts.append(row)
+		"lars": # he rents her the barn's stalls for her flock (homestead.gd)
+			if homestead.barn_rent_on():
+				var owed := homestead.barn_rent_owed()
+				if owed > 0:
+					acts.append(_act("pay_barn_rent", "Pay the barn rent  (%dc)" % owed, Game.coins >= owed))
+				else:
+					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
@@ -7502,6 +7555,10 @@ func _villager_action(v, id: String) -> void:
 				var said: Array = ["One coffee. Don't say it's cute in here.", "It's hot. Obviously. It's coffee.", "Here. You look like you needed it. Whatever."] if Game.stat("sabrina", "trust") < 10 else ["Made it the way you like. Don't make it weird.", "Extra hot. You're always freezing.", "On the house. Kidding. Six coins."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
 				hud.show_toast("A hot coffee. (+%d warmth)" % int(COFFEE_WARMTH))
+		"pay_barn_rent":
+			if homestead.pay_barn_rent():
+				var thanks: Array = ["Cheers, neighbour. Stalls are mucked out and the straw's fresh.", "All good. Your lot are the best-behaved lodgers I've had.", "Thanks! I'll put it towards a new radio for the barn. The sheep have opinions."]
+				_say(v, thanks[(Game.day + int(f["n"])) % thanks.size()])
 		"buy_cottage":
 			if not Game.owns_cottage and Game.spend(_cottage_price()):
 				Game.owns_cottage = true

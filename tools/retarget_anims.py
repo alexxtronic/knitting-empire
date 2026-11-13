@@ -14,8 +14,11 @@ loops named in --map it:
      from the reference pose as the library bone has, so the motion survives different rest poses,
      bone rolls and proportions;
   3. moves the hips by the library's hip motion scaled to our leg length, removes any drift so the
-     loop closes, and sets standing loops' feet on the ground; seated loops keep the old loop's
-     hip position so the character still lands on the chair;
+     loop closes, and sets standing loops' soles on the ground (the body's lowest point, not the foot
+     bones: a Mixamo rig can end those at the top of a boot); seated loops keep the old loop's
+     hip position so the character still lands on the chair, and a new rig with no old loop to go by
+     sits with the underside of its seat (the lowest point of the body round the hips) on the origin,
+     the seat height every seated scene places characters by;
   4. writes the keys into our existing action of that name (so the NLA tracks and every other loop
      are untouched), deletes the library, saves tools/character_build/<out_id>/<out_id>.blend and
      exports assets/<out_id>.glb.
@@ -37,6 +40,7 @@ prints the stride speed, the ground speed the planted foot implies; put those in
 data/characters.json as walk_anim_speed, brisk_anim_speed and run_anim_speed.
 """
 import bpy, math, os, sys
+import numpy as np
 from mathutils import Matrix, Quaternion, Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -91,12 +95,44 @@ def hips_head(action, frames):
     return acc / len(frames)
 
 
-def lowest_foot(action, frames):
+BODY = max((o for o in scene.objects if o.type == "MESH" and o.parent == rig), key=lambda o: len(o.data.vertices))
+BODY_MW = np.array(BODY.matrix_world)
+
+
+def body_points():
+    """The body's vertices as posed now, armature space (n x 3)."""
+    ev = BODY.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = ev.to_mesh()
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    ev.to_mesh_clear()
+    return co.reshape(-1, 3) @ BODY_MW[:3, :3].T + BODY_MW[:3, 3]
+
+
+def seat_low(action, frames):
+    """Mean lowest point of the body round the hips (its seat) over a seated loop, armature space."""
+    hz = T["Hips"].head_local.z
+    rest = [v.co.copy() for v in BODY.data.vertices]
+    idx = [i for i, c in enumerate(rest) if hz - 0.25 < c.z < hz + 0.02 and abs(c.x) < 0.25]
     rig.animation_data.action = action
     lows = []
     for f in frames:
         scene.frame_set(f)
-        lows.append(min(rig.pose.bones[n].tail.z for n in ("LeftToes", "RightToes", "LeftFoot", "RightFoot")))
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = BODY.evaluated_get(dg).to_mesh()
+        lows.append(min((BODY.matrix_world @ me.vertices[i].co).z for i in idx))
+        BODY.evaluated_get(dg).to_mesh_clear()
+    rig.animation_data.action = None
+    return sum(lows) / len(lows)
+
+
+def lowest_foot(action, frames):
+    """The body's lowest point (the soles, standing) in each frame."""
+    rig.animation_data.action = action
+    lows = []
+    for f in frames:
+        scene.frame_set(f)
+        lows.append(float(body_points()[:, 2].min()))
     rig.animation_data.action = None
     return lows
 
@@ -113,7 +149,10 @@ for name in MAP:
 for pb in rig.pose.bones:
     pb.matrix_basis = Matrix.Identity(4)
 update()
-rest_low = min(rig.pose.bones[n].tail.z for n in ("LeftToes", "RightToes", "LeftFoot", "RightFoot"))
+rest_pts = body_points()
+rest_low = float(rest_pts[:, 2].min())
+# each sole: the body's lowest 5 cm at rest, either side of the middle (left is +x)
+SOLES = {s: (rest_pts[:, 2] < rest_low + 0.05) & (np.sign(rest_pts[:, 0]) == sign) for s, sign in (("Left", 1), ("Right", -1))}
 
 # --------------------------------------------------------------------------- 1. the library
 before = set(scene.objects)
@@ -210,9 +249,11 @@ def stride_speed(action, n):
     prev, dist, count = None, 0.0, 0
     for f in range(n + 1):
         scene.frame_set(f)
+        pts = body_points()
+        sole = {s: float(pts[m, 2].min()) for s, m in SOLES.items()}
         feet = {s: rig.pose.bones[s + "Foot"].tail.copy() for s in ("Left", "Right")}
-        low = min(feet, key=lambda s: feet[s].z)
-        if prev and prev[0] == low and feet[low].z < rest_low + 0.03:  # planted, not mid-air
+        low = min(sole, key=sole.get)
+        if prev and prev[0] == low and sole[low] < rest_low + 0.03:  # planted, not mid-air
             dist += abs(feet[low].y - prev[1].y)
             count += 1
         prev = (low, feet[low])
@@ -320,6 +361,11 @@ for name, spec in MAP.items():
         loc = [l + rest_rot["Hips"].inverted() @ Vector((0, 0, dz)) for l in loc]
         write(rig_act, rot_keys, loc)
         note = f"feet {dz:+.3f} m"
+    if name in SEATED and name not in anchors:
+        dz = -seat_low(rig_act, range(0, n, max(1, n // 6)))
+        loc = [l + rest_rot["Hips"].inverted() @ Vector((0, 0, dz)) for l in loc]
+        write(rig_act, rot_keys, loc)
+        note = f"seat {dz:+.3f} m"
     if name in ("Walk", "Brisk", "Run"):
         note += f" stride speed {stride_speed(rig_act, n):.2f} m/s"
     print("LOOP", name, "<-", spec, "x", stride, "frames", n, "seam", seam, "drift", round(drift.length, 3), note)

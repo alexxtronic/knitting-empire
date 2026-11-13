@@ -8,7 +8,8 @@
     "steve": "Steve. Builder's Delight. Wood, nails, hinges. Ask.",
     "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably.",
     "wren": "Wren. Mayor. Sorry, I've got four minutes. If something's broken, tell me. If it's on fire, tell me faster.",
-    "barbara": "Hello, sweetheart. Barbara, with the post. Nine o'clock, every door, rain or shine. Yours too, now. That's how you know you live somewhere."
+    "barbara": "Hello, sweetheart. Barbara, with the post. Nine o'clock, every door, rain or shine. Yours too, now. That's how you know you live somewhere.",
+    "lars": "Hey, neighbour! I'm Lars, from next door. That's my barn, and the loft up top is home. Ellie's sheep always slept in my stalls, and yours can too, for a little rent each month. No rush on anything."
   },
   "lines": {
     "rosa": [
@@ -146,6 +147,23 @@
         "Best part of my round is the bit past your farm. It smells like hay and woodsmoke, and hope.",
         "Forty years I've carried other people's news. Yours is turning into a good story."
       ]
+    ],
+    "lars": [
+      [
+        "Morning! Good sky for drying hay. Or for doing nothing at all. Both count.",
+        "If your sheep ever get out, they come here first. They know where the good hay is.",
+        "Barn rent's once a month. Pay me whenever you're passing. I'm not going anywhere."
+      ],
+      [
+        "I left the radio on in the barn last night. Your sheep are big fans of the farming report.",
+        "You're up early these days. Farm life's getting into you.",
+        "Put fresh straw in your stalls. Don't thank me. Seriously, don't, I'll go red."
+      ],
+      [
+        "Best part of my evening is seeing your lights on next door. That came out a bit much. Still true.",
+        "Sit on the hay bales with me sometime and watch the sun go down. It's free, and it never gets old.",
+        "Ellie always said the farm would have someone good in it again. She was right."
+      ]
     ]
   },
   "gift_lines": {
@@ -176,6 +194,10 @@
     "barbara": {
       "pumpkin": "Oh, a pumpkin! That's a pie for the sorting room. Bless you.",
       "sweater": "You made this? I'll wear it on my round and tell every door it's yours."
+    },
+    "lars": {
+      "pumpkin": "A pumpkin! I'll carve it for the barn door. The sheep won't care, but I will.",
+      "turnip": "Turnips! Roasted with a bit of butter. You're a good neighbour, you know that?"
     }
   },
   "gift_loved": {
@@ -186,7 +208,8 @@
     "steve": "Now that's a pumpkin. Going on the counter. Best-looking thing in the shop.",
     "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill.",
     "wren": "For me? Oh. Oh, this is beautiful. I haven't got time to cry. I'm going to anyway.",
-    "barbara": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew, sweetheart."
+    "barbara": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew, sweetheart.",
+    "lars": "You knitted this? For me? I'm wearing it to do the chores. I'm wearing it to everything."
   },
   "new_sheep_names": [
     "Clover",

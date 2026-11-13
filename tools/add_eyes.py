@@ -59,6 +59,8 @@ EYES = {
     "barbara_tripo": dict(mid=-0.5, dx=54.2, z=1568.5, a=25.5, up=20.5, lo=9.0, tilt=3.0, k_up=-0.03, p=0.7, lash=2.2, rim=2.5),
     "sabrina_tripo": dict(mid=-0.7, dx=38.6, z=1502.0, a=19.2, up=9.5, lo=9.5, tilt=4.5, k_up=0.1, k_lo=0.07, p=0.85, lash=2.0),
     "wren_tripo": dict(mid=-0.6, dx=45.6, z=1446.9, a=21.1, up=13.2, lo=8.8, tilt=6.0, k_up=0.2, k_lo=-0.03, p=0.7, lash=2.2),
+    "rosa_tripo": dict(mid=-0.3, dx=44.3, z=1299.5, a=23.3, up=15.0, lo=9.0, tilt=-4.0, k_up=-0.1, p=0.75, lash=2.2, rim=2.5),
+    "max_tripo": dict(mid=-0.25, dx=38.25, z=1622.75, a=17.75, up=10.0, lo=6.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.6, iris=11.0),
 }
 DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0)
 SPEC = None
