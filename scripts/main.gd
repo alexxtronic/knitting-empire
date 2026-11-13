@@ -75,6 +75,7 @@ var _cloud_drift := Vector2.ZERO
 var house_root: Node3D
 var furniture_root: Node3D
 var walls: Array = [] # {tall, short, normal, cut}
+var roofs: Array = [] # {node, rect}: the roofs of Nora's house and the cottage (_house_roof)
 var wall_rects: Array = []
 var divider_rects: Array = []
 var furniture: Array = []
@@ -719,6 +720,7 @@ func _rebuild_house() -> void:
 	for c in house_root.get_children():
 		c.free()
 	walls.clear()
+	roofs.clear()
 	_rebuild_grass()
 	wall_rects.clear()
 	divider_rects.clear()
@@ -752,6 +754,7 @@ func _rebuild_house() -> void:
 	Catalog.box(tall, Vector3(0.6, 0.04, 0.035), Vector3(bx, 2.15, 0.135), Catalog.BRASS)
 	Catalog.ball(tall, 0.15, Vector3(bx, 1.8, 0.15), Color(0.78, 0.25, 0.3), Vector3(1, 1, 0.3))
 	Catalog.ring(tall, 0.17, 0.2, Vector3(bx, 1.8, 0.15), Catalog.BRASS, Vector3(90, 0, 0))
+	_house_roof(Rect2(0, z0, W, depth), true) # the ridge runs front to back, so it grows with the house
 	_build_cottage()
 	_update_walls()
 
@@ -853,7 +856,74 @@ func _door_lintel() -> void:
 	walls.append({"tall": tall, "short": short, "normal": Vector3(1, 0, 0), "cut": true})
 
 
+const ROOF_PITCH := 34.0 # degrees
+const ROOF_EAVES := 0.35 # metres the roof reaches past the walls
+const ROOF_COLOR := Color(0.42, 0.21, 0.16) # weathered red-brown shingles
+const RIDGE_COLOR := Color(0.27, 0.15, 0.11)
+
+
+## A gable roof over the walls of rect r (wall lines), its ridge along z (or x): a plastered
+## gable with its flat underside as the ceiling, two shingled slopes with eaves, a ridge cap and
+## dark fascia boards along the eaves. Like the barn and the shops, it lifts off while she's
+## inside, from above, and stays on in first person (_update_walls).
+func _house_roof(r: Rect2, ridge_z: bool) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Roof"
+	root.position = Vector3(r.get_center().x, WALL_H, r.get_center().y)
+	root.rotation.y = 0.0 if ridge_z else PI * 0.5
+	house_root.add_child(root)
+	var span := (r.size.x if ridge_z else r.size.y) + WALL_T # across the ridge
+	var length := (r.size.y if ridge_z else r.size.x) + WALL_T # along it
+	var half := span * 0.5
+	var rise := tan(deg_to_rad(ROOF_PITCH)) * half
+	var gable := PrismMesh.new()
+	gable.size = Vector3(span, rise, length)
+	var g := MeshInstance3D.new()
+	g.name = "Gable"
+	g.mesh = gable
+	g.material_override = Catalog.mat(PLASTER)
+	g.position = Vector3(0, rise * 0.5, 0)
+	root.add_child(g)
+	var out := half + ROOF_EAVES
+	var slope := out / cos(deg_to_rad(ROOF_PITCH))
+	var run := length + ROOF_EAVES * 2.0
+	var t := 0.12
+	for sx in [-1.0, 1.0]:
+		# each slope hangs from the ridge, in its own space: x down the slope, y out of it
+		var side := Node3D.new()
+		side.position = Vector3(0, rise, 0)
+		side.rotation.z = -sx * deg_to_rad(ROOF_PITCH)
+		root.add_child(side)
+		Catalog.box(side, Vector3(slope, t, run), Vector3(sx * slope * 0.5, t * 0.5, 0), ROOF_COLOR)
+		# courses of shingles: each row's lower edge stands a little proud, in a slightly different shade
+		var rows := int(slope / 0.32)
+		for i in rows:
+			var d := slope - (i + 0.5) * slope / rows
+			var shade := ROOF_COLOR.darkened(0.06 * float(i % 3)) if i % 2 == 0 else ROOF_COLOR.lightened(0.04)
+			Catalog.box(side, Vector3(slope / rows, 0.03, run), Vector3(sx * d, t + 0.012, 0), shade)
+			Catalog.box(side, Vector3(0.04, 0.05, run), Vector3(sx * (d + slope / rows * 0.5 - 0.02), t + 0.02, 0), ROOF_COLOR.darkened(0.3))
+		Catalog.box(side, Vector3(0.06, 0.22, run + 0.04), Vector3(sx * (slope + 0.02), t * 0.5 - 0.02, 0), RIDGE_COLOR) # fascia
+	Catalog.box(root, Vector3(0.22, 0.14, length + ROOF_EAVES * 2.0 + 0.06), Vector3(0, rise + 0.1, 0), RIDGE_COLOR) # ridge cap
+	roofs.append({"node": root, "rect": r})
+	return root
+
+
+## Whether the roofs over her lift off now: from above while she's inside (as the barn's and
+## the shops' do), and whenever she's furnishing (building mode, placing a piece, the world
+## editor). Never in first person, where she's under them.
+func _roof_lifted(r: Rect2) -> bool:
+	if fps != null and fps.active:
+		return false
+	if mode == Mode.BUILD or ghost != null or (god != null and god.active):
+		return true
+	return player != null and r.grow(0.3).has_point(Vector2(player.position.x, player.position.z))
+
+
 func _update_walls() -> void:
+	for rf in roofs:
+		var n := rf["node"] as Node3D
+		if is_instance_valid(n):
+			n.visible = not _roof_lifted(rf["rect"])
 	var cdir := Vector3(sin(cam_yaw), 0, cos(cam_yaw))
 	for w in walls:
 		var hide_it: bool = w["cut"] and not walls_up and (w["normal"] as Vector3).dot(cdir) > 0.25
@@ -6134,6 +6204,36 @@ func _fps_checks() -> void:
 	_check("E on what's under the dot opens its ring of actions (%s; %d of %d pieces with actions tried)" % [used if used != "" else "nothing opened", tried, with_acts], used != "" and fps.active)
 	hud.hide_menu()
 	await _wait(0.2)
+	# the roofs: on over her from her eyes indoors, lifted from above while she's inside or furnishing,
+	# on again from above once she's outside
+	var house_roof: Node3D = roofs[0]["node"] if not roofs.is_empty() else null
+	player.position = Vector3(4.0, 0, 3.0)
+	fps.yaw = deg_to_rad(-60.0)
+	fps.pitch = deg_to_rad(12.0)
+	await _wait(0.5)
+	var on_inside := house_roof != null and house_roof.visible
+	await _shot("52_fps_indoors.png")
+	await _key_tap(KEY_V)
+	await _wait(0.3)
+	var lifted := house_roof != null and not house_roof.visible
+	player.position = Vector3(4.0, 0, 9.5)
+	await _wait(0.3)
+	var on_outside := house_roof != null and house_roof.visible
+	set_mode(Mode.BUILD)
+	await _wait(0.2)
+	var build_lifted := house_roof != null and not house_roof.visible
+	set_mode(Mode.LIVE)
+	await _wait(0.2)
+	_check("her house and the cottage have roofs (%d): on from her eyes indoors %s, lifted from above while she's inside %s, on from above outside %s, lifted in building mode %s" % [roofs.size(), on_inside, lifted, on_outside, build_lifted],
+		roofs.size() == 2 and on_inside and lifted and on_outside and build_lifted and house_roof.visible)
+	_set_cam_lock(false)
+	cam_target = Vector3(4.0, 0.5, 2.0)
+	cam_dist = 22.0
+	await _wait(1.5)
+	await _shot("52_roof_outside.png")
+	_set_cam_lock(true)
+	await _key_tap(KEY_V)
+	await _wait(0.3)
 	# handing over: the cinematic camera takes over from it, and it won't start asleep
 	await _key_tap(KEY_P)
 	await _wait(0.3)
@@ -7192,6 +7292,7 @@ func _build_cottage() -> void:
 		Catalog.ball(tall, 0.04, Vector3(gap * 0.32, 1.0, -0.06), Catalog.BRASS)
 		wall_rects.append(Rect2(dz.x, z0 - WALL_T * 0.5, gap, WALL_T))
 	walls.append({"tall": tall, "short": short, "normal": Vector3(0, 0, -1), "cut": true})
+	_house_roof(c, c.size.y > c.size.x)
 	# the sign out front
 	var fsign := Landmark.new()
 	fsign.kind = "for_sale"
