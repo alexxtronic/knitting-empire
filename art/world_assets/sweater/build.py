@@ -918,10 +918,13 @@ def main(cid, render):
         want = os.environ.get("SW_DESIGNS", "").split(",") if os.environ.get("SW_DESIGNS") else None
         for sw in PT.SWEATERS[:1] if os.environ.get("SW_ONE") else [w for w in PT.SWEATERS if not want or w["id"] in want]:
             node.image = imgs[sw["id"]]
-            shoot(cam, os.path.join(rv, "%s_%s_front.png" % (cid, sw["id"])), -22)
-            if not os.environ.get("SW_ONE"):
+            views = os.environ.get("SW_VIEWS", "front,back,close").split(",")   # SW_VIEWS=front for a quick catalogue
+            if "front" in views:
+                shoot(cam, os.path.join(rv, "%s_%s_front.png" % (cid, sw["id"])), -22)
+            if "back" in views and not os.environ.get("SW_ONE"):
                 shoot(cam, os.path.join(rv, "%s_%s_back.png" % (cid, sw["id"])), 158)
-            shoot(cam, os.path.join(rv, "%s_%s_close.png" % (cid, sw["id"])), -15, target=(0.0, 0.0, B["UpperChest"][0].z - 0.1), dist=1.25 * B["UpperChest"][0].z / 1.222)
+            if "close" in views:
+                shoot(cam, os.path.join(rv, "%s_%s_close.png" % (cid, sw["id"])), -15, target=(0.0, 0.0, B["UpperChest"][0].z - 0.1), dist=1.25 * B["UpperChest"][0].z / 1.222)
         node.image = imgs["cranberry"]
         others = [o for o in bpy.context.scene.objects if o.type == "MESH" and o is not sw_ob]
         for o in others:

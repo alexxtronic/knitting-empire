@@ -55,15 +55,70 @@ sleeves gathered into deep ribbed cuffs, a ribbed hem and a ribbed collar.
    skin the sweater covers in by `TUCK` (more on the forearms and hips, where Nora's own sculpted sweater
    is bulkiest), for the game to turn on with the sweater.
 
-## The five test designs (names and stars are drafts)
+## The fifty designs (names and stars are drafts)
 
-| Stars | id | Name | What it is |
-|---|---|---|---|
-| ★ | cranberry | Cranberry Classic | the reference: plain red |
-| ★ | oatmeal_stripe | Oatmeal Stripe | oatmeal with pairs of chocolate stripes |
-| ★★ | snowfall_yoke | Snowfall Yoke | navy, a cream Fair Isle snowflake band round the yoke, red seeds, peerie bands above the cuffs |
-| ★★★ | flock | Flock of Friends | sage, a flock of cream sheep across the chest, daisies below, a sheep on each sleeve |
-| ★★★★ | midnight_moon | Midnight Moon | indigo, gold stars, the moon's eight phases across the chest |
+Alex: "proceed, make 5 first as a test", then "Yes, make the designs". 20 common (★), 15 rare (★★), 10 ultra
+rare (★★★), 5 legendary (★★★★); `patterns.py` asserts the counts. Each design function says what it
+draws in its docstring; several commons share one (a plain colour, a tweed, stripes) with their own
+palette. Common is plain colours, tweeds and stripes; rare, allover repeats and single bands; ultra rare,
+pictures (sheep, sunflowers, foxes, the lighthouse, Gran's cottage); legendary, the whole sweater as one
+picture or many Fair Isle bands, in five or more colours.
+
+| Stars | id | Name | Drawn by | Colours |
+|---|---|---|---|---|
+| ★ | cranberry | Cranberry Classic | `cranberry` | #c0261d |
+| ★ | oatmeal_stripe | Oatmeal Stripe | `oatmeal_stripe` | #dccdb0 #5b3a26 |
+| ★ | forest | Forest Green | `solid` | #2f5a3a |
+| ★ | harbour_navy | Harbour Navy | `solid` | #22304f |
+| ★ | mustard | Mustard Seed | `solid` | #c99a2e |
+| ★ | lavender | Lavender | `solid` | #a493c4 |
+| ★ | pumpkin | Pumpkin | `solid` | #cf6a2a |
+| ★ | heather_tweed | Heather Tweed | `_tweed` | #8c8b88 #b8322a #d8a83a #4a7a9a #efe3c8 |
+| ★ | bark_tweed | Bark Tweed | `_tweed` | #6b4a33 #d8c7a6 #a0522d #557a46 |
+| ★ | cream_forest | Cream and Forest | `contrast_ribs` | #efe6d2 #2f5a3a |
+| ★ | charcoal_tipped | Charcoal Tipped | `tipped` | #3a3a3c #b8322a |
+| ★ | breton | Breton | `breton` | #f2ece0 #4f7fb8 |
+| ★ | rust_stripe | Rust Stripe | `wide_stripe` | #a8492a #e9dcc2 |
+| ★ | mint_candy | Mint Candy | `candy_stripe` | #9fd3bf #fbf7ee #7d8c88 |
+| ★ | rose_block | Rose Block | `colourblock` | #d98a95 #7a2a3a #f3e7d3 |
+| ★ | sage_cream | Sage and Cream | `other_sleeves` | #8fa58a #efe6d2 |
+| ★ | denim | Denim Pinstripe | `pinstripe` | #3b5a80 #9fb4cc |
+| ★ | butter_dots | Buttercup Dots | `pin_dots` | #f1d77a #fffaf0 |
+| ★ | plum_stripe | Plum Stripe | `chest_stripe` | #5e2f55 #efe3c8 #e0b43c |
+| ★ | dusk_ombre | Dusk Ombre | `ombre` | #1f3b4d #2f5d73 #4f8a99 #86b8bc #c7e0d9 |
+| ★★ | snowfall_yoke | Snowfall Yoke | `snowfall_yoke` | #1f2c4a #efe3c8 #b8322a |
+| ★★ | argyle | Argyle | `argyle` | #2d4a3e #b98f57 #c9372f |
+| ★★ | gingham | Picnic Gingham | `gingham` | #f6f0e4 #e4958f #c43b35 |
+| ★★ | houndstooth | Houndstooth | `houndstooth` | #efe6d2 #2a2724 |
+| ★★ | chevron | Chevron | `chevron` | #2a7f7a #f1e8d6 #e2725b |
+| ★★ | polka | Navy Polka | `polka` | #22304f #f1e8d6 |
+| ★★ | lattice | Cornflower Lattice | `lattice` | #6a8fd0 #f4eee0 #e0b43c |
+| ★★ | raindrops | April Showers | `raindrops` | #7d93a8 #f7f7f4 #cfe3f0 #4c5e70 |
+| ★★ | strawberries | Strawberry Patch | `strawberries` | #f3ead6 #c8302c #4f8a3a #f2d36b |
+| ★★ | heart_band | Sweetheart | `heart_band` | #f3e7d3 #c8302c #e79aa6 |
+| ★★ | peerie_bands | Peerie Bands | `peerie_bands` | #e3d3b4 #5b3a26 #a8322a #3f6a4a |
+| ★★ | pine_band | Winter Pines | `pine_band` | #2f5a3a #f1e8d6 #6b4a33 |
+| ★★ | tulip_border | Tulip Border | `tulip_border` | #a9cfe6 #d9434a #e98aa8 #f2c94c #4f8a3a |
+| ★★ | greyspine | Greyspine Peaks | `mountains` | #7fa3c4 #8a8f99 #f6f4ee #2f4a3a |
+| ★★ | daisy_chain | Daisy Chain | `daisy_chain` | #b6a3d1 #fbf7ee #f2c94c #5f8a4a |
+| ★★★ | flock | Flock of Friends | `flock` | #7f9a6d #f3ead6 #2f2a26 #3f5a3a |
+| ★★★ | sunflowers | Sunflower Field | `sunflowers` | #8cc3e0 #f2c12e #5a3a1e #3f7a3f |
+| ★★★ | autumn_leaves | Falling Leaves | `autumn_leaves` | #4a2e2a #e0782a #b8322a #e2b23c |
+| ★★★ | fox_forest | Fox in the Pines | `fox_forest` | #2b4a35 #d2691e #f3ead6 #2a2320 #5f8a5a |
+| ★★★ | reindeer | Reindeer | `reindeer` | #a52a2a #f3e7d3 |
+| ★★★ | honeycomb | Honeycomb | `honeycomb` | #e0a92a #b07a14 #2a2320 #f6f2e6 #f8dc5a |
+| ★★★ | mushrooms | Toadstools | `mushrooms` | #6d8a52 #c8302c #f3ead6 #3f5a32 #8a5a32 |
+| ★★★ | lighthouse | Saltmeadow Light | `lighthouse` | #cfe3ec #c23a30 #f6f1e6 #f2c94c #2b2f3a #2f6f9a #1f4a6e |
+| ★★★ | cottage | Home Sweet Home | `cottage` | #bcd7e6 #a83a2c #f3ead6 #f2c94c #6b4226 #7a6a5a #f4f4f2 #6a9a5a #3f6a3f |
+| ★★★ | rainbow | After the Rain | `rainbow` | #9cc9e6 #d6453d #ee8a3a #f2cf4a #5fae5a #4a86c8 #7a5aa8 #fafafa |
+| ★★★★ | midnight_moon | Midnight Moon | `midnight_moon` | #22204a #e0b43c #f4ead0 #3a3870 |
+| ★★★★ | golden_fleece | Golden Fleece | `golden_fleece` | #1d4a4f #e2b23c #2a2320 #f3e7c8 #a8761c |
+| ★★★★ | northern_lights | Northern Lights | `northern_lights` | #141a33 #3fd08a #2a8f8a #8a5cd0 #f4ead0 #0b1f19 |
+| ★★★★ | grans_heirloom | Gran's Heirloom | `grans_heirloom` | #e3d3b4 #5b3a26 #a8322a #d1a23a #3f6a4a #33507a |
+| ★★★★ | four_seasons | Four Seasons | `four_seasons` | #f1e8d4 #a8d5b5 #8cc3e0 #b5532b #22304f #e07a95 #f0c43a #5a3a22 #3f7a3f #fafafa #e08a2a |
+
+Flat check: `patterns.py OUT_DIR` writes each design's body. Catalogue: `SW_VIEWS=front,back` on the
+`--render` build, then `sheet.py nora` writes `review/nora_catalogue.jpg`.
 
 ## Checkpoints
 
