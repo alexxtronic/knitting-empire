@@ -255,9 +255,10 @@ func _hedges_and_fences() -> void:
 	_run("hedge", Vector2(-4.2, 11.5), Vector2(20.2, 11.5), 2.0, hedges, 0.45)
 	_run("hedge", Vector2(28.0, 0.7), Vector2(36.0, 0.7), 2.0, hedges, 0.45)
 	_run("hedge", Vector2(28.0, 5.3), Vector2(36.0, 5.3), 2.0, hedges, 0.45)
-	# the cottage garden: hedge on its south and east sides
-	_run("hedge", Vector2(56.2, 13.4), Vector2(68.0, 13.4), 2.0, hedges, 0.45)
-	_run("hedge", Vector2(67.9, 5.6), Vector2(67.9, 13.4), 2.0, hedges, 0.45)
+	# the cottage garden: hedge on its south and east sides (not while the cottage is hidden)
+	if Town.COTTAGE_ON:
+		_run("hedge", Vector2(56.2, 13.4), Vector2(68.0, 13.4), 2.0, hedges, 0.45)
+		_run("hedge", Vector2(67.9, 5.6), Vector2(67.9, 13.4), 2.0, hedges, 0.45)
 	# white picket fences along the east side of the yard, with a gap for the gate
 	_run("fence_picket", Vector2(26.6, -18.4), Vector2(26.6, 0.2), 1.0, fences, 0.12)
 	_run("fence_picket", Vector2(26.6, 5.8), Vector2(26.6, 11.4), 1.0, fences, 0.12)

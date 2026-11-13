@@ -32,6 +32,9 @@ const HANGING_SIGNS := {"shop": "yarn_barn", "bakery": "heart_bakery", "office":
 const HANGING_SIGN_AT := {"mayor": [Vector3(0, 4.69, 4.07), 0.9]}
 const HANGING_SIGN_Y := 3.03 # the board's centre: clear of the timber band (2.74), the log under the eaves (3.4)
 const HANGING_SIGN_SCALE := 0.82 # 1.64 m across
+## Rosewood Cottage is hidden for now (Alex, 2026-11-13): no house, sign or garden hedge, no sale on
+## Gary's menu, no rent. Everything about it is still here; true brings it back.
+const COTTAGE_ON := false
 const COTTAGE_LOT := Rect2(56.0, 4.6, 12.0, 9.0) # x 56..68, z 4.6..13.6
 const COTTAGE := Rect2(58.0, 7.0, 7.0, 5.0) # wall lines: x 58..65, z 7..12
 const COTTAGE_DOOR := Vector2(60.8, 62.2) # gap in the north wall (x range)

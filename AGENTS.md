@@ -70,6 +70,8 @@ Alex arranges the map himself in the game: Settings > God mode > "Edit the world
 - The sheep pen can be moved: use `main.pen_rect`, not the `PEN` constant, for where it is now.
 - Painted roads replace `World.PATHS`, `Town.PATHS` and the plaza cobbles as soon as the file has a `roads` entry. Read `god.road_at(x, z)` rather than those constants if you need to know what's underfoot.
 
+- Rosewood Cottage is hidden for now (Alex, 2026-11-13): `Town.COTTAGE_ON` is false, so there's no cottage, for-sale sign or garden hedge, no sale on Gary's menu and no rent, and the town checks skip it (they check it's gone instead). An old save that bought it keeps the flag but gets nothing from it (`main.cottage_owned()`). Set it true to bring it all back.
+
 ## The lands round the farm: `scripts/regions.gd`, `data/regions.json`
 
 - Four lands sit round the farm and Maple Grove, all in one continuous world (no loading screens): Mirewood Swamp to the west, Greyspine Foothills to the north with the mountain range behind them, Saltmeadow Beach and the sea to the south, Eastfield Meadows to the east. The names are draft text until Alex approves them.

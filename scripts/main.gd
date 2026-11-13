@@ -258,8 +258,9 @@ func _ready() -> void:
 	place_blockers.append(Rect2(10.4, -1.6, 4.8, 3.6)) # farm plots
 	place_blockers.append(PEN.grow(0.3))
 	place_blockers.append(Rect2(HOUSE_W - 1.0, DOOR_Z0 - 0.1, 2.4, DOOR_Z1 - DOOR_Z0 + 0.2)) # doorway, both sides
-	place_blockers.append(Rect2(Town.COTTAGE_DOOR.x - 0.2, Town.COTTAGE.position.y - 1.2, Town.COTTAGE_DOOR.y - Town.COTTAGE_DOOR.x + 0.4, 2.5)) # cottage doorway
-	place_blockers.append(Rect2(56.6, 5.1, 1.4, 0.5)) # cottage sign
+	if Town.COTTAGE_ON:
+		place_blockers.append(Rect2(Town.COTTAGE_DOOR.x - 0.2, Town.COTTAGE.position.y - 1.2, Town.COTTAGE_DOOR.y - Town.COTTAGE_DOOR.x + 0.4, 2.5)) # cottage doorway
+		place_blockers.append(Rect2(56.6, 5.1, 1.4, 0.5)) # cottage sign
 	# the world as arranged in god mode (data/world_layout.json) goes on top of what was just built
 	god = GodMode.new()
 	god.main = self
@@ -665,7 +666,7 @@ func _zmin() -> float:
 ## What's underfoot at a spot, for footsteps: "wood" indoors (home or Rosewood Cottage), else "grass".
 func surface_at(p: Vector3) -> String:
 	var q := Vector2(p.x, p.z)
-	return "wood" if interior_rect().has_point(q) or Town.COTTAGE.has_point(q) else "grass"
+	return "wood" if interior_rect().has_point(q) or (Town.COTTAGE_ON and Town.COTTAGE.has_point(q)) else "grass"
 
 
 func player_indoors() -> bool:
@@ -717,7 +718,8 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Rect2(-0.35, _zmin() - 0.35, HOUSE_W + 0.7, HOUSE_FRONT - _zmin() + 0.7))
 	if not painted:
 		clear.append(Town.PLAZA)
-	clear.append(Town.COTTAGE.grow(0.3))
+	if Town.COTTAGE_ON:
+		clear.append(Town.COTTAGE.grow(0.3))
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
@@ -1678,7 +1680,7 @@ func dig_bed(at: Vector3) -> bool:
 ## still holds after the world editor moves them.
 func building_at(p: Vector3) -> bool:
 	var q := Vector2(p.x, p.z)
-	if house_rect().grow(0.3).has_point(q) or Town.COTTAGE.grow(0.3).has_point(q):
+	if house_rect().grow(0.3).has_point(q) or (Town.COTTAGE_ON and Town.COTTAGE.grow(0.3).has_point(q)):
 		return true
 	if Interiors.inside_of(p) != "":
 		return true
@@ -2354,9 +2356,9 @@ func _update_ghost(mpos: Vector2) -> void:
 
 func _placement_valid(f, pos: Vector3) -> bool:
 	var r: Rect2 = f.footprint_at(pos)
-	var in_cottage := Game.owns_cottage and cottage_interior().encloses(r)
+	var in_cottage := cottage_owned() and cottage_interior().encloses(r)
 	var inside := interior_rect().encloses(r) or in_cottage
-	var in_yard := Game.owns_cottage and Town.COTTAGE_LOT.encloses(r) and not cottage_house_rect().grow(0.25).intersects(r)
+	var in_yard := cottage_owned() and Town.COTTAGE_LOT.encloses(r) and not cottage_house_rect().grow(0.25).intersects(r)
 	var outside := (LOT.encloses(r) and not house_rect().grow(0.25).intersects(r)) or in_yard
 	match str(f.info()["where"]):
 		"in":
@@ -6670,7 +6672,7 @@ func _fps_checks() -> void:
 	set_mode(Mode.LIVE)
 	await _wait(0.2)
 	_check("her house and the cottage have roofs (%d): on from her eyes indoors %s, lifted from above while she's inside %s (%d walls cut down), on from above outside %s with every wall standing (%d cut), lifted in building mode %s" % [roofs.size(), on_inside, lifted, cut_in, on_outside, cut_out, build_lifted],
-		roofs.size() == 2 and on_inside and lifted and cut_in >= 1 and on_outside and cut_out == 0 and build_lifted and house_roof.visible)
+		roofs.size() == (2 if Town.COTTAGE_ON else 1) and on_inside and lifted and cut_in >= 1 and on_outside and cut_out == 0 and build_lifted and house_roof.visible)
 	_set_cam_lock(false)
 	cam_target = Vector3(4.0, 0.5, 2.0)
 	cam_dist = 22.0
@@ -7470,7 +7472,9 @@ func _villager_actions(v) -> Array:
 		"sabrina":
 			acts.append(_act("buy_coffee", "Buy a coffee  (%dc)" % COFFEE_PRICE, Game.coins >= COFFEE_PRICE and Game.warmth < 99.0))
 		"gary":
-			if Game.owns_cottage:
+			if not Town.COTTAGE_ON: # Rosewood Cottage is hidden for now (town.gd)
+				pass
+			elif Game.owns_cottage:
 				acts.append(_act("noop", "Rosewood Cottage rent: %dc a day" % _cottage_rent(), false))
 			else:
 				var cp := _cottage_price()
@@ -7594,7 +7598,7 @@ func _villager_action(v, id: String) -> void:
 				var thanks: Array = ["Cheers, neighbour. Stalls are mucked out and the straw's fresh.", "All good. Your lot are the best-behaved lodgers I've had.", "Thanks! I'll put it towards a new radio for the barn. The sheep have opinions."]
 				_say(v, thanks[(Game.day + int(f["n"])) % thanks.size()])
 		"buy_cottage":
-			if not Game.owns_cottage and Game.spend(_cottage_price()):
+			if Town.COTTAGE_ON and not Game.owns_cottage and Game.spend(_cottage_price()):
 				Game.owns_cottage = true
 				_rebuild_house()
 				_rebuild_grid()
@@ -7775,6 +7779,12 @@ func _chat_context(v) -> Dictionary:
 	return ctx
 
 
+## She owns Rosewood Cottage and it's in the game (Town.COTTAGE_ON): an old save that bought it
+## keeps the flag while it's hidden, but gets no rooms, yard or rent from it.
+func cottage_owned() -> bool:
+	return Town.COTTAGE_ON and Game.owns_cottage
+
+
 func cottage_interior() -> Rect2:
 	var c := Town.COTTAGE
 	return Rect2(c.position.x + 0.1, c.position.y + 0.1, c.size.x - 0.2, c.size.y - 0.2)
@@ -7786,7 +7796,7 @@ func cottage_house_rect() -> Rect2:
 
 ## Rent paid every morning: a base amount plus more for every piece of furniture.
 func _cottage_rent() -> int:
-	if not Game.owns_cottage:
+	if not cottage_owned():
 		return 0
 	var inside := 0
 	var yard := 0
@@ -7800,6 +7810,8 @@ func _cottage_rent() -> int:
 
 
 func _build_cottage() -> void:
+	if not Town.COTTAGE_ON: # hidden for now (town.gd)
+		return
 	var c := Town.COTTAGE
 	var x0 := c.position.x
 	var x1 := c.end.x
@@ -7854,6 +7866,55 @@ func _build_cottage() -> void:
 	fsign.add_child(l)
 	Town.pickable(fsign, Vector3(1.4, 1.4, 0.4), Vector3(0, 0.7, 0))
 	wall_rects.append(Rect2(56.7, 5.25, 1.2, 0.2))
+
+
+## Rosewood Cottage in the town checks (only while Town.COTTAGE_ON): locked, bought from Gary,
+## walked into, furnished, and paying rent the next morning.
+func _cottage_buy_checks() -> void:
+	var blocked := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
+	_check("cottage is locked before buying", blocked.is_empty() or blocked[-1].distance_to(Vector3(61.5, 0, 9.5)) > 0.8)
+	Game.coins += 3000
+	var gary := _villager("gary")
+	_do_action(gary, "buy_cottage")
+	await _walk_wait()
+	_check("bought Rosewood Cottage from Gary", Game.owns_cottage)
+	var into := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
+	_check("can walk into the cottage after buying", into.size() > 0 and into[-1].distance_to(Vector3(61.5, 0, 9.5)) < 0.8)
+
+
+func _cottage_furnish_checks() -> void:
+	var placed := 0
+	for spec in [["armchair", Vector3(59.0, 0, 10.8), 0], ["bed", Vector3(63.6, 0, 10.6), 0], ["rug_round", Vector3(60.5, 0, 9.6), 0], ["lamp", Vector3(64.4, 0, 7.6), 0], ["bookshelf", Vector3(58.5, 0, 8.2), 1], ["flower_pot", Vector3(66.5, 0, 6.0), 0]]:
+		ghost_rot = spec[2]
+		_begin_place(spec[0])
+		if ghost:
+			ghost.set_rot(spec[2])
+		var sp := cam.unproject_position(spec[1])
+		_last_mouse = sp
+		_update_ghost(sp)
+		var ok := ghost_valid
+		_build_click(sp, false)
+		if ok:
+			placed += 1
+		else:
+			print("  could not place ", spec[0])
+			_cancel_ghost()
+	ghost_rot = 0
+	_check("furnished the cottage (%d of 6 pieces placed)" % placed, placed >= 5)
+
+
+func _cottage_rent_checks() -> void:
+	player.position = Vector3(61.0, 0, 9.3)
+	_set_cam_lock(false)
+	cam_target = Vector3(61.5, 0, 9.0)
+	await _wait(1.0)
+	await _shot("11_cottage.png")
+
+	var rent := _cottage_rent()
+	var coins_before := Game.coins
+	_go_to_sleep(false)
+	await _wait(2.5)
+	_check("rent paid next morning (+%dc)" % rent, rent > 80 and Game.coins == coins_before + rent)
 
 
 func _walk_wait(timeout := 30.0) -> void:
@@ -7913,39 +7974,19 @@ func _town_checks() -> void:
 	await _walk_wait()
 	_check("bought a sheep (%d → %d in the pen)" % [n0, sheep_list.size()], sheep_list.size() == n0 + 1 and Game.sheep_count == n0 + 1)
 
-	var blocked := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
-	_check("cottage is locked before buying", blocked.is_empty() or blocked[-1].distance_to(Vector3(61.5, 0, 9.5)) > 0.8)
-	Game.coins += 3000
-	var gary := _villager("gary")
-	_do_action(gary, "buy_cottage")
-	await _walk_wait()
-	_check("bought Rosewood Cottage from Gary", Game.owns_cottage)
-	var into := _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5))
-	_check("can walk into the cottage after buying", into.size() > 0 and into[-1].distance_to(Vector3(61.5, 0, 9.5)) < 0.8)
-
+	if Town.COTTAGE_ON:
+		await _cottage_buy_checks()
+	else:
+		var gary_rows: Array = _villager_actions(_villager("gary")).map(func(a): return str(a.get("id", "")))
+		_check("Rosewood Cottage is hidden: no house, sign or sale (Gary's rows %s, rent %dc, the lot walkable %s)" % [str(gary_rows), _cottage_rent(), str(not _find_path(Vector3(61.5, 0, 4.5), Vector3(61.5, 0, 9.5)).is_empty())],
+			not gary_rows.has("buy_cottage") and _cottage_rent() == 0 and house_root.get_children().all(func(n): return n.get("kind") != "for_sale"))
 	set_mode(Mode.BUILD)
 	cam_target = Vector3(61.5, 0, 9.5)
 	cam_dist = 18.0
 	player.position = Vector3(61.5, 0, 5.2)
 	await _wait(0.8)
-	var placed := 0
-	for spec in [["armchair", Vector3(59.0, 0, 10.8), 0], ["bed", Vector3(63.6, 0, 10.6), 0], ["rug_round", Vector3(60.5, 0, 9.6), 0], ["lamp", Vector3(64.4, 0, 7.6), 0], ["bookshelf", Vector3(58.5, 0, 8.2), 1], ["flower_pot", Vector3(66.5, 0, 6.0), 0]]:
-		ghost_rot = spec[2]
-		_begin_place(spec[0])
-		if ghost:
-			ghost.set_rot(spec[2])
-		var sp := cam.unproject_position(spec[1])
-		_last_mouse = sp
-		_update_ghost(sp)
-		var ok := ghost_valid
-		_build_click(sp, false)
-		if ok:
-			placed += 1
-		else:
-			print("  could not place ", spec[0])
-			_cancel_ghost()
-	ghost_rot = 0
-	_check("furnished the cottage (%d of 6 pieces placed)" % placed, placed >= 5)
+	if Town.COTTAGE_ON:
+		await _cottage_furnish_checks()
 	_begin_place("flower_pot")
 	var bad := cam.unproject_position(Vector3(53.0, 0, 3.0))
 	_update_ghost(bad)
@@ -7957,17 +7998,8 @@ func _town_checks() -> void:
 	_check("Rosa's market stall is the new model, one mesh (%d)" % stall_mesh.size(), stall_mesh.size() == 1)
 	_cancel_ghost()
 	set_mode(Mode.LIVE)
-	player.position = Vector3(61.0, 0, 9.3)
-	_set_cam_lock(false)
-	cam_target = Vector3(61.5, 0, 9.0)
-	await _wait(1.0)
-	await _shot("11_cottage.png")
-
-	var rent := _cottage_rent()
-	var coins_before := Game.coins
-	_go_to_sleep(false)
-	await _wait(2.5)
-	_check("rent paid next morning (+%dc)" % rent, rent > 80 and Game.coins == coins_before + rent)
+	if Town.COTTAGE_ON:
+		await _cottage_rent_checks()
 	_save_game()
 	var d = JSON.parse_string(FileAccess.get_file_as_string(Game.save_path))
-	_check("save has cottage, friendships and sheep", bool(d["owns_cottage"]) and int(d["friends"]["rosa"]["familiarity"]) > 0 and int(d["sheep_count"]) == n0 + 1)
+	_check("save has cottage, friendships and sheep", (bool(d["owns_cottage"]) or not Town.COTTAGE_ON) and int(d["friends"]["rosa"]["familiarity"]) > 0 and int(d["sheep_count"]) == n0 + 1)
