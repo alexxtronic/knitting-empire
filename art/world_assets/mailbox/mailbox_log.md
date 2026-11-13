@@ -1,0 +1,75 @@
+# mailbox — Production Log
+
+## Config
+- Type: prop (static), game asset for Knitting Empire (Godot 4.7)
+- Target: GLB in assets/props/, uncompressed (Godot cannot import Draco)
+- Tier: balanced
+- Style: stylised, hand-painted, cozy (the park bench and trash can are the template)
+- Mode: auto
+
+## Reference Image
+- Path: ref/reference.png (Alex's message of 2026-11-13)
+- Brief: "use the kiln skill to make this mailbox, replace it for the one outside her house and place 3 others in the city"
+- Assumptions: real size 0.46 m wide (body), 0.44 m deep, 1.15 m tall, about a real street collection box
+  and a little under Nora's shoulder; camera about 10° above, 25° round to the right; the back and the
+  left side are not seen, so they repeat the right side and the front's banding.
+- Visual comparison: by eye against the reference, scripted build
+
+## Intent
+- Palette (sampled from the reference): main paint blue #34558a (door #315286, side #354d77, roof lit
+  #4972b3); secondary brass #b37e4b (light #e9b47f, dark #885a30); accent cream #ecd8c6 (the envelope);
+  the paint chips through to bronze #b37e4b on worn edges; slot shadow #15253d
+- Materials: painted iron (rough 0.55), brass (rough 0.35, metallic), cream enamel decal (in the paint bake)
+- Finishes: paint chipped to bronze along every edge and rivet, dome brass rivets on the bands, ribs and
+  feet, a flying-envelope decal with three speed lines on the door, brass barrel hinges and a keyhole lock
+
+## Inventory (read from the reference)
+- a box with a round-arched roof running front to back, a mail-slot hood with a dark opening under the roof
+- two arched ribs, one down each side, over the roof's edge, ending in four legs that flare out to plinth feet
+- two horizontal straps round the body (under the hood and above the feet), riveted
+- a door on the front, proud of the body, hinges on the right, a round brass lock on the left
+- the cream envelope decal and speed lines on the door
+
+## Source
+- Method: scripted (Blender, build.py; helpers in ../kelib.py and ../bench_park/build.py)
+
+## Pipeline
+- Scene (headless build, rule 1): 17 paint parts, 33 brass parts, 3 dark parts (slot and keyhole), joined
+  per material.
+- Build: 10,272 triangles; 0.72 m over the feet x 0.58 m x 1.17 m; front -Y, origin at the centre of the
+  base, 1 unit = 1 m. Built clean by script, normals per part; the ribs' and legs' straight runs are
+  sampled every 3 cm so smooth shading doesn't bend them toward their end caps.
+- Texturing: procedural Cycles paint and brass shaders, baked to colour and normal maps (paint 1024 px,
+  brass 256 px); the envelope decal is drawn by numpy into an image and laid on the door's face inside
+  the paint shader, then baked with it. A dark plain material for the slot and keyhole.
+- UV check (kiln tools/uv_check.py): collapsed 0.0 %, stretch 1.7 %, overlap 100 % (WARN: the paint and
+  the brass each have their own 0-1 texture, so the joined mesh overlaps by design).
+- Review round 1 (review/round1, kiln review_sheet.py): ribs smeared dark and blotched orange low down
+  (smooth shading bent along one long face to the end cap) → ribs and legs sampled densely; chipping
+  too faint → stronger; ribs round and thin → flat bands; legs too thin → thicker, flared.
+- Review round 2 (review/round2): chips read as a continuous orange outline on every edge, not the
+  reference's broken flecks → patchy chip mask.
+- Review round 3 (review/round3, beside the reference): too spindly → thicker legs and ribs, bigger
+  feet, less flare; paint a shade lighter. (The kiln sheet's EEVEE render stalled while another
+  session's Blender held the GPU, so rounds 4 and 5 render in Cycles on the CPU with review.py.)
+- Review round 4 (review/round4): chips still faint against the reference's, lock too small → more
+  chipping, warmer bronze, bigger lock and keyhole.
+- Review round 5 (review/round5, colour and clay): nothing blocking in my own reading; the reference
+  still has heavier chipping at the door's corners (left for Alex's eye).
+- Reviewers: my own reading each round, no fresh reviewer subagents (as with the earlier props).
+- Optimize: skipped for the game copy (no Draco, no WebP).
+- Export: GLB (export_apply on an already applied mesh), copied to assets/props/mailbox.glb; light bake
+  (art/world_assets/light_bake, reach 0.6 m) added in place; imported.
+
+## In the game
+- Nora's mailbox by the porch (scripts/mail.gd build_box) is this model, with the game's red flag on its
+  right side between the ribs (up while there's post). Footprint Mail.SIZE (0.72 x 0.58 m).
+- Three more stand in town as decor (`mailbox` in data/furniture.json, main.gd TOWN_MAILBOXES): by the
+  Coffee Shop, in front of the Mayor's office, on the east street between Willow Homes and Builder's
+  Delight. The world editor can move them. `--only=mail` checks them and saves 53_town_mailbox_N.png.
+
+## Licences
+All geometry and textures generated by the script. No third-party assets.
+
+## Checkpoint
+- Step: EXPORT done, in the game; waiting for Alex's review (2026-11-13)

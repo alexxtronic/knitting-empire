@@ -25,7 +25,7 @@ const BAKED := [
 	"armchair", "bakery_counter", "bakery_stall", "barn", "bench_park", "bench_park_short",
 	"bookshelf", "bread_rack", "brick_oven", "chalkboard_sign", "coffee_table", "daisy_crate",
 	"dining_table", "fence_post", "fence_rails", "fence_section", "filing_cabinet", "fireplace",
-	"flour_sacks", "gran_bed", "hay_bale", "kitchen", "lamp", "lamp_post", "market_stall",
+	"flour_sacks", "gran_bed", "hay_bale", "kitchen", "lamp", "lamp_post", "mailbox", "market_stall",
 	"milk_churn", "office_desk", "plaza_fountain", "rocking_chair", "rug_red", "scarecrow",
 	"shop_counter", "sofa", "spinning_wheel", "sweater_rack", "trash_can", "wardrobe", "yarn_shelf"
 ]

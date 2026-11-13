@@ -99,6 +99,7 @@ var bin: Node3D
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
 const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
 const MAILBOX_YAW := PI
+const TOWN_MAILBOXES := [[Vector3(57.0, 0, 6.6), 2], [Vector3(55.6, 0, -12.5), 0], [Vector3(68.5, 0, -1.0), 3]] # [where, quarter turns]
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
@@ -230,7 +231,7 @@ func _ready() -> void:
 	mail.main = self
 	add_child(mail)
 	mail.build_box(self, MAILBOX_POS, MAILBOX_YAW)
-	grid_blockers.append(Rect2(MAILBOX_POS.x - 0.2, MAILBOX_POS.z - 0.25, 0.4, 0.5))
+	grid_blockers.append(Rect2(MAILBOX_POS.x - Mail.SIZE.x * 0.5, MAILBOX_POS.z - Mail.SIZE.y * 0.5, Mail.SIZE.x, Mail.SIZE.y))
 	house_root = Node3D.new()
 	add_child(house_root)
 	furniture_root = Node3D.new()
@@ -4007,6 +4008,15 @@ func _mail_checks() -> void:
 	var in_editor: bool = god.els.any(func(e): return e.node == box and e.kind == "mailbox")
 	_check("a mailbox stands by the porch, flag down, and the world editor can move it (%s, editor %s, %s)" % [str(box.global_position), str(in_editor), mail.actions()[0]["label"]],
 		box.visible and box.global_position.distance_to(POST_FARM_DOOR) < 4.0 and in_editor and not mail.flag_up() and not mail.actions()[0]["enabled"])
+	# the blue post box model (art/world_assets/mailbox) by the porch, and three more in town
+	var meshes := box.find_children("*", "MeshInstance3D", true, false).size()
+	var town_boxes: Array = decor.filter(func(f): return is_instance_valid(f) and f.item_id == "mailbox")
+	_check("the mailbox is the blue post box model, and %d more stand in town (%d meshes)" % [town_boxes.size(), meshes],
+		box.get_child(0) is Node3D and str(box.get_child(0).scene_file_path).ends_with("mailbox.glb") and meshes >= 2 and town_boxes.size() == 3)
+	for i in town_boxes.size():
+		var tb: Furniture = town_boxes[i]
+		await _cast_frame(tb.global_position, tb.rotation.y, 6.5)
+		await _shot("53_town_mailbox_%d.png" % i)
 	# Barbara brings the post on day 4: Gran's first letter, Max's, and the first order
 	Game.day = 4
 	Game.sweaters.clear()
@@ -6744,6 +6754,10 @@ func _build_town_decor() -> void:
 	# trash cans (art/world_assets/trash_can) at the end of two plaza benches, where Alex's layout has them
 	_decor("trash_can", Vector3(54.5, 0, 2.0), 0)
 	_decor("trash_can", Vector3(56.05, 0, -2.45), 1)
+	# post boxes (art/world_assets/mailbox, the same blue box as Nora's): by the Coffee Shop, the Mayor's
+	# office and Willow Homes (where they stand is in data/world_layout.json, set in the world editor)
+	for m in TOWN_MAILBOXES:
+		_decor("mailbox", m[0], m[1])
 	for p in [Vector3(55.0, 0, -8.3), Vector3(58.2, 0, -8.3), Vector3(62.3, 0, -7.9)]:
 		_decor("flower_pot", p, 0)
 	_decor("sunflowers", Vector3(45.2, 0, -12.0), 0)

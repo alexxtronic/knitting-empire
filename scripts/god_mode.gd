@@ -43,6 +43,7 @@ const Interiors = preload("res://scripts/interiors.gd")
 const Grass = preload("res://scripts/grass.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Furniture = preload("res://scripts/furniture.gd")
+const Mail = preload("res://scripts/mail.gd")
 
 const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
@@ -210,7 +211,8 @@ func collect() -> void:
 	_collect_node(main.bin, "bin", "Shipping bin", [Rect2(bp.x - 0.5, bp.z - 0.35, 1.0, 0.7)])
 	if main.mail and main.mail.box:
 		var mp: Vector3 = main.mail.box.position
-		_collect_node(main.mail.box, "mailbox", "Mailbox", [Rect2(mp.x - 0.2, mp.z - 0.25, 0.4, 0.5)])
+		var ms: Vector2 = Mail.SIZE
+		_collect_node(main.mail.box, "mailbox", "Mailbox", [Rect2(mp.x - ms.x * 0.5, mp.z - ms.y * 0.5, ms.x, ms.y)])
 	for p in main.plots:
 		_collect_node(p, "plot", "Crop plot", [])
 	if World.pen != null and is_instance_valid(World.pen):

@@ -1,0 +1,31 @@
+{
+  "name": "mailbox",
+  "triangles": 10272,
+  "materials": [
+    "mailbox_paint_mat",
+    "mailbox_brass_mat",
+    "mailbox_dark"
+  ],
+  "size_m": [
+    0.716,
+    0.576,
+    1.172
+  ],
+  "min_m": [
+    -0.358,
+    -0.289,
+    0.0
+  ],
+  "max_m": [
+    0.358,
+    0.287,
+    1.172
+  ],
+  "images": [
+    "mailbox_brass",
+    "mailbox_brass_n",
+    "mailbox_paint",
+    "mailbox_paint_n"
+  ],
+  "glb_bytes": 2180460
+}

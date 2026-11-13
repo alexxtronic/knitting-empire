@@ -80,6 +80,7 @@ PROPS = {
     "kitchen": (0.8, True),
     "lamp": (0.5, True),
     "lamp_post": (0.6, True),
+    "mailbox": (0.6, True),
     "market_stall": (1.0, True),
     "milk_churn": (0.5, True),
     "office_desk": (0.8, True),

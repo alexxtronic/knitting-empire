@@ -19,6 +19,8 @@ const Data = preload("res://scripts/data.gd")
 
 const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const STOP_AHEAD := 0.75 # m in front of the box: where Barbara stands to post
+const MODEL := "res://assets/props/mailbox.glb"
+const SIZE := Vector2(0.72, 0.58) # its footprint, width (x) by depth (z), over the feet
 
 var main: Node
 var box: Node3D # the mailbox by the porch (a MailBox); the world editor can move it
@@ -72,8 +74,8 @@ func open_orders() -> Array:
 
 # --- the mailbox ------------------------------------------------------------------------
 
-## Builds the mailbox at `pos`, its door toward `yaw` (radians; 0 faces +z). A wooden post, a
-## green tin box with a round top, a brass catch and a red flag on its side.
+## Builds the mailbox at `pos`, its door toward `yaw` (radians; 0 faces +z): the blue post box
+## (assets/props/mailbox.glb, art/world_assets/mailbox) with a red flag on its right side.
 func build_box(root: Node3D, pos: Vector3, yaw: float) -> Node3D:
 	box = MailBox.new()
 	box.mail = self
@@ -81,29 +83,19 @@ func build_box(root: Node3D, pos: Vector3, yaw: float) -> Node3D:
 	box.position = pos
 	box.rotation.y = yaw
 	root.add_child(box)
-	const TIN := Color(0.27, 0.40, 0.31)
-	Catalog.box(box, Vector3(0.09, 1.02, 0.09), Vector3(0, 0.51, -0.06), Catalog.WOOD)
-	Catalog.box(box, Vector3(0.2, 0.05, 0.3), Vector3(0, 1.03, 0), Catalog.WOOD_DARK) # the shelf it sits on
-	Catalog.box(box, Vector3(0.24, 0.16, 0.44), Vector3(0, 1.135, 0), TIN)
-	Catalog.cyl(box, 0.12, 0.12, 0.44, Vector3(0, 1.215, 0), TIN, Vector3(90, 0, 0), 20) # the round top
-	Catalog.box(box, Vector3(0.235, 0.27, 0.015), Vector3(0, 1.2, 0.222), TIN.darkened(0.15)) # the door
-	Catalog.box(box, Vector3(0.05, 0.03, 0.02), Vector3(0, 1.3, 0.235), Catalog.BRASS) # its catch
-	var l := Label3D.new()
-	l.text = "BIRCHFIELD"
-	l.font_size = 28
-	l.pixel_size = 0.0028
-	l.modulate = Catalog.CREAM
-	l.outline_size = 0
-	l.position = Vector3(-0.122, 1.16, 0)
-	l.rotation.y = -PI * 0.5
-	box.add_child(l)
-	# the flag pivots on the right-hand side, lying along the box when down
+	var packed := load(MODEL) as PackedScene
+	if packed != null:
+		box.add_child(packed.instantiate())
+	else: # not imported yet: a plain blue box stands in, so the game still starts
+		push_warning("mail: %s is missing; import the assets" % MODEL)
+		Catalog.box(box, Vector3(0.46, 0.9, 0.44), Vector3(0, 0.7, 0), Color(0.23, 0.36, 0.6))
+	# the flag pivots on the right-hand side between the ribs, lying along the box when down
 	_flag = Node3D.new()
-	_flag.position = Vector3(0.135, 1.15, -0.12)
+	_flag.position = Vector3(0.24, 0.70, -0.13)
 	box.add_child(_flag)
-	Catalog.box(_flag, Vector3(0.015, 0.025, 0.26), Vector3(0, 0, 0.13), Color(0.75, 0.13, 0.11))
-	Catalog.box(_flag, Vector3(0.015, 0.09, 0.08), Vector3(0, 0.03, 0.24), Color(0.80, 0.15, 0.12))
-	box.add_hitbox(Vector3(0.5, 1.45, 0.6))
+	Catalog.box(_flag, Vector3(0.014, 0.025, 0.24), Vector3(0, 0, 0.12), Color(0.75, 0.13, 0.11))
+	Catalog.box(_flag, Vector3(0.014, 0.09, 0.08), Vector3(0, 0.03, 0.22), Color(0.80, 0.15, 0.12))
+	box.add_hitbox(Vector3(SIZE.x, 1.2, SIZE.y))
 	update_flag()
 	return box
 
