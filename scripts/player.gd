@@ -19,6 +19,12 @@ var walk_speed := 1.5 # m/s; main.gd raises both with fitness
 var run_speed := 3.0
 var running := false # Shift held (main.gd sets it every frame; the autotest can hold it too)
 var path: Array = []
+## First person (first_person.gd): the way the keys walk her, flat and of length 1, or zero when
+## nobody steers her that way; steer_back when that's backward (the steps play in reverse).
+## steer_ok says whether a point is walkable (main.gd sets it).
+var steer := Vector3.ZERO
+var steer_back := false
+var steer_ok := Callable()
 var busy := false
 var detailed := false # true when the Blender character loaded
 var _on_arrive := Callable()
@@ -425,12 +431,33 @@ func _process(delta: float) -> void:
 			position += to / d * step
 			walked += step
 			rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * TURN))
+	elif steer != Vector3.ZERO:
+		walking = _steer_step(delta)
 	else:
 		speed = 0.0
 	if detailed:
 		_animate(delta, walking)
 	else:
 		_animate_simple(walking)
+
+
+## One frame of walking by the keys (first person): she eases up to speed the way steer points
+## and slides along whatever stops her. Returns whether she's taking steps.
+func _steer_step(delta: float) -> bool:
+	var top := (run_speed if running else walk_speed) * (0.7 if steer_back else 1.0)
+	speed = move_toward(speed, top, ACCEL * delta)
+	var step := steer * speed * delta
+	var to := position + step
+	if steer_ok.is_valid() and not steer_ok.call(to):
+		to = position + Vector3(step.x, 0, 0) # along the wall, if it allows
+		if not steer_ok.call(to):
+			to = position + Vector3(0, 0, step.z)
+			if not steer_ok.call(to):
+				speed = 0.0
+				return false
+	walked += position.distance_to(to)
+	position = Vector3(to.x, 0.0, to.z)
+	return true
 
 
 ## Skinned character: pick the loop for the current state; the body cross-fades to it.
@@ -453,6 +480,8 @@ func _animate(delta: float, walking: bool) -> void:
 	elif _talk_t > 0.0:
 		want = "Talk"
 	body.play(want, speed)
+	if walking and steer_back and steer != Vector3.ZERO:
+		body.anim.speed_scale = -absf(body.anim.speed_scale) # stepping backward
 	_sound_cues(delta)
 
 
@@ -461,7 +490,10 @@ func _animate(delta: float, walking: bool) -> void:
 func _sound_cues(delta: float) -> void:
 	var cur := body.current()
 	if body.striding() and body.anim.current_animation_length > 0.0:
-		var ph := fmod(body.anim.current_animation_position / body.anim.current_animation_length + 0.75, 1.0)
+		var through := body.anim.current_animation_position / body.anim.current_animation_length
+		if body.anim.speed_scale < 0.0:
+			through = 1.0 - through # stepping backward: the loop runs the other way
+		var ph := fmod(through + 0.75, 1.0)
 		if _walk_phase >= 0.0 and (ph < _walk_phase or (_walk_phase < 0.5 and ph >= 0.5)):
 			footstep.emit()
 		_walk_phase = ph

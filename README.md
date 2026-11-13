@@ -23,6 +23,7 @@ Controls:
 - C toggles the walls.
 - B toggles Build mode. In Build mode, R rotates a piece, X sells it and Esc cancels.
 - P (or Menu > Cinematic camera) turns on cinematic mode, a free camera that leaves Nora where she is and stops the clock. WASD flies, the mouse looks round (the arrow keys or a two-finger swipe also work), E or Space climbs, Q or C sinks, Shift goes faster, Alt slower, and the scroll wheel sets the cruising speed. It goes right down to the grass and up to 300 m. F, Enter or a click takes a photo, H hides the hint, and Esc or P goes back to Nora. Photos are saved as PNGs in Godot's user folder (`user://photos/`), named by the date and the time in the game, and **Menu > Photo album** shows them as thumbnails, full size, and lets you delete them.
+- V (or Menu > First person) plays in first person, through Nora's eyes. The mouse looks round (the arrow keys or a two-finger swipe also work), WASD walks her the way she looks, S steps back and Shift jogs. Look down and you see her own arms, hands, legs and feet. A click or E uses what's under the dot in the middle of the screen, with the same ring of actions as clicking it from above. V or Esc goes back to the overhead camera, and so does a story scene, bed, the knitting game, a chat, building mode, the dog (Tab) or the cinematic camera (P).
 
 The game opens on a title screen (Continue, New Game, Settings, Quit) over the farm. **Settings** (also behind the Menu button, or Esc) has the picture quality, music and sound volumes, full screen, and switches for the frame counter and the on-screen camera buttons, all kept per computer in `user://settings.cfg`.
 
@@ -88,6 +89,7 @@ The autotest checks the chat offline with a stand-in for the API, so it never sp
 | `scripts/thumbs.gd` | renders the Build mode picture cards |
 | `scripts/ai_chat.gd`, `chat_panel.gd`, `data/personas.json` | typed chat with villagers |
 | `scripts/cinematic.gd`, `photo_album.gd` | cinematic mode (the free camera and its photos) and the photo album |
+| `scripts/first_person.gd` | first person: the camera at Nora's eyes, her head hidden from it |
 | `scripts/regions.gd`, `data/regions.json` | the lands round the farm: Mirewood Swamp, Greyspine Foothills and the mountains, Saltmeadow Beach and the sea, Eastfield Meadows, and the trails out to them |
 | `scripts/god_mode.gd`, `data/world_layout.json` | the admin's world editor (Settings > God mode) and the map layout it saves |
 | `scripts/audio.gd` | music, ambience and sound effects on three buses (Music, Ambience, SFX) |
@@ -250,4 +252,4 @@ Run the automated smoke test, which writes screenshots and prints PASS/FAIL line
 /Applications/Godot.app/Contents/MacOS/Godot --path . -- --autotest=/tmp/ke_shots
 ```
 
-Add `--only=photo` after it to check just cinematic mode and the photo album (about fifteen seconds). See `AGENTS.md` for the other quick checks.
+Add `--only=photo` after it to check just cinematic mode and the photo album (about fifteen seconds), or `--only=fps` for just first person (about fifteen seconds). See `AGENTS.md` for the other quick checks.

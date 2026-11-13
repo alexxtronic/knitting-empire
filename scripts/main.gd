@@ -30,6 +30,7 @@ const Planks = preload("res://scripts/planks.gd")
 const Homestead = preload("res://scripts/homestead.gd")
 const Dog = preload("res://scripts/dog.gd")
 const Cinematic = preload("res://scripts/cinematic.gd")
+const FirstPerson = preload("res://scripts/first_person.gd")
 const Jobs = preload("res://scripts/jobs.gd")
 
 const CELL := 0.5
@@ -99,6 +100,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
+var fps: FirstPerson # first person: the camera at her eyes (first_person.gd), V
 var jobs: Jobs # work beside knitting: the bakery, the Coffee Shop, the post round (jobs.gd)
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
@@ -275,6 +277,10 @@ func _ready() -> void:
 	cinema = Cinematic.new()
 	cinema.main = self
 	add_child(cinema)
+	fps = FirstPerson.new() # after the player, so it places the camera once she has moved this frame
+	fps.main = self
+	add_child(fps)
+	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -368,6 +374,7 @@ func _connect_hud() -> void:
 	hud.fullscreen_toggled.connect(set_fullscreen)
 	hud.hud_option.connect(_save_hud_option)
 	hud.cinematic_pressed.connect(func(): cinema.enter())
+	hud.first_person_pressed.connect(func(): fps.enter())
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -1052,7 +1059,7 @@ func _update_needs(delta: float) -> void:
 	player.running = autotest_jog or _held(KEY_SHIFT)
 	_update_dog()
 	var head := player.head_point()
-	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not knit.active and not cam.is_position_behind(head)
+	var show := player.busy and not story.is_playing() and not sleeping and not hide_activity_bar and not knit.active and not fps.active and not cam.is_position_behind(head)
 	hud.update_activity(player.activity_text(), player.activity_progress(), cam.unproject_position(head), show, player.activity_text() != "Zzz")
 
 
@@ -1071,6 +1078,8 @@ func _update_gaze() -> void:
 
 func _gaze_for(a, people: Array) -> Variant:
 	var me: Vector3 = a.global_position
+	if a == player and fps.active and not player.busy:
+		return fps.look_point() # her head turns the way the view looks
 	if a == player:
 		if player.busy:
 			return null
@@ -1110,8 +1119,8 @@ func warmth_target() -> float:
 
 
 func _update_camera(delta: float) -> void:
-	if cinema.active:
-		return # cinematic.gd flies the camera
+	if cinema.active or fps.active:
+		return # cinematic.gd flies the camera; first_person.gd puts it at her eyes
 	if not _photo_dof.is_empty():
 		_apply_photo_dof()
 	# close-ups get a soft background
@@ -1155,6 +1164,14 @@ func _update_camera(delta: float) -> void:
 		cam.position += Vector3(randf_range(-k, k), randf_range(-k, k), randf_range(-k, k))
 
 
+## What stops first person (first_person.gd), or ends it when it starts: a story scene, sleep,
+## the title, the knitting game, a chat, the cinematic camera, the world editor, building mode
+## and playing the dog.
+func fp_blocked() -> bool:
+	return sleeping or title_on or knit.active or story.is_playing() or cinema.active or god.active \
+		or hud.is_chat_open() or mode != Mode.LIVE or (dog != null and dog.controlled)
+
+
 ## Layout-proof key check: matches the key by its label or by its physical position.
 func _held(k: Key) -> bool:
 	if knit != null and knit.active:
@@ -1180,6 +1197,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		return # the autotest calls _live_click and friends itself; a real mouse would only disturb it
 	if cinema.active:
 		cinema.handle_mouse(e)
+		return
+	if fps.active:
+		fps.handle_mouse(e)
 		return
 	if god.active and god.handle_mouse(e):
 		return # the world editor: clicks pick things up and paint roads instead of walking Nora
@@ -1278,6 +1298,9 @@ func _input(e: InputEvent) -> void:
 		cinema.handle_key(kc) # every key belongs to the free camera while it flies
 		get_viewport().set_input_as_handled()
 		return
+	if fps.active and fps.handle_key(kc):
+		get_viewport().set_input_as_handled()
+		return
 	if hud.is_menu_open() and kc >= KEY_1 and kc <= KEY_9:
 		hud.pie.key(kc - KEY_0)
 		get_viewport().set_input_as_handled()
@@ -1305,6 +1328,8 @@ func _input(e: InputEvent) -> void:
 			toggle_dog()
 		KEY_P:
 			cinema.enter()
+		KEY_V:
+			fps.enter()
 		KEY_SPACE:
 			_set_cam_lock(not cam_follow, true)
 		KEY_B:
@@ -4088,6 +4113,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=fps" in OS.get_cmdline_user_args(): # just first person: through her eyes
+		await _wait(1.5)
+		await _fps_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	autotest_jog = true
 	await _wait(1.5)
 	await _shot("01_live.png")
@@ -4268,6 +4299,7 @@ func _autotest() -> void:
 	await _world_checks()
 	await _dog_checks()
 	await _photo_checks()
+	await _fps_checks()
 	await _minimap_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
@@ -5970,6 +6002,161 @@ func _photo_checks() -> void:
 	await _key_tap(KEY_ESCAPE)
 	_check("Esc closes the album", not hud.album.visible)
 	Cinematic.delete_photo(low)
+
+
+## First person (first_person.gd): V puts the camera at her eyes with her head hidden from it,
+## WASD walks her the way she looks and her body turns with the view, looking down shows her own
+## feet (52_fps_feet.png), a click or E on what's under the dot opens its ring, it won't start
+## asleep and gives way to the cinematic camera, and V brings the overhead camera back.
+func _fps_checks() -> void:
+	var was_running: bool = Game.time_running
+	Game.time_running = false
+	_set_cam_lock(true)
+	if hud.is_menu_open():
+		hud.hide_menu()
+	# open ground on the farm
+	var start := Vector3(20.0, 0, 8.0)
+	var open_round := func(q: Vector3) -> bool:
+		for a in 16:
+			for r in [1.0, 2.5, 4.0]:
+				if not _walkable(_cell(q + Vector3(cos(a * TAU / 16.0), 0, sin(a * TAU / 16.0)) * r)):
+					return false
+		return true
+	for i in 200:
+		var q := Vector3(20.0 + (i % 20) * 2.0, 0, 8.0 - (i / 20) * 2.0)
+		if open_round.call(q):
+			start = q
+			break
+	player.walk([])
+	player.cancel_activity()
+	player.position = start
+	player.rotation.y = 0.0
+	await _wait(0.4)
+	var fov0 := cam.fov
+	var near0 := cam.near
+	await _key_tap(KEY_V)
+	await _wait(0.3)
+	var eye: Vector3 = player.global_transform.affine_inverse() * cam.global_position
+	_check("V puts the camera at her eyes (active %s, %.2f m up, %.2f m before her, fov %.0f, near %.2f)" % [fps.active, eye.y, eye.z, cam.fov, cam.near],
+		fps.active and eye.y > 1.3 and eye.y < 1.85 and eye.z > 0.0 and eye.z < 0.35 and is_equal_approx(cam.fov, FirstPerson.FOV) and cam.near < 0.1)
+	var copies: Array = fps.body_copies()
+	var tri_orig := 0
+	var tri_copy := 0
+	for c in fps._copies:
+		var o := c[0] as MeshInstance3D
+		for sidx in o.mesh.get_surface_count():
+			tri_orig += o.mesh.surface_get_array_index_len(sidx) / 3
+		if c[1] != null:
+			var m := (c[1] as MeshInstance3D).mesh
+			for sidx in m.get_surface_count():
+				tri_copy += m.surface_get_array_index_len(sidx) / 3
+	var shown := fps._copies.all(func(c): return c[1] == null or (c[1] as MeshInstance3D).visible == (c[0] as MeshInstance3D).visible)
+	_check("her head isn't drawn for this camera: her %d meshes only cast their shadow (head drawn %s) and %d headless copies are drawn with them (%s; %d of %d triangles kept)" % [fps._copies.size(), fps.head_drawn(), copies.size(), shown, tri_copy, tri_orig],
+		not fps.head_drawn() and not copies.is_empty() and shown and tri_copy > tri_orig * 0.4 and tri_copy < tri_orig)
+	# walking: W goes the way she looks, and she turns with the view
+	for yaw_deg in [30.0, -100.0]:
+		player.position = start
+		fps.yaw = deg_to_rad(yaw_deg)
+		fps.pitch = deg_to_rad(-5.0)
+		await _wait(0.3)
+		var p0 := player.position
+		await _key_tap(KEY_W, 1.0)
+		await _wait(0.2)
+		var d := player.position - p0
+		var fwd := Vector3(-sin(fps.yaw), 0, -cos(fps.yaw))
+		var along := d.dot(fwd)
+		var side := (d - fwd * along).length()
+		var facing := absf(angle_difference(player.rotation.y, fps.yaw + PI))
+		_check("W walks her the way she looks (view at %.0f°: %.2f m ahead, %.2f m aside; her body %.0f° off the view)" % [yaw_deg, along, side, rad_to_deg(facing)],
+			along > 1.2 and side < 0.2 and facing < deg_to_rad(5.0))
+	var p1 := player.position
+	await _key_tap(KEY_S, 0.6)
+	var back := (player.position - p1).dot(Vector3(-sin(fps.yaw), 0, -cos(fps.yaw)))
+	_check("S steps her backward (%.2f m) and she still faces the view" % back,
+		back < -0.4 and absf(angle_difference(player.rotation.y, fps.yaw + PI)) < deg_to_rad(5.0))
+	# looking down: her feet, on the screen and in front of the camera
+	fps.pitch = deg_to_rad(FirstPerson.PITCH_MIN)
+	await _wait(0.5)
+	var sk: Skeleton3D = player.body.skeleton
+	var vp := get_viewport().get_visible_rect().size
+	var feet := 0
+	for bn in ["LeftFoot", "RightFoot"]:
+		var b := sk.find_bone(bn)
+		if b < 0:
+			continue
+		var w := sk.global_transform * sk.get_bone_global_pose(b).origin
+		var sp := cam.unproject_position(w)
+		if not cam.is_position_behind(w) and Rect2(Vector2.ZERO, vp).has_point(sp):
+			feet += 1
+	var head_w := sk.global_transform * sk.get_bone_global_pose(sk.find_bone("Head")).origin
+	_check("looking down she sees both her feet (%d on screen); the Head bone is behind the camera's view (%.2f m below it)" % [feet, cam.global_position.y - head_w.y],
+		feet == 2 and cam.global_position.y > head_w.y)
+	await _shot("52_fps_feet.png")
+	fps.key_down[KEY_W] = true # and walking, looking down
+	await _wait(0.6)
+	await _shot("52_fps_feet_walk.png")
+	fps.key_down.clear()
+	await _wait(0.4)
+	fps.pitch = deg_to_rad(-6.0)
+	await _wait(0.3)
+	await _shot("52_fps_ahead.png")
+	# using something: the dot on a piece of her furniture opens its ring, as a click from above would
+	var used := ""
+	var tried := 0
+	var with_acts := 0
+	for f in furniture:
+		if used != "":
+			break
+		if not is_instance_valid(f) or not (f as Node3D).visible or _actions_for(f).is_empty():
+			continue
+		with_acts += 1
+		var fp: Vector3 = (f as Node3D).global_position
+		for dir in [Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(-1, 0, 0)]:
+			var spot: Vector3 = fp + dir * 2.4
+			if not _walkable(_cell(spot)):
+				continue
+			player.position = spot
+			fps.yaw = atan2(dir.x, dir.z) # looking back at it
+			await _wait(0.3)
+			var to := fp + Vector3(0, 0.45, 0) - cam.global_position
+			fps.yaw = atan2(-to.x, -to.z)
+			fps.pitch = atan2(to.y, Vector2(to.x, to.z).length())
+			await _wait(0.3)
+			tried += 1
+			if _ray_target(get_viewport().get_visible_rect().size * 0.5) != f:
+				continue
+			await _key_tap(KEY_E)
+			await _wait(0.2)
+			if hud.is_menu_open():
+				used = _name_of(f)
+				await _shot("52_fps_use.png")
+			break
+	_check("E on what's under the dot opens its ring of actions (%s; %d of %d pieces with actions tried)" % [used if used != "" else "nothing opened", tried, with_acts], used != "" and fps.active)
+	hud.hide_menu()
+	await _wait(0.2)
+	# handing over: the cinematic camera takes over from it, and it won't start asleep
+	await _key_tap(KEY_P)
+	await _wait(0.3)
+	_check("P leaves first person for the cinematic camera (first person %s, cinematic %s)" % [fps.active, cinema.active], not fps.active and cinema.active)
+	cinema.leave()
+	await _wait(0.2)
+	sleeping = true
+	fps.enter()
+	var asleep_on: bool = fps.active
+	sleeping = false
+	_check("it won't start while she's asleep", not asleep_on)
+	await _key_tap(KEY_V)
+	await _wait(0.2)
+	_check("V again goes into first person", fps.active)
+	await _key_tap(KEY_V)
+	await _wait(0.5)
+	var dist := cam.global_position.distance_to(player.position)
+	_check("V comes out: the overhead camera is back (%.1f m from her, fov %.0f, near %.2f), her head is drawn again, the copies hidden" % [dist, cam.fov, cam.near],
+		not fps.active and is_equal_approx(cam.fov, fov0) and is_equal_approx(cam.near, near0) and dist > 6.0
+		and fps.head_drawn() and copies.all(func(m): return not m.visible))
+	Game.time_running = was_running
+	player.walk([])
+	player.position = Vector3(4.6, 0, 4.9)
 
 
 func _camera_checks() -> void:

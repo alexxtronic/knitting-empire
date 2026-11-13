@@ -18,6 +18,7 @@ signal god_weather(weather: String) # "clear" or "rain"
 signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
 signal cinematic_pressed # Menu > Cinematic camera (cinematic.gd)
+signal first_person_pressed # Menu > First person (first_person.gd)
 signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
 signal rotate_pressed
@@ -559,6 +560,7 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Save Game", func(): shut.call(); save_pressed.emit()))
 	vb.add_child(_button("Settings", func(): shut.call(); open_settings()))
 	vb.add_child(_button("Journal", func(): shut.call(); open_journal()))
+	vb.add_child(_button("First person (V)", func(): shut.call(); first_person_pressed.emit()))
 	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
 	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))
 	vb.add_child(_button("How to Play", func(): shut.call(); help_panel.visible = true))
@@ -1203,7 +1205,7 @@ func _build_help() -> void:
 [b]Build & Buy[/b] ([b]B[/b], or Build on the bar): pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
 [b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.
 [b]Tools:[/b] with a tool in her hand, a click uses it. To dig a new bed, right-click open ground on her farm and pick Dig bed (never indoors). The watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
-[b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons.
+[b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons. [b]V[/b] plays in first person, through her eyes: the mouse looks, WASD walks, a click or [b]E[/b] uses what's under the dot, [b]V[/b] or [b]Esc[/b] goes back.
 [b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Sell sweaters to Rosa (the Yarn Barn, or her market stall in the mornings) for today's price and buy wool and sheep from her, croissants from Giorgio, coffee from Sabrina, and Rosewood Cottage from Gary at Willow Homes. Furnish it and it earns rent every morning. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]Sheep pen:[/b] in the story, buy wood from Steve at Builder's Delight. [b]F[/b] builds the pen: click to lay a panel (1 wood), right-click to take one up, [b]T[/b] switches to the gate. [b]G[/b] crafts a gate from 2 wood. Walk up behind sheep and they move away from you.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
