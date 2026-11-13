@@ -122,6 +122,7 @@
       "pos": [19.2, 0.0, -6.1],
       "roam": [0.6, 0.3],
       "look": {
+        "model": "lars",
         "skin": "#d99a6c",
         "hair": "#8b5a2b",
         "top": "#8c2e2a",

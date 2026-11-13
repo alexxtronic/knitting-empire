@@ -52,6 +52,8 @@ LID_PAST = 0.006                    # the lids reach this far above and below th
 #   iris    the iris's radius (default: half the two arcs' heights together)
 #   rim     the lid rim's width round the opening
 #   R       the eyeball's radius (default: from the face's own curve round the eye)
+#   loose   1 also paints out dark marks near the eye that don't touch it (a lash flick painted above the outer
+#           corner, Lars), as long as they end within REACH; a brow or hair runs on past it and stays
 EYES = {
     "gary_tripo": dict(mid=-0.1, dx=40.6, z=1617.75, a=21.0, up=7.6, lo=6.6, tilt=-3.5, k_up=-0.1, k_lo=0.1, p=0.85, lash=1.6),
     "giorgio_tripo": dict(mid=0.4, dx=52.1, z=1687.0, a=25.0, up=19.0, lo=10.5, k_up=-0.1, p=0.6, lash=1.8, rim=2.5),
@@ -61,8 +63,9 @@ EYES = {
     "wren_tripo": dict(mid=-0.6, dx=45.6, z=1446.9, a=21.1, up=13.2, lo=8.8, tilt=6.0, k_up=0.2, k_lo=-0.03, p=0.7, lash=2.2),
     "rosa_tripo": dict(mid=-0.3, dx=44.3, z=1299.5, a=23.3, up=15.0, lo=9.0, tilt=-4.0, k_up=-0.1, p=0.75, lash=2.2, rim=2.5),
     "max_tripo": dict(mid=-0.25, dx=38.25, z=1622.75, a=17.75, up=10.0, lo=6.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.6, iris=11.0),
+    "lars_tripo": dict(mid=-0.4, dx=45.9, z=1665.5, a=18.0, up=10.0, lo=6.8, tilt=-1.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.8, iris=11.0, loose=1),
 }
-DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0)
+DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0)
 SPEC = None
 if CID in EYES:
     SPEC = dict(DEFAULTS)
@@ -417,8 +420,12 @@ for kind_ in (dark_, nonskin & ~dark_):
     np.maximum.at(reach, lab[lab > 0], EX[lab > 0])
     touch = np.zeros(nlab + 1, dtype=bool)
     touch[np.unique(lab[(lab > 0) & (EX < 0.004)])] = True
-    near_lab = np.nonzero(touch & (reach <= REACH))[0]
+    loose_ = ~touch & (reach <= REACH) & bool(SPEC["loose"]) & (kind_ is dark_)
+    loose_[0] = False
+    near_lab = np.nonzero((touch | loose_) & (reach <= REACH))[0]
     near_px |= np.isin(lab, near_lab)
+    if loose_.any():
+        log("  loose dark marks near the eyes painted out: %d, %d px" % (int(loose_.sum()), int(np.isin(lab, np.nonzero(loose_)[0]).sum())))
     for k_ in np.nonzero(touch)[0]:
         n_ = int((lab == k_).sum())
         if n_ > 200:

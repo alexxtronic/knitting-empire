@@ -14,7 +14,8 @@ It:
   2. renames the bones the game knows to its names (Hips, Spine, Chest, UpperChest, Neck, Head,
      LeftShoulder, LeftUpperArm, LeftLowerArm, LeftHand, LeftUpperLeg, LeftLowerLeg, LeftFoot, LeftToes, and
      the right side); the fingers keep Mixamo's names (LeftHandIndex1 ...) without the "mixamorig:" prefix;
-  3. gives the mesh a plain material with its base colour packed in (the FBX carries it);
+  3. gives the mesh a plain material with its base colour packed in (the FBX carries it), with the bake's misses
+     filled in: a face to_mixamo.py's short rays didn't reach baked pure black, and takes its neighbours' colour;
   4. makes the head rigid (tools/rigid_head.py);
   5. keeps the seated anchor of --like (the old rig's SitIdle hips, moved by how far Mixamo put the hip
      joint from the old one, so the body still lands on the chair: tools/retarget_anims.py reads
@@ -24,6 +25,7 @@ It:
      run tools/retarget_anims.py on the blend next).
 """
 import bpy, os, sys
+import numpy as np
 from mathutils import Matrix, Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -110,7 +112,43 @@ mod.object = rig
 img = next((i for i in bpy.data.images if i.size[0] > 0 and i.name not in ("Render Result", "Viewer Node")), None)
 assert img is not None, "no texture in the FBX"
 img.name = OUT_ID + "_albedo"
+# tools/to_mixamo.py bakes with short rays, so a face sunk in a fold (under a brow, at a boot top) can miss the
+# full model and come out pure black (Lars's brows): those texels take their neighbours' colour, which also pads
+# the islands' edges into the unused black round them.
+W, H = img.size
+px = np.empty(W * H * 4, np.float32)
+img.pixels.foreach_get(px)
+px = px.reshape(H, W, 4)
+rgb = px[..., :3]
+me = body.data
+uv = np.empty(len(me.loops) * 2, np.float32)
+me.uv_layers.active.data.foreach_get("uv", uv)
+starts = np.empty(len(me.polygons), np.int64)
+counts = np.empty(len(me.polygons), np.int64)
+me.polygons.foreach_get("loop_start", starts)
+me.polygons.foreach_get("loop_total", counts)
+centre = np.add.reduceat(uv.reshape(-1, 2), starts) / counts[:, None]
+ci = np.clip((centre[:, 0] % 1.0 * W).astype(int), 0, W - 1)
+cj = np.clip((centre[:, 1] % 1.0 * H).astype(int), 0, H - 1)
+black_faces = int((rgb[cj, ci].sum(-1) < 0.01).sum())
+hole = rgb.sum(-1) < 0.01
+for _ in range(48):
+    ok = ~hole
+    acc = np.zeros_like(rgb)
+    n = np.zeros(hole.shape, np.float32)
+    for shift in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        acc += np.roll(rgb * ok[..., None], shift, (0, 1))
+        n += np.roll(ok, shift, (0, 1))
+    take = hole & (n > 0)
+    if not take.any():
+        break
+    rgb[take] = acc[take] / n[take][:, None]
+    hole &= ~take
+img.pixels.foreach_set(px.ravel())
+img.update()
+print("BAKE MISSES %s: %d faces were black at their centre, now %d" % (OUT_ID, black_faces, int((rgb[cj, ci].sum(-1) < 0.01).sum())))
 img.pack()
+img.filepath_raw = "//" + OUT_ID + "_albedo.png"   # the GLB names its texture by this, not by the FBX's file
 m = bpy.data.materials.new(OUT_ID.split("_")[0].capitalize())
 m.use_nodes = True
 nt = m.node_tree
