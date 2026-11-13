@@ -3601,7 +3601,7 @@ func _act1_shot(sub: String, fname: String) -> void:
 
 
 ## The town's cast (Alex's, 2026-11-12, and Lars next door, 2026-11-13) and their routines: the nine
-## villagers and nobody else, the eight new faces in their own models (Rosa's and Lars's since 2026-11-13),
+## villagers and nobody else, the eight new faces in their own models with real eyes (Rosa's and Lars's since 2026-11-13),
 ## Sabrina starting cool by the Coffee Shop, Rosa's mornings at the market stall and afternoons in the
 ## Yarn Barn, Barbara's nine o'clock post round (every door in town and Nora's porch), Gary's land and
 ## his visit on her second day, and Lars by his barn, renting her its stalls by the month.
@@ -3619,9 +3619,9 @@ func _cast_checks() -> void:
 	var bodies: Array = []
 	for id in ["barbara", "gary", "giorgio", "lars", "rosa", "sabrina", "steve", "wren"]:
 		var v := _villager(id)
-		if v != null and v.body != null:
+		if v != null and v.body != null and v.body.face != null:
 			bodies.append(id)
-	_check("the eight new faces wear their own models (%s)" % ", ".join(bodies), bodies.size() == 8)
+	_check("the eight new faces wear their own models, with real eyes (%s)" % ", ".join(bodies), bodies.size() == 8)
 	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id) and ai.has_persona(id)))
 	_check("every villager has an intro, lines and a chat persona (missing: %s)" % str(missing), missing.is_empty())
 	var old_f = Game.friends.get("sabrina")

@@ -42,7 +42,7 @@ The game opens on a title screen (Continue, New Game, Settings, Quit) over the f
     - **Barbara**: the postwoman, kind and full of wise advice. At nine every morning she walks the post to every door in town and out to Nora's mailbox
     - **Rowan**: the shepherd (below)
     - **Lars**: the farmer next door, very chill and easygoing, and a possible romance. He lives in the loft of the big barn by Nora's farm and rents her its stalls for her sheep: 60c a month from the day her first sheep are penned, paid to him in person (`data/economy.json` "story" `barn_rent`, `scripts/homestead.gd`). He wears his own model, rigged on Mixamo
-  - The eight new faces (Rosa's and Lars's since 2026-11-13) wear their Tripo models (`data/characters.json`), with painted eyes until Alex approves their real eyes (`model_eyes`)
+  - The eight new faces (Rosa's and Lars's since 2026-11-13) wear their Tripo models (`data/characters.json`), with real eyes that blink, look about and take the story's moods (Alex approved them on 2026-11-13)
   - daily market prices
   - a wool shop where you can also buy sheep
   - Rosewood Cottage, which you can buy, furnish and rent out (hidden for now: `Town.COTTAGE_ON` in `scripts/town.gd`)
