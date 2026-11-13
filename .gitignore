@@ -7,3 +7,5 @@
 # macOS
 .DS_Store
 __pycache__/
+tools/character_build/_mixamo_upload/
+tools/character_build/*_eyes/_front_*.npy

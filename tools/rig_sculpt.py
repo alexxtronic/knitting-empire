@@ -34,6 +34,7 @@ TEX = int(argv[argv.index("--tex") + 1]) if "--tex" in argv else 2048
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
 HEIGHT = float(argv[argv.index("--height") + 1]) if "--height" in argv else 0.0  # the sculpt's full height in metres when it is not the rig's: a tall hat or big hair puts the chin too low otherwise
 COAT = float(argv[argv.index("--coat") + 1]) if "--coat" in argv else 0.0  # nearest-bone weights: jacket length below the hips
+ARM_THICK = float(argv[argv.index("--arm-thick") + 1]) if "--arm-thick" in argv else 1.0  # fatten thin T-pose arms round their own line (a 'noodle' arm), shoulder to wrist; the hands keep their size
 APRON = "--apron" in argv  # a long apron or skirt hangs free in front of the thighs: let its hem drape off the knees
 
 scene = bpy.context.scene
@@ -307,6 +308,20 @@ for side, sx in (("Left", 1), ("Right", -1)):
             moved_joint[side] = (shift.copy(), k)
             print("SHOULDER", side, "arm radius", round(r, 3), "torso side", round(w, 3), "joint moved by",
                   tuple(round(v, 3) for v in shift), "arm length x", round(k, 3), "measured", round(k_raw, 3))
+            if ARM_THICK != 1.0:
+                # radial scale about the arm's line, eased in past the armpit and out before the wrist
+                wrist = (eb[side + "LowerArm"].tail - eb[side + "UpperArm"].head).length
+                along = (L - np.array(joint)) @ ax
+                off = (L - c) - np.outer((L - c) @ ax, ax)
+                d_ = np.linalg.norm(off, axis=1)
+                f = (np.clip((along - 0.02) / 0.08, 0, 1) * np.clip((wrist + 0.01 - along) / 0.04, 0, 1)
+                     * np.clip((r + 0.06 - d_) / 0.02, 0, 1) * (L[:, 0] * sx > joint.x * sx))
+                f = f * f * (3 - 2 * f)
+                L += off * ((ARM_THICK - 1.0) * f)[:, None]
+                lo.data.vertices.foreach_set("co", L.astype(np.float32).ravel())
+                lo.data.update()
+                arm_r[side] = (r * ARM_THICK, c.copy(), ax.copy())
+                print("ARM THICK", side, "x", ARM_THICK, "verts", int((f > 0).sum()))
             sh = joint
             tip = eb[side + "Hand"].tail.copy()
     have = Vector((tip.x - sh.x, 0.0, tip.z - sh.z)).normalized()
@@ -703,6 +718,45 @@ for side, sx in (("Left", 1), ("Right", -1)):
         lo.vertex_groups[hips_g].add([int(i)], float(w * (1.0 - m[i])), "ADD")
         moved += 1
     print("SEAT", side, "verts eased onto the pelvis", moved)
+
+# elbows and wrists: bone heat spreads the upper arm and forearm over each other for 15 cm or more, so a bent
+# arm curved like a hose from shoulder to hand (Sabrina working). A real arm is two straight segments with a
+# joint between: each vertex's arm weight goes to one bone, blended only within a few centimetres of the
+# elbow and the wrist. The arm's share against the shoulder and body is kept as it was.
+def smoothstep(x):
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * (3 - 2 * x)
+
+
+ELBOW_BAND, WRIST_BAND = 0.035, 0.02
+for side, sx in (("Left", 1), ("Right", -1)):
+    names = [side + b for b in ("UpperArm", "LowerArm", "Hand")]
+    if any(n not in gidx for n in names):
+        continue
+    gis = [gidx[n] for n in names]
+    sh_, el_ = (np.array(p) for p in seg[names[0]])
+    wr_ = np.array(seg[names[2]][0])
+    du = (el_ - sh_) / np.linalg.norm(el_ - sh_)
+    dl = (wr_ - el_) / np.linalg.norm(wr_ - el_)
+    de = du + dl
+    de /= np.linalg.norm(de)
+    W3 = np.zeros((len(L), 3))
+    for i, v in enumerate(lo.data.vertices):
+        for g in v.groups:
+            if g.group in gis:
+                W3[i, gis.index(g.group)] = g.weight
+    a = W3.sum(axis=1)
+    on = np.where(a > 1e-4)[0]
+    t_el = smoothstep(((L[on] - el_) @ de + ELBOW_BAND) / (2 * ELBOW_BAND))
+    t_wr = smoothstep(((L[on] - wr_) @ dl + WRIST_BAND) / (2 * WRIST_BAND))
+    new = np.stack([1 - t_el, t_el * (1 - t_wr), t_el * t_wr], axis=1) * a[on, None]
+    for n_, i in enumerate(on):
+        for k_, gi in enumerate(gis):
+            if new[n_, k_] > 1e-4:
+                lo.vertex_groups[gi].add([int(i)], float(new[n_, k_]), "REPLACE")
+            elif W3[i, k_] > 0.0:
+                lo.vertex_groups[gi].remove([int(i)])
+    print("JOINTS", side, "arm verts", len(on), "elbow band", ELBOW_BAND * 2, "m, wrist band", WRIST_BAND * 2, "m")
 
 # the head: one rigid piece from the jaw line up, turning on a short band of neck (tools/rigid_head.py)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

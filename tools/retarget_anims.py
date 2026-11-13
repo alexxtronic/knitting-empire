@@ -60,7 +60,8 @@ FPS = scene.render.fps
 rig = next(o for o in scene.objects if o.type == "ARMATURE")
 assert rig.matrix_world.to_3x3().is_identity or (rig.matrix_world.to_3x3() - Matrix.Identity(3)).median_scale < 1e-4
 T = rig.data.bones
-order = sorted(T, key=lambda b: len(b.parent_recursive))  # parents before children
+# parents before children; only the bones the library drives (a Mixamo rig's fingers and end bones stay at rest)
+order = [b for b in sorted(T, key=lambda b: len(b.parent_recursive)) if b.name in BONES]
 our_actions = {a.name for a in bpy.data.actions}
 rig.animation_data.action = None
 use_nla = rig.animation_data.use_nla
@@ -99,6 +100,8 @@ for name in MAP:
         a = bpy.data.actions[name]
         f0, f1 = (int(x) for x in a.frame_range)
         anchors[name] = hips_head(a, range(f0, f1))
+    elif name in SEATED and "seat_" + name in rig:      # a new rig (tools/import_mixamo.py) keeps the old one's seat
+        anchors[name] = Vector(rig["seat_" + name])
 for pb in rig.pose.bones:
     pb.matrix_basis = Matrix.Identity(4)
 update()
