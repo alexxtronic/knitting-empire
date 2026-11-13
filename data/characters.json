@@ -76,9 +76,9 @@
       "model": "res://assets/sabrina_tripo.glb",
       "model_eyes": "res://assets/sabrina_tripo_eyes.glb",
       "model_painted_eyes": "res://assets/sabrina_tripo.glb",
-      "walk_anim_speed": 1.01,
-      "brisk_anim_speed": 1.18,
-      "run_anim_speed": 3.04,
+      "walk_anim_speed": 1.10,
+      "brisk_anim_speed": 1.21,
+      "run_anim_speed": 4.11,
       "label_height": 2.05
     },
     {
