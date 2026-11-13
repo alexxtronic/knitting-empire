@@ -30,6 +30,7 @@ signal cam_zoom(dir: int)
 
 const Catalog = preload("res://scripts/catalog.gd")
 const PhotoAlbum = preload("res://scripts/photo_album.gd")
+const LettersPanel = preload("res://scripts/letters_panel.gd")
 
 
 ## Small vector icons drawn in code, so they never depend on a font having the glyph.
@@ -199,6 +200,7 @@ var build_btn: Button # at the end of the hotbar
 var menu_btn: Button
 var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
 var album: PhotoAlbum # the photo album (photo_album.gd): what cinematic mode took
+var letters: LettersPanel # the letters from the mailbox (letters_panel.gd); main.gd gives it the post (mail.gd)
 var needs_panel: PanelContainer
 var cam_pad: PanelContainer
 var fps_check: CheckButton
@@ -313,6 +315,10 @@ func _ready() -> void:
 	album.setup(self)
 	root.add_child(album)
 	_place(album, 0.5, 0.5, Vector2.ZERO)
+	letters = LettersPanel.new()
+	letters.setup(self)
+	root.add_child(letters)
+	_place(letters, 0.5, 0.5, Vector2.ZERO)
 	_build_bag()
 	fade = ColorRect.new()
 	fade.color = Color(0.02, 0.02, 0.06, 0.0)
@@ -560,6 +566,7 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Save Game", func(): shut.call(); save_pressed.emit()))
 	vb.add_child(_button("Settings", func(): shut.call(); open_settings()))
 	vb.add_child(_button("Journal", func(): shut.call(); open_journal()))
+	vb.add_child(_button("Letters", func(): shut.call(); letters.open()))
 	vb.add_child(_button("First person (V)", func(): shut.call(); first_person_pressed.emit()))
 	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
 	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))

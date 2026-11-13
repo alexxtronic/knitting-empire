@@ -75,7 +75,7 @@ const TITLES := {
 	"bush_round": "Round bush", "bush_tall": "Tall bush", "bush_berry": "Berry bush", "bush_autumn": "Autumn bush",
 	"tuft_small": "Grass tuft (small)", "tuft_mid": "Grass tuft", "tuft_tall": "Grass tuft (tall)", "flowers_daisy": "Daisies",
 	"flowers_buttercup": "Buttercups", "flowers_wild": "Wild flowers", "flowers_poppy": "Poppies", "clover_patch": "Clover",
-	"barn": "Barn", "bin": "Shipping bin", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
+	"barn": "Barn", "bin": "Shipping bin", "mailbox": "Mailbox", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
 	"leaf_yellow": "Maple leaf (gold)", "leaf_red": "Maple leaf (red)", "leaf_green": "Maple leaf (green)",
 	"maplewood_bus": "Maplewood bus",
 }
@@ -208,6 +208,9 @@ func collect() -> void:
 		_collect_node(World.barn, "barn", "Barn", World.barn_blocks(p) if not World.barn_parts.is_empty() else [Rect2(p.x - 2.6, p.z - 2.1, 5.2, 4.2)])
 	var bp: Vector3 = main.bin.position
 	_collect_node(main.bin, "bin", "Shipping bin", [Rect2(bp.x - 0.5, bp.z - 0.35, 1.0, 0.7)])
+	if main.mail and main.mail.box:
+		var mp: Vector3 = main.mail.box.position
+		_collect_node(main.mail.box, "mailbox", "Mailbox", [Rect2(mp.x - 0.2, mp.z - 0.25, 0.4, 0.5)])
 	for p in main.plots:
 		_collect_node(p, "plot", "Crop plot", [])
 	if World.pen != null and is_instance_valid(World.pen):

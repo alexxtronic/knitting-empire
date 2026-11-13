@@ -27,15 +27,17 @@ const NOTE_ITEM := "gran_note"
 ## The note Gran left on the table. A DRAFT for Alex.
 const NOTE_TEXT := """My darling Nora,
 
-I have missed you every single day since you moved away. The kettle still boils for two out of habit, and I let it.
+By the time you read this I'll be in Florida at your great-aunt Dot's, sitting in her garden with my feet up, complaining about the heat. The doctor says my chest can't take another winter in this valley, and for once I've done as I'm told.
 
-The house is yours now, if you'll have it: the third stair that creaks, the roses that sulk every June, the chair by the fire that still remembers the shape of me. Keep it warm for me.
+So the house is yours to look after while I'm gone: the third stair that creaks, the roses that sulk every June, the chair by the fire that still remembers the shape of me. Keep it warm for me.
 
 Put a little in the tin each week, for the house. Not because it needs the money. Because a home you pay into is a home you stay in.
 
 There's a hundred coins under the lid to start you off. Go and see Rosa at the Yarn Barn for some good yarn, and make something with your hands. It always helped me. It will help you.
 
-Whatever happened out there, love, it stays out there. In here it's just you, and the kettle, and me in every cup.
+Whatever happened out there, love, it stays out there. In here it's just you and the kettle.
+
+I'll write. Barbara brings the post up the lane at nine every morning, so mind you look in the box.
 
 All my love, always,
 Gran"""

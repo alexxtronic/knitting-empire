@@ -1,0 +1,80 @@
+{
+  "_about": "The post (scripts/mail.gd). Every word here is a DRAFT for Alex. Barbara brings the post on her nine o'clock round (main.gd _update_post); what's due goes into Nora's mailbox by the porch, she takes it out and reads it in the letters panel (scripts/letters_panel.gd). 'letters': one-off letters, each with an 'id', 'from', 'place' (where it's posted from), 'subject' and 'body' ({name} is the player's name, \\n\\n a new paragraph). When it comes: 'day' (the earliest day), 'needs' (a story flag; a flag starting 'act1' counts as set on a farm that isn't the story farm), 'after' + 'days' (that many days after the letter 'after' was delivered). Enclosed, given when she first reads it: 'coins', 'item' + 'item_n'. 'orders': sweater orders by post. From 'start_day' (and 'needs'), one comes every 'every' days while fewer than 'max_open' are waiting; the customers take turns. Each wants one sweater of 'stars' (1 Common .. 5 Legendary) or better and pays 'pay', plus 'tip_per_star' for each star above. She puts the sweater in the mailbox, Barbara takes it on her next round, and the payment comes with the customer's 'thanks' in the post the morning after.",
+  "letters": [
+    {
+      "id": "gran_florida_1",
+      "from": "Gran",
+      "place": "Sarasota, Florida",
+      "day": 2,
+      "needs": "act1_note",
+      "subject": "Safe and sweltering",
+      "body": "My darling Nora,\n\nI'm here, I'm alive, and I'm melting. Dot met me at the airport in a sun hat the size of a cartwheel and has not stopped talking since. She has a parrot called Admiral who says \"hello, gorgeous\" to the postman and nothing at all to me.\n\nThe doctor here says my chest is already better for the warm. I say it's better for not shovelling snow off a porch, but we're both happy, so I let him win.\n\nHow is the house? Is the front door still sticking? Lift and shove, love. Are the roses sulking? Ignore them, they always come round.\n\nI've put a little something in for wool. Don't argue, you can't from there.\n\nWrite when you can. Barbara knows the address.\n\nAll my love,\nGran\n\nP.S. If a tall quiet man turns up to fix the fence, feed him. That's Rowan. He won't ask, but he's always hungry.",
+      "coins": 25
+    },
+    {
+      "id": "daniel_1",
+      "from": "Daniel",
+      "place": "the city",
+      "day": 4,
+      "needs": "act1_done",
+      "subject": "Come home",
+      "body": "Nora,\n\nYour mother gave me this address. Don't be angry with her, she's worried too.\n\nI know you think you needed to get away. Fine. You've had your break. But a farm, Nora? You don't even like the cold. You're going to wake up one morning and wonder what you're doing out there, and I'd rather you didn't have to.\n\nThe house is too quiet. I keep making two coffees.\n\nWe don't need lawyers for this. Come home and we'll talk properly, just us, the way we used to. I'll even wear one of your sweaters. That's a joke. You used to laugh at my jokes.\n\nCall me.\n\nD."
+    },
+    {
+      "id": "gran_florida_2",
+      "from": "Gran",
+      "place": "Sarasota, Florida",
+      "after": "gran_florida_1",
+      "days": 7,
+      "subject": "A parcel for my girl",
+      "body": "My darling Nora,\n\nDot has joined a bridge club and dragged me along. I am a terrible bridge player. I am, however, a very good knitter, and half the table has already asked whether my granddaughter takes orders. I told them you might. Don't be surprised if strangers write.\n\nI've sent you a little wool from a woman at the farmers' market here. She keeps three sheep in her back garden and calls them all Doris. It's soft, and it smells of oranges.\n\nBarbara says you've been looking thin. Barbara says a lot of things. Eat something.\n\nAll my love, always,\nGran",
+      "item": "wool",
+      "item_n": 3
+    }
+  ],
+  "orders": {
+    "start_day": 3,
+    "needs": "act1_done",
+    "every": 3,
+    "max_open": 2,
+    "tip_per_star": 30,
+    "customers": [
+      {
+        "from": "Marjorie Fenn",
+        "place": "Sarasota, Florida",
+        "stars": 1,
+        "pay": 170,
+        "subject": "From your gran's bridge table",
+        "body": "Dear Nora,\n\nYou don't know me. I'm the one at your grandmother's bridge table who can't count trumps. Ellie showed us the scarf you knitted her years ago and I haven't stopped thinking about it.\n\nIt's never cold here, but the supermarket air conditioning is a crime. Could you send me a sweater? Anything warm will do. I'll pay {pay} coins, and I'll tell everyone who made it.\n\nWith thanks,\nMarjorie Fenn",
+        "thanks": "Dear Nora,\n\nIt came! I wore it to the supermarket and a woman in frozen foods asked where I got it. I told her. Your grandmother pretended not to be proud and failed completely.\n\nPayment enclosed, as promised.\n\nMarjorie"
+      },
+      {
+        "from": "Tom Beckett",
+        "place": "Duluth, Minnesota",
+        "stars": 2,
+        "pay": 210,
+        "subject": "A sweater for a long winter",
+        "body": "Hello,\n\nI drove through Maple Grove in the summer and stopped at the Yarn Barn for directions. Rosa had one of your sweaters in the window and talked about you for twenty minutes. I left without the directions but with your name.\n\nOur winters go on until about May. I'd like a good warm sweater, Uncommon or better if you have one. I can pay {pay} coins.\n\nTom Beckett",
+        "thanks": "Hello again,\n\nThe sweater arrived the same day as the first snow. Good timing. I wore it to shovel the drive and didn't come in for an hour.\n\nPayment enclosed, with my thanks.\n\nTom"
+      },
+      {
+        "from": "Ruth Hollis",
+        "place": "Portland, Maine",
+        "stars": 3,
+        "pay": 270,
+        "subject": "For my father's eightieth",
+        "body": "Dear Ms. Nora,\n\nMy father turns eighty next month. He has everything, and what he doesn't have he says he doesn't want. But he grew up on a sheep farm and he still talks about his mother's knitting.\n\nBarbara, your postwoman, is my cousin's friend, and she says you're the real thing. Would you knit him one? A Rare one if you can. I'll pay {pay} coins and gladly.\n\nRuth Hollis",
+        "thanks": "Dear Nora,\n\nHe put it on and didn't say anything for a long time. Then he said it smelled like home. That's the most he's said about anything in years.\n\nThank you. Payment enclosed.\n\nRuth"
+      },
+      {
+        "from": "Priya Nair",
+        "place": "Boston, Massachusetts",
+        "stars": 4,
+        "pay": 420,
+        "subject": "A window piece",
+        "body": "Dear Nora,\n\nI run a small knitwear shop on Charles Street. One of my customers came in wearing your work and I've been trying to find you for weeks.\n\nI'd like one exceptional sweater for the window: Epic or better. Something people stop for. I'll pay {pay} coins, and if it does what I think it will, I'll write again.\n\nWarmly,\nPriya Nair",
+        "thanks": "Dear Nora,\n\nThree people stopped in the first hour. One of them cried a little, which I'm taking as a review.\n\nPayment enclosed. I meant it about writing again.\n\nPriya"
+      }
+    ]
+  }
+}

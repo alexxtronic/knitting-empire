@@ -90,7 +90,7 @@ Avoid: energy that blocks play, real-time waits, daily login rewards, loot boxes
 - **Existing Act 1:** the rain bus, Daniel's call, Wren's tour, Gran's basket and letter, first sweater, the fence and Rowan, first sale to Rosa, the porch voicemail.
 - **Days 2–7:** tutorial by doing. The order board opens with Rosa's first commission. Rosa teaches spinning. First dye (onion skins from the garden). Nora knits herself out of the thin city coat.
 - **Week 2:** Gran's pattern book is found with most pages missing; villagers each hold a page (the collection begins). Memory thread 2: Ellie teaching her to cast on.
-- **Week 3:** the lawyer's letter: Daniel is contesting the farm as a marital asset. Stakes: she needs to show the farm is a working business by year's end.
+- **Week 3:** the lawyer's letter: Daniel is contesting the farm as a marital asset. (Needs rethinking: since 2026-11-13 Gran is alive, in Florida, and the farm is still hers; Nora looks after it.) Stakes: she needs to show the farm is a working business by year's end.
 - **Chapter end, Harvest Fair (day 28):** first festival. She enters one sweater in the beginner's class. Whatever she places, the town claps. Rowan's first-date scene can land here.
 - Player has by the end: stitch game, 3 patterns, 3 colours, orders, 2-heart friendships.
 

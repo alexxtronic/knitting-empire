@@ -31,6 +31,7 @@ const Homestead = preload("res://scripts/homestead.gd")
 const Dog = preload("res://scripts/dog.gd")
 const Cinematic = preload("res://scripts/cinematic.gd")
 const FirstPerson = preload("res://scripts/first_person.gd")
+const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
 
 const CELL := 0.5
@@ -94,6 +95,9 @@ var town_rounds := true # the cast's routines (_update_rounds); off in the autot
 var _flock_t := 0.0
 var _flock_seen := false
 var bin: Node3D
+var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
+const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
+const MAILBOX_YAW := PI
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
@@ -221,6 +225,11 @@ func _ready() -> void:
 	grid_blockers.append_array(World.build_pen(self, PEN, PEN_GATE))
 	bin = World.build_bin(self, BIN_POS)
 	grid_blockers.append(Rect2(BIN_POS.x - 0.5, BIN_POS.z - 0.35, 1.0, 0.7))
+	mail = Mail.new()
+	mail.main = self
+	add_child(mail)
+	mail.build_box(self, MAILBOX_POS, MAILBOX_YAW)
+	grid_blockers.append(Rect2(MAILBOX_POS.x - 0.2, MAILBOX_POS.z - 0.25, 0.4, 0.5))
 	house_root = Node3D.new()
 	add_child(house_root)
 	furniture_root = Node3D.new()
@@ -270,6 +279,7 @@ func _ready() -> void:
 	fireflies.setup(self)
 	hud = Hud.new()
 	add_child(hud)
+	hud.letters.mail = mail
 	minimap = Minimap.new()
 	minimap.main = self
 	hud.add_minimap(minimap)
@@ -1425,6 +1435,8 @@ func _input(e: InputEvent) -> void:
 				hud.journal_panel.visible = false
 			elif hud.album.visible:
 				hud.album.close()
+			elif hud.letters.visible:
+				hud.letters.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -3635,8 +3647,8 @@ func _cast_checks() -> void:
 		not stall.is_empty() and rosa.position.distance_to(stall["pos"]) <= 0.4 and rosa_at_stall)
 	var stops := _post_stops.size()
 	var kinds: Array = Town.built.filter(func(e): return str(e[1]).begins_with("building_")).map(func(e): return str(e[1]).substr(9))
-	_check("Barbara set out with the post at nine (%d stops for %s, Nora's porch among them: %s)" % [stops, ", ".join(kinds), str(POST_FARM_DOOR in _post_stops)],
-		post_day == Game.day and stops >= 7 and POST_FARM_DOOR in _post_stops)
+	_check("Barbara set out with the post at nine (%d stops for %s, Nora's porch among them: %s)" % [stops, ", ".join(kinds), str(post_farm_stop() in _post_stops)],
+		post_day == Game.day and stops >= 7 and post_farm_stop() in _post_stops)
 	if not stall.is_empty():
 		await _cast_frame(stall["pos"], float(stall["yaw"]), 7.0, CAM_PITCH_LOW) # low, to see her under the awning
 		await _shot("51_cast_rosa_stall.png")
@@ -3647,9 +3659,9 @@ func _cast_checks() -> void:
 	_check("she calls at the first door and moves on (%.1fs)" % t, _post_stops.size() < stops and not _post_stops.is_empty())
 	await _cast_frame(barbara.position, cam_yaw, 8.0)
 	await _shot("51_cast_barbara.png")
-	var to_farm := _find_path(Vector3(50.5, 0, 1.6), POST_FARM_DOOR)
-	_check("the post can walk from the plaza to Gran's porch (%d steps)" % to_farm.size(),
-		not to_farm.is_empty() and (to_farm[-1] as Vector3).distance_to(POST_FARM_DOOR) < 0.8)
+	var to_farm := _find_path(Vector3(50.5, 0, 1.6), post_farm_stop())
+	_check("the post can walk from the plaza to Nora's mailbox (%d steps)" % to_farm.size(),
+		not to_farm.is_empty() and (to_farm[-1] as Vector3).distance_to(post_farm_stop()) < 0.8)
 	Game.hour = 13.0
 	t = 0.0
 	while Interiors.inside_of(rosa.position) != "shop" and t < 40.0:
@@ -3908,6 +3920,166 @@ func _job_checks() -> void:
 	cam_target = player.position
 
 
+## The post (scripts/mail.gd, data/mail.json): the mailbox by the porch, letters coming on
+## Barbara's round, reading them (coins and wool enclosed), and a sweater order: she posts a
+## sweater, Barbara takes it, and the next morning's post pays for it. Pictures: 53_mail_barbara.png,
+## 53_mail_letter.png, 53_mail_order.png and 53_mailbox_flag.png.
+func _mail_checks() -> void:
+	hud.hide_dialogue()
+	hud.tip_panel.visible = false
+	mode = Mode.LIVE
+	var hour0 := Game.hour
+	var day0 := Game.day
+	var coins0 := Game.coins
+	var sweaters0: Array = Game.sweaters.duplicate()
+	var wool0 := Game.count("wool")
+	var mail0: Variant = Game.flags.get("mail", null)
+	Game.flags.erase("mail")
+	var story0 := {}
+	for f in ["act1_note", "act1_done"]: # the letters wait for Act 1; the check doesn't depend on what ran before
+		story0[f] = Game.flags.get(f, null)
+		Game.set_flag(f)
+	var defs := Data.load_json("mail")
+	var custom: Array = defs.get("orders", {}).get("customers", [])
+	var ids: Array = defs.get("letters", []).map(func(d): return str(d["id"]))
+	_check("data/mail.json: Gran's letters from Florida, Daniel's and %d sweater customers (%s)" % [custom.size(), ", ".join(ids)],
+		ids.has("gran_florida_1") and ids.has("gran_florida_2") and ids.has("daniel_1") and custom.size() >= 3
+		and custom.all(func(c): return str(c.get("thanks", "")) != "" and int(c.get("pay", 0)) > 0))
+	var box: Node3D = mail.box
+	var in_editor: bool = god.els.any(func(e): return e.node == box and e.kind == "mailbox")
+	_check("a mailbox stands by the porch, flag down, and the world editor can move it (%s, editor %s, %s)" % [str(box.global_position), str(in_editor), mail.actions()[0]["label"]],
+		box.visible and box.global_position.distance_to(POST_FARM_DOOR) < 4.0 and in_editor and not mail.flag_up() and not mail.actions()[0]["enabled"])
+	# Barbara brings the post on day 4: Gran's first letter, Daniel's, and the first order
+	Game.day = 4
+	Game.sweaters.clear()
+	Game.inv["sweater"] = 0
+	town_rounds = true
+	set_home("barbara")
+	player.walk([])
+	player.position = Vector3(12.6, 0, 3.6)
+	await _cast_frame(box.global_position, MAILBOX_YAW, 9.0)
+	await _shot("53_mailbox.png")
+	await _cast_frame(box.global_position, MAILBOX_YAW, 5.0, CAM_PITCH_LOW)
+	var came := await _mail_round()
+	var box_ids: Array = mail.letters_in_box().map(func(l): return str(l["id"]))
+	_check("Barbara calls at the mailbox on her round and leaves three letters, flag up (%s; '%s')" % [", ".join(box_ids), hud.toast_label.text],
+		came and box_ids == ["gran_florida_1", "daniel_1", "order_1"] and mail.flag_up() and hud.toast_label.text.contains("Barbara brings the post"))
+	await _shot("53_mail_barbara.png")
+	# the order wants a sweater she hasn't got yet
+	var post_act: Array = mail.actions().filter(func(a): return str(a["id"]) == "post:order_1")
+	_check("the mailbox offers to take the post, and the order waits for a sweater (%s)" % ", ".join(mail.actions().map(func(a): return a["label"])),
+		mail.actions()[0]["id"] == "take" and post_act.size() == 1 and not post_act[0]["enabled"])
+	# she takes the post out and the letters panel opens on Gran's letter, with its coins
+	var coins1 := Game.coins
+	_do_action(box, "take")
+	var t := 0.0
+	while not hud.letters.visible and t < 15.0:
+		await _wait(0.1)
+		t += 0.1
+	var first: Dictionary = mail.letters()[hud.letters.current] if hud.letters.current >= 0 else {}
+	_check("she walks to the box and takes the post: Gran's letter from Florida opens, 25c enclosed (%.1fs, '%s', coins %d→%d, %d unread)" % [t, first.get("from", ""), coins1, Game.coins, mail.unread()],
+		hud.letters.visible and str(first.get("id", "")) == "gran_florida_1" and bool(first["read"]) and Game.coins == coins1 + 25
+		and mail.letters_in_box().is_empty() and mail.letters().size() == 3 and mail.unread() == 2 and not mail.flag_up()
+		and hud.letters._meta.text.contains("Florida") and hud.letters._list.get_child_count() == 3)
+	await _shot("53_mail_letter.png")
+	hud.letters.show_letter(1)
+	_check("Daniel's letter asks her to come home", hud.letters._from.text == "From Daniel" and hud.letters._body.text.contains("Come home"))
+	hud.letters.show_letter(2)
+	_check("the order letter says what it wants and pays ('%s')" % hud.letters._note.text,
+		hud.letters._note.text.contains("Common or better") and hud.letters._body.text.contains("170 coins") and mail.unread() == 0)
+	await _shot("53_mail_order.png")
+	hud.letters.close()
+	# she knits two sweaters; the order takes the plainest that will do
+	Game.add_sweater(4)
+	Game.add_sweater(2)
+	_do_action(box, "post:order_1")
+	t = 0.0
+	while str(mail.orders()["order_1"]["state"]) != "posted" and t < 10.0:
+		await _wait(0.1)
+		t += 0.1
+	_check("she posts a sweater for the order: the Uncommon one goes, the Epic stays, flag up (%s, carrying %s)" % [mail.orders()["order_1"]["state"], str(Game.sweaters)],
+		str(mail.orders()["order_1"]["state"]) == "posted" and int(mail.orders()["order_1"]["rarity"]) == 2 and Game.sweaters == [4] and Game.count("sweater") == 1 and mail.flag_up())
+	await _cast_frame(box.global_position, MAILBOX_YAW + 0.9, 2.6, CAM_PITCH_LOW)
+	await _shot("53_mailbox_flag.png")
+	# the next morning Barbara takes it; the morning after, the payment comes
+	Game.day = 5
+	came = await _mail_round()
+	_check("next morning Barbara takes the sweater and has nothing for her (%s, box %d, flag up %s, '%s')" % [mail.orders()["order_1"]["state"], mail.letters_in_box().size(), str(mail.flag_up()), hud.toast_label.text],
+		came and str(mail.orders()["order_1"]["state"]) == "sent" and mail.letters_in_box().is_empty() and not mail.flag_up() and hud.toast_label.text.contains("Nothing for you"))
+	Game.day = 6
+	came = await _mail_round()
+	var coins2 := Game.coins
+	mail.do_action("take")
+	var paid: Dictionary = mail.letters()[hud.letters.current] if hud.letters.current >= 0 else {}
+	_check("the day after, Marjorie's payment comes: 170c and a 30c tip for the extra star (coins %d→%d, '%s', order %s)" % [coins2, Game.coins, paid.get("from", ""), mail.orders()["order_1"]["state"]],
+		came and str(paid.get("id", "")) == "paid_order_1" and Game.coins == coins2 + 200 and str(mail.orders()["order_1"]["state"]) == "paid")
+	hud.letters.close()
+	# a week after Gran's first letter, her second, with wool; and the next customer writes
+	Game.day = 11
+	came = await _mail_round()
+	box_ids = mail.letters_in_box().map(func(l): return str(l["id"]))
+	var wool1 := Game.count("wool")
+	mail.do_action("take")
+	_check("a week on, Gran writes again with 3 wool enclosed, and the next customer orders (%s; wool %d→%d)" % [", ".join(box_ids), wool1, Game.count("wool")],
+		came and box_ids == ["gran_florida_2", "order_2"] and Game.count("wool") == wool1 + 3 and str(mail.orders()["order_2"]["from"]) == "Tom Beckett")
+	hud.letters.close()
+	# it all saves: the state goes through JSON like the save file (numbers come back as floats)
+	var n_letters := mail.letters().size()
+	Game.flags["mail"] = JSON.parse_string(JSON.stringify(Game.flags["mail"]))
+	var reopen: Array = mail.open_orders()
+	_check("the post saves with the game (%d letters, open orders %s)" % [mail.letters().size(), str(reopen.map(func(e): return e[0]))],
+		mail.letters().size() == n_letters and reopen.size() == 1 and reopen[0][0] == "order_2" and mail.sweater_for(reopen[0][1]) == 0)
+	var menu_btn: bool = hud.game_menu.find_children("*", "Button", true, false).any(func(b): return (b as Button).text == "Letters")
+	_check("Letters is in the Esc menu", menu_btn)
+	# put everything back
+	town_rounds = false
+	set_home("barbara")
+	if mail0 == null:
+		Game.flags.erase("mail")
+	else:
+		Game.flags["mail"] = mail0
+	for f in story0:
+		if story0[f] == null:
+			Game.flags.erase(f)
+		else:
+			Game.flags[f] = story0[f]
+	mail.update_flag()
+	Game.coins = coins0
+	Game.sweaters = sweaters0
+	Game.inv["sweater"] = sweaters0.size()
+	Game.inv["wool"] = wool0
+	Game.day = day0
+	Game.hour = hour0
+	cam_glide = {}
+	_set_cam_lock(true)
+	cam_target = player.position
+
+
+## One of Barbara's rounds, quickly: she sets out at nine, the test skips the doors in town and
+## starts her a little way down the lane, and she walks to the mailbox. True once she has called.
+func _mail_round() -> bool:
+	var barbara := _villager("barbara")
+	post_day = 0
+	_post_stops.clear()
+	_rounds_t = 0.0
+	Game.hour = 9.0
+	var t := 0.0
+	while _post_stops.is_empty() and t < 5.0:
+		await _wait(0.1)
+		t += 0.1
+	if _post_stops.is_empty():
+		return false
+	while _post_stops.size() > 2: # the mailbox, then her spot on the plaza
+		_post_stops.pop_front()
+	barbara.position = post_farm_stop() + Vector3(5.0, 0, 0)
+	_post_next(barbara)
+	t = 0.0
+	while _post_stops.size() > 1 and t < 30.0:
+		await _wait(0.1)
+		t += 0.1
+	return _post_stops.size() == 1
+
+
 func _cast_frame(at: Vector3, yaw: float, dist: float, pitch := CAM_PITCH) -> void:
 	_set_cam_lock(false)
 	cam_target = at + Vector3(0, 1.0, 0)
@@ -4118,6 +4290,12 @@ func _autotest() -> void:
 	if "--only=cast" in OS.get_cmdline_user_args(): # just the town's cast and their routines (about a minute)
 		await _wait(1.5)
 		await _cast_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=mail" in OS.get_cmdline_user_args(): # just the post: the mailbox, letters on Barbara's round, a sweater order
+		await _wait(1.5)
+		await _mail_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -4363,6 +4541,7 @@ func _autotest() -> void:
 	await _barn_checks()
 	await _shop_checks()
 	await _cast_checks()
+	await _mail_checks()
 	await _job_checks()
 	await _flock_checks()
 	await _light_checks()
@@ -6708,7 +6887,7 @@ var rosa_at_stall := false
 var _rounds_t := 0.0
 var post_day := 0 # the day Barbara last set out
 var _post_stops: Array = [] # the doors still to call at today (Vector3s), her post spot last
-const POST_FARM_DOOR := Vector3(10.6, 0, 3.0) # Gran's porch step: the post comes to Nora too
+const POST_FARM_DOOR := Vector3(10.6, 0, 3.0) # Gran's porch step; the round now stops at the mailbox instead (post_farm_stop())
 
 
 func _update_rounds(delta: float) -> void:
@@ -6718,6 +6897,7 @@ func _update_rounds(delta: float) -> void:
 	_rounds_t = 0.5
 	_update_rosa()
 	_update_post()
+	mail.update()
 	_update_gary_visit()
 
 
@@ -6776,7 +6956,7 @@ func _update_rosa() -> void:
 
 
 ## The doors on Barbara's round today, from where she stands: every building in town, nearest
-## first, then Gran's porch, then back to her spot on the plaza.
+## first, then Nora's mailbox by Gran's porch, then back to her spot on the plaza.
 func post_round_stops(from: Vector3) -> Array:
 	var doors: Array = []
 	for b in Town.built:
@@ -6805,9 +6985,14 @@ func post_round_stops(from: Vector3) -> Array:
 				best = i
 		at = doors.pop_at(best)
 		out.append(at)
-	out.append(POST_FARM_DOOR)
+	out.append(post_farm_stop())
 	out.append(_villager_def("barbara").get("pos", from))
 	return out
+
+
+## Where Barbara stops at the farm: in front of Nora's mailbox, wherever it stands (mail.gd).
+func post_farm_stop() -> Vector3:
+	return mail.stop_point()
 
 
 func _update_post() -> void:
@@ -6828,8 +7013,11 @@ func _update_post() -> void:
 		if v.hold_time <= 0.0 and v.get_meta("posted", false) == false:
 			v.set_meta("posted", true)
 			v.hold(1.5)
-			if here == POST_FARM_DOOR and player.position.distance_to(here) < 14.0:
-				hud.show_toast("Barbara brings the post.")
+			if here.distance_to(post_farm_stop()) < 0.5:
+				var n: int = mail.post_call() # letters in, any sweater for a customer out
+				if player.position.distance_to(here) < 14.0:
+					mail.told_today()
+					hud.show_toast("Barbara brings the post." if n > 0 else "Barbara looks in at the mailbox. Nothing for you today.")
 		elif v.hold_time <= 0.0:
 			_post_stops.pop_front()
 			if _post_stops.is_empty():

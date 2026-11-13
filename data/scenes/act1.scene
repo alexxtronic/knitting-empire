@@ -6,7 +6,8 @@
 #   walks her past the shops (Steve, Rosa, Giorgio, Gary, Sabrina) and up to Gran's house.
 # The cast is Alex's of 2026-11-12: Rosa has the Yarn Barn and the market stall, Gary Willow Homes,
 #   Giorgio Heart Bakery, Steve Builder's Delight, Sabrina the Coffee Shop, Barbara the post.
-# act1_note (inside): Gran's note on the coffee table, kept in her bag; 100 coins; rent to Gran's tin.
+# act1_note (inside): Gran's note on the coffee table (she's gone to Florida and Nora minds the farm;
+#   Alex, 2026-11-13: Gran is alive), kept in her bag; 100 coins; rent to Gran's tin.
 # act1_yarn (her first yarn from Rosa) → knit in the rocking chair → act1_knit (memory thread #1,
 #   then bleating: two strays) → act1_strays (find them by the pond; meet Rowan; "you'll want a pen")
 #   → act1_wood (her first wood from Steve: the pen builder, F, and gate crafting, G) → act1_pen (a
@@ -173,10 +174,10 @@ Nora (sad): Hi, Gran.
 > On the table, propped against an old biscuit tin, a folded note. Gran's handwriting, all loops and hurry.
 Nora (surprised): "For my Nora."
 @farm note
-> "My darling Nora. I have missed you every single day since you moved away. The kettle still boils for two out of habit, and I let it."
-> "The house is yours now, if you'll have it. Keep it warm for me. Put a little in the tin each week. Not because the house needs the money. Because a home you pay into is a home you stay in."
+> "My darling Nora. By the time you read this I'll be in Florida at your great-aunt Dot's, feet up, complaining about the heat. The doctor says my chest can't take another winter in this valley."
+> "So the house is yours to look after while I'm gone. Keep it warm for me. Put a little in the tin each week. Not because the house needs the money. Because a home you pay into is a home you stay in."
 > "There's a hundred coins under the lid to start you off. Go and see Rosa for some good yarn, and make something with your hands. It always helped me. It will help you."
-> "Whatever happened out there, love, it stays out there. In here it's just you, and the kettle, and me in every cup. All my love, always. Gran."
+> "Whatever happened out there, love, it stays out there. In here it's just you and the kettle. I'll write: Barbara brings the post at nine. All my love, always. Gran."
 Nora (sad): ...Okay. Okay, Gran.
 > She folds the note into her pocket. Under the lid of the tin: a hundred coins, in neat little paper rolls.
 @toast Gran's note is in your bag. Rent: 20c a week, into her tin on the table.
@@ -382,7 +383,7 @@ Nora (warm): Thank you. Really.
 @place nora 9.8 3.0 90
 @camera 11.2 3.0 6
 @fade in 1.2
-> Night comes down fast out here. No streetlights. Just stars, and a porch light that hasn't worked since Gran.
+> Night comes down fast out here. No streetlights. Just stars, and a porch light Gran never got round to fixing.
 @phone Voicemail: Claire Moss, family law
 > One new voicemail. Her thumb hovers over it for a while. Then she plays it.
 Voicemail: Hi Nora, it's Claire. Daniel's side has filed to contest the sale of the house.
@@ -432,4 +433,4 @@ Rowan (warm): Ellie's porch light's been broken for years. Keep that. I know the
 > Morning. In daylight the cottage looks smaller, and a little less sad. There's a lantern by the step.
 @title to be continued
 @camera player
-@toast Act 1 complete. The farm is yours now.
+@toast Act 1 complete. The farm is in your hands now.
