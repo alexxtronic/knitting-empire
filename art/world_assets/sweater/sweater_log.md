@@ -89,3 +89,23 @@ sleeves gathered into deep ribbed cuffs, a ribbed hem and a ribbed collar.
 - `out/textures/`: `<design>.png` (one per design), `knit_stockinette(_n).png`, `knit_rib(_n).png`,
   `sweater_rib_mask.png`.
 - `review/`: `nora_<design>_front/back/close.png`, `alone_front/side.png`.
+
+## Steve and Barbara (2026-11-13)
+
+Alex: "put this over Steve, and the mailman as a test". The mailman is Barbara.
+
+- First fit: Steve's sweater stopped flat at the chest (his neck bone sits well below where his neck
+  meets his shoulders, so the collar was inside his shoulders), and his hem rib showed up on his
+  stomach (his longer body ran past Nora's rectangle in the shared layout). Barbara's hung like a
+  poncho: her satchel is weighted to the hips and the outline took it in.
+- Fixes, all general:
+  - The collar's height is the top of the shoulders just beside the neck, never lower than the neck
+    bone gives. The collar is a round crew neck of 6 cm round the torso's middle (`neck` per
+    character: Steve's is 7.5 cm).
+  - Below the chest the body is no wider than 1.15 x the chest, so a bag or a flared jacket stays
+    under the knit.
+  - Each character's stitches are stretched to fit the shared layout, so every design fits everyone.
+  - `under_sweater` is now a shrink-wrap: covered skin goes in by `TUCK`, and anything still within
+    `MARGIN` of the knit (a satchel, braces, a jacket collar) is pulled in under it.
+- Left: the ends of Steve's overall straps peek out at the collar; Barbara's sleeves merge into the
+  body (her arms hang against her sides); both look boxy, since they trace bulky outfits.

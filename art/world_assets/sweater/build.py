@@ -42,6 +42,8 @@ import patterns as PT  # noqa: E402
 
 CHARS = {
     "nora": dict(blend="tools/character_build/nora_tripo_eyes/nora_tripo_eyes.blend", rig="Nora", body="nora_tripoMesh"),
+    "steve": dict(blend="tools/character_build/steve_tripo_eyes/steve_tripo_eyes.blend", rig="Rowan", body="steve_tripoMesh", neck=0.075),
+    "barbara": dict(blend="tools/character_build/barbara_tripo_eyes/barbara_tripo_eyes.blend", rig="Nora", body="barbara_tripoMesh"),
 }
 
 NC = 64          # points round the body
@@ -58,7 +60,8 @@ LIP = 0.03       # how far the hem, cuffs and collar turn under inside
 THICK = 0.007    # the knit's thickness at the turned edges
 EASE = 1.0       # room over the body; Nora's own (sculpted) sweater is already roomy
 ARM_REACH = 0.085  # arm skin further than this from the bone is not the arm
-TUCK = 0.022     # how far the under_sweater key pulls the covered skin in
+MARGIN = 0.012   # how far inside the knit the under_sweater key keeps the skin
+TUCK = 0.012     # how far the under_sweater key pulls the covered skin in
 
 TORSO_G = {"Hips", "Spine", "Chest", "UpperChest", "LeftShoulder", "RightShoulder"}
 SIDES = ("Left", "Right")
@@ -151,7 +154,7 @@ def smooth_ring(r, passes=1):
 
 # --- the shape ---------------------------------------------------------------------------------------
 
-def torso_rows(co, dom, B):
+def torso_rows(co, dom, B, neck_r=0.06):
     """The body of the sweater as rows of NC points, top (collar's turned-in edge) to bottom (hem's
     turned-in edge). Returns (rows: list of (NC, 3) arrays, tags: one per row)."""
     hips = B["Hips"][0].z
@@ -177,17 +180,36 @@ def torso_rows(co, dom, B):
     front = np.clip(-dirs[:, 1], 0, 1)          # 1 at the front's centre, 0 at the sides and back
     side = np.abs(dirs[:, 0])                   # 1 under the arms
 
-    # the collar's base: round the bottom of the neck, dipping at the front
+    # the collar's base: round the bottom of the neck, dipping at the front. Its height comes from the
+    # shape, not the neck bone (which sits low on some rigs): the top of the shoulders just beside
+    # the neck, at the back and sides
+    size = B["Hips"][0].z / 0.821
+    skin = co[~np.isin(dom, ["Head", "LeftHand", "RightHand"] + [s + p for s in SIDES for p in ("LowerArm", "UpperLeg", "LowerLeg")])]
+    beside = skin[(np.abs(skin[:, 0]) > 0.08 * size) & (np.abs(skin[:, 0]) < 0.12 * size)
+                  & (np.abs(skin[:, 1] - yc) < 0.07 * size) & (skin[:, 2] > zc)]
     neck_z = B["Neck"][0].z - 0.016
-    nk = co[(dom == "Neck") & (np.abs(co[:, 2] - neck_z) < 0.012)]
-    nh = hull2(nk[:, :2]) if len(nk) > 8 else None
-    r_neck = np.array([reach(nh, c2, d) or 0.06 for d in dirs]) if nh is not None else np.full(NC, 0.06)
-    r_neck = smooth_ring(r_neck, 2)
-    col_r = r_neck + 0.012 + 0.016 * front ** 2
+    if len(beside) > 10:
+        neck_z = max(neck_z, float(np.percentile(beside[:, 2], 90)) - 0.01)
+    sel_t = co[:, 2] < neck_z + 0.012
+    # a round crew collar of NECK_R (or the character's own `neck`) round the neck's middle: the
+    # torso's, unless the neck sits clear of it (Steve's sits back), then the neck skin's own
+    slab = np.abs(co[:, 2] - neck_z) < 0.012
+    nc = c2
+    nk = co[~np.isin(dom, ["Head", "LeftHand", "RightHand", "LeftUpperArm", "RightUpperArm"]) & slab]
+    nk = nk[np.hypot(nk[:, 0], nk[:, 1] - yc) < 0.13 * size]
+    if len(nk) > 8:
+        nh = hull2(nk[:, :2])
+        mid = 0.5 * (nh.min(axis=0) + nh.max(axis=0))
+        print("[torso] neck middle %.3f from the torso's" % np.linalg.norm(mid - c2)) if os.environ.get("SW_DEBUG") else None
+        if np.linalg.norm(mid - c2) > 0.05:
+            nc = mid
+    r_neck = np.full(NC, neck_r)
+    col_r = np.einsum("ij,ij->i", nc - c2 + dirs * (r_neck + 0.012 + 0.016 * front ** 2)[:, None], dirs)
     col_z = neck_z - 0.006 - 0.04 * front ** 2
 
     # slices of the torso, 1 cm apart: each one's outline, how far out it reaches in each column
-    zs = np.arange(hem0, B["Neck"][0].z + 0.02, 0.01)
+    T = T[T[:, 2] < neck_z + 0.012]
+    zs = np.arange(hem0, neck_z + 0.02, 0.01)
     prof = [[] for _ in range(NC)]
     for z in zs:
         s = T[np.abs(T[:, 2] - z) < 0.008]
@@ -198,6 +220,13 @@ def torso_rows(co, dom, B):
             r = reach(h, c2, dirs[k])
             if r:
                 prof[k].append((r, z))
+    # below the chest, no wider than the chest (and a little): a bag or a flared jacket at the hips
+    # stays under the knit (the under_sweater key tucks it in) rather than tenting it
+    for k in range(NC):
+        top = [r for r, z in prof[k] if chest_lo <= z <= chest_hi + 0.05]
+        if top:
+            cap = max(top) * 1.15
+            prof[k] = [(min(r, cap) if z < chest_lo else r, z) for r, z in prof[k]]
 
     def ease_at(z):
         # hem rib -> blouse above it -> belly -> chest -> shoulders
@@ -250,6 +279,11 @@ def torso_rows(co, dom, B):
     def ring(r, z):
         return np.stack([c2[0] + r * dirs[:, 0], c2[1] + r * dirs[:, 1], z], axis=1)
 
+    if os.environ.get("SW_DEBUG"):
+        print("[torso] yc %.3f zc %.3f neck_z %.3f col_r %.3f..%.3f col_z %.3f..%.3f" % (yc, zc, neck_z, col_r.min(), col_r.max(), col_z.min(), col_z.max()))
+        for i, (r, z) in enumerate(rows):
+            print("[torso] row %d z %.3f..%.3f r %.3f..%.3f" % (i, z.min(), z.max(), r.min(), r.max()))
+
     pts = []
     # top first: collar lip (inside), collar top, collar, then the dome and body down, the hem, hem lip
     cr, cz = rows[-1]
@@ -267,7 +301,7 @@ def torso_rows(co, dom, B):
     for p in (ring(br - THICK * 0.6, bz - 0.003), ring(br - THICK, bz + LIP * 0.5), ring(br - THICK, bz + LIP)):
         pts.append(p)
         tags.append("hem")
-    marks = {"zc": zc, "yc": yc, "n_dome": n_dome, "collar_rows": len(collar)}
+    marks = {"zc": zc, "yc": yc, "neck_z": neck_z, "n_dome": n_dome, "collar_rows": len(collar)}
     return pts, tags, marks
 
 
@@ -459,12 +493,14 @@ def assign_uvs(ob, U, D, parts, ext, reg):
     for poly, (p, i, k) in zip(me.polygons, parts):
         r = reg[p]
         top = ext[p][2]
+        sx = (r["w"] - 2.0) / max(1.0, ext[p][0] - 2.0)      # this character's stitches, fitted to the
+        sy = (r["h"] - 2.0) / max(1.0, ext[p][1] - 2.0)      # shared layout (1 on Nora)
         quad = ((i, k), (i + 1, k), (i + 1, k + 1), (i, k + 1))
         if poly.vertices[0] != i * n + k or poly.vertices[1] != (i + 1) * n + k:
             quad = tuple(reversed(quad))
         for corner, (ii, kk) in zip(poly.loop_indices, quad):
-            us = U[ii][kk] + r["w"] / 2.0
-            ds = (D[ii][kk] - D[top][kk]) / GAUGE[1] + 1.0
+            us = U[ii][kk] * sx + r["w"] / 2.0
+            ds = (D[ii][kk] - D[top][kk]) / GAUGE[1] * sy + 1.0
             px = r["x"] + us * PX
             py = r["y"] + ds * PX
             uv.data[corner].uv = (px / ATLAS[0], 1.0 - py / ATLAS[1])
@@ -542,22 +578,41 @@ def skin(ob, rig, co, dom, weights, piece_of):
     m.object = rig
 
 
-def tuck_key(body, sweater, co, dom, marks):
-    """The body's `under_sweater` key: skin the sweater covers (not the hands, neck or head) moved in
-    along its normal by TUCK, so nothing pokes through as she moves. The game turns it on with the
-    sweater."""
+def tuck_key(body, sweater, co, dom, marks, lip):
+    """The body's `under_sweater` key, for the game to turn on with the sweater: the skin it covers
+    goes in by TUCK along its normal, and anything that would still reach the knit (a satchel, a
+    jacket's collar, braces) is pulled in to MARGIN inside it. Not the head, hands or legs below the
+    hem."""
+    from mathutils.bvhtree import BVHTree
     if not body.data.shape_keys:
         body.shape_key_add(name="Basis")
     key = body.shape_key_add(name="under_sweater", from_mix=False)
-    covered = np.isin(dom, list(TORSO_G) + [s + p for s in SIDES for p in ("UpperArm", "LowerArm", "UpperLeg")])
-    covered &= co[:, 2] < marks["collar_z"]
-    covered &= co[:, 2] > marks["hem_z"]
-    mwi = body.matrix_world.inverted()
-    arm = np.isin(dom, [s + p for s in SIDES for p in ("UpperArm", "LowerArm", "UpperLeg")])
+    me = sweater.data
+    mw = sweater.matrix_world
+    verts = [mw @ v.co for v in me.vertices]
+    polys = [tuple(p.vertices) for p in me.polygons if not any(i in lip for i in p.vertices)]
+    tree = BVHTree.FromPolygons(verts, polys)
+    skip = np.isin(dom, ["Head", "LeftHand", "RightHand", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "LeftToes", "RightToes"])
+    bw = body.matrix_world
+    bwi = bw.inverted()
+    moved = 0
     for v in body.data.vertices:
-        if covered[v.index]:
-            key.data[v.index].co = v.co - v.normal * (TUCK * (1.5 if arm[v.index] else 1.0))
-    del mwi
+        i = v.index
+        if skip[i] or not (marks["hem_z"] < co[i, 2] < marks["collar_z"]):
+            continue
+        p = bw @ v.co
+        hit = tree.find_nearest(p, 0.25)
+        if hit[0] is None:
+            continue
+        loc, n = hit[0], hit[1]
+        if (p - loc).dot(n) < -0.08:          # well inside already, or under some other part
+            continue
+        q = p - (bw.to_3x3() @ v.normal).normalized() * TUCK
+        if (q - loc).dot(n) > -MARGIN:
+            q = q - n * ((q - loc).dot(n) + MARGIN)
+            moved += 1
+        key.data[i].co = bwi @ q
+    print("[sweater] under_sweater: %d points pulled in under the knit" % moved)
     return key
 
 
@@ -735,7 +790,13 @@ def setup_render():
     return co
 
 
-def shoot(cam, path, yaw, target=(0, 0, 1.08), dist=3.2, elev=6.0):
+CAM_Z = [1.08]
+
+
+def shoot(cam, path, yaw, target=None, dist=3.2, elev=6.0):
+    """A render from `yaw` degrees round from the front, aimed at the middle of the sweater (set per
+    character in main)."""
+    target = target or (0, 0, CAM_Z[0])
     a, e = math.radians(yaw), math.radians(elev)
     t = Vector(target)
     cam.location = t + Vector((math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))) * dist
@@ -754,7 +815,7 @@ def main(cid, render):
     tex = os.path.join(out, "textures")
     os.makedirs(tex, exist_ok=True)
 
-    trows, ttags, marks = torso_rows(co, dom, B)
+    trows, ttags, marks = torso_rows(co, dom, B, CHARS[cid].get("neck", 0.06))
     mat = bpy.data.materials.new("tmp")
     tor, tU, tD, tparts, text_ = build_piece("Body", trows, ttags, None, mat)
     sleeves = {}
@@ -811,6 +872,8 @@ def main(cid, render):
             if t in ("collar", "hem", "cuff") or (o is not tor and i <= 1):
                 pins += [i * n + k for k in range(n)]
         o.vertex_groups.new(name="pin").add(pins, 1.0, "REPLACE")
+        lips = [0] + [len(rws) - 2, len(rws) - 1] if o is tor else [len(rws) - 2, len(rws) - 1]
+        o.vertex_groups.new(name="lip").add([i * n + k for i in lips for k in range(n)], 1.0, "REPLACE")
     for o in bpy.context.view_layer.objects:
         o.select_set(False)
     for o in obs:
@@ -822,15 +885,17 @@ def main(cid, render):
     sw_ob.data.name = cid + "_sweater"
     sw_ob.data.polygons.foreach_set("use_smooth", [True] * len(sw_ob.data.polygons))
     gi = {g.index: g.name[6:] for g in sw_ob.vertex_groups if g.name.startswith("piece_")}
+    li = sw_ob.vertex_groups["lip"].index
+    lip = {v.index for v in sw_ob.data.vertices if any(g.group == li for g in v.groups)}
     piece_of = [next(gi[g.group] for g in v.groups if g.group in gi) for v in sw_ob.data.vertices]
     if "--sim" in sys.argv:
         settle(sw_ob, body)
     for g in list(sw_ob.vertex_groups):
         sw_ob.vertex_groups.remove(g)
     skin(sw_ob, rig, co, dom, weights, piece_of)
-    marks["collar_z"] = B["Neck"][0].z + 0.01
+    marks["collar_z"] = marks["neck_z"] + 0.01
     marks["hem_z"] = B["Hips"][0].z - 0.05
-    tuck_key(body, sw_ob, co, dom, marks)
+    tuck_key(body, sw_ob, co, dom, marks, lip)
 
     tris = sum(len(p.vertices) - 2 for p in sw_ob.data.polygons)
     print("[sweater] %s: %d points, %d triangles, regions %s" % (cid, len(sw_ob.data.vertices), tris,
@@ -847,20 +912,23 @@ def main(cid, render):
         rv = os.path.join(HERE, "review")
         os.makedirs(rv, exist_ok=True)
         body.data.shape_keys.key_blocks["under_sweater"].value = 1.0
+        CAM_Z[0] = B["Hips"][0].z + 0.26
         cam = setup_render()
         node = wool.node_tree.nodes["colour"]
-        for sw in PT.SWEATERS[:1] if os.environ.get("SW_ONE") else PT.SWEATERS:
+        want = os.environ.get("SW_DESIGNS", "").split(",") if os.environ.get("SW_DESIGNS") else None
+        for sw in PT.SWEATERS[:1] if os.environ.get("SW_ONE") else [w for w in PT.SWEATERS if not want or w["id"] in want]:
             node.image = imgs[sw["id"]]
             shoot(cam, os.path.join(rv, "%s_%s_front.png" % (cid, sw["id"])), -22)
             if not os.environ.get("SW_ONE"):
                 shoot(cam, os.path.join(rv, "%s_%s_back.png" % (cid, sw["id"])), 158)
-            shoot(cam, os.path.join(rv, "%s_%s_close.png" % (cid, sw["id"])), -15, target=(0.0, 0.0, 1.12), dist=1.25)
+            shoot(cam, os.path.join(rv, "%s_%s_close.png" % (cid, sw["id"])), -15, target=(0.0, 0.0, B["UpperChest"][0].z - 0.1), dist=1.25 * B["UpperChest"][0].z / 1.222)
         node.image = imgs["cranberry"]
         others = [o for o in bpy.context.scene.objects if o.type == "MESH" and o is not sw_ob]
         for o in others:
             o.hide_render = True
-        shoot(cam, os.path.join(rv, "alone_front.png"), 0, elev=4)
-        shoot(cam, os.path.join(rv, "alone_side.png"), 90, elev=4)
+        pre = "" if cid == "nora" else cid + "_"
+        shoot(cam, os.path.join(rv, pre + "alone_front.png"), 0, elev=4)
+        shoot(cam, os.path.join(rv, pre + "alone_side.png"), 90, elev=4)
         for o in others:
             o.hide_render = False
 
