@@ -1489,9 +1489,19 @@ func _update_hover(mpos: Vector2) -> void:
 
 # --- the dog -------------------------------------------------------------------------
 
-## He is on the farm from the start of a sandbox game or an old save; in Act 1 he turns up once
-## the pen is built (homestead.gd's "pen_done", the "pen_built" story event).
+## For now he's with her from the start of every game, Act 1 included (Alex, 2026-11-13); his
+## arrival in the story comes later. False brings back the old cue: on the story farm he turns up
+## once the pen is built (homestead.gd's "pen_done", the "pen_built" story event).
+const DOG_FROM_START := true
+
+
 func dog_here() -> bool:
+	return DOG_FROM_START or dog_herds()
+
+
+## Whether the strays shy from him too. On the story farm only once the pen is built, so he
+## doesn't scatter them before there's a pen to drive them into.
+func dog_herds() -> bool:
 	return Game.flag("story_farm") != true or Game.flag("pen_done") == true
 
 
@@ -1528,8 +1538,12 @@ func _update_dog() -> void:
 	if not here:
 		dog.controlled = false
 		return
-	if homestead and not homestead.herders.has(dog):
-		homestead.herders.append(dog)
+	if homestead:
+		var herds := dog_herds()
+		if herds and not homestead.herders.has(dog):
+			homestead.herders.append(dog)
+		elif not herds:
+			homestead.herders.erase(dog)
 	if dog.controlled and (story.is_playing() or sleeping):
 		dog.controlled = false
 	dog.running = dog.controlled and (autotest_jog or _held(KEY_SHIFT))
@@ -2851,6 +2865,9 @@ func _act1_checks() -> void:
 	await _act1_shot("Barbara the postwoman", "21_act1_town_barbara.png")
 	await _act1_shot("going to like it here", "21_act1_like_it_here.png")
 	await _act1_shot("Good, you're here", "22_act1_wren.png")
+	var wren_v = _villager("wren")
+	var dog_gap: float = dog.position.distance_to(wren_v.global_position) if dog != null and wren_v != null else -1.0
+	_check("in Wren's scene the dog makes way for her: he waits on Nora's other side (%.1f m from Wren)" % dog_gap, dog_gap > 1.6)
 	await _act1_shot("Ellie's girl", "22_act1_tour_rosa.png")
 	await _act1_shot("on the house", "22_act1_tour_giorgio.png")
 	await _act1_shot("Willow Homes. Property", "22_act1_tour_gary.png")
@@ -2919,6 +2936,8 @@ func _act1_checks() -> void:
 	await _act1_until_done(40.0)
 	_check("the memory is in her journal, and two strays are bleating out by the pond (%d strays, goal '%s')" % [homestead.strays.size(), hud.goal_label.text],
 		Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory" and homestead.strays.size() == 2 and hud.goal_label.text.begins_with("Find"))
+	_check("the dog is with her from the start (for now), but the strays don't shy from him before there's a pen (here %s, herding %s)" % [dog != null and dog.visible, homestead.herders.has(dog)],
+		dog != null and dog.visible and not homestead.herders.has(dog))
 	# the hunt: walk out to the strays
 	t0 = Time.get_ticks_msec()
 	player.walk(_find_path(player.position, Vector3(12.2, 0, -12.4)))
@@ -3010,6 +3029,7 @@ func _act1_checks() -> void:
 	cam_dist = 9.0
 	await _wait(0.8)
 	await _shot("26_act1_pen.png")
+	_check("with the pen built, the dog herds too (%s)" % homestead.herders.has(dog), homestead.herders.has(dog))
 	# herding: the strays move off from her
 	var s0 = homestead.strays[0]
 	s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)

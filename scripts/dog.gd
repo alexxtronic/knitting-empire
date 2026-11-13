@@ -11,7 +11,8 @@ extends Node3D
 ## sped up or slowed to match it, so his paws never slide.
 ##
 ## He herds: he is in homestead.herders, and strays shy from him further off than from Nora.
-## In Act 1 he turns up when the pen is built (the "pen_done" flag, the "pen_built" story event).
+## For now he's with her from the start of every game (main.DOG_FROM_START); in Act 1 he only
+## herds once the pen is built (the "pen_done" flag, main.dog_herds()).
 
 const Catalog = preload("res://scripts/catalog.gd")
 const MODEL := "res://assets/props/dog.glb"
@@ -29,6 +30,7 @@ const ACCEL := 7.0
 const BRAKE := 8.0
 const TURN := 9.0
 const HEEL := 1.3 # how close to Nora he settles
+const ROOM := 1.1 # in a story scene, anyone who comes this close moves him round to her other side
 const SCARE_RADIUS := 3.4 # sheep move off when he is this close (Nora: homestead.HERD_RADIUS)
 
 var main: Node # main.gd
@@ -42,6 +44,7 @@ var _model: Node3D
 var _anim: AnimationPlayer
 var _repath := 0.0
 var _look_t := 0.0
+var _giving_way := false # walking round to Nora's far side to make room in a scene
 
 
 func _ready() -> void:
@@ -163,6 +166,20 @@ func _follow_nora(delta: float) -> void:
 		position = main.player.position - main.player.global_transform.basis.z * 1.5 + main.player.global_transform.basis.x * 0.8
 		path = []
 		return
+	var crowd := _crowding()
+	if crowd != null: # in a scene, someone has walked up to her where he sits: he goes round to her far side
+		var away: Vector3 = main.player.position - crowd.global_position
+		away.y = 0.0
+		if away.length() < 0.05:
+			away = main.player.global_transform.basis.z
+		var clear: Vector3 = main.player.position + away.normalized() * HEEL
+		if path.is_empty() or (path[-1] as Vector3).distance_to(clear) > 0.5:
+			path = main._find_path(position, clear) if main.has_method("_find_path") else [clear]
+		_giving_way = true
+		return
+	if _giving_way and not path.is_empty(): # he goes all the way round, not just out of the way
+		return
+	_giving_way = false
 	if d < HEEL + 0.6 and main.player.path.is_empty():
 		if not path.is_empty() and d < HEEL:
 			path = []
@@ -174,6 +191,17 @@ func _follow_nora(delta: float) -> void:
 	var side: Vector3 = main.player.global_transform.basis.x * 0.9 - main.player.global_transform.basis.z * 0.5
 	var spot := nora + side
 	path = main._find_path(position, spot) if main.has_method("_find_path") else [spot]
+
+
+## While a story scene plays, the person within ROOM of where he is (they came to talk to her), so
+## he can make way; null when nobody is, or no scene is on.
+func _crowding() -> Node3D:
+	if main.story == null or not main.story.is_playing():
+		return null
+	for v in main.villagers + main.visitors.values(): # the town's cast, and anyone visiting for a scene (Max)
+		if is_instance_valid(v) and v.visible and (v as Node3D).global_position.distance_to(position) < ROOM:
+			return v
+	return null
 
 
 ## Standing: now and then he turns to look at Nora, or somewhere else.
