@@ -63,6 +63,9 @@ KNIT_SWING = {"nora_tripo": 0.2}
 # sit out over the chair's arms; each forearm then turns back in so the hand (and its needle) stays
 # where it was.
 KNIT_SPREAD = {"nora_tripo": 20.0}
+# The working yarn: its radius and colour (the swatch's sage green, linear), and the ball it
+# comes from, on her right thigh at (x, y) in the SitKnit pose.
+YARN = dict(r=0.0018, color=(0.48, 0.58, 0.40, 1.0), ball_r=0.032, ball_at=(-0.1, -0.34))
 # The needles: length past the index side and past the little-finger side, radius.
 NEEDLE = dict(tip=0.15, butt=0.075, r=0.0042)
 
@@ -280,6 +283,11 @@ def spread_knit_arms(rig):
 
 def hand_deform(rig, side):
     """Rest -> SitKnit pose (frame 0), world space, for points riding on that hand alone."""
+    return bone_deform(rig, side + "Hand")
+
+
+def at_knit_frame(rig, fn):
+    """Calls fn() with the rig in SitKnit's first frame, then puts the rig back as it was."""
     ad = rig.animation_data
     keep = (ad.action, [t.mute for t in ad.nla_tracks])
     for t in ad.nla_tracks:
@@ -291,12 +299,19 @@ def hand_deform(rig, side):
     bpy.context.scene.frame_set(1)
     bpy.context.scene.frame_set(0)
     bpy.context.view_layer.update()
-    pb = rig.pose.bones[side + "Hand"]
-    D = rig.matrix_world @ pb.matrix @ pb.bone.matrix_local.inverted() @ rig.matrix_world.inverted()
+    out = fn()
     ad.action = keep[0]
     for t, m in zip(ad.nla_tracks, keep[1]):
         t.mute = m
-    return D
+    return out
+
+
+def bone_deform(rig, bone):
+    """Rest -> SitKnit pose (frame 0), world space, for points riding on that bone alone."""
+    def get():
+        pb = rig.pose.bones[bone]
+        return rig.matrix_world @ pb.matrix @ pb.bone.matrix_local.inverted() @ rig.matrix_world.inverted()
+    return at_knit_frame(rig, get)
 
 
 def swatch_image():
@@ -358,6 +373,144 @@ def lathe(bm, a, b, r, segs=10):
     return faces
 
 
+def yarn_material():
+    """The working yarn and its ball: the swatch's sage green, soft and matte."""
+    m = bpy.data.materials.get("Yarn") or bpy.data.materials.new("Yarn")
+    m.use_nodes = True
+    bsdf = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = YARN["color"]
+    bsdf.inputs["Roughness"].default_value = 0.95
+    return m
+
+
+def index_top(rig):
+    """The top of her right index finger in the knitting fist (the knit_R key), SitKnit pose:
+    where the working yarn runs over it."""
+    body = body_mesh()
+    G = GRIPS[CID]["knit_R"]
+    th = G["thumb"]
+    gi = body.vertex_groups["RightHand"].index
+    key = body.data.shape_keys.key_blocks["knit_R"]
+    mw = body.matrix_world
+    D = hand_deform(rig, "Right")
+    best = None
+    for v in body.data.vertices:
+        if sum(g.weight for g in v.groups if g.group == gi) < 0.5:
+            continue
+        p = mw @ v.co
+        thumb = p.x > th["x"] and p.y < th["y"] and th["zmin"] < p.z < th["z"]
+        if p.y < G["bands"][2] and not thumb and G["zk"] - 0.045 < p.z < G["zk"] - 0.02:
+            q = D @ (mw @ key.data[v.index].co)
+            if best is None or q.z > best.z:
+                best = q
+    return best
+
+
+def lap_top(rig, x, y):
+    """The top of her right thigh near (x, y) in the SitKnit pose."""
+    body = body_mesh()
+    gi = body.vertex_groups["RightUpperLeg"].index
+    def get():
+        dg = bpy.context.evaluated_depsgraph_get()
+        ev = body.evaluated_get(dg)
+        m = ev.to_mesh()
+        zs = [(body.matrix_world @ mv.co).z for v, mv in zip(body.data.vertices, m.vertices)
+              if sum(g.weight for g in v.groups if g.group == gi) > 0.6
+              and abs((body.matrix_world @ mv.co).x - x) < 0.025 and abs((body.matrix_world @ mv.co).y - y) < 0.025]
+        ev.to_mesh_clear()
+        return max(zs)
+    return at_knit_frame(rig, get)
+
+
+def add_yarn(rig, bm, groups, stitch):
+    """The working yarn: from the last stitch on the left needle, over her right index finger, down
+    to a ball of the same yarn in her lap. Laid out in the SitKnit pose; each point rides on the
+    bones it lies between (left hand to right hand, right hand to thigh), so the strand follows her
+    hands as they work, and the ball sits on her right thigh."""
+    bones = ("LeftHand", "RightHand", "RightUpperLeg")
+    D = {b: bone_deform(rig, b) for b in bones}
+    a = stitch + Vector((0, 0, -0.004))
+    b = index_top(rig) + Vector((0, 0, YARN["r"] + 0.001))
+    lx, ly = YARN["ball_at"]
+    ball = Vector((lx, ly, lap_top(rig, lx, ly) + YARN["ball_r"] * 0.85))
+    e = ball + Vector((0, 0, YARN["ball_r"] * 0.9))
+
+    def bez(p0, p1, p2, t):
+        return p0 * (1 - t) ** 2 + p1 * 2 * t * (1 - t) + p2 * t * t
+
+    # a little slack between the needle and the finger; from the finger it falls to the ball
+    pts, wts = [], []
+    m1 = (a + b) / 2 + Vector((0, -0.004, -0.012))
+    for i in range(14):
+        t = i / 13
+        pts.append(bez(a, m1, b, t))
+        u = smooth01(t)
+        wts.append({"LeftHand": 1 - u, "RightHand": u})
+    m2 = Vector((b.x - 0.02, b.y - 0.01, b.z + 0.01))
+    for i in range(1, 19):
+        t = i / 18
+        pts.append(bez(b, m2 + (e - b) * 0.15, e, t))
+        u = smooth01(t)
+        wts.append({"RightHand": 1 - u, "RightUpperLeg": u})
+
+    def to_rest(p, w):
+        M = Matrix(((0, 0, 0, 0),) * 4)
+        for name, x in w.items():
+            M += D[name] * x
+        return M.inverted() @ p
+
+    segs, r = 6, YARN["r"]
+    prev_n = None
+    rings = []
+    for i, p in enumerate(pts):
+        tang = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        n = prev_n if prev_n is not None else tang.orthogonal().normalized()
+        n = (n - tang * n.dot(tang)).normalized()  # carried along the strand, so it doesn't twist
+        prev_n = n
+        bnorm = tang.cross(n)
+        ring = []
+        for k in range(segs):
+            ang = 2 * math.pi * k / segs
+            q = p + (n * math.cos(ang) + bnorm * math.sin(ang)) * r
+            v = bm.verts.new(to_rest(q, wts[i]))
+            groups[v] = wts[i]
+            ring.append(v)
+        rings.append(ring)
+    for A, B in zip(rings, rings[1:]):
+        for k in range(segs):
+            f = bm.faces.new((A[k], A[(k + 1) % segs], B[(k + 1) % segs], B[k]))
+            f.material_index = 3
+            f.smooth = True
+    # the ball: a sphere wound with a few raised strands round it
+    R = YARN["ball_r"]
+    nu, nv = 24, 14
+    verts = []
+    for j in range(nv + 1):
+        th_ = math.pi * j / nv
+        row = []
+        for i in range(nu):
+            ph = 2 * math.pi * i / nu
+            d = Vector((math.sin(th_) * math.cos(ph), math.sin(th_) * math.sin(ph), math.cos(th_)))
+            wound = 1.0 + 0.04 * math.sin(5 * th_ + 3 * ph) + 0.03 * math.sin(7 * ph - 2 * th_)
+            p = ball + d * R * wound
+            v = bm.verts.new(D["RightUpperLeg"].inverted() @ p)
+            groups[v] = {"RightUpperLeg": 1.0}
+            row.append(v)
+        verts.append(row)
+    for j in range(nv):
+        for i in range(nu):
+            q = [verts[j][i], verts[j][(i + 1) % nu], verts[j + 1][(i + 1) % nu], verts[j + 1][i]]
+            if j == 0 or j == nv - 1:
+                q = list(dict.fromkeys(q)) if len(set(q)) < 4 else q
+            try:
+                f = bm.faces.new(q)
+            except ValueError:
+                continue
+            f.material_index = 3
+            f.smooth = True
+    print("[grip] yarn from the work over her index finger to a ball in her lap at (%.2f, %.2f, %.2f)" % tuple(ball))
+
+
 def build_needles(rig):
     """Replaces the KnitProps mesh: a needle through each knitting fist (along the grip's handle,
     rest pose, bound to that hand), the tips toward the middle, and the work hanging from the left
@@ -381,7 +534,7 @@ def build_needles(rig):
         fs = lathe(bm, butt, tip, NEEDLE["r"])
         for f in fs:
             for v in f.verts:
-                groups[v] = side + "Hand"
+                groups[v] = {side + "Hand": 1.0}
         posed[side] = (D, D @ butt, D @ tip)
     # the work: a small knitted piece hanging off the left needle's front half, toward her lap
     D, pb, pt = posed["Left"]
@@ -400,7 +553,7 @@ def build_needles(rig):
             p = top_a + (top_b - top_a) * u + down * depth * v + toward * (0.02 * math.sin(math.pi * v) + 0.025 * v)
             p += toward * 0.006 * math.sin(math.pi * u) + down * 0.004 * math.sin(math.pi * u) * v
             vert = bm.verts.new(Dinv @ p)
-            groups[vert] = "LeftHand"
+            groups[vert] = {"LeftHand": 1.0}
             row.append(vert)
         grid.append(row)
     for j in range(nv):
@@ -420,14 +573,15 @@ def build_needles(rig):
                     uvs = list(reversed(uvs))
                 for loop, (uu, vv) in zip(f.loops, uvs):
                     loop[uv].uv = (uu / nu, 1.0 - vv / nv)
+    add_yarn(rig, bm, groups, top_b)
     me = bpy.data.meshes.new("KnitProps")
-    vidx = {}
     bm.verts.index_update()
     order = list(bm.verts)
     bm.to_mesh(me)
     bm.free()
     for name in ("Needle", "NeedleCap", "Swatch"):
         me.materials.append(mats.get(name))
+    me.materials.append(yarn_material())
     img = swatch_image()
     sw = mats.get("Swatch")
     if img is not None and sw is not None:
@@ -439,9 +593,12 @@ def build_needles(rig):
     bpy.data.meshes.remove(old_me)
     for vg in list(old.vertex_groups):
         old.vertex_groups.remove(vg)
-    for side in ("Right", "Left"):
-        vg = old.vertex_groups.new(name=side + "Hand")
-        vg.add([k for k, v in enumerate(order) if groups.get(v) == side + "Hand"], 1.0, "REPLACE")
+    for k, v in enumerate(order):
+        for name, w in groups.get(v, {}).items():
+            if w <= 1e-4:
+                continue
+            vg = old.vertex_groups.get(name) or old.vertex_groups.new(name=name)
+            vg.add([k], w, "REPLACE")
     # the mesh is in rest-pose world space: undo the object's own transform
     me.transform(old.matrix_world.inverted())
     print("[grip] needles laid through the fists; swatch texture", img.name if img else None)

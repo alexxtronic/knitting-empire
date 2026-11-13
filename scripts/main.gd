@@ -4119,8 +4119,11 @@ func _autotest() -> void:
 	knit_cam.global_position = knit_at + knit_front * 0.85 + Vector3(0, 0.35, 0)
 	knit_cam.look_at(knit_at + knit_front * 0.1, Vector3.UP)
 	knit_cam.current = true
+	var knit_screen: bool = knit.visible # the knitting game covers the screen: out of the way for this picture
+	knit.visible = false
 	await _wait(0.2)
 	await _shot("02d_knit_hands.png")
+	knit.visible = knit_screen
 	knit_cam.queue_free()
 	cam.current = true
 	var cd0 := cam_dist
