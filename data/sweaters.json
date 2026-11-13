@@ -1,0 +1,585 @@
+{
+ "_about": "The sweater designs, written by art/world_assets/sweater/build.py from patterns.py: don't edit by hand. stars: 1 Common, 2 Rare, 3 Ultra rare, 4 Legendary. Each design's colour map is assets/sweaters/textures/<id>.png; scripts/sweaters.gd puts it on a character. Names and stars are drafts until Alex approves them.",
+ "designs": [
+  {
+   "id": "cranberry",
+   "name": "Cranberry Classic",
+   "stars": 1,
+   "colours": [
+    "#c0261d"
+   ],
+   "about": "The reference sweater: plain red stockinette, red ribs."
+  },
+  {
+   "id": "oatmeal_stripe",
+   "name": "Oatmeal Stripe",
+   "stars": 1,
+   "colours": [
+    "#dccdb0",
+    "#5b3a26"
+   ],
+   "about": "Oatmeal with pairs of chocolate stripes, the same down the sleeves; plain ribs."
+  },
+  {
+   "id": "forest",
+   "name": "Forest Green",
+   "stars": 1,
+   "colours": [
+    "#2f5a3a"
+   ],
+   "about": "Plain stockinette in one colour, ribs to match."
+  },
+  {
+   "id": "harbour_navy",
+   "name": "Harbour Navy",
+   "stars": 1,
+   "colours": [
+    "#22304f"
+   ],
+   "about": "Plain stockinette in one colour, ribs to match."
+  },
+  {
+   "id": "mustard",
+   "name": "Mustard Seed",
+   "stars": 1,
+   "colours": [
+    "#c99a2e"
+   ],
+   "about": "Plain stockinette in one colour, ribs to match."
+  },
+  {
+   "id": "lavender",
+   "name": "Lavender",
+   "stars": 1,
+   "colours": [
+    "#a493c4"
+   ],
+   "about": "Plain stockinette in one colour, ribs to match."
+  },
+  {
+   "id": "pumpkin",
+   "name": "Pumpkin",
+   "stars": 1,
+   "colours": [
+    "#cf6a2a"
+   ],
+   "about": "Plain stockinette in one colour, ribs to match."
+  },
+  {
+   "id": "heather_tweed",
+   "name": "Heather Tweed",
+   "stars": 1,
+   "colours": [
+    "#8c8b88",
+    "#b8322a",
+    "#d8a83a",
+    "#4a7a9a",
+    "#efe3c8"
+   ],
+   "about": "A tweedy yarn: the main colour flecked with other colours at random."
+  },
+  {
+   "id": "bark_tweed",
+   "name": "Bark Tweed",
+   "stars": 1,
+   "colours": [
+    "#6b4a33",
+    "#d8c7a6",
+    "#a0522d",
+    "#557a46"
+   ],
+   "about": "A tweedy yarn: the main colour flecked with other colours at random."
+  },
+  {
+   "id": "cream_forest",
+   "name": "Cream and Forest",
+   "stars": 1,
+   "colours": [
+    "#efe6d2",
+    "#2f5a3a"
+   ],
+   "about": "Plain body, ribs in a second colour."
+  },
+  {
+   "id": "charcoal_tipped",
+   "name": "Charcoal Tipped",
+   "stars": 1,
+   "colours": [
+    "#3a3a3c",
+    "#b8322a"
+   ],
+   "about": "Plain body, ribs in a second colour and a line of it just above the hem and each cuff."
+  },
+  {
+   "id": "breton",
+   "name": "Breton",
+   "stars": 1,
+   "colours": [
+    "#f2ece0",
+    "#4f7fb8"
+   ],
+   "about": "Breton stripes: a two-row stripe every five rows from the chest down, plain above; striped sleeves; plain ribs."
+  },
+  {
+   "id": "rust_stripe",
+   "name": "Rust Stripe",
+   "stars": 1,
+   "colours": [
+    "#a8492a",
+    "#e9dcc2"
+   ],
+   "about": "Even six-row stripes of two colours, all over."
+  },
+  {
+   "id": "mint_candy",
+   "name": "Mint Candy",
+   "stars": 1,
+   "colours": [
+    "#9fd3bf",
+    "#fbf7ee",
+    "#7d8c88"
+   ],
+   "about": "Two rows of the second colour and one of the third every nine rows."
+  },
+  {
+   "id": "rose_block",
+   "name": "Rose Block",
+   "stars": 1,
+   "colours": [
+    "#d98a95",
+    "#7a2a3a",
+    "#f3e7d3"
+   ],
+   "about": "The top in one colour, the bottom in another, a line of a third between; the sleeves split at the elbow the same way."
+  },
+  {
+   "id": "sage_cream",
+   "name": "Sage and Cream",
+   "stars": 1,
+   "colours": [
+    "#8fa58a",
+    "#efe6d2"
+   ],
+   "about": "The body in one colour, the sleeves and collar in another."
+  },
+  {
+   "id": "denim",
+   "name": "Denim Pinstripe",
+   "stars": 1,
+   "colours": [
+    "#3b5a80",
+    "#9fb4cc"
+   ],
+   "about": "A thin vertical stripe every six stitches."
+  },
+  {
+   "id": "butter_dots",
+   "name": "Buttercup Dots",
+   "stars": 1,
+   "colours": [
+    "#f1d77a",
+    "#fffaf0"
+   ],
+   "about": "Single-stitch dots on a staggered six by six grid."
+  },
+  {
+   "id": "plum_stripe",
+   "name": "Plum Stripe",
+   "stars": 1,
+   "colours": [
+    "#5e2f55",
+    "#efe3c8",
+    "#e0b43c"
+   ],
+   "about": "Plain, with three stripes across the chest and the upper sleeves (cream, gold, cream)."
+  },
+  {
+   "id": "dusk_ombre",
+   "name": "Dusk Ombre",
+   "stars": 1,
+   "colours": [
+    "#1f3b4d",
+    "#2f5d73",
+    "#4f8a99",
+    "#86b8bc",
+    "#c7e0d9"
+   ],
+   "about": "Five shades in bands from dark at the hem to light at the shoulders, the edges dithered."
+  },
+  {
+   "id": "snowfall_yoke",
+   "name": "Snowfall Yoke",
+   "stars": 2,
+   "colours": [
+    "#1f2c4a",
+    "#efe3c8",
+    "#b8322a"
+   ],
+   "about": "Navy with a cream Fair Isle yoke: a band of snowflakes between peerie borders round the shoulders, red seeds between the flakes, and a peerie band above each cuff. Cream collar edge."
+  },
+  {
+   "id": "argyle",
+   "name": "Argyle",
+   "stars": 2,
+   "colours": [
+    "#2d4a3e",
+    "#b98f57",
+    "#c9372f"
+   ],
+   "about": "Argyle: diamonds of a second colour on the main one, crossed by thin lines of a third."
+  },
+  {
+   "id": "gingham",
+   "name": "Picnic Gingham",
+   "stars": 2,
+   "colours": [
+    "#f6f0e4",
+    "#e4958f",
+    "#c43b35"
+   ],
+   "about": "Gingham: four-stitch checks, where the two colours cross they make the deep one."
+  },
+  {
+   "id": "houndstooth",
+   "name": "Houndstooth",
+   "stars": 2,
+   "colours": [
+    "#efe6d2",
+    "#2a2724"
+   ],
+   "about": "Houndstooth on an eight-stitch repeat."
+  },
+  {
+   "id": "chevron",
+   "name": "Chevron",
+   "stars": 2,
+   "colours": [
+    "#2a7f7a",
+    "#f1e8d6",
+    "#e2725b"
+   ],
+   "about": "Zigzag stripes of three colours, the points down the front."
+  },
+  {
+   "id": "polka",
+   "name": "Navy Polka",
+   "stars": 2,
+   "colours": [
+    "#22304f",
+    "#f1e8d6"
+   ],
+   "about": "Round dots, four stitches across, on a staggered grid."
+  },
+  {
+   "id": "lattice",
+   "name": "Cornflower Lattice",
+   "stars": 2,
+   "colours": [
+    "#6a8fd0",
+    "#f4eee0",
+    "#e0b43c"
+   ],
+   "about": "A diamond lattice of thin lines, a dot in every other diamond."
+  },
+  {
+   "id": "raindrops",
+   "name": "April Showers",
+   "stars": 2,
+   "colours": [
+    "#7d93a8",
+    "#f7f7f4",
+    "#cfe3f0",
+    "#4c5e70"
+   ],
+   "about": "Clouds on the shoulders and rain falling below them, a drop at a time."
+  },
+  {
+   "id": "strawberries",
+   "name": "Strawberry Patch",
+   "stars": 2,
+   "colours": [
+    "#f3ead6",
+    "#c8302c",
+    "#4f8a3a",
+    "#f2d36b"
+   ],
+   "about": "Strawberries scattered all over, seeds and leaves and all."
+  },
+  {
+   "id": "heart_band",
+   "name": "Sweetheart",
+   "stars": 2,
+   "colours": [
+    "#f3e7d3",
+    "#c8302c",
+    "#e79aa6"
+   ],
+   "about": "A row of hearts across the chest between pink peerie borders, and hearts above the cuffs."
+  },
+  {
+   "id": "peerie_bands",
+   "name": "Peerie Bands",
+   "stars": 2,
+   "colours": [
+    "#e3d3b4",
+    "#5b3a26",
+    "#a8322a",
+    "#3f6a4a"
+   ],
+   "about": "Little peerie borders all the way down in brown, red and green, with thin lines between."
+  },
+  {
+   "id": "pine_band",
+   "name": "Winter Pines",
+   "stars": 2,
+   "colours": [
+    "#2f5a3a",
+    "#f1e8d6",
+    "#6b4a33"
+   ],
+   "about": "A forest of cream pines round the bottom of the body and above the cuffs, snow falling above."
+  },
+  {
+   "id": "tulip_border",
+   "name": "Tulip Border",
+   "stars": 2,
+   "colours": [
+    "#a9cfe6",
+    "#d9434a",
+    "#e98aa8",
+    "#f2c94c",
+    "#4f8a3a"
+   ],
+   "about": "A border of tulips in three colours round the hem and above each cuff."
+  },
+  {
+   "id": "greyspine",
+   "name": "Greyspine Peaks",
+   "stars": 2,
+   "colours": [
+    "#7fa3c4",
+    "#8a8f99",
+    "#f6f4ee",
+    "#2f4a3a"
+   ],
+   "about": "The Greyspine range round the body: grey peaks with snow caps against the sky, a line of dark pines along their feet."
+  },
+  {
+   "id": "daisy_chain",
+   "name": "Daisy Chain",
+   "stars": 2,
+   "colours": [
+    "#b6a3d1",
+    "#fbf7ee",
+    "#f2c94c",
+    "#5f8a4a"
+   ],
+   "about": "Daisies round the yoke and the hem and above the cuffs, joined by a green line."
+  },
+  {
+   "id": "flock",
+   "name": "Flock of Friends",
+   "stars": 3,
+   "colours": [
+    "#7f9a6d",
+    "#f3ead6",
+    "#2f2a26",
+    "#3f5a3a"
+   ],
+   "about": "Sage green with a flock of cream sheep (dark faces and legs) across the chest and a smaller line of them round the back, a scatter of cream daisies below, a sheep on each upper sleeve. Ribs in deep green."
+  },
+  {
+   "id": "sunflowers",
+   "name": "Sunflower Field",
+   "stars": 3,
+   "colours": [
+    "#8cc3e0",
+    "#f2c12e",
+    "#5a3a1e",
+    "#3f7a3f"
+   ],
+   "about": "A field of tall sunflowers round the bottom of the body against a summer sky, one on each sleeve."
+  },
+  {
+   "id": "autumn_leaves",
+   "name": "Falling Leaves",
+   "stars": 3,
+   "colours": [
+    "#4a2e2a",
+    "#e0782a",
+    "#b8322a",
+    "#e2b23c"
+   ],
+   "about": "Maple leaves falling all over in orange, red and gold."
+  },
+  {
+   "id": "fox_forest",
+   "name": "Fox in the Pines",
+   "stars": 3,
+   "colours": [
+    "#2b4a35",
+    "#d2691e",
+    "#f3ead6",
+    "#2a2320",
+    "#5f8a5a"
+   ],
+   "about": "Foxes peeping out across the chest, between bands of pines; pines above the cuffs."
+  },
+  {
+   "id": "reindeer",
+   "name": "Reindeer",
+   "stars": 3,
+   "colours": [
+    "#a52a2a",
+    "#f3e7d3"
+   ],
+   "about": "Nordic reindeer facing each other across the chest between snowflake and peerie bands, red and cream."
+  },
+  {
+   "id": "honeycomb",
+   "name": "Honeycomb",
+   "stars": 3,
+   "colours": [
+    "#e0a92a",
+    "#b07a14",
+    "#2a2320",
+    "#f6f2e6",
+    "#f8dc5a"
+   ],
+   "about": "Honeycomb all over in two golds, busy bees here and there."
+  },
+  {
+   "id": "mushrooms",
+   "name": "Toadstools",
+   "stars": 3,
+   "colours": [
+    "#6d8a52",
+    "#c8302c",
+    "#f3ead6",
+    "#3f5a32",
+    "#8a5a32"
+   ],
+   "about": "Toadstools, red and brown, round the bottom of a mossy body and here and there above."
+  },
+  {
+   "id": "lighthouse",
+   "name": "Saltmeadow Light",
+   "stars": 3,
+   "colours": [
+    "#cfe3ec",
+    "#c23a30",
+    "#f6f1e6",
+    "#f2c94c",
+    "#2b2f3a",
+    "#2f6f9a",
+    "#1f4a6e"
+   ],
+   "about": "Saltmeadow's lighthouse on the front, gulls overhead, waves all the way round below."
+  },
+  {
+   "id": "cottage",
+   "name": "Home Sweet Home",
+   "stars": 3,
+   "colours": [
+    "#bcd7e6",
+    "#a83a2c",
+    "#f3ead6",
+    "#f2c94c",
+    "#6b4226",
+    "#7a6a5a",
+    "#f4f4f2",
+    "#6a9a5a",
+    "#3f6a3f"
+   ],
+   "about": "Gran's cottage on the front: red roof, lit windows, smoke from the chimney, on green hills that roll round to pines at the back."
+  },
+  {
+   "id": "rainbow",
+   "name": "After the Rain",
+   "stars": 3,
+   "colours": [
+    "#9cc9e6",
+    "#d6453d",
+    "#ee8a3a",
+    "#f2cf4a",
+    "#5fae5a",
+    "#4a86c8",
+    "#7a5aa8",
+    "#fafafa"
+   ],
+   "about": "A rainbow across the front with clouds at its ends, little clouds round the back, rainbow stripes above the cuffs."
+  },
+  {
+   "id": "midnight_moon",
+   "name": "Midnight Moon",
+   "stars": 4,
+   "colours": [
+    "#22204a",
+    "#e0b43c",
+    "#f4ead0",
+    "#3a3870"
+   ],
+   "about": "Indigo, scattered with gold stars, and across the chest the moon going round: eight phases from new to full and back, in cream with gold rings, between two gold lines. Gold-tipped ribs."
+  },
+  {
+   "id": "golden_fleece",
+   "name": "Golden Fleece",
+   "stars": 4,
+   "colours": [
+    "#1d4a4f",
+    "#e2b23c",
+    "#2a2320",
+    "#f3e7c8",
+    "#a8761c"
+   ],
+   "about": "Deep teal and gold: a flock of golden sheep across the chest between gold peerie borders, gold and cream stars all over, a golden sheep on each sleeve, gold-tipped ribs."
+  },
+  {
+   "id": "northern_lights",
+   "name": "Northern Lights",
+   "stars": 4,
+   "colours": [
+    "#141a33",
+    "#3fd08a",
+    "#2a8f8a",
+    "#8a5cd0",
+    "#f4ead0",
+    "#0b1f19"
+   ],
+   "about": "The northern lights over a night sky: green curtains with violet tops fading to teal, stars above, a black forest round the bottom."
+  },
+  {
+   "id": "grans_heirloom",
+   "name": "Gran's Heirloom",
+   "stars": 4,
+   "colours": [
+    "#e3d3b4",
+    "#5b3a26",
+    "#a8322a",
+    "#d1a23a",
+    "#3f6a4a",
+    "#33507a"
+   ],
+   "about": "Gran's heirloom: Fair Isle bands from collar to hem in six colours, peerie, XO, snowflake and star borders on changing grounds, the same down the sleeves."
+  },
+  {
+   "id": "four_seasons",
+   "name": "Four Seasons",
+   "stars": 4,
+   "colours": [
+    "#f1e8d4",
+    "#a8d5b5",
+    "#8cc3e0",
+    "#b5532b",
+    "#22304f",
+    "#e07a95",
+    "#f0c43a",
+    "#5a3a22",
+    "#3f7a3f",
+    "#fafafa",
+    "#e08a2a"
+   ],
+   "about": "The year round the body: spring tulips on the front, summer sunflowers on her left, autumn leaves on the back, winter snowflakes on her right, cream seams between; the sleeves go through the seasons from shoulder to cuff."
+  }
+ ]
+}

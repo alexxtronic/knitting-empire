@@ -164,3 +164,19 @@ Alex: "put this over Steve, and the mailman as a test". The mailman is Barbara.
     `MARGIN` of the knit (a satchel, braces, a jacket collar) is pulled in under it.
 - Left: the ends of Steve's overall straps peek out at the collar; Barbara's sleeves merge into the
   body (her arms hang against her sides); both look boxy, since they trace bulky outfits.
+
+## In the game (2026-11-13)
+
+Alex: "Yes, add them".
+
+- `build.py` now also writes what the game loads: `assets/sweaters/<id>_sweater.glb` (plain material),
+  `<id>_tuck.json` (the `under_sweater` key as points and offsets, since the game's character models
+  don't carry it), the textures, and `data/sweaters.json`. `scripts/sweaters.gd` adds the key to a copy
+  of the body mesh and puts the sweater on the character's skeleton; `shaders/sweater.gdshader` is the
+  wool.
+- First look in the game (the Idle pose brings the arms in against the body): Nora's own red sleeve
+  showed through where her arm rests on her side, and Barbara's satchel just above the hem. The tuck
+  is now deeper (`TUCK` 2 cm, `ARM_TUCK` 3.5 cm on the arms) and reaches 6 cm below the hem. A few
+  small spots remain at Nora's side and on Barbara's satchel.
+- Steve's and Barbara's game models have painted eyes, so no eye bones: those two skin binds are
+  pointed at the head (the sweater has no weight on them).

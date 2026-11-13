@@ -3,6 +3,7 @@ extends Node
 ## Prices and limits come from res://data/economy.json (see scripts/data.gd).
 
 const Data = preload("res://scripts/data.gd")
+const Sweaters = preload("res://scripts/sweaters.gd")
 
 signal toast(text: String)
 signal day_started(day: int)
@@ -62,6 +63,8 @@ var knit_xp: int = 0
 var sweaters: Array = []
 ## Quality of the warmest thing she owns to wear: 1 = the thin city coat she arrived in.
 var worn_quality: int = 1
+## The design of the sweater she wears (data/sweaters.json, scripts/sweaters.gd); "" in the city coat.
+var worn_design: String = ""
 const NEEDS := ["energy", "fullness", "happiness", "love", "warmth", "fitness"]
 var day: int = 1
 var hour: float = 8.0
@@ -114,6 +117,7 @@ func reset() -> void:
 	fitness = 45.0
 	knit_xp = 0
 	worn_quality = 1
+	worn_design = ""
 	sweaters = []
 	sync_sweaters()
 	day = 1
@@ -166,6 +170,7 @@ func knit_sweater(rarity := 0) -> int:
 	add_sweater(q)
 	if q > worn_quality:
 		worn_quality = q
+		worn_design = Sweaters.design_for(q, randi())
 	return q
 
 
@@ -398,7 +403,7 @@ func to_dict() -> Dictionary:
 		"version": SAVE_VERSION, "flags": flags, "chats": chats,
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
-		"knit_xp": knit_xp, "worn_quality": worn_quality, "sweaters": sweaters,
+		"knit_xp": knit_xp, "worn_quality": worn_quality, "worn_design": worn_design, "sweaters": sweaters,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
@@ -467,6 +472,9 @@ func from_dict(d: Dictionary) -> void:
 	fitness = float(d.get("fitness", 45.0))
 	knit_xp = int(d.get("knit_xp", 0))
 	worn_quality = clampi(int(d.get("worn_quality", 1)), 1, 5)
+	worn_design = str(d.get("worn_design", ""))
+	if worn_quality > 1 and Sweaters.design(worn_design).is_empty(): # a save from before the designs
+		worn_design = Sweaters.design_for(worn_quality, knit_xp)
 	sweaters = []
 	for r in d.get("sweaters", []):
 		sweaters.append(clampi(int(r), 1, 5))

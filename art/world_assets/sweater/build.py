@@ -26,6 +26,7 @@ pictures in review/. Blender: front is -Y.
 import json
 import math
 import os
+import shutil
 import sys
 
 import bmesh
@@ -61,7 +62,9 @@ THICK = 0.007    # the knit's thickness at the turned edges
 EASE = 1.0       # room over the body; Nora's own (sculpted) sweater is already roomy
 ARM_REACH = 0.085  # arm skin further than this from the bone is not the arm
 MARGIN = 0.012   # how far inside the knit the under_sweater key keeps the skin
-TUCK = 0.012     # how far the under_sweater key pulls the covered skin in
+TUCK = 0.02      # how far the under_sweater key pulls the covered skin in
+ARM_TUCK = 0.035 # and the arms, further: a relaxed arm rests against the body's knit, and its skin
+                 # (a sculpted sleeve) would show through there
 
 TORSO_G = {"Hips", "Spine", "Chest", "UpperChest", "LeftShoulder", "RightShoulder"}
 SIDES = ("Left", "Right")
@@ -598,7 +601,7 @@ def tuck_key(body, sweater, co, dom, marks, lip):
     moved = 0
     for v in body.data.vertices:
         i = v.index
-        if skip[i] or not (marks["hem_z"] < co[i, 2] < marks["collar_z"]):
+        if skip[i] or not (marks["hem_z"] - 0.06 < co[i, 2] < marks["collar_z"]):
             continue
         p = bw @ v.co
         hit = tree.find_nearest(p, 0.25)
@@ -607,7 +610,7 @@ def tuck_key(body, sweater, co, dom, marks, lip):
         loc, n = hit[0], hit[1]
         if (p - loc).dot(n) < -0.08:          # well inside already, or under some other part
             continue
-        q = p - (bw.to_3x3() @ v.normal).normalized() * TUCK
+        q = p - (bw.to_3x3() @ v.normal).normalized() * (ARM_TUCK if "Arm" in str(dom[i]) else TUCK)
         if (q - loc).dot(n) > -MARGIN:
             q = q - n * ((q - loc).dot(n) + MARGIN)
             moved += 1
@@ -807,6 +810,55 @@ def shoot(cam, path, yaw, target=None, dist=3.2, elev=6.0):
 
 # --- main ----------------------------------------------------------------------------------------------
 
+GAME = os.path.join(ROOT, "assets", "sweaters")
+
+
+def game_export(cid, sw_ob, rig, body, tex):
+    """What the game loads (scripts/sweaters.gd builds the wool material itself):
+    assets/sweaters/<cid>_sweater.glb, the sweater skinned to the rig with a plain material;
+    <cid>_tuck.json, the body's under_sweater key as points (the body's own coordinates, Y up) and how
+    far each moves, since the game's character models don't carry the key; and the textures."""
+    os.makedirs(os.path.join(GAME, "textures"), exist_ok=True)
+    wool = sw_ob.data.materials[0]
+    plain = bpy.data.materials.new("Wool")
+    sw_ob.data.materials[0] = plain
+    for o in bpy.context.view_layer.objects:
+        o.select_set(o in (sw_ob, rig))
+    bpy.ops.export_scene.gltf(filepath=os.path.join(GAME, cid + "_sweater.glb"), export_format="GLB",
+                              use_selection=True, export_animations=False, export_skins=True,
+                              export_morph=False, export_yup=True, export_materials="PLACEHOLDER")
+    sw_ob.data.materials[0] = wool
+    kb = body.data.shape_keys.key_blocks
+    base, key = kb[0].data, kb["under_sweater"].data
+    pts = []
+    for i, v in enumerate(body.data.vertices):
+        p, q = base[i].co, key[i].co
+        d = q - p
+        if d.length > 1e-5:
+            pts += [round(p.x, 5), round(p.z, 5), round(-p.y, 5), round(d.x, 5), round(d.z, 5), round(-d.y, 5)]
+    with open(os.path.join(GAME, cid + "_tuck.json"), "w", encoding="utf-8") as f:
+        json.dump({"about": "under_sweater for %s: x, y, z, dx, dy, dz per point (art/world_assets/sweater/build.py)" % cid,
+                   "points": pts}, f, separators=(",", ":"))
+    for name in os.listdir(tex):
+        if name.endswith(".png"):
+            shutil.copyfile(os.path.join(tex, name), os.path.join(GAME, "textures", name))
+    write_catalogue()
+    print("[sweater] game: %s_sweater.glb, %d tucked points" % (cid, len(pts) // 6))
+
+
+def write_catalogue():
+    """data/sweaters.json: the fifty designs as the game sees them (patterns.py is the source)."""
+    designs = [{"id": sw["id"], "name": sw["name"], "stars": sw["stars"], "colours": sw["colours"],
+                "about": " ".join((sw["draw"].__doc__ or "").split())} for sw in PT.SWEATERS]
+    with open(os.path.join(ROOT, "data", "sweaters.json"), "w", encoding="utf-8") as f:
+        json.dump({"_about": "The sweater designs, written by art/world_assets/sweater/build.py from patterns.py: "
+                             "don't edit by hand. stars: 1 Common, 2 Rare, 3 Ultra rare, 4 Legendary. Each design's "
+                             "colour map is assets/sweaters/textures/<id>.png; scripts/sweaters.gd puts it on a "
+                             "character. Names and stars are drafts until Alex approves them.",
+                   "designs": designs}, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+
 def main(cid, render):
     rig, body = load_char(cid)
     B = bones(rig)
@@ -907,6 +959,7 @@ def main(cid, render):
     bpy.ops.export_scene.gltf(filepath=os.path.join(out, cid + "_sweater.glb"), export_format="GLB",
                               use_selection=True, export_animations=False, export_skins=True,
                               export_morph=False, export_yup=True)
+    game_export(cid, sw_ob, rig, body, tex)
 
     if render:
         rv = os.path.join(HERE, "review")

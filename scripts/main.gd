@@ -33,6 +33,7 @@ const Cinematic = preload("res://scripts/cinematic.gd")
 const FirstPerson = preload("res://scripts/first_person.gd")
 const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
+const Sweaters = preload("res://scripts/sweaters.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -1108,6 +1109,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_walls()
 	_update_held_tool()
+	_update_sweater()
 	_update_hold(delta)
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
@@ -1715,6 +1717,15 @@ const TOOL_HOLD := {
 var _tool_hand: BoneAttachment3D
 var _held_id := ""
 var _grip_meshes: Array = [] # her meshes with the grip_R shape key
+
+
+## Dresses her in the sweater she wears (Game.worn_design; none in the city coat).
+func _update_sweater() -> void:
+	if player.body == null or player.body.skeleton == null:
+		return
+	var want := Game.worn_design if Game.worn_quality > 1 else ""
+	if want != Sweaters.worn(player.body):
+		Sweaters.wear(player.body, want)
 
 
 ## Shows the hotbar's tool in her fist (once that tool has a model), and takes it away while she
@@ -4465,6 +4476,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=sweater" in OS.get_cmdline_user_args(): # just the knitted sweaters: the designs, wearing them
+		await _wait(1.5)
+		await _sweater_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=fps" in OS.get_cmdline_user_args(): # just first person: through her eyes
 		await _wait(1.5)
 		await _fps_checks()
@@ -4652,6 +4669,7 @@ func _autotest() -> void:
 	await _light_checks()
 	await _world_checks()
 	await _dog_checks()
+	await _sweater_checks()
 	await _photo_checks()
 	await _fps_checks()
 	await _minimap_checks()
@@ -5863,6 +5881,80 @@ func _dog_checks() -> void:
 		dog.position.distance_to(player.position) < 2.6)
 	_check("he herds: the strays shy from him too", homestead.herders.has(dog) and dog.scare_radius() > Homestead.HERD_RADIUS)
 	cam_dist = cd0
+
+
+## The knitted sweaters: fifty designs, Nora in the one she knit (and back in her coat), the fitted
+## sweater on Steve and Barbara, the skin tucked under the knit.
+func _sweater_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var ds := Sweaters.designs()
+	var by := [0, 0, 0, 0]
+	for d in ds:
+		by[clampi(int(d["stars"]), 1, 4) - 1] += 1
+	_check("fifty sweater designs, 20 common, 15 rare, 10 ultra rare and 5 legendary (%s)" % str(by), ds.size() == 50 and by == [20, 15, 10, 5])
+	_check("every design has its colour map", ds.all(func(d): return ResourceLoader.exists(Sweaters.TEX + str(d["id"]) + ".png")))
+	var keep_q := Game.worn_quality
+	var keep_d := Game.worn_design
+	Game.worn_quality = 1
+	Game.worn_design = ""
+	await _wait(0.2)
+	_check("in her city coat she wears no knitted sweater", Sweaters.worn(player.body) == "")
+	Game.worn_quality = 4
+	Game.worn_design = "flock"
+	await _wait(0.2)
+	var sw := player.body.skeleton.get_node_or_null(Sweaters.NODE) as MeshInstance3D
+	_check("she wears the sweater she knit, on her own skeleton (%s)" % Sweaters.worn(player.body),
+		Sweaters.worn(player.body) == "flock" and sw != null and sw.visible and sw.skin != null)
+	var tuck_on := Sweaters._body_meshes(player.body).any(func(m): return m.find_blend_shape_by_name(Sweaters.KEY) >= 0 and m.get_blend_shape_value(m.find_blend_shape_by_name(Sweaters.KEY)) > 0.99)
+	_check("the skin under it is tucked in (%d points)" % Sweaters.tucked_points(player.body), Sweaters.tucked_points(player.body) > 1000 and tuck_on)
+	var aabb := sw.get_aabb() if sw else AABB()
+	_check("the sweater is her size (%.2f m tall, %.2f m wide)" % [aabb.size.y, aabb.size.x], aabb.size.y > 0.5 and aabb.size.y < 1.0 and aabb.size.x > 0.4 and aabb.size.x < 1.3)
+	var cam2 := Camera3D.new()
+	add_child(cam2)
+	cam2.fov = 30.0
+	var fwd: Vector3 = player.body.global_transform.basis.z.normalized()
+	var mid := player.global_position + Vector3(0, 1.05, 0)
+	cam2.global_position = mid + fwd.rotated(Vector3.UP, 0.35) * 3.4 + Vector3(0, 0.25, 0)
+	cam2.look_at(mid, Vector3.UP)
+	cam2.current = true
+	for id in ["flock", "cranberry", "northern_lights"]:
+		Game.worn_design = id
+		await _wait(0.3)
+		await _shot("55_sweater_%s.png" % id)
+	cam2.global_position = mid - fwd.rotated(Vector3.UP, 0.35) * 3.4 + Vector3(0, 0.25, 0)
+	cam2.look_at(mid, Vector3.UP)
+	await _wait(0.2)
+	await _shot("55_sweater_back.png")
+	player.body.play("Walk", 1.0)
+	cam2.global_position = mid + fwd.rotated(Vector3.UP, 1.2) * 3.4 + Vector3(0, 0.25, 0)
+	cam2.look_at(mid, Vector3.UP)
+	await _wait(0.6)
+	await _shot("55_sweater_walk.png")
+	player.body.play("Idle")
+	for vid in ["steve", "barbara"]:
+		var v := _villager(vid)
+		if v == null or v.body == null:
+			_check("%s is in town to try a sweater on" % vid, false)
+			continue
+		var ok := Sweaters.wear(v.body, "snowfall_yoke" if vid == "steve" else "oatmeal_stripe")
+		_check("%s wears a sweater fitted to them (%s, %d points tucked)" % [vid, Sweaters.worn(v.body), Sweaters.tucked_points(v.body)],
+			ok and Sweaters.worn(v.body) != "" and Sweaters.tucked_points(v.body) > 1000)
+		var vf: Vector3 = v.body.global_transform.basis.z.normalized()
+		var vm := v.global_position + Vector3(0, 1.05, 0)
+		cam2.global_position = vm + vf * 3.4 + Vector3(0, 0.25, 0)
+		cam2.look_at(vm, Vector3.UP)
+		await _wait(0.4)
+		await _shot("55_sweater_%s.png" % vid)
+		Sweaters.take_off(v.body)
+		_check("%s can take it off again" % vid, Sweaters.worn(v.body) == "")
+	var gary := _villager("gary")
+	_check("someone without a fitted sweater can't wear one yet", gary != null and gary.body != null and not Sweaters.wear(gary.body, "flock"))
+	cam2.queue_free()
+	Game.worn_quality = keep_q
+	Game.worn_design = keep_d
+	await _wait(0.1)
 
 
 func _face_checks() -> void:
