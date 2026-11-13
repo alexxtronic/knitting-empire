@@ -20,6 +20,11 @@ loops named in --map it:
      are untouched), deletes the library, saves tools/character_build/<out_id>/<out_id>.blend and
      exports assets/<out_id>.glb.
 
+--same-bones takes the loops from one of our own rigs instead (its bones carry our names), such as the
+character's previous rig: its clips are renamed "lib_<name>" so they don't clash with ours. A rig made by
+tools/import_mixamo.py has no SitKnit (the library has no knitting), so it borrows the old rig's:
+  ... -P tools/retarget_anims.py -- "$PWD" <old_rig.glb> <out_id> --same-bones --map SitKnit=lib_SitKnit
+
 Loops not named in --map keep their old keys (SitKnit's knitting hands, for instance); a name the
 rig doesn't have yet (Run) gets a new action set up like the others.
 
@@ -54,6 +59,9 @@ BONES = {
     "LeftUpperLeg": "thigh_l", "LeftLowerLeg": "calf_l", "LeftFoot": "foot_l", "LeftToes": "ball_l",
     "RightUpperLeg": "thigh_r", "RightLowerLeg": "calf_r", "RightFoot": "foot_r", "RightToes": "ball_r",
 }
+SAME = "--same-bones" in argv
+if SAME:
+    BONES = {n: n for n in BONES}
 
 scene = bpy.context.scene
 FPS = scene.render.fps
@@ -118,6 +126,10 @@ for o in new:
 SW = src.matrix_world.copy()
 assert (SW.to_3x3() - Matrix.Identity(3)).median_scale < 1e-4, "library armature is rotated or scaled"
 lib_actions = [a for a in bpy.data.actions if a.name not in our_actions]
+if SAME:
+    for a in lib_actions:
+        a.name = "lib_" + a.name.split(".")[0]
+print("LIB CLIPS", sorted(a.name for a in lib_actions))
 src.animation_data_create()
 src.animation_data.action = None
 for t in list(src.animation_data.nla_tracks):
@@ -137,8 +149,10 @@ for b in order:
 ref = {b.name: src.pose.bones[BONES[b.name]].matrix.to_3x3().normalized() for b in order}
 ref_inv = {k: v.inverted() for k, v in ref.items()}
 rest_rot = {b.name: b.matrix_local.to_3x3().normalized() for b in order}
-src_pelvis0 = src.pose.bones["pelvis"].head.copy()
-k_leg = T["LeftUpperLeg"].head_local.z / src.data.bones["thigh_l"].head_local.z
+src_pelvis0 = src.pose.bones[BONES["Hips"]].head.copy()
+# the hips move as far as the library's, scaled to our legs; the same body on another rig moves them as far
+k_leg = 1.0 if SAME else T["LeftUpperLeg"].head_local.z / src.data.bones[BONES["LeftUpperLeg"]].head_local.z
+print("HIPS AT REST: ours", tuple(round(v, 3) for v in T["Hips"].head_local), "library's", tuple(round(v, 3) for v in src_pelvis0))
 print("LIB", os.path.basename(LIB), "clips", len(lib_actions), "leg scale", round(k_leg, 3))
 
 
@@ -174,7 +188,7 @@ def sample(t):
     scene.frame_set(int(t), subframe=t - int(t))
     want = {b.name: (src.pose.bones[BONES[b.name]].matrix.to_3x3().normalized() @ ref_inv[b.name]
                      @ rest_rot[b.name]).to_quaternion() for b in order}
-    head = T["Hips"].head_local + (src.pose.bones["pelvis"].head - src_pelvis0) * k_leg
+    head = T["Hips"].head_local + (src.pose.bones[BONES["Hips"]].head - src_pelvis0) * k_leg
     return want, head
 
 

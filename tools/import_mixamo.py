@@ -16,8 +16,9 @@ It:
      the right side); the fingers keep Mixamo's names (LeftHandIndex1 ...) without the "mixamorig:" prefix;
   3. gives the mesh a plain material with its base colour packed in (the FBX carries it);
   4. makes the head rigid (tools/rigid_head.py);
-  5. keeps the seated anchor of --like (the old rig's SitIdle hip height, so a seated loop still lands on
-     the chair: tools/retarget_anims.py reads rig["seat_SitIdle"]) and its armature's name;
+  5. keeps the seated anchor of --like (the old rig's SitIdle hips, moved by how far Mixamo put the hip
+     joint from the old one, so the body still lands on the chair: tools/retarget_anims.py reads
+     rig["seat_SitIdle"]) and its armature's name;
   6. saves tools/character_build/<out_id>/<out_id>.blend and exports assets/<out_id>.glb (no loops yet:
      run tools/retarget_anims.py on the blend next).
 """
@@ -37,13 +38,14 @@ NAMES = {
 }
 
 # ---- what to keep from the old rig
-rig_name, seat, fps = "Rig", None, 30
+rig_name, seat, old_hips, fps = "Rig", None, None, 30
 if LIKE:
     with bpy.data.libraries.load(LIKE) as (src, dst):
         dst.objects = list(src.objects)
         dst.actions = [a for a in src.actions if a == "SitIdle"]
     old = next(o for o in dst.objects if o and o.type == "ARMATURE")
     rig_name = old.name
+    old_hips = old.data.bones["Hips"].head_local.copy()
     if dst.actions:
         sc_ = bpy.context.scene
         sc_.collection.objects.link(old)
@@ -127,7 +129,11 @@ rigid_head.make_rigid(body, rig)
 
 # ---- 5. seat anchor for seated loops
 if seat is not None:
-    rig["seat_SitIdle"] = list(seat)
+    # the anchor is where the hip joint sits; Mixamo's is higher than ours (Sabrina's by 11 cm), and the
+    # body hangs from it, so the joint has to sit that much higher too
+    rig["seat_SitIdle"] = list(seat - old_hips + rig.data.bones["Hips"].head_local)
+    print("SEAT", tuple(round(v, 3) for v in rig["seat_SitIdle"]), "hip joint moved by",
+          tuple(round(v, 3) for v in rig.data.bones["Hips"].head_local - old_hips))
 rig.animation_data_create()
 
 # ---- 6. save, export
