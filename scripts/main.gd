@@ -931,13 +931,20 @@ func _roof_lifted(r: Rect2) -> bool:
 
 
 func _update_walls() -> void:
+	var open_rects: Array = [] # the buildings whose roof is off: only theirs cut their walls down
 	for rf in roofs:
 		var n := rf["node"] as Node3D
+		var lifted := _roof_lifted(rf["rect"])
 		if is_instance_valid(n):
-			n.visible = not _roof_lifted(rf["rect"])
+			n.visible = not lifted
+		if lifted:
+			open_rects.append((rf["rect"] as Rect2).grow(0.5))
 	var cdir := Vector3(sin(cam_yaw), 0, cos(cam_yaw))
 	for w in walls:
-		var hide_it: bool = w["cut"] and not walls_up and (w["normal"] as Vector3).dot(cdir) > 0.25
+		# with its roof on (she's outside), a house keeps all four walls
+		var at: Vector3 = (w["tall"] as Node3D).get_parent().global_position if (w["tall"] as Node3D).is_inside_tree() else Vector3.ZERO
+		var open := roofs.is_empty() or open_rects.any(func(r): return (r as Rect2).has_point(Vector2(at.x, at.z)))
+		var hide_it: bool = w["cut"] and open and not walls_up and (w["normal"] as Vector3).dot(cdir) > 0.25
 		w["tall"].visible = not hide_it
 		w["short"].visible = hide_it
 
@@ -6493,16 +6500,18 @@ func _fps_checks() -> void:
 	await _key_tap(KEY_V)
 	await _wait(0.3)
 	var lifted := house_roof != null and not house_roof.visible
+	var cut_in := walls.filter(func(w): return (w["short"] as Node3D).visible).size()
 	player.position = Vector3(4.0, 0, 9.5)
 	await _wait(0.3)
 	var on_outside := house_roof != null and house_roof.visible
+	var cut_out := walls.filter(func(w): return (w["short"] as Node3D).visible).size()
 	set_mode(Mode.BUILD)
 	await _wait(0.2)
 	var build_lifted := house_roof != null and not house_roof.visible
 	set_mode(Mode.LIVE)
 	await _wait(0.2)
-	_check("her house and the cottage have roofs (%d): on from her eyes indoors %s, lifted from above while she's inside %s, on from above outside %s, lifted in building mode %s" % [roofs.size(), on_inside, lifted, on_outside, build_lifted],
-		roofs.size() == 2 and on_inside and lifted and on_outside and build_lifted and house_roof.visible)
+	_check("her house and the cottage have roofs (%d): on from her eyes indoors %s, lifted from above while she's inside %s (%d walls cut down), on from above outside %s with every wall standing (%d cut), lifted in building mode %s" % [roofs.size(), on_inside, lifted, cut_in, on_outside, cut_out, build_lifted],
+		roofs.size() == 2 and on_inside and lifted and cut_in >= 1 and on_outside and cut_out == 0 and build_lifted and house_roof.visible)
 	_set_cam_lock(false)
 	cam_target = Vector3(4.0, 0.5, 2.0)
 	cam_dist = 22.0
