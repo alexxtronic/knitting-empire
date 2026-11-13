@@ -24,7 +24,8 @@ for pb in arm.pose.bones:
 
 sc.render.engine = "BLENDER_WORKBENCH"
 sh = sc.display.shading
-sh.light, sh.color_type, sh.show_cavity, sh.show_shadows = "FLAT", "TEXTURE", False, False
+# studio light shows the opening's rim and the lids' shape; --flat shows the texture's own colours
+sh.light, sh.color_type, sh.show_cavity, sh.show_shadows = ("FLAT" if "--flat" in sys.argv else "STUDIO"), "TEXTURE", False, False
 # the game draws these materials two-sided unless Blender's backface culling is on for them: do the same here
 sh.show_backface_culling = all(m.use_backface_culling for o in (eyes,) for m in o.data.materials)
 print("CULL", [(m.name, m.use_backface_culling) for m in eyes.data.materials])
