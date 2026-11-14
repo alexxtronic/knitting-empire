@@ -302,6 +302,14 @@ static func build(id: String, r: Node3D) -> void:
 			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
 		elif id == "lamp": # the model's shade glows; this is the light it throws
 			omni(r, Vector3(0, 1.3, 0), Color(1.0, 0.78, 0.5), 5.0, 0.3, 1.6)
+		elif id == "candle":
+			_candle_flame(r, Vector3.ZERO, inst)
+		elif id == "pendant_lamp": # the café's dome lamps (art/world_assets/cafe_props): the bulb hangs at 2.4 m
+			var pl := omni(r, Vector3(0, PENDANT_BULB - 0.08, 0), Color(1.0, 0.74, 0.44), 4.8, 0.25, 1.3)
+			pl.shadow_enabled = false
+			pl.set_meta("no_shadow", true) # main.gd's graphics setting leaves it off
+		for at in ITEMS.get(id, {}).get("candles", []):
+			lit_candle(r, Data.vec3(at))
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)
@@ -686,3 +694,95 @@ static func _hay_bale(r: Node3D) -> void:
 	box(r, Vector3(0.95, 0.45, 0.5), Vector3(0, 0.225, 0), Color(0.88, 0.74, 0.38))
 	for x in [-0.25, 0.25]:
 		box(r, Vector3(0.04, 0.47, 0.52), Vector3(x, 0.225, 0), Color(0.6, 0.45, 0.2))
+
+
+# --- candles (art/world_assets/cafe_props: a cream pillar in a brass chamberstick) ------------------
+
+const CANDLE_MODEL := "res://assets/props/candle.glb"
+const CANDLE_FLAME_Y := 0.218 # the wick's tip above the candle's foot (cafe_props/build.py FLAME_Z)
+const PENDANT_BULB := 2.4 # the pendant lamp's bulb above the floor (cafe_props/build.py)
+static var _halo_tex: Texture2D
+
+
+## A lit candle standing at `at` in r's space: the model, its flame, its glow and a small warm light
+## that flickers (furniture.gd and interiors.gd animate everything with the "candle" meta). Any piece
+## with "candles" in data/furniture.json gets one at each of those spots.
+static func lit_candle(r: Node3D, at: Vector3) -> void:
+	var inst := model(CANDLE_MODEL, r)
+	if inst == null:
+		return
+	inst.position = at
+	_candle_flame(r, at, inst)
+
+
+## The live part of a candle whose model `inst` stands at `at`: the wax on CANDLE_LAYER (its own light
+## would blow it out to white) with a faint glow from within, a flame and its bright core, a soft halo
+## round them, and the light. Everything goes straight under r, where furniture.gd looks for it.
+static func _candle_flame(r: Node3D, at: Vector3, inst: Node3D) -> void:
+	if inst != null:
+		for mi in inst.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			m.layers = CANDLE_LAYER
+			for i in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(i)
+				if sm is BaseMaterial3D and sm.resource_name == "candle_wax":
+					m.set_surface_override_material(i, _warm_wax(sm as BaseMaterial3D))
+	# each candle flickers in its own time (not from its spot on the piece: the café's six tables and
+	# three bookshelves carry theirs in the same spot, and would flicker in step)
+	var phase := randf() * 10.0
+	var tip := at + Vector3(0, CANDLE_FLAME_Y, 0)
+	var flame := glow(ball(r, 0.013, tip + Vector3(0, 0.022, 0), Color(1.0, 0.68, 0.26), Vector3(0.75, 1.9, 0.75)), Color(1.0, 0.64, 0.22), 6.0)
+	var core := glow(ball(r, 0.006, tip + Vector3(0, 0.012, 0), Color(1.0, 0.95, 0.8), Vector3(1, 1.6, 1)), Color(1.0, 0.95, 0.8), 9.0)
+	for f in [flame, core]:
+		(f as MeshInstance3D).set_meta("flame", true)
+		(f as MeshInstance3D).set_meta("candle", true)
+		(f as MeshInstance3D).set_meta("phase", phase)
+	var halo := Sprite3D.new()
+	halo.texture = _halo()
+	halo.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	halo.shaded = false
+	halo.transparent = true
+	halo.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	halo.modulate = Color(1.0, 0.72, 0.38, 0.55)
+	halo.pixel_size = 0.3 / 64.0 # 30 cm across
+	halo.position = tip + Vector3(0, 0.03, 0)
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.set_meta("halo", true)
+	halo.set_meta("phase", phase)
+	r.add_child(halo)
+	var l := omni(r, tip + Vector3(0, 0.05, 0), Color(1.0, 0.66, 0.34), 2.6, 0.12, 0.7)
+	l.shadow_enabled = false # a few dozen of them in the café: their glow, not their shadows
+	l.set_meta("no_shadow", true) # and the graphics setting leaves them off (main.gd)
+	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	l.set_meta("candle", true)
+	l.set_meta("phase", phase)
+
+
+static var _wax := {}
+
+
+static func _warm_wax(base: BaseMaterial3D) -> BaseMaterial3D:
+	if not _wax.has(base):
+		var w := base.duplicate() as BaseMaterial3D
+		w.emission_enabled = true
+		w.emission = Color(1.0, 0.78, 0.5)
+		w.emission_energy_multiplier = 0.22
+		_wax[base] = w
+	return _wax[base]
+
+
+## A soft round glow, bright in the middle and gone by the edge, drawn over the flame (Sprite3D).
+static func _halo() -> Texture2D:
+	if _halo_tex == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.35), Color(1, 1, 1, 0.0)])
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 64
+		t.height = 64
+		_halo_tex = t
+	return _halo_tex

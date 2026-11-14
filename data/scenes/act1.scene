@@ -123,9 +123,9 @@ Wren (neutral): He will. Repeatedly. Come on.
 Wren (neutral): Steve. Builder's Delight. Wood, nails, hinges.
 Steve (neutral): ...Welcome.
 Wren (wry): That's a speech, from Steve.
-@walk sabrina by building_cafe 1.6 1.9 nowait
-@walk wren by building_cafe 3.2 4.6 nowait
-@walk nora by building_cafe 1.6 4.4
+@walk sabrina by building_cafe 1.1 4.0 nowait
+@walk wren by building_cafe 2.7 5.6 nowait
+@walk nora by building_cafe 0.9 5.4
 @face nora sabrina
 @face sabrina nora
 @face wren nora

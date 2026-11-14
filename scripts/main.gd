@@ -36,6 +36,8 @@ const Jobs = preload("res://scripts/jobs.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
 const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
+const BookPanel = preload("res://scripts/book_panel.gd")
+const CafeVisits = preload("res://scripts/cafe_visits.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -99,6 +101,10 @@ var _flock_t := 0.0
 var _flock_seen := false
 var bin: Node3D
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
+var books_ui: BookPanel # the books she reads (book_panel.gd, data/books.json)
+var _reading := false # she's sitting (or standing) with a book open; the panel's `closed` gets her up
+var _read_spot = null # the café seat she has (Interiors.ReadSpot), so no villager is sent to it
+var cafe_visits: CafeVisits # villagers dropping into the Coffee Shop for a coffee and a book (cafe_visits.gd)
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
 const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
 const MAILBOX_YAW := PI
@@ -293,6 +299,13 @@ func _ready() -> void:
 	hud.root.add_child(wardrobe_ui)
 	hud._place(wardrobe_ui, 0.5, 0.5, Vector2.ZERO)
 	hud.wardrobe_pressed.connect(func(): wardrobe_ui.open())
+	books_ui = BookPanel.new()
+	books_ui.setup(hud)
+	hud.root.add_child(books_ui)
+	hud._place(books_ui, 0.5, 0.5, Vector2.ZERO)
+	books_ui.closed.connect(_on_book_closed)
+	books_ui.picked.connect(_on_book_picked)
+	Interiors.ReadSpot.main = self
 	minimap.main = self
 	hud.add_minimap(minimap)
 	if _autotest_dir != "":
@@ -318,6 +331,9 @@ func _ready() -> void:
 	story.main = self
 	add_child(story)
 	story.scene_finished.connect(func(_id): _send_visitors_home())
+	cafe_visits = CafeVisits.new()
+	cafe_visits.main = self
+	story.scene_started.connect(func(_id): cafe_visits.end_all()) # before the scene places anyone
 	jobs = Jobs.new()
 	jobs.main = self
 	add_child(jobs)
@@ -575,7 +591,7 @@ func apply_graphics() -> void:
 	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
 	Catalog.lamp_shadows = med
 	for l in find_children("*", "OmniLight3D", true, false):
-		(l as OmniLight3D).shadow_enabled = med
+		(l as OmniLight3D).shadow_enabled = med and not l.has_meta("no_shadow") # candles: dozens of them, glow only
 	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
@@ -1033,7 +1049,10 @@ func walk_areas() -> Array:
 	for b in Town.built:
 		var n := b[0] as Node3D
 		if is_instance_valid(n) and n.visible:
-			areas.append(Rect2(n.global_position.x - 6.5, n.global_position.z - 6.5, 13.0, 13.0))
+			var half := 6.5
+			if str(b[1]) == "building_cafe": # its lot and terrace are bigger than the rest
+				half = maxf(Town.CAFE.size.x, Town.CAFE.size.y) * 0.5 + 1.5
+			areas.append(Rect2(n.global_position.x - half, n.global_position.z - half, half * 2.0, half * 2.0))
 	return areas
 
 
@@ -1237,7 +1256,7 @@ func _update_camera(delta: float) -> void:
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
 	var pan := hud.cam_pad_pan if not story.is_playing() else Vector2.ZERO
-	if not sleeping and not story.is_playing() and not hud.is_chat_open():
+	if not sleeping and not story.is_playing() and not hud.is_chat_open() and not books_ui.visible:
 		if _held(KEY_W) or _held(KEY_UP):
 			pan.y -= 1
 		if _held(KEY_S) or _held(KEY_DOWN):
@@ -1413,6 +1432,9 @@ func _input(e: InputEvent) -> void:
 	if fps.active and fps.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
+	if books_ui.visible and books_ui.handle_key(kc): # the arrow keys turn the pages
+		get_viewport().set_input_as_handled()
+		return
 	if hud.is_menu_open() and kc >= KEY_1 and kc <= KEY_9:
 		hud.pie.key(kc - KEY_0)
 		get_viewport().set_input_as_handled()
@@ -1473,6 +1495,8 @@ func _input(e: InputEvent) -> void:
 				hud.letters.close()
 			elif wardrobe_ui.visible:
 				wardrobe_ui.close()
+			elif books_ui.visible:
+				books_ui.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -2040,8 +2064,10 @@ func _actions_for(t) -> Array:
 	if t is Furniture:
 		match t.item_id:
 			"rocking_chair", "armchair":
-				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3)), _act("rest", "Rest  (+energy)")]
-			"sofa", "bench", "bench_short":
+				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3)), _act("rest", "Rest  (+energy)"), _act("read_book", "Read a book…")]
+			"sofa":
+				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)"), _act("read_book", "Read a book…")]
+			"bench", "bench_short":
 				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)")]
 			"bed":
 				return [_act("sleep", "Sleep until morning"), _act("nap", "Take a nap  (1 hour)")]
@@ -2054,7 +2080,7 @@ func _actions_for(t) -> Array:
 			"spinning_wheel":
 				return [_act("spin", "Spin wool  (just for fun)", Game.has_item("wool"))]
 			"bookshelf":
-				return [_act("read", "Read a knitting book")]
+				return [_act("read", "Read a knitting book"), _act("read_pick", "Choose a book…")]
 			"wardrobe":
 				return [_act("wardrobe", "Choose a sweater…")]
 		return []
@@ -2098,6 +2124,8 @@ func _actions_for(t) -> Array:
 
 
 func _stand_point(t) -> Vector3:
+	if t is Node and t.has_method("stand_point"): # a reading seat or shelf in a shop knows its own
+		return t.stand_point()
 	# a shopkeeper's spot in front of the counter, while they are at work (a scene may take them out)
 	if t is Villager and t.talk_spot != null and t.position.distance_to(t.talk_spot) < 3.0:
 		return t.talk_spot
@@ -2190,6 +2218,8 @@ func _perform(t, id: String) -> void:
 				hud.show_toast("The wheel hums. Your wool is nice and even now."))
 		"wardrobe":
 			wardrobe_ui.open()
+		"read_book", "read_pick":
+			begin_read(t, id)
 		"read":
 			player.start_activity("Reading", 3.0, func():
 				Game.energy = minf(100.0, Game.energy + 8.0)
@@ -2214,6 +2244,90 @@ func _perform(t, id: String) -> void:
 			player.start_activity("Petting", 1.2, _finish_pet.bind(t))
 		"ship_sweater", "ship_crops", "ship_wool":
 			_ship(id)
+
+
+## Reading (data/books.json, scripts/book_panel.gd). `spot` is a reading seat or shelf in a shop
+## (Interiors.ReadSpot) or one of her own chairs or bookshelves; id "read_book" sits her down with
+## the book she last had open, "read_pick" opens the shelf to choose one (then _on_book_picked).
+func begin_read(spot, id: String) -> void:
+	if id == "read_pick":
+		books_ui.open("", true)
+	elif spot is Furniture:
+		_sit_and_read(_seat_point(spot), spot.rotation.y, "")
+	else:
+		_sit_and_read(spot.seat_point(), spot.seat_yaw(), "", spot)
+
+
+func _sit_and_read(seat: Vector3, yaw: float, book_id: String, spot = null) -> void:
+	_take_read_spot(spot)
+	player.start_activity("Reading", 100000.0, Callable(), seat, yaw)
+	_reading = true
+	books_ui.open(book_id)
+
+
+## She took a book off the shelf: she carries it to the nearest free reading seat and sits down with
+## it, or reads it standing if there's no seat near.
+func _on_book_picked(id: String) -> void:
+	books_ui.visible = false
+	var seat = reading_seat_near(player.position)
+	if seat == null:
+		_reading = true
+		books_ui.open(id)
+		return
+	var at: Vector3 = _stand_point(seat)
+	var sit: Callable
+	if seat is Furniture:
+		sit = _sit_and_read.bind(_seat_point(seat), seat.rotation.y, id)
+	else:
+		_take_read_spot(seat) # hers while she walks over with the book
+		sit = _sit_and_read.bind(seat.seat_point(), seat.seat_yaw(), id, seat)
+	player.walk(_find_path(player.position, at), sit)
+
+
+## The nearest reading seat to p (within 12 m): in the shop she's in, its ReadSpots; elsewhere her own
+## armchairs, rocking chairs and sofas. null if none.
+func reading_seat_near(p: Vector3):
+	var best = null
+	var bd := 12.0
+	var shop := Interiors.inside_of(p)
+	var seats: Array = []
+	if shop != "":
+		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken())
+	else:
+		seats = furniture.filter(func(f): return is_instance_valid(f) and f.item_id in ["armchair", "rocking_chair", "sofa"])
+	for st in seats:
+		var d: float = (st as Node3D).global_position.distance_to(p)
+		if d < bd:
+			bd = d
+			best = st
+	return best
+
+
+## The café seat she's in (or on her way to), or null as she gets up.
+func _take_read_spot(spot) -> void:
+	if _read_spot != null and is_instance_valid(_read_spot) and _read_spot.occupant == player:
+		_read_spot.occupant = null
+	_read_spot = spot if spot != null and not (spot is Furniture) else null
+	if _read_spot != null:
+		_read_spot.occupant = player
+
+
+## She puts the book down: she gets up, a little happier for every page she read (more for an ending).
+func _on_book_closed() -> void:
+	if not _reading:
+		return
+	_reading = false
+	_take_read_spot(null)
+	player.cancel_activity()
+	var pages := books_ui.pages_read
+	var joy := minf(12.0, 2.0 + pages * 0.6)
+	var line := "A good read. (+%d happiness)" % roundi(joy)
+	if not books_ui.finished.is_empty():
+		joy += 6.0
+		line = "You finished %s. (+%d happiness)" % [books_ui.book(str(books_ui.finished[0])).get("title", "the book"), roundi(joy)]
+	Game.add_need("happiness", joy)
+	Game.energy = minf(100.0, Game.energy + minf(10.0, pages * 0.5))
+	hud.show_toast(line)
 
 
 ## Sits her in the chair and opens the knitting game. The day waits while she plays.
@@ -2804,7 +2918,7 @@ func _graphics_checks() -> void:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
 	_check("back on High: every effect and all the grass return; settings file untouched",
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return not is_instance_valid(l) or l.shadow_enabled)
+		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return not is_instance_valid(l) or l.shadow_enabled or l.has_meta("no_shadow"))
 		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
 
 
@@ -4561,6 +4675,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=cafe" in OS.get_cmdline_user_args(): # just the Coffee Shop, its candles and the books (about a minute)
+		await _wait(1.5)
+		await _cafe_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=shops" in OS.get_cmdline_user_args(): # just the walk-in shops and their pictures
 		await _wait(1.5)
 		await _shop_checks()
@@ -4832,6 +4952,7 @@ func _autotest() -> void:
 	await _bench_checks()
 	await _barn_checks()
 	await _shop_checks()
+	await _cafe_checks()
 	await _cast_checks()
 	await _mail_checks()
 	await _max_checks()
@@ -5125,6 +5246,239 @@ func _barn_checks() -> void:
 ## (door swung in, roof hidden, the walls toward the camera cut down); its shopkeeper is behind
 ## the counter, and she talks to them from across it (Giorgio sells her a warm croissant). Each
 ## closes up again when she leaves.
+## The Coffee Shop (data/interiors.json "cafe", art/world_assets/coffee_shop and cafe_props): walking in
+## through its door, the room opening up, its candles and lamps coming up at dusk, the reading seats
+## and shelves, the books (data/books.json, book_panel.gd): sitting down with one, turning its pages,
+## the bookmark, choosing one from the shelf and carrying it to a seat, reading to the end; and the
+## candles in Nora's house. Saves 56_cafe.png, 56_cafe_inside.png, 56_cafe_reading.png,
+## 56_book_open.png, 56_cafe_shelf.png, 56_cafe_night.png and 56_house_candles.png.
+func _cafe_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	# the books
+	var books: Array = books_ui.books()
+	var bad := []
+	var genres := {}
+	var ids := {}
+	for b in books:
+		var n: int = (b.get("pages", []) as Array).size()
+		genres[str(b.get("genre", ""))] = int(genres.get(str(b.get("genre", "")), 0)) + 1
+		ids[str(b.get("id", ""))] = true
+		if n < 10 or n > 20 or str(b.get("title", "")) == "" or not BookPanel.COVER.has(str(b.get("cover", ""))):
+			bad.append(str(b.get("id", "?")))
+	_check("data/books.json: %d books of 10 to 20 pages, horror %d, thriller %d, romance %d %s" % [books.size(), int(genres.get("horror", 0)), int(genres.get("thriller", 0)), int(genres.get("romance", 0)), str(bad)],
+		books.size() >= 20 and ids.size() == books.size() and bad.is_empty() and genres.size() == 3 and genres.values().all(func(c): return int(c) >= 5))
+	# a candle on its own, from the catalogue
+	var probe := Furniture.new()
+	add_child(probe)
+	probe.setup("candle", 0)
+	_check("the candle is in Builder's Delight's catalogue with the books, and lit (%d light, %d flames, %d halo)" % [probe.lights.size(), probe.flames.size(), probe.find_children("*", "Sprite3D", false, false).size()],
+		"candle" in Catalog.INDOOR and "book_plum" in Catalog.INDOOR and "book_stack" in Catalog.INDOOR and probe.lights.size() == 1 and probe.flames.size() == 2
+		and probe.find_children("*", "Sprite3D", false, false).size() == 1 and probe.lights[0].has_meta("no_shadow"))
+	probe.queue_free()
+	var s = Interiors.shops.get("cafe")
+	if s == null or not s.node.visible:
+		_check("the Coffee Shop is a walk-in shop", false)
+		return
+	var xf: Transform3D = s.node.global_transform
+	var room: Node = s.node.find_child("Furnishings", false, false)
+	var spots: Array = Interiors.read_spots("cafe")
+	var seats: Array = spots.filter(func(r): return r.kind == "seat")
+	var shelves: Array = spots.filter(func(r): return r.kind == "shelf")
+	var candles: Array = s.lights.filter(func(l): return l.has_meta("candle"))
+	_check("the Coffee Shop is a walk-in shop: %d parts, %d pieces, %d reading seats, %d bookshelves, %d candles and %d lamps lit" % [s.parts.size(), room.get_child_count() if room else 0, seats.size(), shelves.size(), candles.size(), s.lights.size() - candles.size()],
+		s.parts.size() >= 11 and room != null and room.get_child_count() >= 40 and seats.size() >= 16 and shelves.size() >= 3 and candles.size() >= 20)
+	# every seat and shelf can be walked up to from the door (none boxed in by the furniture)
+	var door_in: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y - 1.0)
+	var cut_off := []
+	for r in spots:
+		var sp: Vector3 = r.stand_point()
+		var route := _find_path(door_in, sp)
+		var end: Vector3 = route[-1] if not route.is_empty() else door_in
+		if Vector2(end.x - sp.x, end.z - sp.z).length() > 0.75 or Interiors.inside_of(end) != "cafe":
+			cut_off.append("%s@%s" % [r.label, str(snapped(xf.affine_inverse() * sp, Vector3(0.1, 0.1, 0.1)))])
+	_check("every reading seat and bookshelf in the café can be walked up to from the door %s" % str(cut_off), cut_off.is_empty())
+	if not cut_off.is_empty(): # the room's walking grid, back wall at the top: # blocked, . open
+		for zi in range(int(s.room.position.y * 4.0), int(s.room.end.y * 4.0) + 1):
+			var row := ""
+			for xi in range(int(s.room.position.x * 4.0), int(s.room.end.x * 4.0) + 1):
+				row += "." if _walkable(_cell(xf * Vector3(xi * 0.25, 0, zi * 0.25))) else "#"
+			print("CAFE GRID %5.2f %s" % [zi * 0.25, row])
+	# the walls block the walking grid all the way round (a thin wall can fall between cell centres)
+	var leaks := []
+	for side in [["left", -1], ["right", 1]]:
+		for z in range(int(ceilf(s.room.position.y + 0.6)), int(s.room.end.y - 0.4)):
+			var solid := false
+			for k in 9:
+				var x: float = float(side[1]) * (s.room.size.x * 0.5 - 0.35 + k * 0.1)
+				solid = solid or not _walkable(_cell(xf * Vector3(x, 0, z)))
+			if not solid:
+				leaks.append("%s@%.1f" % [side[0], z])
+	for x in [-5.2, -4.2, -3.2, -2.2, -1.2, 1.2, 2.2, 3.2, 4.2, 5.2]:
+		if absf(x) > s.room.size.x * 0.5 - 0.4:
+			continue
+		for zz in [s.room.position.y, s.room.end.y]:
+			var solid2 := false
+			for k in 9:
+				solid2 = solid2 or not _walkable(_cell(xf * Vector3(x, 0, zz - 0.4 + k * 0.1)))
+			if not solid2:
+				leaks.append("z%.1f@%.1f" % [zz, x])
+	_check("she can't walk through the Coffee Shop's walls %s" % str(leaks), leaks.is_empty())
+	# outside, shut; then in through the door to the armchair by the fire
+	var out_front: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.2)
+	out_front.y = 0.0
+	player.walk([])
+	player.position = out_front
+	_set_cam_lock(false)
+	cam_target = xf * Vector3(0, 2.0, 1.0)
+	cam_dist = 30.0
+	await _wait(1.6)
+	var shut: bool = s.open < 0.05 and (s.parts["roof"] as Node3D).visible and not s.inside
+	await _shot("56_cafe.png")
+	var chair = seats.filter(func(r): return r.label.contains("Armchair"))
+	chair = chair[0] if not chair.is_empty() else seats[0]
+	Game.flags.erase("books")
+	Game.flags.erase("book_last")
+	Game.happiness = 50.0
+	var joy0: float = Game.happiness
+	_do_action(chair, "read_book")
+	var t := 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.6)
+	var seat_d: float = Vector2(player.position.x, player.position.z).distance_to(Vector2(chair.seat_point().x, chair.seat_point().z))
+	_check("she walks in through the café's door to the armchair and sits down with a book (%.1f s, inside %s, door %.0f%% open, roof %s, %.2f m from the seat, '%s')" % [t, s.inside, s.open * 100.0, "hidden" if not (s.parts["roof"] as Node3D).visible else "shown", seat_d, books_ui._head.text],
+		shut and s.inside and s.open > 0.9 and not (s.parts["roof"] as Node3D).visible and player.busy and seat_d < 0.1 and books_ui.visible and books_ui.current == str(books[0]["id"]) and not books_ui.pick_mode)
+	books_ui.visible = false
+	cam_target = xf * Vector3(-0.6, 1.0, -1.6)
+	cam_dist = 9.5
+	await _wait(1.5)
+	await _shot("56_cafe_inside.png")
+	cam_target = player.position + Vector3(0, 1.0, 0)
+	cam_dist = 4.5
+	await _wait(1.2)
+	await _shot("56_cafe_reading.png")
+	books_ui.visible = true
+	await _key_tap(KEY_RIGHT)
+	await _key_tap(KEY_RIGHT)
+	await _key_tap(KEY_RIGHT)
+	await _wait(0.3)
+	await _shot("56_book_open.png")
+	var spread: int = books_ui.spread
+	var shown: String = books_ui._pages[0].text
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.4)
+	var mark: Dictionary = (Game.flag("books", {}) as Dictionary).get(str(books[0]["id"]), {})
+	_check("the arrow keys turn the pages (pages %d–%d, the page's own words shown), Esc puts the book down: she gets up a little happier (%.0f -> %.0f) and it keeps her place (page %d)" % [spread + 1, spread + 2, joy0, Game.happiness, int(mark.get("page", -1)) + 1],
+		spread == 6 and shown == str((books[0]["pages"] as Array)[6]) and not books_ui.visible and not player.busy and Game.happiness > joy0 and int(mark.get("page", -1)) == 6)
+	# choosing a book from a shelf: she carries it to the nearest seat
+	var shelf = shelves[0]
+	_do_action(shelf, "read_pick")
+	t = 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	books_ui.show_book("the_night_ferry")
+	await _wait(0.4)
+	cam_target = player.position + Vector3(0, 1.2, 0)
+	cam_dist = 6.0
+	await _wait(0.8)
+	await _shot("56_cafe_shelf.png")
+	var picking: bool = books_ui.visible and books_ui.pick_mode and books_ui._cover_box.visible
+	books_ui._take_it()
+	t = 0.0
+	while not (books_ui.visible and player.busy) and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	var near = reading_seat_near(player.position)
+	_check("from the bookshelf she chooses The Night Ferry and sits down with it in the nearest seat (%.1f s, reading '%s', %s)" % [t, books_ui.current, near.label if near != null else "no seat"],
+		picking and books_ui.visible and player.busy and books_ui.current == "the_night_ferry" and not books_ui.pick_mode and near != null and Interiors.inside_of(player.position) == "cafe")
+	for i in 12:
+		books_ui.turn_page(1)
+	var ended: bool = books_ui._where.text.contains("The End")
+	books_ui.close()
+	await _wait(0.3)
+	_check("she reads it to the end, and finishing it says so (%s; '%s')" % [str(books_ui.finished), hud.toast_label.text],
+		ended and "the_night_ferry" in books_ui.finished and hud.toast_label.text.contains("finished") and bool(((Game.flag("books", {}) as Dictionary).get("the_night_ferry", {}) as Dictionary).get("done", false)))
+	# a regular drops in for a coffee and a book (cafe_visits.gd): to the counter, then a free seat
+	var reg := _villager("rowan")
+	var home_was: Vector3 = reg.home if reg != null else Vector3.ZERO
+	var home0 := Vector3.ZERO
+	var visited := false
+	var steps := []
+	if reg != null:
+		cafe_visits.visits.clear()
+		cafe_visits.seen.clear()
+		reg.settle_at(xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.5)) # just outside, to save the walk
+		reg.position.y = 0.0
+		home0 = reg.home
+		visited = cafe_visits.start("rowan")
+		t = 0.0
+		while visited and t < 40.0 and str(cafe_visits.visits.get("rowan", {}).get("state", "")) != "reading":
+			cafe_visits.update()
+			var st := str(cafe_visits.visits.get("rowan", {}).get("state", ""))
+			if steps.is_empty() or steps[-1] != st:
+				steps.append(st)
+			await _wait(0.5)
+			t += 0.5
+	var vis: Dictionary = cafe_visits.visits.get("rowan", {})
+	var rseat = vis.get("seat")
+	var book_on: bool = reg != null and reg.find_child("CafeBook", false, false) != null
+	var seat_off: float = 99.0 if rseat == null else Vector2(reg.position.x, reg.position.z).distance_to(Vector2(rseat.seat_point().x, rseat.seat_point().z))
+	cam_target = reg.position + Vector3(0, 1.0, 0) if reg != null else cam_target
+	cam_dist = 5.0
+	await _wait(1.2)
+	await _shot("56_cafe_regular.png")
+	var blocked: bool = rseat != null and rseat.taken() and not rseat.ke_actions()[0]["enabled"] and reading_seat_near(rseat.global_position) != rseat
+	_check("Rowan drops into the café for a coffee: up to the counter, then sits reading in a free seat with a book (%s, %.1f s, %.2f m from the seat, book %s), and Nora isn't offered his seat" % [" > ".join(steps), t, seat_off, book_on],
+		visited and str(vis.get("state", "")) == "reading" and steps.has("ordering") and reg.anim_override == "SitIdle" and seat_off < 0.1 and book_on and blocked)
+	if reg != null and cafe_visits.visits.has("rowan"):
+		cafe_visits.visits["rowan"]["until"] = 0.0
+		cafe_visits.update()
+		await _wait(0.6)
+		var left_ok: bool = str(cafe_visits.visits.get("rowan", {}).get("state", "")) == "leaving" and reg.anim_override == "" and reg.find_child("CafeBook", false, false) == null and (rseat == null or rseat.occupant == null)
+		story.scene_started.emit("test") # a scene starting sends everyone home at once
+		_check("when his time's up he gets up, leaves the book and heads back; a story scene sends him home at once (seat free %s)" % str(rseat == null or rseat.occupant == null),
+			left_ok and cafe_visits.visits.is_empty() and Vector2(reg.position.x, reg.position.z).distance_to(Vector2(home0.x, home0.z)) < 0.1)
+	if reg != null:
+		reg.settle_at(home_was)
+	# at night: the candles and lamps are up and flicker each in its own time
+	var day_e: float = candles[0].light_energy
+	Game.hour = 21.5
+	await _wait(1.5)
+	var es := []
+	for l in candles.slice(0, 4):
+		es.append(snappedf((l as OmniLight3D).light_energy, 0.001))
+	_check("at night the café's candles are lit up (%.2f by day, now %s) and flicker out of step" % [day_e, str(es)],
+		float(es[0]) > day_e * 2.0 and es.size() == 4 and es.max() - es.min() > 0.01)
+	player.walk([])
+	player.position = xf * Vector3(-0.3, 0, 0.6) # inside, so the roof is off
+	player.position.y = 0.0
+	cam_target = xf * Vector3(0.0, 1.0, -2.0)
+	cam_dist = 14.0
+	await _wait(1.2)
+	await _shot("56_cafe_night.png")
+	# candles in Nora's house: on the mantel, the coffee table, the kitchen counter and the bookshelf
+	var lit := {}
+	for f in furniture:
+		if is_instance_valid(f) and f.lights.any(func(l): return l.has_meta("candle")):
+			lit[f.item_id] = f.lights.filter(func(l): return l.has_meta("candle")).size()
+	_check("candles are lit in Nora's house %s" % str(lit), lit.size() >= 3 and lit.values().reduce(func(a, b): return a + b, 0) >= 4)
+	var fp = furniture.filter(func(f): return is_instance_valid(f) and f.item_id == "fireplace")
+	player.walk([])
+	player.position = Vector3(4.6, 0, 4.9)
+	if not fp.is_empty():
+		cam_target = (fp[0] as Node3D).global_position + Vector3(0, 1.0, 0)
+		cam_dist = 7.0
+		await _wait(1.5)
+		await _shot("56_house_candles.png")
+	Game.hour = 11.0
+	_set_cam_lock(true)
+	await _wait(0.5)
+
+
 func _shop_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -7390,6 +7744,7 @@ func _update_rounds(delta: float) -> void:
 	mail.update()
 	_update_gary_visit()
 	_update_max_visit()
+	cafe_visits.update()
 
 
 ## Gary from Willow Homes calls at the farm: first on her second day (data/scenes/town.scene
@@ -7547,6 +7902,11 @@ func post_farm_stop() -> Vector3:
 	return mail.stop_point()
 
 
+## Barbara has been round with today's post (and is free for a coffee).
+func post_round_done() -> bool:
+	return post_day == Game.day and _post_stops.is_empty()
+
+
 func _update_post() -> void:
 	var v := _villager("barbara")
 	var d := _villager_def("barbara")
@@ -7700,6 +8060,7 @@ func _villager_actions(v) -> Array:
 				else:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
+	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
 	else:
@@ -7730,6 +8091,9 @@ func _villager_action(v, id: String) -> void:
 	var f := Game.friend(v.vid)
 	if id.begins_with("job_"):
 		jobs.action(v, id)
+		return
+	if id.begins_with("wearsell_"):
+		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
 		return
 	match id:
 		"talk":
@@ -7813,7 +8177,6 @@ func _villager_action(v, id: String) -> void:
 				_rebuild_grid()
 				_say(v, "Look at you, a property owner. Keys to Rosewood Cottage. Furnish it in Build mode: cozier means more rent every morning. You're welcome.")
 				hud.show_toast("You bought Rosewood Cottage!")
-	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 		_:
 			if id.begins_with("gift_"):
 				var item := id.substr(5)
@@ -7845,9 +8208,6 @@ func _villager_action(v, id: String) -> void:
 
 func open_chat(v) -> void:
 	if hud.is_chat_open():
-	if id.begins_with("wearsell_"):
-		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
-		return
 		close_chat()
 	chat_v = v
 	hud.hide_menu()

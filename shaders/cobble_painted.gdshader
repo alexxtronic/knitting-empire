@@ -12,7 +12,7 @@ uniform float roughness = 0.9;
 uniform sampler2D roads : filter_linear, repeat_disable, hint_default_black;
 uniform vec4 roads_rect = vec4(0.0, 0.0, 1.0, 1.0);
 // the walk-in shops' floors (x, z, width, depth): no cobbles show through their boards
-uniform vec4 holes[4];
+uniform vec4 holes[8];
 uniform int hole_count = 0;
 
 varying vec3 wpos;
