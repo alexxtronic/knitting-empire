@@ -1,0 +1,6 @@
+BODY from metaballs: 15330 vertices, 18506 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 20 bones (343 per bone), 2693 rigid on the head
+STRIDE {'Walk': 0.516, 'Run': 1.277}
+EXPORTED chinchilla: 13712 triangles, 20 bones -> assets/wildlife/chinchilla.glb

@@ -1,0 +1,6 @@
+BODY from metaballs: 41822 vertices, 50048 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6864 vertices on 19 bones (361 per bone), 2421 rigid on the head
+STRIDE {'Walk': 0.681, 'Run': 2.257}
+EXPORTED lynx: 13712 triangles, 19 bones -> assets/wildlife/lynx.glb

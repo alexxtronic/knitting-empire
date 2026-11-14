@@ -1,0 +1,46 @@
+{
+  "_about": "The wild animals and birds round the farm (scripts/wildlife.gd). tiers: the five rarities, commonest first; a fibre's tier sets the least a sweater knitted from it can be (knit_floor, 1 Common .. 5 Legendary on the knitting game's scale). animals: name, the tier, the fibre a comb gives (an item id in fibres; wild sheep give plain wool), the model and its loops' strides (metres a second at speed 1, printed by art/world_assets/wildlife/build.py), walk and run speeds, how many live in the world, the habitats they wander (names in habitats, [x, z, width, depth] in metres), how close she can come at a run or with the dog before they bolt (shy), the size of the box a click finds them by (click, metres), and the days their fur takes to grow back after a comb. Commoner animals live nearer the farm and there are more of them; the rarer, the fewer and the further out (Alex, 2026-11-14: sheep the most common). birds: small flocks that peck about in their zone and fly off when she or the dog comes within flush metres. Every name is a draft until Alex approves it.",
+  "tiers": ["common", "rare", "ultra_rare", "legendary", "mythic"],
+  "tier_names": {"common": "Common", "rare": "Rare", "ultra_rare": "Ultra Rare", "legendary": "Legendary", "mythic": "Mythic"},
+  "tier_colors": {"common": "#c9c2b4", "rare": "#4f9be8", "ultra_rare": "#a35ee0", "legendary": "#f0a52a", "mythic": "#e8467c"},
+  "habitats": {
+    "fields_west": [-27.0, -24.0, 20.0, 40.0],
+    "fields_south": [-4.0, 14.0, 34.0, 20.0],
+    "woods_north": [-8.0, -45.0, 46.0, 24.0],
+    "town_edge": [30.0, 16.0, 44.0, 20.0],
+    "swamp": [-88.0, -30.0, 54.0, 52.0],
+    "beach": [-8.0, 40.0, 70.0, 14.0],
+    "foothills_low": [-16.0, -60.0, 100.0, 11.0],
+    "foothills_mid": [-16.0, -82.0, 100.0, 20.0],
+    "meadow_far": [114.0, -36.0, 24.0, 66.0],
+    "high_foothills": [62.0, -94.0, 26.0, 11.0]
+  },
+  "fibres": {
+    "angora": {"name": "Angora fluff", "tier": "common", "price": 14, "knit_floor": 2, "color": "#eed8b8"},
+    "fox_fibre": {"name": "Fox fluff", "tier": "rare", "price": 32, "knit_floor": 3, "color": "#e07a3c"},
+    "raccoon_fibre": {"name": "Raccoon fluff", "tier": "rare", "price": 30, "knit_floor": 3, "color": "#a08c78"},
+    "beaver_fibre": {"name": "Beaver down", "tier": "ultra_rare", "price": 60, "knit_floor": 4, "color": "#b4642e"},
+    "coyote_fibre": {"name": "Coyote fluff", "tier": "ultra_rare", "price": 62, "knit_floor": 4, "color": "#b89a80"},
+    "mink_fibre": {"name": "Mink down", "tier": "ultra_rare", "price": 66, "knit_floor": 4, "color": "#5a3020"},
+    "sable_fibre": {"name": "Sable down", "tier": "legendary", "price": 125, "knit_floor": 5, "color": "#c08040"},
+    "lynx_fibre": {"name": "Lynx fluff", "tier": "legendary", "price": 130, "knit_floor": 5, "color": "#d8b894"},
+    "chinchilla_fibre": {"name": "Chinchilla cloud", "tier": "mythic", "price": 320, "knit_floor": 5, "color": "#c4cad6"}
+  },
+  "animals": {
+    "sheep": {"name": "Wild sheep", "tier": "common", "fibre": "wool", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "walk": 0.38, "run": 1.0, "click": 0.9, "count": 16, "habitats": ["fields_west", "fields_south"], "shy": 3.5, "regrow_days": 1, "herd": 4},
+    "rabbit": {"name": "Rabbit", "tier": "common", "fibre": "angora", "model": "res://assets/wildlife/rabbit.glb", "stride": {"Walk": 0.591, "Run": 1.463}, "walk": 0.59, "run": 2.2, "click": 0.45, "count": 12, "habitats": ["fields_west", "fields_south", "woods_north"], "shy": 4.5, "regrow_days": 1},
+    "fox": {"name": "Red fox", "tier": "rare", "fibre": "fox_fibre", "model": "res://assets/wildlife/fox.glb", "stride": {"Walk": 0.515, "Run": 1.705}, "walk": 0.52, "run": 2.6, "click": 0.6, "count": 5, "habitats": ["woods_north", "town_edge"], "shy": 5.5, "regrow_days": 2},
+    "raccoon": {"name": "Raccoon", "tier": "rare", "fibre": "raccoon_fibre", "model": "res://assets/wildlife/raccoon.glb", "stride": {"Walk": 0.465, "Run": 1.542}, "walk": 0.47, "run": 2.0, "click": 0.5, "count": 5, "habitats": ["town_edge", "woods_north"], "shy": 5.0, "regrow_days": 2},
+    "beaver": {"name": "Beaver", "tier": "ultra_rare", "fibre": "beaver_fibre", "model": "res://assets/wildlife/beaver.glb", "stride": {"Walk": 0.274, "Run": 0.779}, "walk": 0.28, "run": 1.0, "click": 0.5, "count": 3, "habitats": ["swamp"], "shy": 6.0, "regrow_days": 3},
+    "mink": {"name": "Mink", "tier": "ultra_rare", "fibre": "mink_fibre", "model": "res://assets/wildlife/mink.glb", "stride": {"Walk": 0.38, "Run": 2.06}, "walk": 0.38, "run": 2.4, "click": 0.4, "count": 3, "habitats": ["swamp", "beach"], "shy": 6.0, "regrow_days": 3},
+    "coyote": {"name": "Coyote", "tier": "ultra_rare", "fibre": "coyote_fibre", "model": "res://assets/wildlife/coyote.glb", "stride": {"Walk": 0.673, "Run": 2.229}, "walk": 0.67, "run": 3.2, "click": 0.75, "count": 3, "habitats": ["foothills_low"], "shy": 7.0, "regrow_days": 3},
+    "sable": {"name": "Sable", "tier": "legendary", "fibre": "sable_fibre", "model": "res://assets/wildlife/sable.glb", "stride": {"Walk": 0.404, "Run": 2.193}, "walk": 0.4, "run": 2.6, "click": 0.4, "count": 2, "habitats": ["meadow_far"], "shy": 7.5, "regrow_days": 4},
+    "lynx": {"name": "Lynx", "tier": "legendary", "fibre": "lynx_fibre", "model": "res://assets/wildlife/lynx.glb", "stride": {"Walk": 0.681, "Run": 2.257}, "walk": 0.68, "run": 3.0, "click": 0.8, "count": 2, "habitats": ["foothills_mid"], "shy": 8.0, "regrow_days": 4},
+    "chinchilla": {"name": "Wild chinchilla", "tier": "mythic", "fibre": "chinchilla_fibre", "model": "res://assets/wildlife/chinchilla.glb", "stride": {"Walk": 0.516, "Run": 1.277}, "walk": 0.5, "run": 1.8, "click": 0.4, "count": 1, "habitats": ["high_foothills"], "shy": 9.0, "regrow_days": 7}
+  },
+  "birds": {
+    "sparrow": {"name": "Sparrow", "model": "res://assets/wildlife/sparrow.glb", "flocks": [["fields_south", 5], ["fields_west", 4], ["town_edge", 5], ["woods_north", 4]], "flush": 4.5, "speed": 6.0},
+    "robin": {"name": "Robin", "model": "res://assets/wildlife/robin.glb", "flocks": [["fields_south", 2], ["woods_north", 3], ["swamp", 3]], "flush": 4.0, "speed": 5.5},
+    "gull": {"name": "Gull", "model": "res://assets/wildlife/gull.glb", "flocks": [["beach", 6], ["beach", 5]], "flush": 6.0, "speed": 7.0}
+  }
+}

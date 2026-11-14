@@ -1,0 +1,6 @@
+BODY from metaballs: 27732 vertices, 33160 faces
+BODY thinned: 10000 faces; 9 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 8598 vertices on 19 bones (453 per bone), 2705 rigid on the head
+STRIDE {'Walk': 0.274, 'Run': 0.779}
+EXPORTED beaver: 17160 triangles, 19 bones -> assets/wildlife/beaver.glb

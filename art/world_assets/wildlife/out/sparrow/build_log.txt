@@ -1,0 +1,4 @@
+BODY 3308 faces
+LOOP Idle: 72 frames, 2.40 s
+LOOP Fly: 11 frames, 0.37 s
+EXPORTED sparrow: 7752 triangles, 8 bones -> assets/wildlife/sparrow.glb

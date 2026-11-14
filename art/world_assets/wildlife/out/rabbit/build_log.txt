@@ -1,0 +1,6 @@
+BODY from metaballs: 12522 vertices, 15232 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 17 bones (404 per bone), 2890 rigid on the head
+STRIDE {'Walk': 0.591, 'Run': 1.463}
+EXPORTED rabbit: 13712 triangles, 17 bones -> assets/wildlife/rabbit.glb

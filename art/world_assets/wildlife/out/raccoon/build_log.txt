@@ -1,0 +1,6 @@
+BODY from metaballs: 29732 vertices, 35746 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 19 bones (361 per bone), 2596 rigid on the head
+STRIDE {'Walk': 0.465, 'Run': 1.542}
+EXPORTED raccoon: 13712 triangles, 19 bones -> assets/wildlife/raccoon.glb

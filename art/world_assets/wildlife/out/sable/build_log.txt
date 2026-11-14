@@ -1,0 +1,6 @@
+BODY from metaballs: 17330 vertices, 20986 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 20 bones (343 per bone), 2550 rigid on the head
+STRIDE {'Walk': 0.404, 'Run': 2.193}
+EXPORTED sable: 13712 triangles, 20 bones -> assets/wildlife/sable.glb

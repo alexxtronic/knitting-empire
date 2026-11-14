@@ -1,0 +1,6 @@
+BODY from metaballs: 45042 vertices, 54256 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 20 bones (343 per bone), 2443 rigid on the head
+STRIDE {'Walk': 0.673, 'Run': 2.229}
+EXPORTED coyote: 13712 triangles, 20 bones -> assets/wildlife/coyote.glb

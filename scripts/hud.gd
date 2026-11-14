@@ -635,6 +635,9 @@ class Slot extends Button:
 		"scythe": ["Scythe", Color(0.5, 0.55, 0.5), "click long grass to cut hay"],
 	}
 	static var _icons := {}
+	## More things she can carry, added as the game loads their data: id -> [name, colour] (the wild
+	## fibres, scripts/wildlife.gd).
+	static var extra := {}
 
 	static func holds_tool(item: String) -> bool:
 		return ITEM_INFO.has(item) and (ITEM_INFO[item] as Array).size() > 2
@@ -651,6 +654,8 @@ class Slot extends Button:
 		return _icons[item]
 
 	static func item_name(item: String) -> String:
+		if extra.has(item):
+			return str(extra[item][0])
 		return str(ITEM_INFO[item][0]) if ITEM_INFO.has(item) else item.capitalize()
 
 	var id := ""
@@ -679,7 +684,7 @@ class Slot extends Button:
 		if chosen or picked:
 			draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(0.95, 0.80, 0.46) if chosen else Color(0.6, 0.85, 1.0), false, 3.0)
 		if id != "":
-			var col: Color = ITEM_INFO[id][1] if ITEM_INFO.has(id) else Color.from_hsv(float(id.hash() % 360) / 360.0, 0.45, 0.85)
+			var col: Color = ITEM_INFO[id][1] if ITEM_INFO.has(id) else (extra[id][1] if extra.has(id) else Color.from_hsv(float(id.hash() % 360) / 360.0, 0.45, 0.85))
 			var pic := icon(id)
 			if pic != null:
 				draw_texture_rect(pic, Rect2(Vector2(4, 4), size - Vector2(8, 8)), false)

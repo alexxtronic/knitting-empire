@@ -1,0 +1,6 @@
+BODY from metaballs: 57336 vertices, 69654 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 20 bones (343 per bone), 2799 rigid on the head
+STRIDE {'Walk': 0.515, 'Run': 1.705}
+EXPORTED fox: 13712 triangles, 20 bones -> assets/wildlife/fox.glb

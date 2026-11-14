@@ -243,6 +243,26 @@ def cha_ching():
     return normalize(reverb(x, 0.9, 0.18)[:n], 0.5)
 
 
+def wing_flutter():
+    """A small flock going up: a quick run of soft wing beats, a few birds a beat apart, fading as
+    they climb away. Its own random stream, so it can be made on its own."""
+    r = np.random.default_rng(23)
+    n = int(1.0 * SR)
+    x = np.zeros(n)
+    for bird in range(3):
+        start = r.uniform(0.0, 0.12)
+        rate = r.uniform(15.0, 21.0)  # wing beats a second
+        for k in range(int(rate * 0.7)):
+            s0 = int((start + k / rate + r.uniform(-0.004, 0.004)) * SR)
+            m = int(0.045 * SR)
+            if s0 + m >= n:
+                break
+            beat = band(r.standard_normal(m), 300, 2600) * expdec(m, 0.012)
+            beat *= (1.0 - k / (rate * 0.7)) ** 1.5 * r.uniform(0.6, 1.0)  # fading as they climb
+            x[s0:s0 + m] += beat
+    return normalize(x * fade(n, 0.002, 0.2), 0.45)
+
+
 # --- ambience loops ----------------------------------------------------------------------------
 
 def wind(secs, level=1.0, low=420):
@@ -413,7 +433,8 @@ def arrival(bpm=66):
 if __name__ == "__main__":
     print("writing to", OUT)
     if "--only" in sys.argv:  # one effect, leaving the rest as they are: --only coins
-        {"coins": lambda: write_wav("coins", cha_ching())}[sys.argv[sys.argv.index("--only") + 1]]()
+        {"coins": lambda: write_wav("coins", cha_ching()),
+         "flutter": lambda: write_wav("flutter", wing_flutter())}[sys.argv[sys.argv.index("--only") + 1]]()
         sys.exit(0)
     for i in range(4):
         write_wav("step_grass_%d" % (i + 1), footstep_grass(i))
@@ -424,6 +445,7 @@ if __name__ == "__main__":
     write_wav("ui_open", ui_open())
     write_wav("journal", journal_chime())
     write_wav("coins", cha_ching())
+    write_wav("flutter", wing_flutter())
     write_ogg("amb_day", ambience_day(), 4)
     write_ogg("amb_night", ambience_night(), 4)
     write_ogg("amb_rain", rain(), 4)

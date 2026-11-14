@@ -1,0 +1,1 @@
+GATE side IoU 0.792 (red: the reference's fur the model lacks; blue: the model's extra)

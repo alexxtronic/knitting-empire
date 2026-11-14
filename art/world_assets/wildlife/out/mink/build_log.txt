@@ -1,0 +1,6 @@
+BODY from metaballs: 16228 vertices, 19548 faces
+BODY thinned: 10000 faces; 10 parts
+BAKED 1024 px atlas: colour (with occlusion) and fur normal map
+SKIN 6868 vertices on 20 bones (343 per bone), 2557 rigid on the head
+STRIDE {'Walk': 0.38, 'Run': 2.06}
+EXPORTED mink: 13712 triangles, 20 bones -> assets/wildlife/mink.glb

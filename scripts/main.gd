@@ -38,6 +38,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 const WardrobeView = preload("res://scripts/wardrobe_view.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
+const Wildlife = preload("res://scripts/wildlife.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -111,6 +112,7 @@ var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
 var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
+var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
 var fps: FirstPerson # first person: the camera at her eyes (first_person.gd), V
@@ -118,6 +120,7 @@ var jobs: Jobs # work beside knitting: the bakery, the Coffee Shop, the post rou
 var forage: Forage # trees she fells with the axe, plants she trims with the shears (forage.gd)
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
+var _knit_fibre := "" # the wild fibre going into the sweater on the needles ("" for plain wool)
 var _knit_clock_was := true
 var audio: GameAudio
 var story: StoryPlayer
@@ -357,6 +360,11 @@ func _ready() -> void:
 	add_child(forage)
 	forage.apply()
 	_setup_dog()
+	wildlife = Wildlife.new()
+	wildlife.main = self
+	add_child(wildlife)
+	if _autotest_dir == "": # the autotest places them only for its own check (_wildlife_checks)
+		wildlife.build()
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -2120,11 +2128,11 @@ func _actions_for(t) -> Array:
 			_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0),
 			_act("ship_crops", "Ship crops (%dc)" % crops, crops > 0),
 			_act("ship_wool", "Ship raw wool (%d × %dc)" % [wool, Game.SELL_PRICES["wool"]], wool > 0),
-		]
+		] + ([_act("ship_fibre", "Ship wild fibre (%d, %dc)" % [wildlife.fibre_count(), wildlife.fibre_worth()])] if wildlife.fibre_count() > 0 else [])
 	if t is Furniture:
 		match t.item_id:
 			"rocking_chair", "armchair":
-				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3)), _act("rest", "Rest  (+energy)")]
+				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3))] + wildlife.knit_rows() + [_act("rest", "Rest  (+energy)")]
 			"sofa", "bench", "bench_short":
 				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)")]
 			"bed":
@@ -2242,12 +2250,22 @@ func _perform(t, id: String) -> void:
 	if t.has_method("ke_action"):
 		t.ke_action(id)
 		return
+	if id.begins_with("knit_fibre:"): # two wool and one wild fibre: the sweater is at least that fibre's floor
+		var fibre := id.trim_prefix("knit_fibre:")
+		if not (Game.has_item("wool", 2) and Game.has_item(fibre)):
+			hud.show_toast("You need 2 wool and the %s." % wildlife.item_name(fibre))
+			return
+		if Game.use_energy(10.0):
+			_knit_fibre = fibre
+			_begin_knit(t)
+		return
 	match id:
 		"knit":
 			if not Game.has_item("wool", 3):
 				hud.show_toast("You need 3 wool to knit a sweater. Shear a sheep!")
 				return
 			if Game.use_energy(10.0):
+				_knit_fibre = ""
 				_begin_knit(t)
 		"rest":
 			var seat = _seat_point(t) if t is Furniture else null
@@ -2302,7 +2320,7 @@ func _perform(t, id: String) -> void:
 				player.start_activity("Shearing", 2.5, _finish_shear.bind(t))
 		"pet":
 			player.start_activity("Petting", 1.2, _finish_pet.bind(t))
-		"ship_sweater", "ship_crops", "ship_wool":
+		"ship_sweater", "ship_crops", "ship_wool", "ship_fibre":
 			_ship(id)
 
 
@@ -2336,7 +2354,17 @@ func _on_knit_finished(res: Dictionary) -> void:
 
 
 func _finish_knit(rarity := 0) -> void:
-	if Game.take_item("wool", 3):
+	var fibre := _knit_fibre
+	_knit_fibre = ""
+	if fibre != "" and not (Game.has_item("wool", 2) and Game.has_item(fibre)):
+		fibre = ""
+	var paid := false
+	if fibre != "": # a wild fibre lifts the sweater to at least its floor
+		paid = Game.take_item("wool", 2) and Game.take_item(fibre)
+		rarity = maxi(rarity if rarity > 0 else Game.knit_quality(), wildlife.knit_floor(fibre))
+	else:
+		paid = Game.take_item("wool", 3)
+	if paid:
 		var worn0 := Game.worn_quality
 		var q := Game.knit_sweater(rarity)
 		Game.add_need("happiness", 14.0)
@@ -2435,6 +2463,8 @@ func _ship(kind: String) -> void:
 			items = ["turnip", "pumpkin"]
 		"ship_wool":
 			items = ["wool"]
+		"ship_fibre":
+			earned = wildlife.ship_fibres()
 	for k in items:
 		var n := Game.count(k)
 		earned += Game.sweater_worth(int(Game.SELL_PRICES[k])) if k == "sweater" else n * int(Game.SELL_PRICES[k]) # sweaters sell by rarity
@@ -4936,6 +4966,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=wildlife" in OS.get_cmdline_user_args(): # just the wild animals and birds: placing, combing, fleeing, flushing
+		await _wait(1.5)
+		await _wildlife_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
 		await _wait(1.5)
 		await _dog_checks()
@@ -5168,6 +5204,7 @@ func _autotest() -> void:
 	await _light_checks()
 	await _world_checks()
 	await _dog_checks()
+	await _wildlife_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
 	await _photo_checks()
@@ -6352,6 +6389,251 @@ func _open_near(at: Vector3, r: float) -> Vector3:
 		if _walkable(_cell(p)) and not _find_path(p, at).is_empty():
 			return p
 	return at + Vector3(r, 0, 0)
+
+
+## Where the tall scenery stands (trees and anything else over 1.6 m scattered as MultiMeshes), for
+## the autotest to keep its pictures clear of canopies.
+func _tall_scenery() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for c in find_children("*", "MultiMeshInstance3D", true, false):
+		var mmi := c as MultiMeshInstance3D
+		if mmi.multimesh == null or mmi.multimesh.mesh == null:
+			continue
+		var h := mmi.multimesh.mesh.get_aabb().size.y
+		for i in mmi.multimesh.instance_count:
+			var t := mmi.global_transform * mmi.multimesh.get_instance_transform(i)
+			if h * t.basis.get_scale().y >= 1.6:
+				out.append(t.origin)
+	return out
+
+
+## How far (up to 8 m) from `at` the nearest tall scenery or blocked cell is (for the autotest to
+## pick something in the open to photograph). With `toward` (the flat way to the camera), the
+## ground 3 and 6 m that way counts too, so no canopy stands between.
+func _openness(at: Vector3, tall: PackedVector3Array, toward := Vector3.ZERO) -> float:
+	if toward != Vector3.ZERO:
+		return minf(_openness(at, tall), minf(_openness(at + toward * 3.0, tall), _openness(at + toward * 6.0, tall)))
+	var best := 8.0
+	for p in tall:
+		best = minf(best, Vector2(p.x - at.x, p.z - at.z).length())
+	var n := int(minf(best, 6.0) / CELL)
+	for i in range(-n, n + 1):
+		for j in range(-n, n + 1):
+			var d := Vector2(i, j).length() * CELL
+			if d < best and not _walkable(_cell(at + Vector3(i * CELL, 0.0, j * CELL))):
+				best = d
+	return best
+
+
+## The most open walkable spot within 12 m of `at` (the autotest stands an animal there for its
+## picture when every one of its kind is under the trees).
+func _clear_spot(at: Vector3, tall: PackedVector3Array, toward := Vector3.ZERO) -> Vector3:
+	var best := at
+	var score := _openness(at, tall, toward)
+	for r in [2.0, 4.0, 6.0, 9.0, 12.0]:
+		for k in 16:
+			var a := TAU * k / 16.0
+			var p := at + Vector3(cos(a), 0.0, sin(a)) * float(r)
+			if not _walkable(_cell(p)):
+				continue
+			var s := _openness(p, tall, toward)
+			if s > score + 0.5:
+				score = s
+				best = p
+	return best
+
+
+## The wild animals and birds (scripts/wildlife.gd, data/wildlife.json): every species' model and
+## loops; the rarer the tier, the fewer and the further out, with sheep the commonest; combing one
+## for its fibre and its coat growing back; bolting when she runs at it; birds flying off as she
+## walks up and settling elsewhere; knitting with a fibre lifting the sweater to its floor; shipping.
+func _wildlife_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	Game.energy = maxf(Game.energy, 80.0)
+	var jog0 := autotest_jog
+	autotest_jog = false # she walks up: a run would send them off
+	player.walk([])
+	var cd0 := cam_dist
+	_set_cam_lock(false) # the camera stays on what the check looks at, not on her
+	wildlife.build()
+	await _wait(0.6)
+	var by := {}
+	for a in wildlife.animals:
+		if not by.has(a.species):
+			by[a.species] = []
+		by[a.species].append(a)
+	var bad := []
+	for id in by:
+		if not by[id][0].ok():
+			bad.append(id)
+	_check("every wild animal has its model and loops (%d species; without: %s)" % [by.size(), str(bad)], by.size() == 10 and bad.is_empty())
+	var farm := Vector3(10.0, 0, -3.0)
+	var n := [0, 0, 0, 0, 0]
+	var far := [0.0, 0.0, 0.0, 0.0, 0.0]
+	for a in wildlife.animals:
+		var r: int = wildlife.tier_rank(a.tier())
+		n[r] += 1
+		far[r] += Vector2(a.position.x - farm.x, a.position.z - farm.z).length()
+	var fewer := true
+	var further := true
+	for i in 5:
+		far[i] = far[i] / maxf(1.0, float(n[i]))
+		if i > 0:
+			fewer = fewer and n[i] < n[i - 1]
+			further = further and far[i] > far[i - 1]
+	_check("the rarer the tier, the fewer the animals (%s) and the further from the farm (%s m)" % [str(n), str(far.map(func(x): return int(x)))],
+		n.min() > 0 and fewer and further)
+	var most := 0
+	for id in by:
+		if id != "sheep":
+			most = maxi(most, by[id].size())
+	_check("sheep are the commonest animal (%d wild, %d in the pen; next %d)" % [by.get("sheep", []).size(), sheep_list.size(), most], by.get("sheep", []).size() > most)
+	_check("every animal stands on open ground in its habitat", wildlife.animals.all(func(a): return _walkable(_cell(a.position)) and a._at_home(a.position)))
+	# combing a rabbit
+	var rab = by["rabbit"][0]
+	player.position = _open_near(rab.position, 3.0)
+	cam_target = rab.position
+	cam_dist = 5.0
+	await _wait(0.4)
+	var acts: Array = _actions_for(rab)
+	_check("clicking a rabbit holds it still and offers to comb it (%s)" % str(acts[0]["label"]), acts[0]["id"] == "comb" and acts[0]["enabled"])
+	var a0 := Game.count("angora")
+	_do_action(rab, "comb")
+	var tw := 0.0
+	while (not player.path.is_empty() or player.busy or Game.count("angora") == a0) and tw < 10.0:
+		await _wait(0.25)
+		tw += 0.25
+	_check("she walks up and combs it: +1 %s (%d -> %d)" % [wildlife.item_name("angora"), a0, Game.count("angora")], Game.count("angora") == a0 + 1)
+	cam_target = (player.position + rab.position) * 0.5
+	await _wait(0.3)
+	await _shot("59_wild_comb.png")
+	acts = _actions_for(rab)
+	_check("its coat needs time to grow back (%s)" % str(acts[0].get("hint", "")), not rab.has_fur() and not acts[0]["enabled"])
+	var wild: Dictionary = (Game.flag("wild", {}) as Dictionary).duplicate()
+	wild[rab.key] = Game.day - 1
+	Game.set_flag("wild", wild)
+	_check("a day later its coat has grown back", rab.has_fur())
+	# running at a fox
+	var fox = by["fox"][0]
+	player.position = _open_near(fox.position, 9.0)
+	fox.hold(0.0)
+	await _wait(0.2)
+	cam_target = fox.position
+	cam_dist = 9.0
+	autotest_jog = true # as if Shift were held: she runs at it
+	player.walk(_find_path(player.position, fox.position))
+	tw = 0.0
+	while fox.fleeing <= 0.0 and tw < 8.0:
+		await _wait(0.1)
+		tw += 0.1
+	await _wait(0.7)
+	var stride := float((fox.info["stride"] as Dictionary).get(fox.current_loop(), 1.0))
+	_check("running at a fox, it bolts (%s at %.1f m/s, loop covers %.1f m/s)" % [fox.current_loop(), fox.speed, fox.loop_rate() * stride],
+		fox.fleeing > 0.0 and fox.current_loop() == "Run" and absf(fox.loop_rate() * stride - fox.speed) < 0.4)
+	cam_target = fox.position
+	await _shot("59_wild_flee.png")
+	autotest_jog = false
+	player.walk([])
+	# a lynx at the camera: let it stand for its picture, and the rest of the rarer ones
+	var tall := _tall_scenery()
+	var back: Vector3 = cam.global_position - cam_target # the flat way to the camera
+	back.y = 0.0
+	back = back.normalized() if back.length() > 0.1 else Vector3(0, 0, 1)
+	for id in ["sheep", "rabbit", "fox", "raccoon", "beaver", "mink", "coyote", "sable", "lynx", "chinchilla"]:
+		var a = by[id][0]
+		for b in by[id]: # the one standing most in the open, so no canopy hides it from the camera
+			if _openness(b.position, tall, back) > _openness(a.position, tall, back):
+				a = b
+		if _openness(a.position, tall, back) < 4.0: # all of them under the trees: it steps out for its picture
+			a.position = _clear_spot(a.position, tall, back)
+		a.hold(4.0)
+		player.position = _open_near(a.position, 6.0) # out of the picture, and too far for it to turn to her
+		cam_target = a.position + Vector3(0, 0.15, 0)
+		cam_dist = 3.2 if id in ["rabbit", "mink", "sable", "chinchilla"] else 4.5
+		await _wait(0.4)
+		var to: Vector3 = cam.global_position - a.global_position
+		a.rotation.y = atan2(to.x, to.z) + 0.7 # three-quarters on to the camera
+		await _wait(0.4)
+		await _shot("59_wild_%s.png" % id)
+	cam_dist = cd0
+	# walking up to sparrows
+	var fl = null
+	for f in wildlife.flocks:
+		if f.kind == "sparrow" and (fl == null or _openness(f.global_position, tall, back) > _openness(fl.global_position, tall, back)):
+			fl = f
+	player.position = _open_near(fl.global_position, 10.0) # (a flock already up is heading here: its spot moves with it)
+	var tl := 0.0
+	while fl.flying and tl < 15.0: # one she put up while posing for the pictures above lands first
+		await _wait(0.25)
+		tl += 0.25
+	cam_target = (fl.global_position + player.position) * 0.5
+	cam_dist = 12.0
+	await _wait(1.2)
+	_check("the sparrows peck about on the ground", not fl.flying and fl.in_air() == 0)
+	player.walk(_find_path(player.position, fl.global_position))
+	tw = 0.0
+	while fl.flushes == 0 and tw < 10.0:
+		await _wait(0.1)
+		tw += 0.1
+	await _wait(0.5)
+	_check("walking up to them, the sparrows fly off (%d of %d in the air)" % [fl.in_air(), fl.birds.size()], fl.flushes > 0 and fl.in_air() > 0)
+	var up := Vector3.ZERO # frame the birds in the air, not her
+	var ups := 0
+	for b in fl.birds:
+		if b["air"]:
+			up += (b["node"] as Node3D).global_position
+			ups += 1
+	cam_target = up / maxf(1.0, ups) if ups > 0 else player.position
+	cam_dist = 9.0
+	await _wait(0.3)
+	await _shot("59_birds_flush.png")
+	player.walk([])
+	tw = 0.0
+	while fl.flying and tw < 15.0:
+		await _wait(0.25)
+		tw += 0.25
+	_check("they settle again in their zone, somewhere else (%.0f s)" % tw, not fl.flying and fl.zone.grow(2.0).has_point(Vector2(fl.position.x, fl.position.z)))
+	cam_dist = cd0
+	autotest_jog = jog0
+	# knitting with a wild fibre, and shipping it
+	var keep := {"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate(), "s": Game.sweaters.duplicate(),
+		"sd": Game.sweater_designs.duplicate(), "xp": Game.knit_xp, "c": Game.coins, "wool": Game.count("wool")}
+	Game.add_item("wool", 2)
+	Game.add_item("lynx_fibre", 1)
+	var rows := wildlife.knit_rows()
+	_check("with a wild fibre in her bag the chair offers to knit with it (%s)" % (str(rows[0]["label"]) if not rows.is_empty() else "none"),
+		rows.any(func(r): return r["id"] == "knit_fibre:lynx_fibre" and r["enabled"]))
+	_knit_fibre = "lynx_fibre"
+	var s0 := Game.sweaters.size()
+	_finish_knit(1)
+	var got: int = Game.sweaters[-1] if Game.sweaters.size() > s0 else 0
+	_check("knitting with lynx fluff, a Common knit comes out at least %s (%s), from 2 wool and the fluff" % [KnitGame.rarity_name(wildlife.knit_floor("lynx_fibre")), KnitGame.rarity_name(got)],
+		got >= wildlife.knit_floor("lynx_fibre") and Game.count("wool") == keep["wool"] and Game.count("lynx_fibre") == 0)
+	Game.add_item("fox_fibre", 2)
+	var worth := wildlife.fibre_worth()
+	var c0 := Game.coins
+	_ship("ship_fibre")
+	_check("the bin ships wild fibre (+%dc)" % (Game.coins - c0), worth > 0 and Game.coins - c0 == worth and wildlife.fibre_count() == 0)
+	Game.worn_quality = keep["q"]
+	Game.worn_design = keep["d"]
+	Game.wardrobe = keep["w"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["sd"]
+	Game.knit_xp = keep["xp"]
+	Game.coins = keep["c"]
+	Game.take_item("angora", Game.count("angora"))
+	Game.set_flag("wild", {})
+	# out of sight, out of mind
+	player.position = Vector3(9.0, 0, 8.0)
+	cam_target = player.position
+	_set_cam_lock(true)
+	await _wait(0.6)
+	var shown: int = wildlife.animals.filter(func(a): return a.visible).size()
+	_check("animals far from her and the camera are hidden and still (%d of %d shown from the yard)" % [shown, wildlife.animals.size()],
+		shown < wildlife.animals.size() and not by["chinchilla"][0].visible and by["chinchilla"][0].process_mode == Node.PROCESS_MODE_DISABLED)
+	wildlife.clear()
 
 
 ## The knitted sweaters: fifty designs; Nora's wardrobe (what she knits hangs there, she picks what

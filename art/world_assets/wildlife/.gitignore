@@ -1,0 +1,9 @@
+# Rebuilt by build.py and birds.py; the GLBs in assets/wildlife carry the textures.
+out/*/*.blend
+out/*/*.png
+# Review renders: only each animal's sheet and its side-view gate are kept (sheet.py makes them;
+# review/birds/sheet.png lays out the birds' renders).
+review/*/*
+!review/*/sheet.png
+!review/*/gate_side.png
+!review/*/gate.txt

@@ -1,0 +1,4 @@
+BODY 3469 faces
+LOOP Idle: 72 frames, 2.40 s
+LOOP Fly: 10 frames, 0.33 s
+EXPORTED robin: 7770 triangles, 8 bones -> assets/wildlife/robin.glb
