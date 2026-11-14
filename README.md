@@ -108,7 +108,8 @@ Prices, furniture, crops, villagers and their lines all live in `data/`. Edit th
 - **A new villager:** add an entry to `villagers.json`, then give them an intro, three tiers of lines and a loved-gift line in `dialogue.json`. Give them `"works_in": "shop"` (or `bakery`, `office`, `homegoods`) to put them behind that shop's counter, or `"at"` to stand them by a building that isn't walk-in (Sabrina on the Coffee Shop's terrace). The `_about` at the top of `villagers.json` lists every field.
 - **A shop's furniture:** `interiors.json` lists what stands in each shop you can walk into (the Yarn Barn, Heart Bakery, Willow Homes, Builder's Delight), where the shopkeeper stands and where you stand to talk to them, all in the building's own space, so it all moves with the building in the world editor.
 - **A new crop:** add it to `crops.json` and give it a sell price in `economy.json`.
-- **Furniture:** add it to `furniture.json`. Either give it a `"model"` (a glb made with `tools/import_asset.py`, see [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)) or write a builder in `catalog.gd`.
+- **Furniture:** add it to `furniture.json`. Either give it a `"model"` (a glb made with `tools/import_asset.py`, see [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)) or write a builder in `catalog.gd`. Give it a `"shop"` (`indoors` or `yard`) and a `"cat"` (its tab: Living, Kitchen, Bed & Study, Crafts, Garden or Farm) to sell it in Builder's Delight's catalogue, and a `"wood"` cost if it can be built from wood.
+- **Tools and seeds for sale:** Steve's counter at Builder's Delight sells what's in `economy.json` "store" (tools, seed packets, Gran's seed tin's contents). Felling and trimming are in its "forage" block.
 
 The autotest checks the files against each other and names anything missing.
 

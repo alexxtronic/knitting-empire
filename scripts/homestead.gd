@@ -36,12 +36,22 @@ Put a little in the tin each week, for the house. Not because it needs the money
 
 There's a hundred coins under the lid to start you off. Go and see Rosa at the Yarn Barn for some good yarn, and make something with your hands. It always helped me. It will help you.
 
+My seed tin is on the kitchen counter, with what's left of last year's. Grow yourself some supper.
+
 Whatever happened out there, love, it stays out there. In here it's just you and the kettle.
 
 I'll write. Barbara brings the post up the lane at nine every morning, so mind you look in the box.
 
 All my love, always,
 Gran"""
+## The note folded inside Gran's seed tin. A DRAFT for Alex.
+const SEED_NOTE := """Nora love,
+
+These are the last of my seeds. The turnips are quick: dig a bed, plant them in the morning and they're ready by supper. The pumpkins take their time but fetch a good price. Rosa buys whatever you grow.
+
+You'll need a hoe to break the ground. Mine finally went to pieces, so see Steve at Builder's Delight. He has everything for the house, and he won't overcharge you.
+
+Gran x"""
 
 var main: Node
 var ui: PlayUi
@@ -53,6 +63,7 @@ var herders: Array = [] # what the sheep move away from (Nora; the dog joins whe
 var building := false # the fence builder is on
 var tool := "fence" # what a click puts down: "fence" or "gate"
 var tin: Node3D # Gran's tin on the table: pay the rent
+var seed_tin: Node3D # Gran's seed tin on the kitchen counter, until she opens it
 var note_prop: Node3D
 var _fence_root: Node3D
 var _blocks: Array = [] # Rect2s this file added to main.grid_blockers
@@ -106,7 +117,7 @@ func has_pen() -> bool:
 func start_story() -> void:
 	Game.set_flag("story_farm")
 	Game.coins = 0
-	for id in ["wool", "turnip", "pumpkin", "sweater"]:
+	for id in ["wool", "turnip", "pumpkin", "sweater", "turnip_seeds", "pumpkin_seeds", "leaves"]:
 		Game.inv.erase(id)
 	Game.sheep_count = 0
 	Game.flags.erase("fences")
@@ -806,6 +817,52 @@ func _place_note_and_tin() -> void:
 		main.add_child(note_prop)
 		Catalog.box(note_prop, Vector3(0.22, 0.008, 0.16), Vector3(0, 0.005, 0), Color(0.97, 0.94, 0.86), Vector3(0, 12, 0))
 		note_prop.position = top + Vector3(-0.1, 0.0, 0.05)
+	_place_seed_tin()
+
+
+## Gran's seed tin on the kitchen counter, on the story farm until she opens it.
+func _place_seed_tin() -> void:
+	var opened: bool = Game.flag("seed_tin_opened") == true
+	if opened or not story_farm():
+		if seed_tin and is_instance_valid(seed_tin):
+			seed_tin.queue_free()
+		seed_tin = null
+		return
+	var kitchen = null
+	for f in main.furniture:
+		if f.item_id == "kitchen":
+			kitchen = f
+			break
+	if kitchen == null:
+		return
+	if seed_tin == null or not is_instance_valid(seed_tin):
+		seed_tin = _Pickable.new()
+		seed_tin.home = self
+		seed_tin.kind = "seeds"
+		main.add_child(seed_tin)
+		Catalog.box(seed_tin, Vector3(0.2, 0.12, 0.14), Vector3(0, 0.06, 0), Color(0.42, 0.56, 0.36))
+		Catalog.box(seed_tin, Vector3(0.21, 0.025, 0.15), Vector3(0, 0.13, 0), Color(0.78, 0.66, 0.4))
+		Catalog.box(seed_tin, Vector3(0.12, 0.05, 0.004), Vector3(0, 0.07, 0.072), Color(0.96, 0.92, 0.8)) # its paper label
+		seed_tin.add_hitbox(Vector3(0.5, 0.5, 0.5))
+	var h := float(Data.furniture().get(kitchen.item_id, {}).get("height", 1.1))
+	seed_tin.position = kitchen.position + Vector3(0, h - 0.18, 0) + kitchen.basis * Vector3(0.35, 0, 0.0)
+	seed_tin.rotation.y = kitchen.rotation.y
+
+
+## She opens Gran's seed tin: its seeds are hers, and Gran's note inside tells her what to do with them.
+func open_seed_tin() -> void:
+	if Game.flag("seed_tin_opened") == true:
+		return
+	Game.set_flag("seed_tin_opened")
+	var gives: Dictionary = Data.economy().get("store", {}).get("seed_tin", {"turnip": 6, "pumpkin": 2})
+	var got := []
+	for crop in gives:
+		Game.add_item(str(crop) + "_seeds", int(gives[crop]))
+		got.append("%d %s" % [int(gives[crop]), crop])
+	main.hud.show_toast("Gran's seeds: %s" % ", ".join(got))
+	ui.show_note(SEED_NOTE)
+	_place_seed_tin()
+	main._story_event_soon("seed_tin_opened")
 
 
 ## The story has handed her the note: it leaves the table.
@@ -833,10 +890,12 @@ class _Pickable extends Node3D:
 		add_child(body)
 
 	func display_name() -> String:
-		return "Gran's tin"
+		return "Gran's seed tin" if kind == "seeds" else "Gran's tin"
 
 	func ke_actions() -> Array:
 		var acts := []
+		if kind == "seeds":
+			return [{"id": "open_seeds", "label": "Open the seed tin", "enabled": true}]
 		var owed: int = home.rent_owed()
 		if Game.flag("rent_on") == true:
 			if owed > 0:
@@ -849,6 +908,8 @@ class _Pickable extends Node3D:
 
 	func ke_action(id: String) -> void:
 		match id:
+			"open_seeds":
+				home.open_seed_tin()
 			"pay_rent":
 				home.pay_rent()
 			"read_note":

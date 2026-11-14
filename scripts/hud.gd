@@ -622,12 +622,15 @@ class Slot extends Button:
 		"hay": ["Hay", Color(0.94, 0.72, 0.2)],
 		"gate": ["Pen gate", Color(0.6, 0.45, 0.3)],
 		"gran_note": ["Gran's note", Color(0.96, 0.92, 0.82)],
+		"leaves": ["Leaves", Color(0.45, 0.68, 0.32)],
+		"turnip_seeds": ["Turnip seeds", Color(0.78, 0.66, 0.86)],
+		"pumpkin_seeds": ["Pumpkin seeds", Color(0.95, 0.8, 0.55)],
 		# tools: a third entry says what a click does with it in her hand
 		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "right-click open ground on the farm and pick Dig bed"],
 		"watering_can": ["Watering can", Color(0.45, 0.5, 0.6), "click a growing crop to water it"],
-		"shears": ["Shears", Color(0.8, 0.3, 0.25), "click a woolly sheep to shear it"],
+		"shears": ["Shears", Color(0.8, 0.3, 0.25), "click a woolly sheep to shear it, or a bush or flowers to trim them for leaves"],
 		"shovel": ["Shovel", Color(0.5, 0.45, 0.45), "click a bed you dug to clear it away"],
-		"axe": ["Axe", Color(0.55, 0.4, 0.3), "click a tree to chop some wood"],
+		"axe": ["Axe", Color(0.55, 0.4, 0.3), "click a tree on the farm to fell it for wood"],
 		"scythe": ["Scythe", Color(0.5, 0.55, 0.5), "click long grass to cut hay"],
 	}
 	static var _icons := {}
@@ -1041,7 +1044,11 @@ func _build_catalog() -> void:
 	vb.add_child(tabs)
 	var group := ButtonGroup.new()
 	var pages: Array[Control] = []
-	var sections := [["Indoors", Catalog.INDOOR], ["Yard & Garden", Catalog.OUTDOOR]]
+	var sections := []
+	for c in Catalog.CATS: # Builder's Delight's catalogue, by room (furniture.json "cat")
+		var ids: Array = Catalog.in_cat(c)
+		if not ids.is_empty():
+			sections.append([c, ids])
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(408, 430)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -1056,7 +1063,7 @@ func _build_catalog() -> void:
 		for id in sections[si][1]:
 			var info: Dictionary = Catalog.ITEMS[id]
 			var item_id: String = id
-			var b := _button("%s\n%dc" % [info["name"], info["price"]], func(): item_chosen.emit(item_id))
+			var b := _button("%s\n%s" % [info["name"], Catalog.price_text(id)], func(): item_chosen.emit(item_id))
 			b.custom_minimum_size = Vector2(128, 138)
 			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
@@ -1064,7 +1071,7 @@ func _build_catalog() -> void:
 			b.add_theme_constant_override("icon_max_width", 112)
 			b.add_theme_font_size_override("font_size", 12)
 			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			b.tooltip_text = "%s · %dc" % [info["name"], info["price"]]
+			b.tooltip_text = "%s · %s" % [info["name"], Catalog.price_text(id)]
 			grid.add_child(b)
 			item_buttons[id] = b
 		grid.visible = si == 0
@@ -1078,11 +1085,11 @@ func _build_catalog() -> void:
 		tab.button_pressed = si == 0
 		tabs.add_child(tab)
 	vb.add_child(scroll)
-	vb.add_child(_label("R rotates · right-click cancels · click a placed item to move or sell it", 11, Color(0.85, 0.8, 0.7)))
+	vb.add_child(_label("Wooden pieces are built from your wood when you have enough, or bought with coins.\nR rotates · right-click cancels · click a placed item to move or sell it", 11, Color(0.85, 0.8, 0.7)))
 	catalog_panel.add_child(vb)
 	catalog_panel.visible = false
 	root.add_child(catalog_panel)
-	_place(catalog_panel, 1.0, 0.5, Vector2(16, 0))
+	_place(catalog_panel, 1.0, 1.0, Vector2(16, 96)) # above the hotbar, clear of the minimap at the top right
 	var th = preload("res://scripts/thumbs.gd").new()
 	add_child(th)
 	th.thumb_ready.connect(func(id: String, tex: Texture2D):
@@ -1368,7 +1375,7 @@ func _process(_delta: float) -> void:
 	clock_label.text = "%s, Day %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.clock_text()]
 	if catalog_panel.visible:
 		for id in item_buttons:
-			item_buttons[id].disabled = Game.coins < int(Catalog.ITEMS[id]["price"])
+			item_buttons[id].disabled = not Catalog.affordable(id, Game.coins, Game.count("wood"))
 
 
 # --- story scenes ----------------------------------------------------------------

@@ -26,6 +26,40 @@ const FIRE := Color(1.0, 0.48, 0.10)
 static var ITEMS: Dictionary = Data.furniture()
 static var INDOOR: Array = Data.furniture_ids("indoors")
 static var OUTDOOR: Array = Data.furniture_ids("yard")
+## The Build catalog's tabs (Builder's Delight's catalogue), by each piece's "cat" in furniture.json.
+const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm"]
+
+
+## The tab a piece is in: its "cat", or Living for an indoor piece and Garden for the yard.
+static func cat_of(id: String) -> String:
+	var info: Dictionary = ITEMS.get(id, {})
+	var c := str(info.get("cat", ""))
+	if c in CATS:
+		return c
+	return "Living" if str(info.get("shop", "")) == "indoors" else "Garden"
+
+
+## The catalog's pieces in one tab, in file order.
+static func in_cat(cat: String) -> Array:
+	return (INDOOR + OUTDOOR).filter(func(id): return cat_of(id) == cat)
+
+
+## The wood a wooden piece can be built from instead of its coins (0: coins only).
+static func wood_cost(id: String) -> int:
+	return int(ITEMS.get(id, {}).get("wood", 0))
+
+
+## Its price as the catalog shows it: "120c", or "120c or 24 wood".
+static func price_text(id: String) -> String:
+	var w := wood_cost(id)
+	var c := int(ITEMS.get(id, {}).get("price", 0))
+	return "%dc or %d wood" % [c, w] if w > 0 else "%dc" % c
+
+
+## Whether she can pay for it, in wood or in coins.
+static func affordable(id: String, coins: int, wood: int) -> bool:
+	var w := wood_cost(id)
+	return coins >= int(ITEMS.get(id, {}).get("price", 0)) or (w > 0 and wood >= w)
 ## Ids that have a builder in build(). A furniture.json entry without one shows a magenta box.
 const BUILDERS := ["rocking_chair", "armchair", "sofa", "bed", "kitchen", "coffee_table", "dining_table",
 	"bookshelf", "wardrobe", "fireplace", "spinning_wheel", "lamp", "yarn_basket", "rug_red", "rug_round",

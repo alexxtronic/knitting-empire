@@ -17,7 +17,7 @@ const MAX_HOUSE_LEVEL := 3
 ## v4: adds the needs happiness, love, warmth and fitness, knitting skill and the sweater she wears.
 ## v5: adds typed chats with villagers (the last lines of each conversation).
 ## v6: every sweater has a rarity (1 Common .. 5 Legendary), kept in `sweaters` (scripts/knit_game.gd).
-const SAVE_VERSION := 7
+const SAVE_VERSION := 8
 ## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
 const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
@@ -49,8 +49,11 @@ var inv := {}
 ## Where each carried thing sits: item ids, "" for an empty slot. The first nine are the hotbar,
 ## the rest the bag (hud.gd). Counts stay in `inv`; sync_slots() keeps the two in step.
 const SLOTS := 36
-## The tools she always owns (one each, never used up). main.gd says what each does (_tool_click).
+## Her tools (one each, never used up). main.gd says what each does (_tool_click). A new game
+## starts with START_TOOLS (Gran's garden shears) and Builder's Delight sells the rest
+## (economy.json "store"; Alex, 2026-11-14). Saves from before version 8 keep all six.
 const TOOLS := ["hoe", "watering_can", "shears", "shovel", "axe", "scythe"]
+const START_TOOLS := ["shears"]
 var slots: Array = []
 # --- needs, 0..100 (100 = fully met). Shown in the needs panel (hud.gd). ---------
 var energy: float = 100.0
@@ -113,7 +116,7 @@ func reset() -> void:
 	coins = START_COINS
 	coins_shown = coins
 	inv = START_INVENTORY.duplicate()
-	give_tools()
+	give_tools(START_TOOLS)
 	slots = []
 	energy = 100.0
 	fullness = 80.0
@@ -336,8 +339,9 @@ func sync_slots() -> void:
 				slots[free] = id
 
 
-func give_tools() -> void:
-	for t in TOOLS:
+## Gives her these tools (all six when none are named: old saves, and the autotest's tool checks).
+func give_tools(which: Array = TOOLS) -> void:
+	for t in which:
 		inv[t] = 1
 
 
@@ -487,6 +491,16 @@ static func migrate(d: Dictionary) -> Dictionary:
 	if v < 7:
 		_rename_daniel(d.get("flags", {})) # Nora's ex is Max now (Alex, 2026-11-13), not Daniel
 		v = 7
+	if v < 8:
+		# tools are bought now (Alex, 2026-11-14): a game that started when she had all six keeps them
+		var inv8: Dictionary = d.get("inv", {})
+		for t in TOOLS:
+			inv8[t] = 1
+		# and planting takes a seed now, not coins: a handful to go on with
+		inv8["turnip_seeds"] = int(inv8.get("turnip_seeds", 0)) + 6
+		inv8["pumpkin_seeds"] = int(inv8.get("pumpkin_seeds", 0)) + 2
+		d["inv"] = inv8
+		v = 8
 	d["version"] = v
 	return d
 
@@ -529,7 +543,8 @@ func from_dict(d: Dictionary) -> void:
 	var saved_inv: Dictionary = d.get("inv", {})
 	for k in saved_inv:
 		inv[str(k)] = int(saved_inv[k])
-	give_tools() # saves from before the tools get them too
+	if not has_item("shears"): # Gran's shears: she always has them
+		inv["shears"] = 1
 	slots = []
 	var seen := {}
 	for id in d.get("slots", []):

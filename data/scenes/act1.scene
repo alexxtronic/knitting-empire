@@ -283,7 +283,7 @@ Rowan (warm): I'll talk you through it. It's your pen, though. That matters, wit
 @home rowan off
 @set act1_strays
 @camera player
-@goal Buy wood from Steve at Builder's Delight | 47.7 -9.4
+@goal Get wood: buy it from Steve at Builder's Delight, or fell a farm tree with an axe | 47.7 -9.4
 
 == act1_wood
 @trigger event wood_bought

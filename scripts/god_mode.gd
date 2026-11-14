@@ -95,6 +95,7 @@ class El:
 	var base := Transform3D.IDENTITY # where the code (or the layout file) put it
 	var xf := Transform3D.IDENTITY # where it is now
 	var deleted := false
+	var cut := false # felled or trimmed by her in the game (scripts/forage.gd): hidden, but never saved as deleted
 	var added := false # decor copied in the editor
 	var home := false # Nora's furniture (main.furniture): saved as the "house" list, not as a node
 	var tint := Color.WHITE
@@ -361,7 +362,7 @@ static func _rigid(t: Transform3D) -> Transform3D:
 func _apply(el: El) -> void:
 	if el.scenery:
 		var t := el.xf
-		if el.deleted or Interiors.inside_of(el.xf.origin) != "":
+		if el.deleted or el.cut or Interiors.inside_of(el.xf.origin) != "":
 			t = Transform3D(Basis.from_scale(Vector3.ZERO), el.xf.origin)
 		el.mmi.multimesh.set_instance_transform(el.idx, el.mmi.transform.affine_inverse() * t)
 		_apply_leaves(el)
@@ -579,7 +580,7 @@ func _reblock(el: El) -> Array:
 		main.place_blockers.erase(r)
 		changed.append(r)
 	el.block_world = []
-	if not el.deleted:
+	if not el.deleted and not el.cut:
 		for r in _block_rects(el):
 			el.block_world.append(r)
 			main.grid_blockers.append(r)
@@ -924,7 +925,7 @@ func pick_kind(mpos: Vector2, prefix: String) -> El:
 	var best: El = null
 	var best_t := INF
 	for el in els:
-		if el.deleted or not el.kind.begins_with(prefix):
+		if el.deleted or el.cut or not el.kind.begins_with(prefix):
 			continue
 		var to_c: Vector3 = el.xf * el.bounds.get_center() - from
 		var along := to_c.dot(dir)

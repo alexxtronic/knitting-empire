@@ -1,0 +1,37 @@
+# Seeds the town gives Nora when she talks to them (Alex, 2026-11-14): one gift each, once she has
+# had Wren's tour. With Gran's seed tin and the packets at Builder's Delight, this is how her first
+# beds get planted. Every line here is a DRAFT for Alex.
+
+== seeds_giorgio
+@trigger talk giorgio
+@requires act1_toured
+@once
+@camera giorgio 6
+Giorgio (happy): Ah, Ellie's girl! Wait, wait. I keep these for her every autumn.
+> He hands her a paper twist from under the counter.
+Giorgio (happy): Pumpkin seeds. Grow them big, and I bake you pumpkin bread. That is a promise.
+Nora (happy): Deal.
+@give pumpkin_seeds 3
+> +3 pumpkin seeds
+
+== seeds_barbara
+@trigger talk barbara
+@requires act1_toured
+@once
+@camera barbara 6
+Barbara (neutral): Your gran's turnips were the best on my round. I've some seed spare. Don't tell the post office.
+> She digs an envelope out of her bag. Someone has written TURNIPS on it in capitals.
+Barbara (wry): Plant them in the morning, they're ready by supper. Quicker than the post.
+@give turnip_seeds 4
+> +4 turnip seeds
+
+== seeds_lars
+@trigger talk lars
+@requires act1_toured
+@once
+@camera lars 6
+Lars (neutral): You're growing things up at Ellie's? Good. Ground's been idle too long.
+> He presses a small cloth bag into her hand.
+Lars (neutral): Turnips. Water them and they come on faster. Sheep like the tops.
+@give turnip_seeds 4
+> +4 turnip seeds

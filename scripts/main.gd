@@ -32,6 +32,7 @@ const Cinematic = preload("res://scripts/cinematic.gd")
 const FirstPerson = preload("res://scripts/first_person.gd")
 const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
+const Forage = preload("res://scripts/forage.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
 const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
@@ -113,6 +114,7 @@ var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
 var fps: FirstPerson # first person: the camera at her eyes (first_person.gd), V
 var jobs: Jobs # work beside knitting: the bakery, the Coffee Shop, the post round (jobs.gd)
+var forage: Forage # trees she fells with the axe, plants she trims with the shears (forage.gd)
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
 var _knit_clock_was := true
@@ -345,6 +347,10 @@ func _ready() -> void:
 	homestead.main = self
 	add_child(homestead)
 	homestead.apply()
+	forage = Forage.new()
+	forage.main = self
+	add_child(forage)
+	forage.apply()
 	_setup_dog()
 	_load_graphics()
 	hud.render_thumbnails()
@@ -1758,8 +1764,6 @@ func building_at(p: Vector3) -> bool:
 
 const PLOT_GRID := 1.2 # beds sit on the grid the first twelve were laid out on
 const PLOT_ORIGIN := Vector2(11.0, -1.0)
-const CHOP_WOOD := 2
-var _chopped := {} # tree (a god mode element) -> the day it was last chopped: once a day each
 
 
 const TOOL_MODEL := "res://assets/props/%s.glb"
@@ -1915,6 +1919,15 @@ func _tool_click(tool: String, t, mpos: Vector2) -> bool:
 			if t is Sheep and t.is_woolly():
 				_do_action(t, "shear")
 				return true
+			var plant = forage.plant_at(mpos) if t == null and forage else null
+			if plant != null: # Gran's shears take a bush, a tuft or a flower clump down to the ground, for leaves
+				var at: Vector3 = plant.xf.origin
+				at.y = 0.0
+				var side := player.position - at
+				side.y = 0.0
+				side = side.normalized() if side.length() > 0.1 else Vector3(0, 0, 1)
+				_tool_walk(at, at + side * (0.6 + plant.radius * 0.4), 1.5, "Trimming", 1.2, _finish_trim.bind(plant))
+				return true
 		"shovel":
 			if t is Plot and t.crop == "":
 				if not t.tilled:
@@ -1925,8 +1938,9 @@ func _tool_click(tool: String, t, mpos: Vector2) -> bool:
 		"axe":
 			var tree = god.pick_kind(mpos, "tree_") if t == null else null
 			if tree != null:
-				if int(_chopped.get(tree, 0)) == Game.day:
-					hud.show_toast("She's taken what this tree can spare today.")
+				var why: String = forage.fell_problem(tree)
+				if why != "":
+					hud.show_toast(why)
 					return true
 				var trunk: Vector3 = tree.xf.origin
 				trunk.y = 0.0
@@ -2020,11 +2034,22 @@ func _finish_clear_plot(p) -> void:
 	Game.add_need("fitness", 1.0)
 
 
+## The tree comes down (forage.gd): it's gone until it grows back, and its wood is hers.
 func _finish_chop(tree) -> void:
-	_chopped[tree] = Game.day
-	Game.add_item("wood", CHOP_WOOD)
+	if tree.cut:
+		return
+	var wood: int = forage.fell(tree)
 	Game.add_need("fitness", 3.0)
-	hud.show_toast("+%d wood" % CHOP_WOOD)
+	hud.show_toast("Timber! +%d wood" % wood)
+	_story_event_soon("wood_bought") # Act 1's pen wants wood, bought or felled
+
+
+func _finish_trim(plant) -> void:
+	if plant.cut:
+		return
+	var n: int = forage.trim(plant)
+	Game.add_need("fitness", 0.5)
+	hud.show_toast("+%d leaves" % n)
 
 
 func _finish_mow() -> void:
@@ -2047,6 +2072,15 @@ func _name_of(t) -> String:
 	if t == bin:
 		return "Shipping Bin"
 	return t.display_name()
+
+
+## A bed's planting row: it takes one of her seeds (Gran's tin, a villager's gift, Builder's Delight).
+func _plant_row(crop: String) -> Dictionary:
+	var n := Game.count(crop + "_seeds")
+	var hours := int(Plot.CROPS[crop]["hours"])
+	if n <= 0:
+		return _act("plant_" + crop, "Plant %ss  (no seeds: Builder's Delight sells them)" % crop, false)
+	return _act("plant_" + crop, "Plant %ss  (%d seeds · %d hrs)" % [crop, n, hours], true)
 
 
 func _act(id: String, label: String, enabled := true) -> Dictionary:
@@ -2088,10 +2122,7 @@ func _actions_for(t) -> Array:
 		return []
 	if t is Plot:
 		if t.crop == "":
-			return [
-				_act("plant_turnip", "Plant turnips  (10c · 6 hrs)", Game.coins >= 10),
-				_act("plant_pumpkin", "Plant pumpkins  (30c · 14 hrs)", Game.coins >= 30),
-			]
+			return [_plant_row("turnip"), _plant_row("pumpkin")]
 		if t.is_ready():
 			return [_act("harvest", "Harvest %s" % t.display_name())]
 		var acts := []
@@ -2099,6 +2130,8 @@ func _actions_for(t) -> Array:
 			acts.append(_act("noop", "Watered today ✓", false))
 		else:
 			acts.append(_act("water", "Water"))
+		var ml := int(forage.econ("mulch_leaves", 3))
+		acts.append(_act("mulch", "Mulch with leaves  (%d of %d · grows on faster)" % [ml, Game.count("leaves")], Game.count("leaves") >= ml))
 		var g := _act("check", "Growing", true)
 		g["progress"] = t.progress()
 		g["hint"] = "watered today" if t.watered else "needs water today"
@@ -2227,11 +2260,18 @@ func _perform(t, id: String) -> void:
 			var crop := id.substr(6)
 			if t.crop != "":
 				return
-			if Game.use_energy(2.0) and Game.spend(int(Plot.CROPS[crop]["seed"])):
+			if Game.has_item(crop + "_seeds") and Game.use_energy(2.0) and Game.take_item(crop + "_seeds", 1):
 				player.start_activity("Planting", 1.2, _finish_plant.bind(t, crop))
 		"water":
 			if Game.use_energy(2.0):
 				player.start_activity("Watering", 1.0, _finish_water.bind(t))
+		"mulch": # leaves from her shears, tucked round the crop: it comes on a good way at once
+			var ml := int(forage.econ("mulch_leaves", 3))
+			if t.crop != "" and not t.is_ready() and Game.use_energy(1.0) and Game.take_item("leaves", ml):
+				player.start_activity("Mulching", 1.0, func():
+					t.growth = minf(t.hours_needed(), t.growth + t.hours_needed() * float(forage.econ("mulch_growth", 0.25)))
+					t.refresh()
+					hud.show_toast("Leaf mulch: the %s comes on." % t.display_name().to_lower()))
 		"harvest":
 			if Game.use_energy(2.0):
 				player.start_activity("Harvesting", 1.0, _finish_harvest.bind(t))
@@ -2412,6 +2452,8 @@ func _on_day_started(_day: int) -> void:
 		Game.coins += rent
 		_morning_note = "  Rent from Rosewood Cottage: +%dc." % rent
 	_update_price_board()
+	if forage:
+		forage.apply() # what she cut a while ago grows back
 	for p in plots:
 		p.on_new_day()
 	for s in sheep_list:
@@ -2451,8 +2493,9 @@ func _begin_place(id: String) -> void:
 		set_mode(Mode.BUILD)
 	if ghost:
 		_cancel_ghost()
-	if Game.coins < int(Catalog.ITEMS[id]["price"]):
-		hud.show_toast("Not enough coins for that yet.")
+	if not Catalog.affordable(id, Game.coins, Game.count("wood")):
+		var w := Catalog.wood_cost(id)
+		hud.show_toast("Not enough coins for that yet." if w <= 0 else "Not enough coins or wood for that yet (%s)." % Catalog.price_text(id))
 		return
 	ghost = Furniture.new()
 	furniture_root.add_child(ghost)
@@ -2462,6 +2505,16 @@ func _begin_place(id: String) -> void:
 	ghost_marker.visible = true
 	hud.set_holding(true, 0)
 	_update_ghost(_last_mouse)
+
+
+## Pays for a new piece: a wooden one from her wood when she has enough (felled or bought from
+## Steve), otherwise in coins. False if she can do neither.
+func _pay_for(id: String) -> bool:
+	var w := Catalog.wood_cost(id)
+	if w > 0 and Game.count("wood") >= w and Game.take_item("wood", w):
+		hud.show_toast("Built it from %d wood." % w)
+		return true
+	return Game.spend(int(Catalog.ITEMS[id]["price"]))
 
 
 func _snap(v: float, size: float) -> float:
@@ -2520,7 +2573,7 @@ func _build_click(mpos: Vector2, keep_placing: bool) -> void:
 			return
 		var id: String = ghost.item_id
 		var bought := ghost_from == null
-		if bought and not Game.spend(int(Catalog.ITEMS[id]["price"])):
+		if bought and not _pay_for(id):
 			return
 		ghost.set_ghost(false)
 		furniture.append(ghost)
@@ -2985,13 +3038,13 @@ func _act1_checks() -> void:
 	await _act1_shot("Good, you're here", "22_act1_wren.png")
 	var wren_v = _villager("wren")
 	var dog_gap: float = dog.position.distance_to(wren_v.global_position) if dog != null and wren_v != null else -1.0
-	_check("in Wren's scene the dog makes way for her: he waits on Nora's other side (%.1f m from Wren)" % dog_gap, dog_gap > 1.6)
 	await _act1_shot("Ellie's girl", "22_act1_tour_rosa.png")
 	await _act1_shot("on the house", "22_act1_tour_giorgio.png")
 	await _act1_shot("Willow Homes. Property", "22_act1_tour_gary.png")
 	await _act1_shot("...Welcome.", "22_act1_tour_steve.png")
 	await _act1_shot("That's the tour", "22_act1_tour_sabrina.png")
 	await _act1_shot("Front door sticks", "23_act1_grans_door.png")
+	_check("in Wren's scene the dog makes way for her: he waits on Nora's other side (%.1f m from Wren)" % dog_gap, dog_gap > Dog.ROOM + 0.2)
 	await _act1_until_done(120.0)
 	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, hour_end[0]], absf(hour_end[0] - hour0) < 0.001 and Game.time_running)
 	_check("the arrival: the rain stops at the sign to the arrival music (%s), the mayor's tour ends at Gran's door with a goal ('%s')" % [str(tune_on), hud.goal_label.text],
@@ -3071,7 +3124,7 @@ func _act1_checks() -> void:
 	await _act1_until_done(60.0)
 	Game.hour = 9.0
 	_check("the strays: met Rowan, opened up (trust %d→%d), off to Steve for wood ('%s')" % [trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
-		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Buy wood"))
+		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Get wood"))
 	# wood from Steve at Builder's Delight
 	var steve := _villager("steve")
 	var acts: Array = _villager_actions(steve).map(func(x): return x["id"])
@@ -4658,6 +4711,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=early" in OS.get_cmdline_user_args(): # just the first half hour's systems: tools from Steve, trimming, felling, wood, seeds
+		await _wait(1.5)
+		await _early_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
 		await _wait(1.5)
 		await _dog_checks()
@@ -4785,9 +4844,13 @@ func _autotest() -> void:
 	_check("indoors is warmer than out in the rain (%.0f vs %.0f)" % [w_in, w_rain], w_in > w_rain + 20.0)
 
 	var coins0 := Game.coins
+	Game.inv.erase("pumpkin_seeds")
+	var no_seed: Dictionary = _plant_row("pumpkin")
+	Game.add_item("pumpkin_seeds", 2)
 	_do_action(plots[3], "plant_pumpkin")
 	await _wait(6.0)
-	_check("planted pumpkin (crop=%s, coins %d→%d)" % [plots[3].crop, coins0, Game.coins], plots[3].crop == "pumpkin" and Game.coins == coins0 - 30)
+	_check("planted pumpkin from a seed (crop=%s, seeds 2→%d, coins %d→%d; with none the row is off: %s)" % [plots[3].crop, Game.count("pumpkin_seeds"), coins0, Game.coins, no_seed["label"]],
+		plots[3].crop == "pumpkin" and Game.count("pumpkin_seeds") == 1 and Game.coins == coins0 and not bool(no_seed["enabled"]))
 	_do_action(plots[3], "water")
 	await _wait(3.0)
 	_check("watered plot", plots[3].watered)
@@ -4885,6 +4948,7 @@ func _autotest() -> void:
 	await _photo_checks()
 	await _fps_checks()
 	await _minimap_checks()
+	await _early_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
@@ -6513,6 +6577,215 @@ func _hud_checks() -> void:
 
 
 ## Waits (up to `secs`) for a tool's work to be over: `done` true and her hands free.
+## The first half hour (Alex, 2026-11-14): a new game has only the shears, and Steve sells the rest at
+## Builder's Delight with seeds and wood; the shears trim plants for leaves and the axe fells trees
+## for wood, and both grow back; wooden pieces are built from her wood; Gran's seed tin, seeds
+## given in talk, and planting that takes a seed.
+func _early_checks() -> void:
+	var energy0 := Game.energy
+	Game.energy = 100.0
+	story.auto = false
+	hud.hide_dialogue()
+	set_mode(Mode.LIVE)
+	player.cancel_activity()
+	# a new game: the shears and nothing else; an older save keeps all six and gets seeds to go on with
+	var start_tools: Array = Game.TOOLS.filter(func(t): return Game.START_INVENTORY.has(t) or Game.START_TOOLS.has(t))
+	var old: Dictionary = Game.migrate({"version": 7, "inv": {"wool": 2}})
+	var kept: Array = Game.TOOLS.filter(func(t): return int(old["inv"].get(t, 0)) == 1)
+	_check("early: a new game starts with only the shears (%s); a save from before keeps all six tools (%d) and gets %d turnip seeds" % [str(start_tools), kept.size(), int(old["inv"].get("turnip_seeds", 0))],
+		start_tools == ["shears"] and kept.size() == 6 and int(old["inv"].get("turnip_seeds", 0)) == 6)
+	# Steve sells the tools and the seeds
+	for t in Game.TOOLS:
+		if t != "shears":
+			Game.inv.erase(t)
+	Game.sync_slots()
+	Game.coins = 400
+	var steve := _villager("steve")
+	var acts: Array = _villager_actions(steve)
+	var ids: Array = acts.map(func(a): return a["id"])
+	var hoe_price := int(_store()["tools"]["hoe"])
+	_villager_action(steve, "buy_tool_hoe")
+	var after: Array = _villager_actions(steve).filter(func(a): return str(a["label"]).begins_with("Hoe"))
+	_check("early: Steve sells every tool but the shears, and seeds (%s); the hoe for %dc goes in a slot (coins %d, slot %d) and its row says she has one" % [str(ids), hoe_price, Game.coins, Game.slots.find("hoe") + 1],
+		ids.has("buy_tool_hoe") and ids.has("buy_tool_axe") and not ids.has("buy_tool_shears") and ids.has("buy_seeds_turnip") and ids.has("buy_wood")
+		and Game.has_item("hoe") and Game.coins == 400 - hoe_price and Game.slots.has("hoe") and after.size() == 1 and not bool(after[0]["enabled"]))
+	var ts0 := Game.count("turnip_seeds")
+	var pack: Array = _store()["seeds"]["turnip"]
+	var c0 := Game.coins
+	_villager_action(steve, "buy_seeds_turnip")
+	_check("early: a packet of %d turnip seeds from Steve for %dc (seeds %d→%d)" % [int(pack[0]), int(pack[1]), ts0, Game.count("turnip_seeds")],
+		Game.count("turnip_seeds") == ts0 + int(pack[0]) and Game.coins == c0 - int(pack[1]))
+	_villager_action(steve, "buy_tool_axe")
+	hud.hide_dialogue()
+	# the shears trim a bush (or tuft) on the farm for leaves, and it grows back
+	var plant = null
+	var best := INF
+	for el in god.els:
+		if el.deleted or el.cut or not el.scenery or not el.kind.begins_with("bush_"):
+			continue
+		var d: float = el.xf.origin.distance_to(Vector3(9, 0, 8))
+		if d < best and not Town.TOWN.has_point(Vector2(el.xf.origin.x, el.xf.origin.z)):
+			best = d
+			plant = el
+	if plant == null:
+		_check("early: there's a bush on the farm to trim", false)
+	else:
+		player.position = plant.xf.origin + Vector3(0, 0, 2.2)
+		_set_cam_lock(true)
+		await _wait(1.2)
+		var leaves0 := Game.count("leaves")
+		var used := _tool_click("shears", null, cam.unproject_position(plant.xf.origin + Vector3(0, 0.4, 0)))
+		await _tool_wait(func(): return Game.count("leaves") > leaves0, 30.0)
+		var got := Game.count("leaves") - leaves0
+		await _wait(0.4)
+		await _shot("56_trimmed.png")
+		var day0 := Game.day
+		Game.day += int(forage.econ("plant_regrow_days", 2))
+		forage.apply()
+		var back: bool = not plant.cut
+		Game.day = day0
+		_check("early: the shears trim the bush under the click (%s) for %d leaves (it's gone: %s) and it grows back in a couple of days (%s)" % [used, got, Game.flag("cut", {}).has(Forage.key_of(plant)) or back, back],
+			used and got == forage.leaves_for(plant) and back)
+	# the axe fells a farm tree for wood, and it grows back
+	var tree = null
+	best = INF
+	for el in god.els:
+		if el.deleted or el.cut or not el.kind.begins_with("tree_") or forage.fell_problem(el) != "":
+			continue
+		var d: float = el.xf.origin.distance_to(Vector3(9, 0, 8))
+		if d < best:
+			best = d
+			tree = el
+	if tree == null:
+		_check("early: there's a farm tree to fell", false)
+	else:
+		player.position = tree.xf.origin + Vector3(0, 0, 3.0)
+		await _wait(1.2)
+		var wood0 := Game.count("wood")
+		var used := _tool_click("axe", null, cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0)))
+		await _tool_wait(func(): return Game.count("wood") > wood0, 45.0)
+		await _wait(0.6)
+		await _shot("56_felled.png")
+		var felled: bool = tree.cut
+		var day0 := Game.day
+		Game.day += int(forage.econ("tree_regrow_days", 14))
+		forage.apply()
+		var back: bool = not tree.cut
+		Game.day = day0
+		_check("early: the axe fells the tree (%s, gone %s) for %d wood, and it grows back in a fortnight (%s)" % [used, felled, Game.count("wood") - wood0, back],
+			used and felled and Game.count("wood") - wood0 == int(forage.econ("tree_wood", 8)) and back)
+	# wooden pieces are built from her wood when she has enough, otherwise bought
+	var bw := Catalog.wood_cost("bench")
+	Game.inv["wood"] = bw + 3
+	Game.coins = 1000
+	var from_wood := _pay_for("bench")
+	var w_left := Game.count("wood")
+	var c_left := Game.coins
+	var from_coins := _pay_for("bench")
+	_check("early: a bench (%s) is built from %d wood when she has it (%s: wood %d, coins %d), and bought when she hasn't (%s: coins %d)" % [Catalog.price_text("bench"), bw, from_wood, w_left, c_left, from_coins, Game.coins],
+		bw > 0 and from_wood and w_left == 3 and c_left == 1000 and from_coins and Game.coins == 1000 - int(Catalog.ITEMS["bench"]["price"]))
+	Game.inv.erase("wood")
+	Game.coins = 0
+	var poor := Catalog.affordable("bench", 0, 0)
+	Game.inv["wood"] = bw
+	var rich := Catalog.affordable("bench", 0, bw)
+	Game.inv.erase("wood")
+	_check("early: with no coins, her wood alone pays for a wooden piece (none %s, %d wood %s)" % [poor, bw, rich], not poor and rich)
+	# the catalogue: six rooms, every piece in one, every model there
+	var tabs: Array = []
+	var bad: Array = []
+	for id in Catalog.INDOOR + Catalog.OUTDOOR:
+		if not str(Catalog.ITEMS[id].get("cat", "")) in Catalog.CATS:
+			bad.append(id)
+		var m := str(Catalog.ITEMS[id].get("model", ""))
+		if m != "" and not ResourceLoader.exists(m):
+			bad.append(id)
+	for c in Catalog.CATS:
+		tabs.append("%s %d" % [c, Catalog.in_cat(c).size()])
+	_check("early: Builder's Delight's catalogue has %d pieces in six rooms (%s), each with its room and model (%s)" % [(Catalog.INDOOR + Catalog.OUTDOOR).size(), ", ".join(tabs), str(bad)],
+		bad.is_empty() and (Catalog.INDOOR + Catalog.OUTDOOR).size() >= 50 and Catalog.CATS.all(func(c): return Catalog.in_cat(c).size() >= 4))
+	Game.coins = 500
+	Game.inv["wood"] = 30
+	set_mode(Mode.BUILD)
+	await _wait(1.0)
+	await _shot("56_catalog.png")
+	set_mode(Mode.LIVE)
+	Game.inv.erase("wood")
+	# Gran's seed tin on the kitchen counter, on the story farm
+	var was_story: bool = Game.flag("story_farm") == true
+	Game.flags.erase("seed_tin_opened")
+	Game.set_flag("story_farm")
+	homestead._place_seed_tin()
+	var tin = homestead.seed_tin
+	if tin == null:
+		_check("early: Gran's seed tin is on the kitchen counter", false)
+	else:
+		player.position = tin.position + Vector3(0, 0, 1.2)
+		player.position.y = 0.0
+		cam_dist = 6.0
+		await _wait(1.2)
+		await _shot("56_seed_tin.png")
+		var tseeds := Game.count("turnip_seeds")
+		var pseeds := Game.count("pumpkin_seeds")
+		var labels: Array = tin.ke_actions().map(func(a): return a["label"])
+		_do_action(tin, "open_seeds")
+		await _tool_wait(func(): return Game.flag("seed_tin_opened") == true, 20.0)
+		await _wait(0.5)
+		var note_up: bool = homestead.ui._note.visible
+		await _shot("56_seed_note.png")
+		homestead.ui.close_all()
+		_check("early: Gran's seed tin (%s) gives %d turnip and %d pumpkin seeds, with her note (%s), and it's gone from the counter (%s)" % [str(labels), Game.count("turnip_seeds") - tseeds, Game.count("pumpkin_seeds") - pseeds, note_up, homestead.seed_tin == null],
+			Game.count("turnip_seeds") - tseeds == 6 and Game.count("pumpkin_seeds") - pseeds == 2 and note_up and homestead.seed_tin == null)
+	if not was_story:
+		Game.flags.erase("story_farm")
+	cam_dist = 11.0
+	# a villager gives her seeds when they talk, once
+	var toured: bool = Game.flag("act1_toured") == true
+	Game.set_flag("act1_toured")
+	var lars := _villager("lars") # Barbara and Giorgio offer their jobs first, once Act 1 is done
+	story.auto = true # the scene plays itself through
+	var bs0 := Game.count("turnip_seeds")
+	_villager_action(lars, "talk")
+	var playing := story.playing
+	await _act1_until_done(40.0)
+	hud.hide_dialogue()
+	var bs1 := Game.count("turnip_seeds")
+	_villager_action(lars, "talk") # once only: the next talk is an ordinary one
+	var again := story.playing
+	await _act1_until_done(10.0)
+	story.auto = false
+	hud.hide_dialogue()
+	_check("early: talking to Lars, he gives her turnip seeds ('%s', %d→%d), once ('%s' the next time)" % [playing, bs0, bs1, again],
+		playing == "seeds_lars" and bs1 == bs0 + 4 and again != "seeds_lars" and Game.count("turnip_seeds") == bs1)
+	if not toured:
+		Game.flags.erase("act1_toured")
+	# planting takes a seed
+	var bed = null
+	for p in plots:
+		if p.crop == "":
+			bed = p
+			break
+	if bed == null:
+		_check("early: an empty bed to plant", false)
+	else:
+		var n0 := Game.count("turnip_seeds")
+		var c1 := Game.coins
+		var row: Dictionary = _plant_row("turnip")
+		_do_action(bed, "plant_turnip")
+		await _tool_wait(func(): return bed.crop != "", 30.0)
+		_check("early: planting turnips takes one of her seeds ('%s': seeds %d→%d, coins %d→%d)" % [row["label"], n0, Game.count("turnip_seeds"), c1, Game.coins],
+			bed.crop == "turnip" and Game.count("turnip_seeds") == n0 - 1 and Game.coins == c1)
+		Game.inv["leaves"] = 3
+		var g0: float = bed.growth
+		_do_action(bed, "mulch")
+		await _tool_wait(func(): return not Game.has_item("leaves"), 20.0)
+		await _wait(1.4)
+		_check("early: three leaves mulch the growing bed and bring it on (growth %.1f→%.1f of %.0f hrs)" % [g0, bed.growth, bed.hours_needed()],
+			not Game.has_item("leaves") and bed.growth >= g0 + bed.hours_needed() * 0.2)
+	Game.energy = energy0
+	_set_cam_lock(false)
+
+
 func _tool_wait(done: Callable, secs := 30.0) -> void:
 	var t := 0.0
 	while (not done.call() or player.busy) and t < secs:
@@ -6532,6 +6805,8 @@ func _tool_checks() -> void:
 	player.position = Vector3(9.0, 0, 8.0)
 	_set_cam_lock(true)
 	await _wait(1.0)
+	Game.give_tools() # a new game has only the shears; the rest come from Builder's Delight (_early_checks)
+	Game.sync_slots()
 	var owned: Array = Game.TOOLS.filter(func(t): return Game.count(t) == 1 and Game.slots.has(t) and Hud.Slot.icon(t) != null)
 	_check("tools: she owns all six, each with a slot and a picture (%s)" % str(owned), owned.size() == 6)
 	hud.hot_sel = Game.slots.find("hoe")
@@ -6603,11 +6878,11 @@ func _tool_checks() -> void:
 	used = _tool_click("scythe", null, cam.unproject_position(hay_at))
 	await _tool_wait(func(): return Game.count("hay") > 0)
 	_check("scythe: cuts hay from the grass (%s, hay %d)" % [used, Game.count("hay")], used and Game.count("hay") == 1)
-	# the axe: wood from a tree, once a day each
+	# the axe: she fells the tree for its wood, and it's gone until it grows back
 	var tree = null
 	best = INF
 	for el in god.els:
-		if not el.deleted and el.kind.begins_with("tree_") and el.xf.origin.distance_to(player.position) < best:
+		if not el.deleted and not el.cut and el.kind.begins_with("tree_") and forage.fell_problem(el) == "" and el.xf.origin.distance_to(player.position) < best:
 			best = el.xf.origin.distance_to(player.position)
 			tree = el
 	var at_tree := cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0))
@@ -6615,10 +6890,17 @@ func _tool_checks() -> void:
 	await _tool_wait(func(): return Game.count("wood") > 0, 45.0)
 	var wood := Game.count("wood")
 	await _wait(0.6) # the camera follows her, so the tree is somewhere else on screen now
-	var again := _tool_click("axe", null, cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0)))
-	await _wait(0.5)
-	_check("axe: chops wood from the tree under the click (%s, wood %d), once a day each (asked again %s, wood %d, busy %s)" % [used, wood, again, Game.count("wood"), player.busy],
-		used and wood == CHOP_WOOD and again and Game.count("wood") == wood and not player.busy)
+	var again = god.pick_kind(cam.unproject_position(tree.xf.origin + Vector3(0, 0.8, 0)), "tree_")
+	var tree_wood: int = forage.econ("tree_wood", 5)
+	_check("axe: fells the tree under the click for %d wood (%s, wood %d), and it's gone (cut %s, picked again %s)" % [tree_wood, used, wood, tree.cut, again == tree],
+		used and wood == tree_wood and tree.cut and again != tree and Game.flag("cut", {}).has(Forage.key_of(tree)))
+	var town_tree = null
+	for el in god.els:
+		if not el.deleted and el.kind.begins_with("tree_") and Town.TOWN.has_point(Vector2(el.xf.origin.x, el.xf.origin.z)):
+			town_tree = el
+			break
+	_check("axe: the town's trees aren't hers to fell (%s)" % (forage.fell_problem(town_tree) if town_tree else "no tree in town"),
+		town_tree == null or forage.fell_problem(town_tree) != "")
 	# the axe has a model, so it shows in her hand
 	hud.hot_sel = Game.slots.find("axe")
 	player.position = Vector3(9.0, 0, 8.0) # out from under the tree she just chopped
@@ -7843,6 +8125,39 @@ func _update_price_board() -> void:
 		price_board.text = "TODAY'S PRICES\nSweater   %dc\nPumpkin   %dc\nTurnip     %dc" % [_rosa_price(), Game.market_price("pumpkin"), Game.market_price("turnip")]
 
 
+## What Builder's Delight sells over Steve's counter besides wood: data/economy.json "store".
+var _store_cache := {}
+func _store() -> Dictionary:
+	if _store_cache.is_empty():
+		_store_cache = Data.load_json("economy").get("store", {})
+	return _store_cache
+
+
+func _buy_from_store(v, id: String) -> void:
+	var store := _store()
+	if id.begins_with("buy_tool_"):
+		var t := id.trim_prefix("buy_tool_")
+		var price := int(store.get("tools", {}).get(t, 0))
+		if price <= 0 or Game.has_item(t) or not Game.spend(price):
+			return
+		Game.add_item(t, 1)
+		Game.sync_slots()
+		var said := {"hoe": "Hoe. Breaks ground for a bed. Right-click the grass.", "watering_can": "Fill it at the pump. Crops grow faster wet.",
+			"shovel": "Digs a bed back out. Or anything else.", "scythe": "Long grass. Hay for the sheep.", "axe": "Farm trees only. They grow back. Mind your feet."}
+		_say(v, str(said.get(t, "Good tool. Look after it.")))
+		var hint := Hud.Slot.tool_hint(t)
+		hud.show_toast("New tool: %s. %s." % [Hud.Slot.item_name(t), hint.left(1).to_upper() + hint.substr(1)])
+		_story_event_soon("tool_bought")
+	else:
+		var crop := id.trim_prefix("buy_seeds_")
+		var pack: Array = store.get("seeds", {}).get(crop, [])
+		if pack.size() < 2 or not Game.spend(int(pack[1])):
+			return
+		Game.add_item(crop + "_seeds", int(pack[0]))
+		_say(v, "%d %s seeds. Plant them in a dug bed." % [int(pack[0]), crop.capitalize()])
+		hud.show_toast("+%d %s seeds" % [int(pack[0]), crop])
+
+
 func _villager_actions(v) -> Array:
 	var acts := [_act("talk", "Talk")]
 	match v.vid:
@@ -7860,10 +8175,22 @@ func _villager_actions(v) -> Array:
 				acts.append(_act("buy_sheep", "Buy a sheep  (%dc · you have %d)" % [sp, Game.sheep_count], Game.coins >= sp))
 			else:
 				acts.append(_act("noop", "Your pen is full (%d sheep)" % Game.MAX_SHEEP, false))
-		"steve":
+		"steve": # Builder's Delight: wood, tools and seeds, anything for the house that isn't wool, food or coffee
 			var n := homestead.econ("wood_pack", 5)
 			var wp := homestead.econ("wood_pack_price", 15)
 			acts.append(_act("buy_wood", "Buy %d wood  (%dc)" % [n, wp], Game.coins >= wp))
+			var store := _store()
+			var tools: Dictionary = store.get("tools", {})
+			for t in tools:
+				var tp := int(tools[t])
+				if Game.has_item(t):
+					acts.append(_act("noop", "%s  (you have one)" % Hud.Slot.item_name(t), false))
+				else:
+					acts.append(_act("buy_tool_" + t, "Buy a %s  (%dc)" % [Hud.Slot.item_name(t).to_lower(), tp], Game.coins >= tp))
+			var seeds: Dictionary = store.get("seeds", {})
+			for crop in seeds:
+				var pack: Array = seeds[crop]
+				acts.append(_act("buy_seeds_" + crop, "Buy %d %s seeds  (%dc)" % [int(pack[0]), crop, int(pack[1])], Game.coins >= int(pack[1])))
 		"giorgio":
 			var pp := _pastry_price()
 			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
@@ -7923,6 +8250,9 @@ func _villager_action(v, id: String) -> void:
 		return
 	if id.begins_with("wearsell_"):
 		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
+		return
+	if id.begins_with("buy_tool_") or id.begins_with("buy_seeds_"):
+		_buy_from_store(v, id)
 		return
 	match id:
 		"talk":

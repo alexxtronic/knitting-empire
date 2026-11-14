@@ -1,5 +1,5 @@
 {
-  "_about": "Furniture you can buy in Build mode. 'size' is width x depth in metres; 'where' is in / out / any; 'shop' picks the Build-menu section. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py.",
+  "_about": "Furniture you can buy in Build mode (Builder's Delight's catalogue). 'size' is width x depth in metres; 'where' is in / out / any; 'shop' (indoors / yard) puts it in the catalogue, and 'cat' picks its tab (Living, Kitchen, Bed & Study, Crafts, Garden, Farm: scripts/catalog.gd CATS); 'wood' is what a wooden piece takes to build from her own wood instead of its price in coins. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py.",
   "items": [
     {
       "name": "Rocking Chair",
@@ -9,7 +9,9 @@
       "height": 1.2,
       "id": "rocking_chair",
       "shop": "indoors",
-      "model": "res://assets/props/rocking_chair.glb"
+      "model": "res://assets/props/rocking_chair.glb",
+      "cat": "Living",
+      "wood": 45
     },
     {
       "name": "Plaid Armchair",
@@ -19,7 +21,8 @@
       "height": 1.0,
       "id": "armchair",
       "shop": "indoors",
-      "model": "res://assets/props/armchair.glb"
+      "model": "res://assets/props/armchair.glb",
+      "cat": "Living"
     },
     {
       "name": "Cozy Sofa",
@@ -29,7 +32,8 @@
       "height": 1.0,
       "id": "sofa",
       "shop": "indoors",
-      "model": "res://assets/props/sofa.glb"
+      "model": "res://assets/props/sofa.glb",
+      "cat": "Living"
     },
     {
       "name": "Quilted Bed",
@@ -39,7 +43,8 @@
       "height": 1.0,
       "id": "bed",
       "shop": "indoors",
-      "model": "res://assets/props/gran_bed.glb"
+      "model": "res://assets/props/gran_bed.glb",
+      "cat": "Bed & Study"
     },
     {
       "name": "Kitchen Counter",
@@ -49,7 +54,9 @@
       "height": 1.1,
       "id": "kitchen",
       "shop": "indoors",
-      "model": "res://assets/props/kitchen.glb"
+      "model": "res://assets/props/kitchen.glb",
+      "cat": "Kitchen",
+      "wood": 88
     },
     {
       "name": "Round Coffee Table",
@@ -59,7 +66,9 @@
       "height": 0.6,
       "id": "coffee_table",
       "shop": "indoors",
-      "model": "res://assets/props/coffee_table.glb"
+      "model": "res://assets/props/coffee_table.glb",
+      "cat": "Living",
+      "wood": 22
     },
     {
       "name": "Farmhouse Table",
@@ -69,7 +78,9 @@
       "height": 0.9,
       "id": "dining_table",
       "shop": "indoors",
-      "model": "res://assets/props/dining_table.glb"
+      "model": "res://assets/props/dining_table.glb",
+      "cat": "Kitchen",
+      "wood": 50
     },
     {
       "name": "Bookshelf",
@@ -79,7 +90,9 @@
       "height": 1.9,
       "id": "bookshelf",
       "shop": "indoors",
-      "model": "res://assets/props/bookshelf.glb"
+      "model": "res://assets/props/bookshelf.glb",
+      "cat": "Living",
+      "wood": 65
     },
     {
       "name": "Oak Wardrobe",
@@ -89,7 +102,9 @@
       "height": 2.0,
       "id": "wardrobe",
       "shop": "indoors",
-      "model": "res://assets/props/wardrobe.glb"
+      "model": "res://assets/props/wardrobe.glb",
+      "cat": "Bed & Study",
+      "wood": 70
     },
     {
       "name": "Stone Fireplace",
@@ -99,7 +114,8 @@
       "height": 2.6,
       "id": "fireplace",
       "shop": "indoors",
-      "model": "res://assets/props/fireplace.glb"
+      "model": "res://assets/props/fireplace.glb",
+      "cat": "Living"
     },
     {
       "name": "Spinning Wheel",
@@ -109,7 +125,9 @@
       "height": 1.3,
       "id": "spinning_wheel",
       "shop": "indoors",
-      "model": "res://assets/props/spinning_wheel.glb"
+      "model": "res://assets/props/spinning_wheel.glb",
+      "cat": "Crafts",
+      "wood": 75
     },
     {
       "name": "Floor Lamp",
@@ -119,7 +137,8 @@
       "height": 1.6,
       "id": "lamp",
       "shop": "indoors",
-      "model": "res://assets/props/lamp.glb"
+      "model": "res://assets/props/lamp.glb",
+      "cat": "Living"
     },
     {
       "name": "Yarn Basket",
@@ -129,7 +148,8 @@
       "height": 0.45,
       "id": "yarn_basket",
       "shop": "indoors",
-      "model": "res://assets/props/yarn_basket.glb"
+      "model": "res://assets/props/yarn_basket.glb",
+      "cat": "Crafts"
     },
     {
       "name": "Yarn Balls",
@@ -139,7 +159,8 @@
       "height": 0.2,
       "id": "yarn_balls",
       "shop": "indoors",
-      "model": "res://assets/props/yarn_balls.glb"
+      "model": "res://assets/props/yarn_balls.glb",
+      "cat": "Crafts"
     },
     {
       "name": "Knitting Needles",
@@ -149,7 +170,8 @@
       "height": 0.06,
       "id": "knitting_needles",
       "shop": "indoors",
-      "model": "res://assets/props/knitting_needles.glb"
+      "model": "res://assets/props/knitting_needles.glb",
+      "cat": "Crafts"
     },
     {
       "name": "Wool Rug",
@@ -160,7 +182,8 @@
       "height": 0.06,
       "id": "rug_red",
       "shop": "indoors",
-      "model": "res://assets/props/rug_red.glb"
+      "model": "res://assets/props/rug_red.glb",
+      "cat": "Living"
     },
     {
       "name": "Round Braided Rug",
@@ -170,7 +193,8 @@
       "flat": true,
       "height": 0.06,
       "id": "rug_round",
-      "shop": "indoors"
+      "shop": "indoors",
+      "cat": "Living"
     },
     {
       "name": "Potted Fern",
@@ -180,7 +204,8 @@
       "height": 0.9,
       "id": "plant",
       "shop": "indoors",
-      "model": "res://assets/props/plant.glb"
+      "model": "res://assets/props/plant.glb",
+      "cat": "Living"
     },
     {
       "name": "Flower Pot",
@@ -189,7 +214,8 @@
       "where": "any",
       "height": 0.6,
       "id": "flower_pot",
-      "shop": "yard"
+      "shop": "yard",
+      "cat": "Garden"
     },
     {
       "name": "Sunflower Patch",
@@ -198,7 +224,8 @@
       "where": "out",
       "height": 1.6,
       "id": "sunflowers",
-      "shop": "yard"
+      "shop": "yard",
+      "cat": "Garden"
     },
     {
       "name": "Picket Fence",
@@ -208,7 +235,9 @@
       "height": 0.9,
       "id": "fence",
       "shop": "yard",
-      "model": "res://assets/props/fence_picket.glb"
+      "model": "res://assets/props/fence_picket.glb",
+      "cat": "Garden",
+      "wood": 5
     },
     {
       "name": "Garden Bench",
@@ -218,25 +247,32 @@
       "height": 0.9,
       "id": "bench",
       "shop": "yard",
-      "model": "res://assets/props/bench_park.glb"
+      "model": "res://assets/props/bench_park.glb",
+      "cat": "Garden",
+      "wood": 40
     },
     {
-      "name": "Garden Bench",
+      "name": "Garden Seat",
       "price": 110,
       "size": [1.0, 1.0],
       "where": "out",
       "height": 0.9,
       "id": "bench_short",
-      "model": "res://assets/props/bench_park_short.glb"
+      "model": "res://assets/props/bench_park_short.glb",
+      "shop": "yard",
+      "cat": "Garden",
+      "wood": 28
     },
     {
-      "name": "Trash Can",
+      "name": "Garden Bin",
       "price": 60,
       "size": [1.0, 0.5],
       "where": "out",
       "height": 0.75,
       "id": "trash_can",
-      "model": "res://assets/props/trash_can.glb"
+      "model": "res://assets/props/trash_can.glb",
+      "shop": "yard",
+      "cat": "Garden"
     },
     {
       "name": "Post Box",
@@ -255,7 +291,8 @@
       "height": 1.9,
       "id": "scarecrow",
       "shop": "yard",
-      "model": "res://assets/props/scarecrow.glb"
+      "model": "res://assets/props/scarecrow.glb",
+      "cat": "Farm"
     },
     {
       "name": "Lantern Post",
@@ -265,7 +302,8 @@
       "height": 1.7,
       "id": "lantern",
       "shop": "yard",
-      "model": "res://assets/props/lamp_post.glb"
+      "model": "res://assets/props/lamp_post.glb",
+      "cat": "Garden"
     },
     {
       "name": "Hay Bale",
@@ -275,7 +313,8 @@
       "height": 0.5,
       "id": "hay_bale",
       "shop": "yard",
-      "model": "res://assets/props/hay_bale.glb"
+      "model": "res://assets/props/hay_bale.glb",
+      "cat": "Farm"
     },
     {
       "name": "Pen Fence",
@@ -285,7 +324,9 @@
       "height": 1.0,
       "id": "pen_fence",
       "shop": "yard",
-      "model": "res://assets/props/fence_section.glb"
+      "model": "res://assets/props/fence_section.glb",
+      "cat": "Farm",
+      "wood": 6
     },
     {
       "name": "Bakery Stall",
@@ -303,7 +344,10 @@
       "where": "out",
       "height": 0.86,
       "id": "chalkboard_sign",
-      "model": "res://assets/props/chalkboard_sign.glb"
+      "model": "res://assets/props/chalkboard_sign.glb",
+      "shop": "yard",
+      "cat": "Farm",
+      "wood": 10
     },
     {
       "name": "Daisy Crate",
@@ -313,7 +357,9 @@
       "height": 0.4,
       "id": "daisy_crate",
       "shop": "yard",
-      "model": "res://assets/props/daisy_crate.glb"
+      "model": "res://assets/props/daisy_crate.glb",
+      "cat": "Garden",
+      "wood": 11
     },
     {
       "name": "Milk Churn",
@@ -323,34 +369,44 @@
       "height": 0.8,
       "id": "milk_churn",
       "shop": "yard",
-      "model": "res://assets/props/milk_churn.glb"
+      "model": "res://assets/props/milk_churn.glb",
+      "cat": "Farm"
     },
     {
-      "name": "Shop Counter",
-      "price": 0,
+      "name": "Craft Counter",
+      "price": 200,
       "size": [1.6, 0.6],
       "where": "in",
       "height": 1.0,
       "id": "shop_counter",
-      "model": "res://assets/props/shop_counter.glb"
+      "model": "res://assets/props/shop_counter.glb",
+      "shop": "indoors",
+      "cat": "Crafts",
+      "wood": 50
     },
     {
       "name": "Yarn Shelf",
-      "price": 0,
+      "price": 220,
       "size": [1.4, 0.4],
       "where": "in",
       "height": 1.9,
       "id": "yarn_shelf",
-      "model": "res://assets/props/yarn_shelf.glb"
+      "model": "res://assets/props/yarn_shelf.glb",
+      "shop": "indoors",
+      "cat": "Crafts",
+      "wood": 55
     },
     {
       "name": "Sweater Rack",
-      "price": 0,
+      "price": 160,
       "size": [1.2, 0.5],
       "where": "in",
       "height": 1.55,
       "id": "sweater_rack",
-      "model": "res://assets/props/sweater_rack.glb"
+      "model": "res://assets/props/sweater_rack.glb",
+      "shop": "indoors",
+      "cat": "Crafts",
+      "wood": 40
     },
     {
       "name": "Bakery Counter",
@@ -362,49 +418,62 @@
       "model": "res://assets/props/bakery_counter.glb"
     },
     {
-      "name": "Bread Rack",
-      "price": 0,
+      "name": "Pantry Shelf",
+      "price": 180,
       "size": [1.4, 0.45],
       "where": "in",
       "height": 1.75,
       "id": "bread_rack",
-      "model": "res://assets/props/bread_rack.glb"
+      "model": "res://assets/props/bread_rack.glb",
+      "shop": "indoors",
+      "cat": "Kitchen",
+      "wood": 45
     },
     {
-      "name": "Brick Oven",
-      "price": 0,
+      "name": "Bread Oven",
+      "price": 450,
       "size": [1.3, 1.0],
       "where": "in",
       "height": 1.95,
       "id": "brick_oven",
-      "model": "res://assets/props/brick_oven.glb"
+      "model": "res://assets/props/brick_oven.glb",
+      "shop": "indoors",
+      "cat": "Kitchen"
     },
     {
       "name": "Flour Sacks",
-      "price": 0,
+      "price": 40,
       "size": [0.8, 0.6],
       "where": "in",
       "height": 0.6,
       "id": "flour_sacks",
-      "model": "res://assets/props/flour_sacks.glb"
+      "model": "res://assets/props/flour_sacks.glb",
+      "shop": "indoors",
+      "cat": "Kitchen"
     },
     {
-      "name": "Office Desk",
-      "price": 0,
+      "name": "Writing Desk",
+      "price": 240,
       "size": [1.4, 0.7],
       "where": "in",
       "height": 1.2,
       "id": "office_desk",
-      "model": "res://assets/props/office_desk.glb"
+      "model": "res://assets/props/office_desk.glb",
+      "shop": "indoors",
+      "cat": "Bed & Study",
+      "wood": 60
     },
     {
-      "name": "Filing Cabinet",
-      "price": 0,
+      "name": "Oak Drawers",
+      "price": 150,
       "size": [0.55, 0.5],
       "where": "in",
       "height": 1.55,
       "id": "filing_cabinet",
-      "model": "res://assets/props/filing_cabinet.glb"
+      "model": "res://assets/props/filing_cabinet.glb",
+      "shop": "indoors",
+      "cat": "Bed & Study",
+      "wood": 38
     },
     {
       "name": "Welcome Sign",
@@ -414,6 +483,161 @@
       "height": 3.2,
       "id": "welcome_sign",
       "model": "res://assets/props/welcome_sign.glb"
+    },
+    {
+      "name": "Round Shrub",
+      "price": 60,
+      "size": [2.0, 1.5],
+      "where": "out",
+      "height": 1.0,
+      "id": "shrub_round",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/bush_round.glb"
+    },
+    {
+      "name": "Tall Shrub",
+      "price": 70,
+      "size": [1.5, 1.0],
+      "where": "out",
+      "height": 1.8,
+      "id": "shrub_tall",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/bush_tall.glb"
+    },
+    {
+      "name": "Berry Bush",
+      "price": 80,
+      "size": [2.0, 1.5],
+      "where": "out",
+      "height": 1.05,
+      "id": "berry_bush",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/bush_berry.glb"
+    },
+    {
+      "name": "Autumn Shrub",
+      "price": 70,
+      "size": [2.0, 1.5],
+      "where": "out",
+      "height": 1.0,
+      "id": "shrub_autumn",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/bush_autumn.glb"
+    },
+    {
+      "name": "Daisy Bed",
+      "price": 35,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.5,
+      "id": "bed_daisy",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/flowers_daisy.glb"
+    },
+    {
+      "name": "Buttercup Bed",
+      "price": 35,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.5,
+      "id": "bed_buttercup",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/flowers_buttercup.glb"
+    },
+    {
+      "name": "Poppy Bed",
+      "price": 40,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.6,
+      "id": "bed_poppy",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/flowers_poppy.glb"
+    },
+    {
+      "name": "Wildflower Bed",
+      "price": 40,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.5,
+      "id": "bed_wild",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/flowers_wild.glb"
+    },
+    {
+      "name": "Box Hedge",
+      "price": 90,
+      "size": [2.5, 1.0],
+      "where": "out",
+      "height": 1.3,
+      "id": "hedge_box",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/hedge.glb"
+    },
+    {
+      "name": "Garden Stone",
+      "price": 25,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.45,
+      "id": "garden_stone",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/rock_single.glb"
+    },
+    {
+      "name": "Rock Garden",
+      "price": 70,
+      "size": [2.0, 1.5],
+      "where": "out",
+      "height": 0.6,
+      "id": "rock_garden",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/rock_cluster.glb"
+    },
+    {
+      "name": "Mossy Boulder",
+      "price": 120,
+      "size": [2.5, 2.5],
+      "where": "out",
+      "height": 1.1,
+      "id": "boulder",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/rock_boulder.glb"
+    },
+    {
+      "name": "Garden Fountain",
+      "price": 900,
+      "size": [3.5, 3.5],
+      "where": "out",
+      "height": 2.3,
+      "id": "fountain",
+      "shop": "yard",
+      "cat": "Garden",
+      "model": "res://assets/props/plaza_fountain.glb"
+    },
+    {
+      "name": "Farm Stand",
+      "price": 300,
+      "size": [3.0, 1.5],
+      "where": "out",
+      "height": 2.6,
+      "id": "farm_stand",
+      "shop": "yard",
+      "cat": "Farm",
+      "model": "res://assets/props/market_stall.glb",
+      "wood": 75
     }
   ]
 }
