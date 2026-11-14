@@ -36,6 +36,7 @@ const Jobs = preload("res://scripts/jobs.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
 const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
+const WardrobeView = preload("res://scripts/wardrobe_view.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -99,6 +100,7 @@ var _flock_t := 0.0
 var _flock_seen := false
 var bin: Node3D
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
+var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
 const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
 const MAILBOX_YAW := PI
@@ -288,12 +290,12 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.letters.mail = mail
-	minimap = Minimap.new()
 	wardrobe_ui = WardrobePanel.new()
 	wardrobe_ui.setup(hud)
 	hud.root.add_child(wardrobe_ui)
 	hud._place(wardrobe_ui, 0.5, 0.5, Vector2.ZERO)
 	hud.wardrobe_pressed.connect(func(): wardrobe_ui.open())
+	minimap = Minimap.new()
 	minimap.main = self
 	hud.add_minimap(minimap)
 	if _autotest_dir != "":
@@ -304,6 +306,9 @@ func _ready() -> void:
 	fps = FirstPerson.new() # after the player, so it places the camera once she has moved this frame
 	fps.main = self
 	add_child(fps)
+	wview = WardrobeView.new() # after first person, so it moves the hangers once her eyes are placed
+	wview.main = self
+	add_child(wview)
 	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
@@ -1320,6 +1325,9 @@ func _unhandled_input(e: InputEvent) -> void:
 	if cinema.active:
 		cinema.handle_mouse(e)
 		return
+	if wview.active:
+		wview.handle_mouse(e)
+		return
 	if fps.active:
 		fps.handle_mouse(e)
 		return
@@ -1427,6 +1435,9 @@ func _input(e: InputEvent) -> void:
 		cinema.handle_key(kc) # every key belongs to the free camera while it flies
 		get_viewport().set_input_as_handled()
 		return
+	if wview.active and wview.handle_key(kc):
+		get_viewport().set_input_as_handled()
+		return
 	if fps.active and fps.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
@@ -1488,6 +1499,8 @@ func _input(e: InputEvent) -> void:
 				hud.album.close()
 			elif hud.letters.visible:
 				hud.letters.close()
+			elif wardrobe_ui.visible:
+				wardrobe_ui.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -1505,8 +1518,6 @@ func _ray_target(mpos: Vector2) -> Variant:
 	var res := get_world_3d().direct_space_state.intersect_ray(q)
 	if res.is_empty():
 		return null
-			elif wardrobe_ui.visible:
-				wardrobe_ui.close()
 	var col: Object = res["collider"]
 	if col and col.has_meta("target"):
 		return col.get_meta("target")
@@ -1801,49 +1812,9 @@ var _grip_meshes: Array = [] # her meshes with the grip_R shape key
 func _update_sweater() -> void:
 	if player.body == null or player.body.skeleton == null:
 		return
-	var want := Game.worn_design if Game.worn_quality > 1 else ""
+	var want := Game.worn_design # a Common one too (warmth 1, like the coat, but she has it on)
 	if want != Sweaters.worn(player.body):
 		Sweaters.wear(player.body, want)
-
-
-## Shows the hotbar's tool in her fist (once that tool has a model), and takes it away while she
-## sits, sleeps or is in a story scene.
-func _update_held_tool() -> void:
-	var id := hud.selected_item() if not title_on else ""
-	if not Game.TOOLS.has(id) or not ResourceLoader.exists(TOOL_MODEL % id):
-		id = ""
-	if id != _held_id and player.body and player.body.skeleton:
-		_held_id = id
-		var sk: Skeleton3D = player.body.skeleton
-		if _tool_hand == null:
-			_tool_hand = BoneAttachment3D.new()
-			sk.add_child(_tool_hand)
-			_tool_hand.bone_name = "RightHand"
-			_grip_meshes = player.body.find_children("*", "MeshInstance3D", true, false).filter(
-				func(mi): return mi.mesh != null and mi.find_blend_shape_by_name("grip_R") >= 0)
-		for c in _tool_hand.get_children():
-			c.queue_free()
-		if id != "":
-			var m := Catalog.model(TOOL_MODEL % id, _tool_hand)
-			if m:
-				m.transform = _tool_in_fist(sk, id)
-	if _tool_hand:
-		_tool_hand.visible = _held_id != "" and mode == Mode.LIVE and not story.is_playing() and not player.is_sitting() and not player.is_lying()
-		for mi in _grip_meshes:
-			mi.set_blend_shape_value(mi.find_blend_shape_by_name("grip_R"), 1.0 if _tool_hand.visible else 0.0)
-
-
-## Where a tool sits in the hand bone's space: its handle through the fist, the hanging side down.
-func _tool_in_fist(sk: Skeleton3D, id: String) -> Transform3D:
-	var hold: Array = TOOL_HOLD[id]
-	var rest: Transform3D = sk.get_bone_global_rest(sk.find_bone("RightHand")).orthonormalized()
-	var a: Vector3 = rest.basis.inverse() * FIST_AXIS
-	var d: Vector3 = rest.basis.inverse() * FIST_DOWN
-	var want := _frame(a, d)
-	var have := _frame(hold[1], hold[2])
-	var b: Basis = (want * have.inverse()).scaled(Vector3.ONE * float(hold[3]))
-	return Transform3D(b, rest.affine_inverse() * FIST_C - b * (hold[0] as Vector3))
-
 	var bought: Dictionary = Game.flag("npc_sweaters", {}) # villagers wear only what they bought from her
 	for v in villagers:
 		if v.body and v.body.skeleton:
@@ -1905,6 +1876,46 @@ func _sell_to_wear(v, i: int) -> bool:
 	_say(v, said[(Game.day + i) % said.size()])
 	hud.show_toast("Sold %s to %s for %dc. They're wearing it!" % [d["name"], v.title, price])
 	return true
+
+
+## Shows the hotbar's tool in her fist (once that tool has a model), and takes it away while she
+## sits, sleeps or is in a story scene.
+func _update_held_tool() -> void:
+	var id := hud.selected_item() if not title_on else ""
+	if not Game.TOOLS.has(id) or not ResourceLoader.exists(TOOL_MODEL % id):
+		id = ""
+	if id != _held_id and player.body and player.body.skeleton:
+		_held_id = id
+		var sk: Skeleton3D = player.body.skeleton
+		if _tool_hand == null:
+			_tool_hand = BoneAttachment3D.new()
+			sk.add_child(_tool_hand)
+			_tool_hand.bone_name = "RightHand"
+			_grip_meshes = player.body.find_children("*", "MeshInstance3D", true, false).filter(
+				func(mi): return mi.mesh != null and mi.find_blend_shape_by_name("grip_R") >= 0)
+		for c in _tool_hand.get_children():
+			c.queue_free()
+		if id != "":
+			var m := Catalog.model(TOOL_MODEL % id, _tool_hand)
+			if m:
+				m.transform = _tool_in_fist(sk, id)
+	if _tool_hand:
+		_tool_hand.visible = _held_id != "" and mode == Mode.LIVE and not story.is_playing() and not player.is_sitting() and not player.is_lying()
+		for mi in _grip_meshes:
+			mi.set_blend_shape_value(mi.find_blend_shape_by_name("grip_R"), 1.0 if _tool_hand.visible else 0.0)
+
+
+## Where a tool sits in the hand bone's space: its handle through the fist, the hanging side down.
+func _tool_in_fist(sk: Skeleton3D, id: String) -> Transform3D:
+	var hold: Array = TOOL_HOLD[id]
+	var rest: Transform3D = sk.get_bone_global_rest(sk.find_bone("RightHand")).orthonormalized()
+	var a: Vector3 = rest.basis.inverse() * FIST_AXIS
+	var d: Vector3 = rest.basis.inverse() * FIST_DOWN
+	var want := _frame(a, d)
+	var have := _frame(hold[1], hold[2])
+	var b: Basis = (want * have.inverse()).scaled(Vector3.ONE * float(hold[3]))
+	return Transform3D(b, rest.affine_inverse() * FIST_C - b * (hold[0] as Vector3))
+
 
 ## A right-handed frame from a main direction and a second one squared off against it.
 func _frame(main_dir: Vector3, second: Vector3) -> Basis:
@@ -2095,6 +2106,8 @@ func _actions_for(t) -> Array:
 				return [_act("spin", "Spin wool  (just for fun)", Game.has_item("wool"))]
 			"bookshelf":
 				return [_act("read", "Read a knitting book")]
+			"wardrobe":
+				return [_act("wardrobe", "Choose a sweater…")]
 		return []
 	if t is Plot:
 		if t.crop == "":
@@ -2135,8 +2148,6 @@ func _actions_for(t) -> Array:
 	return []
 
 
-			"wardrobe":
-				return [_act("wardrobe", "Choose a sweater…")]
 func _stand_point(t) -> Vector3:
 	# a shopkeeper's spot in front of the counter, while they are at work (a scene may take them out)
 	if t is Villager and t.talk_spot != null and t.position.distance_to(t.talk_spot) < 3.0:
@@ -2228,6 +2239,8 @@ func _perform(t, id: String) -> void:
 			player.start_activity("Spinning", 3.0, func():
 				Game.add_need("happiness", 4.0)
 				hud.show_toast("The wheel hums. Your wool is nice and even now."))
+		"wardrobe":
+			wview.open(t) # the list (wardrobe_ui) if first person can't start
 		"read":
 			player.start_activity("Reading", 3.0, func():
 				Game.energy = minf(100.0, Game.energy + 8.0)
@@ -2268,8 +2281,6 @@ func _begin_knit(chair) -> void:
 	knit.open(opts)
 
 
-		"wardrobe":
-			wardrobe_ui.open()
 func _on_knit_finished(res: Dictionary) -> void:
 	Game.time_running = _knit_clock_was
 	player.quiet_needles = false
@@ -4700,6 +4711,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=wardrobe" in OS.get_cmdline_user_args(): # just the wardrobe from her eyes: hangers, browsing, picking
+		await _wait(1.5)
+		await _wardrobe_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=fps" in OS.get_cmdline_user_args(): # just first person: through her eyes
 		await _wait(1.5)
 		await _fps_checks()
@@ -4888,6 +4905,7 @@ func _autotest() -> void:
 	await _world_checks()
 	await _dog_checks()
 	await _sweater_checks()
+	await _wardrobe_checks()
 	await _photo_checks()
 	await _fps_checks()
 	await _minimap_checks()
@@ -6142,6 +6160,23 @@ func _sweater_checks() -> void:
 	_check("the skin under it is tucked in (%d points)" % Sweaters.tucked_points(player.body), Sweaters.tucked_points(player.body) > 1000 and tuck_on)
 	var aabb := sw.get_aabb() if sw else AABB()
 	_check("the sweater is her size (%.2f m tall, %.2f m wide)" % [aabb.size.y, aabb.size.x], aabb.size.y > 0.5 and aabb.size.y < 1.0 and aabb.size.x > 0.4 and aabb.size.x < 1.3)
+	if _wardrobe_piece():
+		_check("the wardrobe in her house offers her sweaters", _actions_for(_wardrobe_piece()).any(func(a): return a["id"] == "wardrobe"))
+	wardrobe_ui.open()
+	await _wait(0.2)
+	var rows := wardrobe_ui._list.get_children()
+	_check("the wardrobe lists her city coat and her four sweaters, best first (%d rows)" % rows.size(),
+		rows.size() == 5 and str(rows[1].get_meta("design")) == "northern_lights" and str(rows[0].get_meta("design")) == "")
+	var picked := str(rows[3].get_meta("design")) # rows: the coat, then Northern Lights, Flock, Snowfall Yoke, Cranberry
+	(rows[3] as Button).pressed.emit()
+	await _wait(0.3)
+	_check("picking one there puts it on (%s, warmth from %s)" % [Game.worn_design, Game.stars(Game.worn_quality)], Game.worn_design == picked and Sweaters.worn(player.body) == Game.worn_design and Game.worn_quality == int(Game.wardrobe[Game.worn_design]))
+	await _shot("55_wardrobe.png")
+	(wardrobe_ui._list.get_child(0) as Button).pressed.emit()
+	await _wait(0.2)
+	_check("and the city coat takes it off", Game.worn_design == "" and Game.worn_quality == 1 and Sweaters.worn(player.body) == "")
+	wardrobe_ui.close()
+	Game.wear("flock")
 	var cam2 := Camera3D.new()
 	add_child(cam2)
 	cam2.fov = 30.0
@@ -6227,6 +6262,151 @@ func _sweater_checks() -> void:
 	await _wait(0.2)
 
 
+## The wardrobe from her eyes (wardrobe_view.gd): "Choose a sweater…" opens its doors in first person,
+## every sweater in her wardrobe hangs on its own hanger in its own design (the one she has on leaves
+## an empty hanger), Right and Left browse with her arm reaching in and the hangers sliding and
+## swinging, a click or Enter puts one on, X her city coat, Esc closes, and the camera she had comes back.
+func _wardrobe_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var keep := {"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate()}
+	Game.wardrobe = {"flock": 4, "cranberry": 1, "northern_lights": 5, "snowfall_yoke": 3, "oatmeal_stripe": 2, "forest": 1}
+	Game.wear("cranberry")
+	var w = _wardrobe_piece()
+	var made: bool = w == null
+	if made:
+		w = _spawn_furniture("wardrobe", Vector3(7.5, 0, 3.0), 3)
+	var dl := w.find_child("door_l", true, false) as Node3D
+	var dr := w.find_child("door_r", true, false) as Node3D
+	_check("the wardrobe model has its two doors as parts of their own, on their hinges (%s, %s)" % [dl != null, dr != null],
+		dl != null and dr != null and dl.position.x < -0.4 and dr.position.x > 0.4)
+	_check("the wardrobe offers 'Choose a sweater…'", _actions_for(w).any(func(a): return a["id"] == "wardrobe"))
+	var cam0 := {"yaw": cam_yaw, "dist": cam_dist}
+	player.position = _stand_point(w)
+	await _wait(0.3)
+	_perform(w, "wardrobe")
+	await _wardrobe_settle(true)
+	var opened: float = rad_to_deg(absf(dl.rotation.y)) if dl else 0.0
+	_check("it opens from her eyes: first person, locked, the doors swung open (%.0f deg), %d hangers" % [opened, wview.hangers.size()],
+		wview.active and fps.active and fps.locked and opened > 90.0 and wview.hangers.size() == 6)
+	var designs := {}
+	var own := true
+	for h in wview.hangers:
+		designs[h["design"]] = true
+		own = own and (h["sweater"] as MeshInstance3D).material_override == Sweaters.material(str(h["design"]))
+	var worn_h: Array = wview.hangers.filter(func(h): return h["design"] == "cranberry")
+	_check("every sweater hangs on its own hanger in its own design, and the one she has on leaves an empty hanger",
+		designs.size() == 6 and own and worn_h.size() == 1 and not (worn_h[0]["sweater"] as MeshInstance3D).visible
+		and wview.hangers.filter(func(h): return (h["sweater"] as MeshInstance3D).visible).size() == 5)
+	var sw0 := wview.hangers[wview.focus]["sweater"] as MeshInstance3D
+	var box: AABB = (wview._model.global_transform.affine_inverse() * sw0.global_transform) * sw0.get_aabb() # in the wardrobe's own frame
+	var rail_y: float = WardrobeView.RAIL_Y
+	_check("the hung sweater is a sweater's size and hangs under the rail (%.2f wide, %.2f tall, top %.2f m under it)" % [box.size.x, box.size.y, rail_y - box.end.y],
+		box.size.x > 0.4 and box.size.x < 0.8 and box.size.y > 0.4 and box.size.y < 0.8 and rail_y - box.end.y > 0.0 and rail_y - box.end.y < 0.15)
+	var front_rect := wview.screen_rect(wview.focus)
+	var vp := get_viewport().get_visible_rect()
+	var shown: float = front_rect.intersection(vp).get_area() / maxf(front_rect.get_area(), 1.0)
+	_check("the one in front is in the middle of the view, %.0f%% of it on screen (%s)" % [shown * 100.0, str(front_rect)],
+		front_rect.has_area() and shown > 0.85 and absf(front_rect.get_center().x - vp.get_center().x) < vp.size.x * 0.08
+		and front_rect.has_point(vp.get_center()) and front_rect.size.y < vp.size.y)
+	await _shot("57_wardrobe_open.png")
+	var f0: int = wview.focus
+	await _key_tap(KEY_RIGHT)
+	await _wait(0.3)
+	var reach_w: float = wview.reach.weight if wview.reach else 0.0
+	var gap: float = wview.reach.hand_gap if wview.reach else 9.0
+	var swinging: bool = wview.hangers.any(func(h): return absf(float(h["roll"])) > 0.01)
+	_check("Right browses: the next one comes to the middle, her right arm reaches in for it (weight %.2f, hand %.2f m off) and the hangers swing" % [reach_w, gap],
+		wview.focus == f0 + 1 and reach_w > 0.6 and wview.reach.side == 1 and swinging)
+	await _shot("57_wardrobe_reach.png")
+	await _wait(1.4)
+	var settled := true
+	for i in wview.hangers.size():
+		settled = settled and absf(float(wview.hangers[i]["x"]) - wview._target_x(i)) < 0.01
+	_check("then the hangers settle on the rail and her arm drops (weight %.2f)" % wview.reach.weight, settled and wview.reach.weight < 0.05)
+	await _key_tap(KEY_LEFT)
+	await _wait(0.3)
+	_check("Left browses back with her left arm", wview.focus == f0 and wview.reach.side == -1 and wview.reach.weight > 0.6)
+	await _wait(1.4)
+	# a click on one at the side
+	var j := -1
+	for i in wview.hangers.size():
+		if i != wview.focus and wview.hangers[i]["design"] != Game.worn_design and wview.screen_rect(i).has_area():
+			j = i
+			break
+	var want: String = str(wview.hangers[j]["design"]) if j >= 0 else ""
+	if j >= 0:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = true
+		ev.position = wview.screen_rect(j).get_center()
+		_check("a click there finds that sweater (%s)" % want, wview.hanger_at(ev.position) == j)
+		wview.handle_mouse(ev)
+	await _wait(0.3)
+	await _shot("57_wardrobe_pick.png")
+	await _wardrobe_settle(false)
+	_check("a click on a sweater puts it on (%s, on her %s), the doors shut and the camera she had is back" % [Game.worn_design, Sweaters.worn(player.body)],
+		want != "" and Game.worn_design == want and Sweaters.worn(player.body) == want and not wview.active and not fps.active
+		and absf(rad_to_deg(dl.rotation.y)) < 1.0 and is_equal_approx(cam_dist, float(cam0["dist"])) and is_equal_approx(cam_yaw, float(cam0["yaw"])))
+	# Enter on the one in front
+	_perform(w, "wardrobe")
+	await _wardrobe_settle(true)
+	await _key_tap(KEY_RIGHT)
+	await _wait(0.8)
+	if str(wview.hangers[wview.focus]["design"]) == Game.worn_design:
+		await _key_tap(KEY_RIGHT) # past the empty hanger of the one she has on
+		await _wait(0.8)
+	var front: String = str(wview.hangers[wview.focus]["design"])
+	await _key_tap(KEY_ENTER)
+	await _wardrobe_settle(false)
+	_check("Enter puts on the one in front (%s)" % front, Game.worn_design == front and Sweaters.worn(player.body) == front and not wview.active)
+	# Esc changes nothing; X is her city coat
+	_perform(w, "wardrobe")
+	await _wardrobe_settle(true)
+	await _key_tap(KEY_RIGHT)
+	await _key_tap(KEY_ESCAPE)
+	await _wardrobe_settle(false)
+	_check("Esc closes it without changing (%s)" % Game.worn_design, Game.worn_design == front and not wview.active and not fps.active)
+	_perform(w, "wardrobe")
+	await _wardrobe_settle(true)
+	await _key_tap(KEY_X)
+	await _wardrobe_settle(false)
+	_check("X puts her back in her city coat", Game.worn_design == "" and Sweaters.worn(player.body) == "" and not wview.active)
+	# from first person it comes back to first person
+	Game.wear("northern_lights")
+	fps.enter()
+	await _wait(0.2)
+	_perform(w, "wardrobe")
+	await _wardrobe_settle(true)
+	await _key_tap(KEY_ESCAPE)
+	await _wardrobe_settle(false)
+	_check("opened from first person, it goes back to first person, free to walk", fps.active and not fps.locked and not wview.active)
+	fps.leave()
+	await _wait(0.3)
+	cam_target = player.position + Vector3(0, 0.9, 0)
+	cam_dist = 4.5
+	await _wait(1.2)
+	await _shot("57_wardrobe_worn.png")
+	Game.wardrobe = keep["w"]
+	Game.worn_design = keep["d"]
+	Game.worn_quality = keep["q"]
+	if made:
+		furniture.erase(w)
+		w.queue_free()
+	await _wait(0.2)
+
+
+## Waits (up to six seconds) for the wardrobe view to finish opening or to have closed: its doors
+## move by game frames, which a busy machine draws slowly.
+func _wardrobe_settle(opened: bool) -> void:
+	var t := 0.0
+	while t < 6.0 and not ((wview.active and wview._door_t >= 1.0) if opened else not wview.active):
+		await get_tree().process_frame
+		t += get_process_delta_time()
+	await _wait(0.1)
+
+
 ## The wardrobe piece in her house, if there is one.
 func _wardrobe_piece():
 	for f in furniture:
@@ -6236,23 +6416,6 @@ func _wardrobe_piece():
 
 
 func _face_checks() -> void:
-	if _wardrobe_piece():
-		_check("the wardrobe in her house offers her sweaters", _actions_for(_wardrobe_piece()).any(func(a): return a["id"] == "wardrobe"))
-	wardrobe_ui.open()
-	await _wait(0.2)
-	var rows := wardrobe_ui._list.get_children()
-	_check("the wardrobe lists her city coat and her four sweaters, best first (%d rows)" % rows.size(),
-		rows.size() == 5 and str(rows[1].get_meta("design")) == "northern_lights" and str(rows[0].get_meta("design")) == "")
-	var picked := str(rows[3].get_meta("design")) # rows: the coat, then Northern Lights, Flock, Snowfall Yoke, Cranberry
-	(rows[3] as Button).pressed.emit()
-	await _wait(0.3)
-	_check("picking one there puts it on (%s, warmth from %s)" % [Game.worn_design, Game.stars(Game.worn_quality)], Game.worn_design == picked and Sweaters.worn(player.body) == Game.worn_design and Game.worn_quality == int(Game.wardrobe[Game.worn_design]))
-	await _shot("55_wardrobe.png")
-	(wardrobe_ui._list.get_child(0) as Button).pressed.emit()
-	await _wait(0.2)
-	_check("and the city coat takes it off", Game.worn_design == "" and Game.worn_quality == 1 and Sweaters.worn(player.body) == "")
-	wardrobe_ui.close()
-	Game.wear("flock")
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
 	Game.hour = 11.0
@@ -7813,6 +7976,7 @@ func _villager_actions(v) -> Array:
 				else:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
+	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
 	else:
@@ -7843,6 +8007,9 @@ func _villager_action(v, id: String) -> void:
 	var f := Game.friend(v.vid)
 	if id.begins_with("job_"):
 		jobs.action(v, id)
+		return
+	if id.begins_with("wearsell_"):
+		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
 		return
 	match id:
 		"talk":
@@ -7926,7 +8093,6 @@ func _villager_action(v, id: String) -> void:
 				_rebuild_grid()
 				_say(v, "Look at you, a property owner. Keys to Rosewood Cottage. Furnish it in Build mode: cozier means more rent every morning. You're welcome.")
 				hud.show_toast("You bought Rosewood Cottage!")
-	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 		_:
 			if id.begins_with("gift_"):
 				var item := id.substr(5)
@@ -7958,9 +8124,6 @@ func _villager_action(v, id: String) -> void:
 
 func open_chat(v) -> void:
 	if hud.is_chat_open():
-	if id.begins_with("wearsell_"):
-		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
-		return
 		close_chat()
 	chat_v = v
 	hud.hide_menu()

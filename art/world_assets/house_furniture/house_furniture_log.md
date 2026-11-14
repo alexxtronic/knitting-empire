@@ -36,7 +36,7 @@ passes to save on token costs. Focus especially on assets in the main character'
 | 6 | spinning_wheel | spoked wheel on a sloping bench with three turned legs, treadle, flyer and bobbin, distaff with wool | 2,564 |
 | 7 | dining_table | plank table on four thick legs, tartan runner, jug of yellow flowers, two candles | 4,094 |
 | 8 | bookshelf | four shelves of books, some leaning and a flat pile, a trailing plant on top | 6,292 |
-| 9 | wardrobe | oak wardrobe with arched panel doors, cornice and plinth, a red hat box on top | 3,080 |
+| 9 | wardrobe | oak wardrobe with arched panel doors, cornice and plinth, a red hat box on top (rebuilt 2026-11-14, doors that open and a rail: `wardrobe/wardrobe_log.md`) | 7,430 |
 | 10 | lamp | floor lamp: turned wooden base, brass pole, glowing cream shade | 1,052 |
 | 11 | plant | fern in a terracotta pot | 4,084 |
 
@@ -82,7 +82,6 @@ The reference reached the session in the chat only, so it is not in `ref/`.
 ## Known differences left
 
 - The fireplace's flames are the game's three glowing, flickering shapes, not the reference's painted flame.
-- The wardrobe's lower half follows the top of its reference (the screenshot cut the rest).
 - Still box models, not redone here: the round rug, the flower pot and the sunflower patch.
 
 ## Licences

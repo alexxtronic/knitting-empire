@@ -470,10 +470,13 @@ def tri_count(ob):
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
 
-def finish(name, out_dir, max_tris=None, separate=()):
+def finish(name, out_dir, max_tris=None, separate=(), parts=None):
     """Joins everything into one mesh called 'model', saves <name>.blend and exports <name>.glb.
     Parts whose names start with one of `separate` are joined into a second mesh called 'tidy', so
-    the game can hide them (a bed's folded blanket while someone sleeps in it)."""
+    the game can hide them (a bed's folded blanket while someone sleeps in it).
+    `parts` ({label: (name prefix, pivot)}) joins the pieces whose names start with the prefix into a
+    mesh of their own called `label`, its origin at `pivot`, so the game can turn it about that point
+    (a wardrobe's door on its hinge)."""
     bpy.context.view_layer.update()
     obs = [o for o in COLL.objects if o.type == "MESH"]
     for o in obs:
@@ -488,6 +491,10 @@ def finish(name, out_dir, max_tris=None, separate=()):
                 o.data.uv_layers.new(name="UVMap")
     tidy = [o for o in obs if o.name.split(".")[0] in separate]
     obs = [o for o in obs if o not in tidy]
+    moving = {}
+    for label, (prefix, pivot) in (parts or {}).items():
+        moving[label] = ([o for o in obs if o.name.startswith(prefix)], pivot)
+        obs = [o for o in obs if not o.name.startswith(prefix)]
 
     def join(parts, label):
         for o in bpy.context.view_layer.objects:
@@ -505,13 +512,21 @@ def finish(name, out_dir, max_tris=None, separate=()):
     ob = join(obs, "model")
     if tidy:
         join(tidy, "tidy")
+    for label, (pieces, pivot) in moving.items():
+        if pieces:
+            j = join(pieces, label)
+            bpy.context.scene.cursor.location = pivot
+            for o in bpy.context.view_layer.objects:
+                o.select_set(o == j)
+            bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+            bpy.context.scene.cursor.location = (0, 0, 0)
     for o in COLL.objects:
         o.select_set(True)
     os.makedirs(out_dir, exist_ok=True)
     co = [v.co for v in ob.data.vertices]
     lo = Vector((min(c.x for c in co), min(c.y for c in co), min(c.z for c in co)))
     hi = Vector((max(c.x for c in co), max(c.y for c in co), max(c.z for c in co)))
-    tris = tri_count(ob)
+    tris = tri_count(ob) + sum(tri_count(o) for o in COLL.objects if o.type == "MESH" and o.name in (parts or {}))
     stats = {
         "name": name, "triangles": tris, "materials": [m.name for m in ob.data.materials],
         "size_m": [round(hi.x - lo.x, 3), round(hi.y - lo.y, 3), round(hi.z - lo.z, 3)],

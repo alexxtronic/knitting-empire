@@ -543,34 +543,273 @@ def bookshelf():
 
 # --- wardrobe ------------------------------------------------------------------------------------------
 
+# Measured from ref/wardrobe.png (1024 x 1536). Its camera, from the converging lines: level, eye
+# 1.07 m up (the cornice slopes down to the right, the plinth up), 24 degrees round to the left, a
+# focal length of 3760 px (59 mm on a 24 mm frame) and 5.9 m from the front left corner. Heights read
+# down the middle of the front are 1.625 mm a pixel (the top of the cornice 2.145 m up); the front's
+# width and the side's depth are solved through that camera (wardrobe/wardrobe_log.md).
+WR_KX = 1.625e-3 / math.cos(math.radians(24))   # metres a pixel across the front, near the middle
+WR_W = 1.15          # carcass, side to side (front: 243..884 px)
+WR_D = 0.60          # carcass, front to back (side face: 121..243 px solves to 0.62)
+WR_Z0 = 0.245        # top of the plinth (1330 px)
+WR_ZT = 1.97         # top of the carcass, under the cornice (268 px)
+WR_ZC = 2.145        # top of the cornice (160 px)
+WR_POST = 0.084      # the corner posts either side of the doors (243..290 px)
+WR_DOOR = (0.276, 1.942)   # bottom and top of the doors (1310 and 285 px)
+WR_DOOR_X = 0.491    # the doors' outer edges, either side of the middle (290 and 848 px)
+WR_HINGE_Y = -WR_D / 2 - 0.004   # the hinges' pins, just in front of the face frame
+WR_RAIL_Z = 1.80     # the hanging rail inside (inferred: hidden by the doors in the reference)
+WR_RAIL_Y = 0.005
+WR_STILE = 0.088     # the doors' stiles (297..345 px)
+WR_UV = 3.2          # texture repeats a metre: the reference's grain is fine and busy
+
+
+def sweep3(name, prof, hx, yf, yb, mat, grain="x", scale=WR_UV):
+    """A moulding swept round the two sides and the front of a carcass whose outer faces are at
+    x = +-hx and y = yf (front) back to yb, with mitred front corners. prof is [(out, z)], how far
+    out from the carcass face each point stands, bottom to top. The back ends are closed."""
+    path = [(-1, yb, 0), (-1, yf, 1), (1, yf, 1), (1, yb, 0)]
+    rings = []
+    for sx, y, corner in path:
+        ring = []
+        for out, z in prof:
+            x = sx * (hx + out)
+            yy = y - out if corner else y
+            ring.append((x, yy, z))
+        rings.append(ring)
+    n = len(prof)
+    verts = [v for r in rings for v in r]
+    faces = []
+    for a in range(3):
+        for i in range(n - 1):
+            faces.append((a * n + i, (a + 1) * n + i, (a + 1) * n + i + 1, a * n + i + 1))
+    faces.append(tuple(range(n)))                    # the back ends
+    faces.append(tuple(range(3 * n + n - 1, 3 * n - 1, -1)))
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    ob = K._obj(name, me, mat)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    K.smooth(ob)
+    K.uv_box(ob, scale, grain=grain)
+    return ob
+
+
+def raised(name, outline, y_back, y_face, inset, mat, scale=WR_UV):
+    """A raised panel field: outline(i) gives the panel's outline in XZ shrunk by i (counter-clockwise
+    from -Y, the same number of points for any i). The outer edge lies on y_back, the bevel rises
+    `inset` inwards to the flat field at y_face (y_face < y_back: toward the front)."""
+    o, f = outline(0.0), outline(inset)
+    n = len(o)
+    verts = [(x, y_back, z) for x, z in o] + [(x, y_face, z) for x, z in f]
+    faces = [tuple(range(n, 2 * n))]
+    for i in range(n):
+        j = (i + 1) % n
+        faces.append((i, j, n + j, n + i))
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    ob = K._obj(name, me, mat)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    for fc in bm.faces:   # every face looks toward the front
+        fc.normal_update()
+        if fc.normal.y > 0:
+            fc.normal_flip()
+    bm.to_mesh(me)
+    bm.free()
+    K.uv_box(ob, scale)   # flat shaded: the bevel round the field has to catch the light (ref)
+    return ob
+
+
+def arch_pts(cx, hw, z0, zs, zp, n=13):
+    """A door panel's outline: square bottom corners, a cathedral arch on top that rises from zs at
+    the sides to zp in the middle (ref: the upper panels, 365 px at the sides, 325 px at the crown)."""
+    pts = [(cx - hw, z0), (cx + hw, z0)]
+    for k in range(n):
+        u = 1.0 - 2.0 * k / (n - 1)
+        pts.append((cx + u * hw, zs + (zp - zs) * (1.0 - abs(u) ** 2.4)))
+    return pts
+
+
+def leather(key, base, dark):
+    """Red leather for the hat box: mottled, with a faint tooled scroll pattern pressed in (ref)."""
+    if key not in M:
+        n = 512
+        a, b = K.tile_noise(n, 1.4, 41), K.tile_noise(n, 0.6, 42)
+        yy, xx = np.mgrid[0:n, 0:n] / n
+        scroll = np.clip(np.sin(xx * 2 * np.pi * 6 + np.sin(yy * 2 * np.pi * 3) * 2.2) * np.sin(yy * 2 * np.pi * 4), -1, 1)
+        press = np.clip(np.abs(scroll) - 0.82, 0, 1) * 5
+        rgb = CL.mix(CL.C(base), CL.C(dark), np.clip(a * 1.5 - 0.35 + press * 0.5, 0, 1)[..., None])
+        rgb = rgb * (0.94 + 0.12 * b[..., None])
+        i = K.save_image(ITEM + "_" + key, rgb, TEX)
+        nm = K.save_image(ITEM + "_" + key + "_n", K.normal_from_height(0.5 * a - press * 0.6, 2.0), TEX)
+        M[key] = K.textured(ITEM + "_" + key, i, rough=0.6, normal=nm, normal_strength=0.8)
+    return M[key]
+
+
+def wbx(*a, **k):
+    """bx with the wardrobe's finer grain (the reference's wood has many thin grain lines)."""
+    return bx(*a, scale=WR_UV, **k)
+
+
+def fine_wood(key, base, light, dark, seed=1, n=512, lines=8.0):
+    """The reference's wood: many thin dark grain lines that wander along the board, soft lighter
+    streaks between them and no knots (the textures repeat a few times on each door)."""
+    if key not in M:
+        yy, xx = np.mgrid[0:n, 0:n]
+        u = xx / n
+        g = K.grain_noise(n, 14.0, 2.0, seed)
+        g2 = K.grain_noise(n, 30.0, 1.4, seed + 7)
+        g3 = K.grain_noise(n, 8.0, 2.4, seed + 11)
+        phase = lines * u + 5.5 * g + 2.0 * np.sin(2 * np.pi * (2 * u + 3.0 * g3))
+        line = 0.5 + 0.5 * np.cos(2 * np.pi * phase)
+        streak = np.clip((g2 - 0.5) * 2.2 + 0.5, 0, 1)
+        rgb = CL.mix(CL.C(base), CL.C(light), (streak * 0.75)[..., None])
+        thin = np.clip((line - 0.9) / 0.1, 0, 1) ** 1.5 * np.clip(g3 * 1.6, 0.25, 1.0)
+        rgb = CL.mix(rgb, CL.C(dark), (thin * 0.75)[..., None])
+        rgb = rgb * (0.96 + 0.08 * K.tile_noise(n, 1.2, seed + 3)[..., None])
+        hgt = 0.35 * streak - 0.6 * thin
+        i = K.save_image(ITEM + "_" + key, rgb, TEX)
+        nm = K.save_image(ITEM + "_" + key + "_n", K.normal_from_height(hgt, 1.6), TEX)
+        M[key] = K.textured(ITEM + "_" + key, i, rough=0.55, normal=nm, normal_strength=0.3)
+    return M[key]
+
+
 def wardrobe():
-    w = wood(knots=2)
-    lighter = wood("panel", "#d98438", "#f0a558", "#ab5c22", seed=9)
-    brass = flat("brass", "#c98a2e", 0.45)
-    bx("body", (1.40, 0.44, 1.70), (0, 0.01, 0.99), w, bevel=0.015, seg=1)
-    bx("plinth", (1.48, 0.50, 0.16), (0, 0.0, 0.08), w, grain="x", bevel=0.03)
-    bx("cornice", (1.44, 0.48, 0.06), (0, 0.0, 1.86), w, grain="x", bevel=0.02)
-    bx("cornice_top", (1.56, 0.54, 0.08), (0, 0.0, 1.92), w, grain="x", bevel=0.035)
+    """The oak wardrobe of ref/wardrobe.png: a framed carcass with panelled sides, two arched panel
+    doors on brass hinges, a stepped cornice and a plinth on bracket feet, a red leather hat box on
+    top. It opens: the doors are parts of their own (door_l, door_r, their origins on the hinge pins)
+    and inside there is a brass hanging rail, where scripts/wardrobe_view.gd hangs her sweaters."""
+    # sampled from the reference's lit front (#e67d28 middle, #f0892f light, grain #ba5911) and the
+    # shaded side (#a6551e); the inside is the same wood a little darker (inferred)
+    w = fine_wood("wood", "#d0650a", "#ef8618", "#8a3a04", seed=1)
+    panel = fine_wood("panel", "#d66b0c", "#f38c1c", "#8f3d06", seed=9)
+    inner = fine_wood("inner", "#a9540f", "#c26818", "#6f3006", seed=13)
+    brass = flat("brass", "#b98434", 0.35)   # antique brass (ref knob #a76c25 .. #f2bc67)
+    brass.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value = 1.0
+    hx, yf, yb = WR_W / 2, -WR_D / 2, WR_D / 2
+    z0, zt, zc = WR_Z0, WR_ZT, WR_ZC
+    # --- the carcass: corner posts, side frames and panels, back, floor, ceiling, face frame
     for sx in (-1, 1):
-        cx = sx * 0.345
-        bx("door", (0.66, 0.035, 1.56), (cx, -0.225, 0.98), w, bevel=0.012)
-        for d in (-1, 1):
-            bx("stile", (0.085, 0.03, 1.56), (cx + d * 0.287, -0.25, 0.98), w, bevel=0.014)
-        bx("rail_bottom", (0.49, 0.03, 0.10), (cx, -0.25, 0.25), w, grain="x", bevel=0.014)
-        bx("rail_top", (0.49, 0.03, 0.10), (cx, -0.25, 1.71), w, grain="x", bevel=0.014)
-        # the arched raised panel
-        pts = [(cx - 0.21, 0.36), (cx + 0.21, 0.36)] + [(cx + 0.21 * math.cos(t), 1.42 + 0.17 * math.sin(t)) for t in lin(0, math.pi, 9)]
-        ob = K.extrude_xz("panel", pts, -0.262, -0.238, lighter, bevel=0.012)
-        K.uv_box(ob, 1.5)
-        ball("knob", 0.034, (sx * 0.065, -0.275, 1.0), brass)
-        for z in (0.45, 1.5):
-            bx("hinge", (0.035, 0.03, 0.10), (sx * 0.70, -0.235, z), brass, bevel=0.008)
-    # a round red hat box on top
-    red = flat("hatbox", "#b23a34", 0.6)
-    cyl("hatbox", 0.23, 0.23, 0.19, (0.22, 0.0, 2.055), red, verts=18, bevel=0.012)
-    cyl("hatbox_lid", 0.245, 0.245, 0.06, (0.22, 0.0, 2.165), flat("hatbox_lid", "#9c2f2b", 0.6), verts=18, bevel=0.012)
-    bx("hatbox_strap", (0.05, 0.02, 0.22), (0.22, -0.238, 2.075), flat("strap", "#8a4a26", 0.7), bevel=0.006)
-    bx("hatbox_clasp", (0.07, 0.03, 0.05), (0.22, -0.245, 2.12), brass, bevel=0.01)
+        wbx("post", (WR_POST, 0.06, zt - z0), (sx * (hx - WR_POST / 2), yf + 0.03, (z0 + zt) / 2), w, bevel=0.012)
+        wbx("side_panel", (0.014, WR_D - 0.06, zt - z0), (sx * (hx - 0.013), 0.03, (z0 + zt) / 2), w, bevel=0.004, seg=1)
+        wbx("side_inner", (0.004, WR_D - 0.08, zt - z0), (sx * (hx - 0.022), 0.02, (z0 + zt) / 2), inner, bevel=0.0)
+        wbx("side_back_stile", (0.016, 0.06, zt - z0), (sx * (hx - 0.004), yb - 0.03, (z0 + zt) / 2), w, bevel=0.006)
+        # the side's rails, at the doors' heights (ref: the side panels end where the door panels do)
+        for (a, b) in ((z0, z0 + 0.125), (WR_DOOR[0] + 0.593, WR_DOOR[0] + 0.70), (zt - 0.105, zt)):
+            wbx("side_rail", (0.016, WR_D - 0.12, b - a), (sx * (hx - 0.004), 0.0, (a + b) / 2), w, grain="y", bevel=0.006)
+    wbx("back", (WR_W - 0.02, 0.015, zt - z0), (0, yb - 0.0075, (z0 + zt) / 2), inner, bevel=0.0)
+    wbx("floor", (WR_W - 0.04, WR_D - 0.04, WR_DOOR[0] - z0), (0, 0.0, (z0 + WR_DOOR[0]) / 2), inner, grain="x", bevel=0.0)
+    wbx("ceiling", (WR_W - 0.04, WR_D - 0.04, zt - WR_DOOR[1]), (0, 0.0, (zt + WR_DOOR[1]) / 2), inner, grain="x", bevel=0.0)
+    wbx("frame_top", (2 * WR_DOOR_X + 0.01, 0.03, zt - WR_DOOR[1]), (0, yf + 0.015, (zt + WR_DOOR[1]) / 2), w, grain="x", bevel=0.006)
+    wbx("frame_bottom", (2 * WR_DOOR_X + 0.01, 0.03, WR_DOOR[0] - z0), (0, yf + 0.015, (z0 + WR_DOOR[0]) / 2), w, grain="x", bevel=0.006)
+    # the hanging rail on two round flanges
+    cyl("rail", 0.011, 0.011, WR_W - 0.05, (0, WR_RAIL_Y, WR_RAIL_Z), brass, verts=12, rot=(0, 90, 0))
+    for sx in (-1, 1):
+        cyl("rail_flange", 0.024, 0.024, 0.01, (sx * (hx - 0.029), WR_RAIL_Y, WR_RAIL_Z), brass, verts=14, rot=(0, 90, 0))
+    # --- the cornice: a bead, a cove, a half-round and a bullnosed top (ref: 160..268 px)
+    prof = [(0.0, zt), (0.012, zt + 0.002), (0.016, zt + 0.008), (0.012, zt + 0.015)]
+    for k in range(1, 7):   # a small cove (ref: the band at 2.03 m is upright and lit, so the cove is low)
+        t = math.pi - (math.pi / 2) * k / 6
+        prof.append((0.040 + 0.028 * math.cos(t), zt + 0.015 + 0.03 * math.sin(t)))
+    prof.append((0.044, zt + 0.047))
+    for k in range(1, 9):   # the broad rounded band
+        p = math.pi * k / 8
+        prof.append((0.044 + 0.018 * math.sin(p), zt + 0.0835 - 0.0365 * math.cos(p)))
+    prof.append((0.05, zt + 0.124))
+    for k in range(1, 9):   # the top slab's bullnose, 0.078 m out at its fullest (ref: 56 px past the post)
+        p = math.pi * k / 8
+        prof.append((0.05 + 0.028 * math.sin(p), zt + 0.1495 - 0.0255 * math.cos(p)))
+    prof += [(0.03, zc), (-0.04, zc)]
+    sweep3("cornice", prof, hx, yf, yb, w)
+    wbx("cornice_top", (WR_W - 0.06, WR_D - 0.04, 0.03), (0, 0.0, zc - 0.015), w, grain="x", bevel=0.0)
+    # --- the plinth: boards on bracket feet, a bullnosed lip on top (ref: 1330..1480 px)
+    ph, po, zl = hx + 0.03, 0.03, z0 - 0.035   # ref: the plinth stands 0.037 m proud, its top edge rounded
+    feet = [(-ph, 0.0), (-ph + 0.16, 0.0)]   # ref: the feet's coves rise 0.07 m over 0.09 m
+    for k in range(1, 8):
+        t = (math.pi / 2) * k / 7
+        feet.append((-ph + 0.16 + 0.09 * (1 - math.cos(t)), 0.07 * math.sin(t)))
+    feet += [(-x, z) for (x, z) in reversed(feet)]
+    feet += [(ph, zl), (-ph, zl)]
+    ob = K.extrude_xz("plinth_front", feet, yf - po, yf, w, bevel=0.012)
+    K.uv_box(ob, WR_UV, grain="x")
+    side = [(yf - po, 0.0), (yf - po + 0.13, 0.0)]
+    a, c = (yb - 0.12 - (yf - po + 0.13)) / 2, (yb - 0.12 + (yf - po + 0.13)) / 2
+    for k in range(1, 10):
+        t = math.pi - math.pi * k / 10
+        side.append((c + a * math.cos(t), 0.075 * math.sin(t)))
+    side += [(yb - 0.12, 0.0), (yb, 0.0), (yb, zl), (yf - po, zl)]
+    for sx in (-1, 1):
+        ob = K.extrude_xz("plinth_side", side, -hx - po if sx > 0 else hx, -hx if sx > 0 else hx + po, w, bevel=0.012)
+        ob.rotation_euler = (0, 0, math.pi / 2)
+        bpy.context.view_layer.update()
+        K.uv_box(ob, WR_UV, grain="y")
+    wbx("plinth_core", (WR_W, WR_D, zl - 0.09), (0, 0.0, zl / 2 + 0.045), inner, bevel=0.0)
+    lip = [(po, zl - 0.002)]
+    for k in range(0, 8):   # a quarter round over the plinth's top front edge (ref: 1310..1355 px)
+        t = (math.pi / 2) * k / 7
+        lip.append((po - 0.03 + 0.03 * math.cos(t), zl + 0.035 * math.sin(t)))
+    lip += [(0.0, z0), (-0.02, z0)]
+    sweep3("plinth_lip", lip, hx, yf, yb, w)
+    # --- the doors (ref: arched raised panels above, square ones below, a broad middle rail)
+    d0, d1 = WR_DOOR
+    dh = d1 - d0
+    for sx, tag in ((-1, "doorL_"), (1, "doorR_")):
+        xo, xi = sx * WR_DOOR_X, sx * 0.002
+        cx, hw = (xo + xi) / 2, abs(xo - xi) / 2
+        yd0, yd1 = WR_HINGE_Y + 0.002, WR_HINGE_Y + 0.028   # front and back of the door's frame
+        wbx(tag + "board", (2 * hw - 0.02, 0.012, dh - 0.02), (cx, yd1 - 0.008, (d0 + d1) / 2), panel, bevel=0.0)
+        for e in (xo, xi):
+            wbx(tag + "stile", (0.08, yd1 - yd0, dh), (e - sx * 0.04 if e == xo else e + sx * 0.04, (yd0 + yd1) / 2, (d0 + d1) / 2), w, bevel=0.01)
+        phw = hw - 0.08   # the panels' half width, between the stiles
+        wbx(tag + "rail_bottom", (2 * phw, yd1 - yd0 - 0.004, 0.098), (cx, (yd0 + yd1) / 2, d0 + 0.049), w, grain="x", bevel=0.008)
+        wbx(tag + "rail_mid", (2 * phw, yd1 - yd0 - 0.004, 0.107), (cx, (yd0 + yd1) / 2, d0 + 0.6465), w, grain="x", bevel=0.008)
+        zs, zp = d0 + dh - 0.13, d0 + dh - 0.065
+        top = [p for p in arch_pts(cx, phw, 0.0, zs, zp)[2:]][::-1] + [(cx + phw, d1), (cx - phw, d1)]
+        ob = K.extrude_xz(tag + "rail_top", top, yd0 + 0.002, yd1 - 0.002, w, bevel=0.008)
+        K.uv_box(ob, WR_UV, grain="x")
+        raised(tag + "field_top", lambda i, cx=cx, phw=phw, zs=zs, zp=zp: arch_pts(cx, phw - i, d0 + 0.70 + i, zs - i, zp - i),
+               yd1 - 0.007, yd0 + 0.006, 0.05, panel)
+        raised(tag + "field_bottom", lambda i, cx=cx, phw=phw: [(cx - phw + i, d0 + 0.098 + i), (cx + phw - i, d0 + 0.098 + i),
+                                                                (cx + phw - i, d0 + 0.593 - i), (cx - phw + i, d0 + 0.593 - i)],
+               yd1 - 0.007, yd0 + 0.006, 0.05, panel)
+        # the knob on the meeting stile (ref: 1.14 m up, 0.068 m across)
+        kx = sx * 31 * WR_KX   # ref: 568 and 630 px, either side of the meeting stiles at 588
+        cyl(tag + "knob_stem", 0.012, 0.016, 0.02, (kx, yd0 - 0.008, 1.137), brass, verts=10, rot=(90, 0, 0))
+        ball(tag + "knob", 0.033, (kx, yd0 - 0.034, 1.137), brass, scale=(1, 0.8, 1), u=14, v=9)
+        # the hinge leaves on the door; the knuckles stay on the frame
+        for z in (0.495, 1.785):
+            wbx(tag + "hinge_leaf", (0.016, 0.003, 0.14), (xo - sx * 0.01, yd0 - 0.0015, z), brass, bevel=0.0015, seg=1)
+    for sx in (-1, 1):
+        for z in (0.495, 1.785):
+            cyl("hinge_knuckle", 0.008, 0.008, 0.15, (sx * (WR_DOOR_X + 0.003), WR_HINGE_Y, z), brass, verts=8)
+            for dz in (-0.08, 0.08):
+                ball("hinge_tip", 0.0075, (sx * (WR_DOOR_X + 0.003), WR_HINGE_Y, z + dz), brass, u=8, v=5)
+    # --- the hat box (ref: 0.48 m across, a cream piped lid, a leather strap and brass buckle)
+    red, lid_red = leather("hatbox", "#962b1e", "#6a1a12"), leather("hatbox_lid", "#a13023", "#731d14")
+    hb = Vector((0.24, 0.06, zc))   # ref: right of the middle and set back
+    hh, lh = 0.25, 0.095            # ref: the box 0.25 m tall, the lid a little over a third of it
+    cyl("hatbox", 0.25, 0.25, hh, (hb.x, hb.y, zc + hh / 2), red, verts=32, bevel=0.01)
+    cyl("hatbox_lid", 0.263, 0.263, lh, (hb.x, hb.y, zc + hh + 0.002 - lh / 2), lid_red, verts=32, bevel=0.014)
+    cream = flat("piping", "#e7c792", 0.6)
+    K.torus("hatbox_piping", 0.264, 0.007, (hb.x, hb.y, zc + hh - lh + 0.004), cream, major=32, minor=6)
+    K.torus("hatbox_piping", 0.257, 0.006, (hb.x, hb.y, zc + hh), cream, major=32, minor=6)
+    strap_mat = leather("strap", "#8d4a22", "#5e2c12")
+    a = math.radians(14)   # the strap sits a little right of the front (ref: 640..675 px against 620)
+    out = Vector((math.sin(a), -math.cos(a), 0))
+    rot_z = math.degrees(a)
+    p = hb + out * 0.266
+    wbx("strap", (0.044, 0.007, 0.14), (p.x, p.y, zc + hh - 0.06), strap_mat, bevel=0.002, seg=1, rot=(0, 0, rot_z))
+    p2 = hb + out * 0.14
+    wbx("strap_top", (0.044, 0.2, 0.007), (p2.x, p2.y, zc + hh + 0.003), strap_mat, bevel=0.002, seg=1, rot=(0, 0, rot_z))
+    p3 = hb + out * 0.273
+    for (ox, oz, sx_, sz_) in ((-0.026, 0.0, 0.008, 0.06), (0.026, 0.0, 0.008, 0.06), (0.0, 0.026, 0.06, 0.008), (0.0, -0.026, 0.06, 0.008)):
+        side_v = Vector((math.cos(a), math.sin(a), 0)) * ox
+        wbx("buckle", (sx_, 0.008, sz_), (p3.x + side_v.x, p3.y + side_v.y, zc + hh - 0.035 + oz), brass, bevel=0.003, seg=1, rot=(0, 0, rot_z))
+    wbx("buckle_pin", (0.006, 0.01, 0.05), (p3.x, p3.y, zc + hh - 0.035), brass, bevel=0.002, seg=1, rot=(0, 0, rot_z))
 
 
 # --- fireplace -----------------------------------------------------------------------------------------
@@ -759,6 +998,11 @@ BUILDERS = {"rocking_chair": rocking_chair, "fireplace": fireplace, "kitchen": k
             "lamp": lamp, "plant": plant, "rug_red": rug_red}
 
 
+# Parts the game moves, joined into meshes of their own with their origin on the pivot.
+PARTS = {"wardrobe": {"door_l": ("doorL_", (-WR_DOOR_X - 0.003, WR_HINGE_Y, 0.0)),
+                      "door_r": ("doorR_", (WR_DOOR_X + 0.003, WR_HINGE_Y, 0.0))}}
+
+
 def main(item):
     global ITEM, TEX
     ITEM = item
@@ -768,7 +1012,7 @@ def main(item):
     BUILDERS[item]()
     bpy.context.view_layer.update()
     bpy.context.preferences.filepaths.save_version = 0
-    K.finish(item, os.path.join(HERE, item, "out"))
+    K.finish(item, os.path.join(HERE, item, "out"), parts=PARTS.get(item))
 
 
 names = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(BUILDERS)

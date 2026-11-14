@@ -33,6 +33,9 @@ var active := false
 var yaw := 0.0 # where the view points: forward is (-sin yaw, 0, -cos yaw)
 var pitch := 0.0
 var key_down := {} # Key -> true: what the autotest holds (the real keyboard is read through Input)
+## Locked (wardrobe_view.gd sets it): the camera stays at her eyes but she doesn't walk, the mouse
+## and the arrow keys don't look round, and there's no dot or hint; whoever locked it steers the view.
+var locked := false
 
 var _cam0 := {}
 var _walls_was := false
@@ -134,6 +137,7 @@ func leave() -> void:
 	if not active:
 		return
 	active = false
+	locked = false
 	var cam: Camera3D = main.cam
 	cam.near = float(_cam0.get("near", 0.5))
 	cam.far = float(_cam0.get("far", 300.0))
@@ -314,6 +318,9 @@ func _process(delta: float) -> void:
 
 func _update(delta: float) -> void:
 	var p: Node3D = main.player
+	if locked:
+		_update_locked(delta)
+		return
 	# the arrow keys look round too, for a trackpad
 	var turn := Vector2.ZERO
 	if _held([KEY_LEFT]):
@@ -390,6 +397,33 @@ func _update(delta: float) -> void:
 	_dot.visible = not main.hud.is_menu_open()
 
 
+## Locked: only the camera follows her eyes, looking where yaw and pitch say.
+func _update_locked(delta: float) -> void:
+	var p: Node3D = main.player
+	p.steer = Vector3.ZERO
+	_hint.visible = false
+	_aim.text = ""
+	_dot.visible = false
+	var eye := _eye_local()
+	if not _have_eye or delta <= 0.0:
+		_eye = eye
+		_have_eye = true
+	else:
+		_eye = _eye.lerp(eye, 1.0 - exp(-12.0 * delta))
+	var basis := Basis.from_euler(Vector3(pitch, yaw, 0.0))
+	main.cam.global_transform = Transform3D(basis, p.global_transform * _eye + Vector3(-sin(yaw), 0, -cos(yaw)) * FORWARD)
+	main.sun.directional_shadow_max_distance = SHADOW
+	p._ring.visible = false
+	for c in _copies:
+		var mi := c[0] as MeshInstance3D
+		var copy = c[1]
+		if copy == null or not is_instance_valid(mi):
+			continue
+		(copy as MeshInstance3D).visible = mi.visible
+		for k in (copy as MeshInstance3D).get_blend_shape_count():
+			(copy as MeshInstance3D).set_blend_shape_value(k, mi.get_blend_shape_value(k))
+
+
 ## Her eyes, in her own space: between the eye bones (or a little above and before the Head bone).
 func _eye_local() -> Vector3:
 	var p: Node3D = main.player
@@ -463,6 +497,8 @@ func handle_key(kc: Key) -> bool:
 
 ## The mouse while it's on (main.gd's _unhandled_input hands it here).
 func handle_mouse(e: InputEvent) -> void:
+	if locked:
+		return
 	if e is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			look((e as InputEventMouseMotion).relative)
