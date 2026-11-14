@@ -44,7 +44,18 @@ def find_chin(P, neck_z, head_z):
         if len(below) >= 2 and front < min(below) - 0.035:
             return float(z), front
         fronts.append((z, front))
-    return float(head_z), float(P[:, 1].min())
+    # No sudden jut: a chin that slopes down into a full neck (Rosa), or a collar standing out under it (Sabrina,
+    # Max). The throat is the deepest front up to the Head bone, and the chin the lowest slice above it that juts
+    # 3.5 cm further forward. (Falling back to the Head bone had put the jaw line at the mouth, and its front at
+    # whatever stood furthest forward, so the chin and the back of the head bent with the neck.)
+    neck = [(zz, f) for zz, f in fronts if zz <= head_z]
+    if neck:
+        tz, tf = max(neck, key=lambda t: t[1])
+        for zz, f in fronts:
+            if zz > tz and f < tf - 0.035:
+                return float(zz), f
+    face = [f for zz, f in fronts if abs(zz - head_z) < 0.01]
+    return float(head_z), (min(face) if face else float(P[:, 1].min()))
 
 
 def make_rigid(me, rig):
