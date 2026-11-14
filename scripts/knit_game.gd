@@ -14,6 +14,7 @@ extends Control
 signal finished(result: Dictionary) # {"song", "difficulty", "accuracy", "rarity", "score", "max_combo", "counts", "cancelled"}
 signal stitched(grade: int) # a stitch was made: 0 perfect, 1 great, 2 good
 
+const Keys = preload("res://scripts/keybinds.gd")
 const LANES := 4
 const LANE_KEYS := [[KEY_D, KEY_LEFT], [KEY_F, KEY_DOWN], [KEY_J, KEY_UP], [KEY_K, KEY_RIGHT]]
 const LANE_LETTERS := ["D", "F", "J", "K"]
@@ -206,7 +207,7 @@ func _input(e: InputEvent) -> void:
 		return
 	var k := e as InputEventKey
 	var kc := k.keycode if k.keycode != KEY_NONE else k.physical_keycode
-	var lane := _lane_of(kc)
+	var lane := _lane_of(Keys.map(kc, ["knit"])) # the lanes' keys as the player bound them
 	match state:
 		State.SELECT:
 			if not k.pressed:
@@ -569,7 +570,7 @@ func _draw_play() -> void:
 		draw_circle(Vector2(cx - 46, HIT_Y + 28), 8.0, c.lightened(0.15))
 		draw_circle(Vector2(cx + 46, HIT_Y + 28), 8.0, c.lightened(0.15))
 		draw_arc(Vector2(cx, HIT_Y), 34.0, 0.0, TAU, 28, Color(CREAM.r, CREAM.g, CREAM.b, 0.35 + 0.5 * glow[l]), 3.0)
-		_text(LANE_LETTERS[l], Vector2(cx, HIT_Y + 78), 24, LANE_COLORS[l].lightened(0.3), 1)
+		_text(Keys.key_name(Keys.bound("lane_%d" % (l + 1))), Vector2(cx, HIT_Y + 78), 24, LANE_COLORS[l].lightened(0.3), 1)
 	# what you've just done, over each needle
 	for p in popups:
 		var age: float = (_clock - float(p["t"])) / fast_div()

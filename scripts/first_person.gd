@@ -15,6 +15,7 @@ extends Node
 
 const World = preload("res://scripts/world.gd")
 const Interiors = preload("res://scripts/interiors.gd")
+const Keys = preload("res://scripts/keybinds.gd")
 
 const FOV := 72.0
 const NEAR := 0.04
@@ -296,7 +297,8 @@ func _held(keys: Array) -> bool:
 	if main.hud.is_menu_open():
 		return false
 	for k in keys:
-		if key_down.get(k, false) or Input.is_key_pressed(k) or Input.is_physical_key_pressed(k):
+		var b := Keys.key_for(k, ["fps", "move"]) # the player's key bindings
+		if key_down.get(k, false) or Input.is_key_pressed(b) or Input.is_physical_key_pressed(b):
 			return true
 	return false
 
@@ -434,6 +436,9 @@ func use() -> bool:
 ## Keys while it's on (main.gd's _input asks first). Returns true if used; the rest (the hotbar,
 ## the bag, Esc with a panel open...) go on to main.gd.
 func handle_key(kc: Key) -> bool:
+	kc = Keys.map(kc, ["fps", "move"]) # the player's key bindings, as the default keys below
+	if kc == KEY_NONE:
+		return true # a default key whose action the player moved: it does nothing here
 	match kc:
 		KEY_V:
 			leave()

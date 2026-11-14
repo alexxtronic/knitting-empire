@@ -32,6 +32,7 @@ signal cam_zoom(dir: int)
 const Catalog = preload("res://scripts/catalog.gd")
 const PhotoAlbum = preload("res://scripts/photo_album.gd")
 const LettersPanel = preload("res://scripts/letters_panel.gd")
+const Keys = preload("res://scripts/keybinds.gd")
 ## The coin (art/world_assets/coin/build.py renders it): on the coin chip and in each "+N" pop-up.
 const COIN_ICON := preload("res://assets/icons/coin.png")
 
@@ -218,6 +219,10 @@ var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it w
 var expand_btn: Button
 var graphics_btn: Button
 var settings_panel: PanelContainer
+var keys_panel: PanelContainer # Settings > Key bindings (built the first time it opens)
+var key_btns := {} # action id -> its key's button on that page
+var keys_note: Label
+var _bind_id := "" # the action waiting for a key
 var god_time_slider: HSlider
 var god_time_label: Label
 var god_weather_btns := {} # "clear" / "rain" -> Button
@@ -1826,6 +1831,10 @@ func _build_settings() -> void:
 		cb.toggled.connect(func(on): click(); set_option(option, on); hud_option.emit(option, on))
 		vb.add_child(cb)
 	vb.add_child(_label("Music and sounds are placeholders made in code (tools/make_audio.py).", 12, Color(TEXT, 0.55)))
+	var keys_btn := _button("Key bindings…", open_keys)
+	keys_btn.custom_minimum_size = Vector2(200, 36)
+	keys_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	vb.add_child(keys_btn)
 	_build_god_mode(vb)
 	var close := _button("Close", func(): settings_panel.visible = false)
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1928,6 +1937,128 @@ func open_settings(music_v := -1.0, sound_v := -1.0, fullscreen := false) -> voi
 	fullscreen_check.set_pressed_no_signal(fullscreen or DisplayServer.window_get_mode() >= DisplayServer.WINDOW_MODE_FULLSCREEN)
 	settings_panel.visible = true
 	settings_panel.move_to_front()
+
+
+# --- key bindings ---------------------------------------------------------------------------------
+
+const KEY_SECTIONS := {"move": "Moving", "world": "From above", "fps": "First person", "cine": "Cinematic camera", "knit": "Knitting"}
+
+
+## Settings > Key bindings: every action the player can move to another key (scripts/keybinds.gd).
+func open_keys() -> void:
+	if keys_panel == null:
+		_build_keys()
+	_bind_id = ""
+	keys_note.text = "Click a key, then press the one you want for it."
+	_refresh_keys()
+	keys_panel.visible = true
+	keys_panel.move_to_front()
+
+
+func keys_open() -> bool:
+	return keys_panel != null and keys_panel.visible
+
+
+func close_keys() -> void:
+	_bind_id = ""
+	if keys_panel:
+		keys_panel.visible = false
+
+
+func _build_keys() -> void:
+	keys_panel = PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	vb.add_child(_label("Key bindings", 24, GOLD))
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(480, 430)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 4)
+	var section := ""
+	for a in Keys.ACTIONS:
+		var sec: String = KEY_SECTIONS[a[2][0]]
+		if sec != section:
+			section = sec
+			list.add_child(_label(sec, 17, GOLD))
+		var row := HBoxContainer.new()
+		var l := _label(a[1], 15)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(l)
+		var id: String = a[0]
+		var b := _button("", func(): start_binding(id))
+		b.custom_minimum_size = Vector2(150, 30)
+		key_btns[id] = b
+		row.add_child(b)
+		list.add_child(row)
+	sc.add_child(list)
+	vb.add_child(sc)
+	keys_note = _label("", 13, Color(TEXT, 0.8))
+	keys_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	keys_note.custom_minimum_size = Vector2(480, 36)
+	vb.add_child(keys_note)
+	vb.add_child(_label("Esc, Enter, the arrow keys and 1 to 9 always keep their jobs.", 12, Color(TEXT, 0.55)))
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 14)
+	var reset := _button("Reset to defaults", func():
+		Keys.reset()
+		_bind_id = ""
+		keys_note.text = "Every key is back to its default."
+		_refresh_keys())
+	var done := _button("Done", close_keys)
+	for b in [reset, done]:
+		b.custom_minimum_size = Vector2(170, 36)
+		bottom.add_child(b)
+	vb.add_child(bottom)
+	keys_panel.add_child(vb)
+	keys_panel.visible = false
+	root.add_child(keys_panel)
+	_place(keys_panel, 0.5, 0.5, Vector2.ZERO)
+
+
+func _refresh_keys() -> void:
+	for id in key_btns:
+		var b: Button = key_btns[id]
+		b.text = "Press a key…" if id == _bind_id else Keys.key_name(Keys.bound(id))
+		b.modulate = GOLD if id == _bind_id else Color.WHITE
+
+
+## Waits for the next key for this action (main.gd's _input hands it to capture_key).
+func start_binding(id: String) -> void:
+	_bind_id = id
+	keys_note.text = "Press the key for \"%s\", or Esc to keep %s." % [_action_label(id), Keys.key_name(Keys.bound(id))]
+	_refresh_keys()
+
+
+func binding_key() -> bool:
+	return _bind_id != "" and keys_open()
+
+
+func capture_key(kc: Key) -> void:
+	var id := _bind_id
+	if kc == KEY_ESCAPE:
+		_bind_id = ""
+		keys_note.text = "\"%s\" stays on %s." % [_action_label(id), Keys.key_name(Keys.bound(id))]
+	elif kc in Keys.FIXED:
+		keys_note.text = "%s keeps its own job. Press another key, or Esc." % Keys.key_name(kc)
+		return
+	else:
+		_bind_id = ""
+		var moved := Keys.bind(id, kc)
+		keys_note.text = "\"%s\" is on %s now." % [_action_label(id), Keys.key_name(kc)]
+		if moved != "":
+			keys_note.text += " \"%s\" was on it, so it moved to %s." % [_action_label(moved), Keys.key_name(Keys.bound(moved))]
+	click()
+	_refresh_keys()
+
+
+func _action_label(id: String) -> String:
+	for a in Keys.ACTIONS:
+		if a[0] == id:
+			return a[1]
+	return id
 
 
 func _build_title_screen() -> void:

@@ -9,6 +9,7 @@
 ## and the day and hour in the game.
 extends Node
 
+const Keys = preload("res://scripts/keybinds.gd")
 const MAX_HEIGHT := 300.0
 const GROUND_CLEAR := 0.15 # how close to the ground it may go
 const BOUNDS := Rect2(-90, -100, 260, 220) # x and z: the map (x -8..92, z -22..20) with plenty of sky round it
@@ -148,7 +149,8 @@ func leave() -> void:
 
 func _held(keys: Array) -> bool:
 	for k in keys:
-		if key_down.get(k, false) or Input.is_key_pressed(k) or Input.is_physical_key_pressed(k):
+		var b := Keys.key_for(k, ["cine", "move"]) # the player's key bindings
+		if key_down.get(k, false) or Input.is_key_pressed(b) or Input.is_physical_key_pressed(b):
 			return true
 	return false
 
@@ -222,7 +224,7 @@ func clamp_pos(p: Vector3) -> Vector3:
 
 ## Keys while the mode is on (main.gd's _input hands them all here). Returns true if used.
 func handle_key(kc: Key) -> bool:
-	match kc:
+	match Keys.map(kc, ["cine", "move"]): # the player's key bindings, as the default keys below
 		KEY_ESCAPE, KEY_P:
 			leave()
 		KEY_F, KEY_ENTER, KEY_KP_ENTER:

@@ -34,6 +34,7 @@ const FirstPerson = preload("res://scripts/first_person.gd")
 const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
+const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 
 const CELL := 0.5
@@ -282,6 +283,7 @@ func _ready() -> void:
 	fireflies = Fireflies.new() # after the layout, so they gather round things where they now stand
 	add_child(fireflies)
 	fireflies.setup(self)
+	Keys.persist = _autotest_dir == "" # the autotest never writes the player's key bindings
 	hud = Hud.new()
 	add_child(hud)
 	hud.letters.mail = mail
@@ -1278,6 +1280,7 @@ func fp_blocked() -> bool:
 func _held(k: Key) -> bool:
 	if knit != null and knit.active:
 		return false # the game's keys (D F J K) must not pan the camera
+	k = Keys.key_for(k, ["move"]) # walking and running, wherever the player bound them
 	return Input.is_key_pressed(k) or Input.is_physical_key_pressed(k)
 
 
@@ -1372,6 +1375,13 @@ func _is_repeat_gesture(g: InputEventGesture) -> bool:
 
 ## Keys are read here, before the on-screen UI gets a chance to swallow them.
 func _input(e: InputEvent) -> void:
+	if e is InputEventKey and hud.binding_key() and (_autotest_dir == "" or e.has_meta("ke_test")):
+		# Settings > Key bindings is waiting for a key: it gets the next one, whatever it is
+		var bk := e as InputEventKey
+		if bk.pressed and not bk.echo:
+			hud.capture_key(bk.keycode if bk.keycode != KEY_NONE else bk.physical_keycode)
+		get_viewport().set_input_as_handled()
+		return
 	if sleeping or title_on or knit.active or not (e is InputEventKey):
 		return
 	if _autotest_dir != "" and not e.has_meta("ke_test"):
@@ -1415,7 +1425,7 @@ func _input(e: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	var handled := true
-	match kc:
+	match Keys.map(kc, ["world"]): # the player's key bindings, as the default keys below
 		KEY_I:
 			hud.toggle_bag()
 		KEY_Q:
@@ -1451,6 +1461,8 @@ func _input(e: InputEvent) -> void:
 				hud.help_panel.visible = false
 			elif hud.bag_panel.visible:
 				hud.toggle_bag()
+			elif hud.keys_open():
+				hud.close_keys()
 			elif hud.settings_panel.visible:
 				hud.settings_panel.visible = false
 			elif hud.journal_panel.visible:
@@ -6334,6 +6346,25 @@ func _hud_checks() -> void:
 	var menu_open := hud.game_menu.visible
 	await _key_tap(KEY_ESCAPE)
 	_check("menu: Esc opens it (%s) and shuts it again" % menu_open, menu_open and not hud.game_menu.visible)
+	# Settings > Key bindings: the bag moved to K opens on K and no longer on I; a clash swaps keys
+	hud.open_keys()
+	hud.start_binding("bag")
+	await _key_tap(KEY_K)
+	var on_k := Keys.bound("bag") == KEY_K
+	await _shot("46_keys.png")
+	await _key_tap(KEY_ESCAPE)
+	var page_shut := not hud.keys_open()
+	await _key_tap(KEY_I)
+	var by_i := hud.bag_panel.visible
+	await _key_tap(KEY_K)
+	var by_k := hud.bag_panel.visible
+	if by_k:
+		await _key_tap(KEY_K)
+	var swap_to := Keys.bind("turn_left", KEY_E)
+	var swapped: bool = swap_to == "turn_right" and Keys.bound("turn_right") == KEY_Q
+	Keys.reset()
+	_check("key bindings: the bag rebound to K (%s) opens on K (%s), not on I (%s), Esc shuts the page (%s); turn left onto E moved turn right to Q (%s); reset" % [on_k, by_k, by_i, page_shut, swapped],
+		on_k and by_k and not by_i and page_shut and swapped and Keys.bound("bag") == KEY_I and not hud.bag_panel.visible)
 	# B and the Build button on the bar
 	await _key_tap(KEY_B)
 	var build_on := mode == Mode.BUILD and hud.build_btn.button_pressed and hud.catalog_panel.visible
