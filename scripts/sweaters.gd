@@ -105,6 +105,7 @@ static func wear(body: Node3D, id: String) -> bool:
 			return false
 	mi.material_override = material(id)
 	mi.set_meta("design", id)
+	mi.set_meta("coat", false)
 	mi.visible = true
 	_set_tuck(body, 1.0)
 	return true
@@ -116,6 +117,55 @@ static func take_off(body: Node3D) -> void:
 		mi.visible = false
 		mi.set_meta("design", "")
 	_set_tuck(body, 0.0)
+
+
+static var _coat_mat: StandardMaterial3D
+
+## Her thin city coat, for when she wears no sweater: the fitted sweater's shape in plain, smooth,
+## cool-coloured cloth (Alex's script: "a coat that was never meant for weather like this"), so her
+## first hand-knit sweater is a change you can see. worn() still says "" while it's on.
+static func wear_coat(body: Node3D) -> bool:
+	if body == null or body.skeleton == null or not fits(body.id):
+		return false
+	var mi := _sweater_node(body)
+	if mi == null:
+		mi = _fit(body)
+		if mi == null:
+			return false
+	mi.material_override = coat_material()
+	mi.set_meta("design", "")
+	mi.set_meta("coat", true)
+	mi.visible = true
+	_set_tuck(body, 1.0)
+	return true
+
+
+static func coat_on(body: Node3D) -> bool:
+	var mi := _sweater_node(body)
+	return mi != null and mi.visible and bool(mi.get_meta("coat", false))
+
+
+static func coat_material() -> StandardMaterial3D:
+	if _coat_mat == null:
+		_coat_mat = StandardMaterial3D.new()
+		_coat_mat.albedo_color = Color(0.5, 0.53, 0.58) # a thin grey city coat
+		var n := FastNoiseLite.new()
+		n.frequency = 0.35
+		var tex := NoiseTexture2D.new()
+		tex.noise = n
+		tex.width = 256
+		tex.height = 256
+		tex.seamless = true
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(0.86, 0.86, 0.86))
+		ramp.set_color(1, Color(1, 1, 1))
+		tex.color_ramp = ramp
+		_coat_mat.albedo_texture = tex # a faint weave, so it reads as cloth and not plastic
+		_coat_mat.roughness = 0.82
+		_coat_mat.metallic_specular = 0.3
+		_coat_mat.rim_enabled = true
+		_coat_mat.rim = 0.15
+	return _coat_mat
 
 
 ## How many of the body's points the tuck moved the last time it was set up (for the checks).

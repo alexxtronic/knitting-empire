@@ -37,6 +37,7 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 const WardrobeView = preload("res://scripts/wardrobe_view.gd")
+const SeeThrough = preload("res://scripts/see_through.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -122,6 +123,7 @@ var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
 var minimap: Minimap # the map under the coins (minimap.gd): click it to walk there
+var see_through: SeeThrough # scenery between the camera and the people fades (see_through.gd)
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
 var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
@@ -270,6 +272,9 @@ func _ready() -> void:
 	god.main = self
 	add_child(god)
 	god.collect()
+	see_through = SeeThrough.new()
+	see_through.setup(self)
+	add_child(see_through)
 	if Engine.has_meta("ke_god_reload"):
 		god.layout_path = GOD_TEST_LAYOUT # the autotest's last step: the world again, from the layout it saved
 	if not OS.get_cmdline_user_args().has("--nolayout") and not Engine.has_meta("ke_god_stock"):
@@ -356,6 +361,7 @@ func _ready() -> void:
 	hud.render_thumbnails()
 	_load_display()
 	tips_enabled = _autotest_dir == "" # the autotest turns them on for its own check
+	hints_enabled = _autotest_dir == "" # Act 1's checks turn the control hints on for themselves
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
@@ -1144,6 +1150,7 @@ func _process(delta: float) -> void:
 	player.in_scene = story.is_playing()
 	_update_tags(delta)
 	_update_camera(delta)
+	see_through.update(delta)
 	_update_walls()
 	_update_held_tool()
 	_update_sweater()
@@ -1157,6 +1164,8 @@ func _process(delta: float) -> void:
 	_update_needs(delta)
 	_update_gaze()
 	_update_tips(delta)
+	_update_hints(delta)
+	_update_new_talk(delta)
 	if not title_on and not get_tree().paused: # how long she has played this save (Max's visit waits for it)
 		Game.flags["play_secs"] = float(Game.flags.get("play_secs", 0.0)) + delta
 	_update_rounds(delta)
@@ -1653,6 +1662,7 @@ func _walker() -> Node3D:
 func minimap_walk(g: Vector3) -> bool:
 	if sleeping or story.is_playing() or title_on or knit.active or cinema.active or god.active or mode != Mode.LIVE:
 		return false
+	Game.set_flag("hint_map") # she found the map by herself: no need for its hint
 	hud.hide_menu()
 	hud.hide_dialogue()
 	var w := _walker()
@@ -1804,7 +1814,9 @@ func _update_sweater() -> void:
 	if player.body == null or player.body.skeleton == null:
 		return
 	var want := Game.worn_design # a Common one too (warmth 1, like the coat, but she has it on)
-	if want != Sweaters.worn(player.body):
+	if want == "" and not Sweaters.coat_on(player.body):
+		Sweaters.wear_coat(player.body) # no sweater: her thin city coat
+	elif want != "" and want != Sweaters.worn(player.body):
 		Sweaters.wear(player.body, want)
 	var bought: Dictionary = Game.flag("npc_sweaters", {}) # villagers wear only what they bought from her
 	for v in villagers:
@@ -2790,25 +2802,173 @@ func _update_tips(delta: float) -> void:
 			return
 
 
+# --- control hints and the glow on people with something to say -----------------------------------
+
+## Short control hints for a new player, once Wren has left her free in Maple Grove (Alex,
+## 2026-11-14: the opening teaches by doing, with glowing things and a few words, not a lecture).
+## One at a time, bottom left: a keycap or two and a few words. Each shows once per save (flag
+## hint_<id>), and is marked done without showing as soon as she does it by herself.
+var hints_enabled := true
+var _hint_t := 1.5
+var _hint_up := 0.0 # how long the hint on show has been up
+var _hint_last := Vector3.INF
+var _hint_walked := 0.0
+var _hint_cam := -1.0
+const HINT_SECS := 9.0
+const HINT_GAP := 9.0
+
+
+## [id, ready, done, keys, words]: in order; the first ready one not yet done shows next.
+func _hints() -> Array:
+	var met: bool = Game.flags.keys().any(func(k): return str(k).begins_with("met_") and str(k) != "met_rowan")
+	return [
+		["walk", true, _hint_walked > 8.0, ["Click"], "Walk there. Hold the button down to keep going"],
+		["talk", _new_talker_near(9.0), met, ["Click"], "Someone glowing has something to say. Click them"],
+		["camera", true, _hint_cam >= 0.0 and absf(cam_dist - _hint_cam) > 2.0, [_key("turn_left"), _key("turn_right")], "Turn the camera. The mouse wheel zooms"],
+		["run", _hint_walked > 20.0, player.running and not player.path.is_empty(), [_key("run")], "Hold to hurry"],
+		["fps", true, fps.active, [_key("first_person")], "See the world through her eyes"],
+		["dog", dog != null and dog.visible, dog != null and dog.controlled, [_key("dog")], "Play as the dog"],
+		["photo", true, cinema.active, [_key("cinematic")], "A free camera, for photos"],
+		["map", true, false, [], "Click the map, top right, to walk anywhere"],
+		["bag", Game.flag("act1_note") == true, hud.bag_panel.visible, [_key("bag")], "Look in your bag"],
+	]
+
+
+func _key(action: String) -> String:
+	return Keys.key_name(Keys.bound(action))
+
+
+func _update_hints(delta: float) -> void:
+	var on: bool = hints_enabled and Game.flag("act1_toured") == true
+	# what she does by herself counts, whether or not the hint has shown yet
+	if on and _hint_last != Vector3.INF and not story.is_playing():
+		_hint_walked += minf(player.position.distance_to(_hint_last), 1.0)
+	_hint_last = player.position
+	if _hint_cam < 0.0 and on and not story.is_playing() and cam_follow:
+		_hint_cam = cam_dist
+	var list := _hints() if on else []
+	for h in list:
+		if h[2] and not Game.flag("hint_" + str(h[0])):
+			Game.set_flag("hint_" + str(h[0]))
+	if hud.hint_id != "":
+		_hint_up += delta
+		var now: Array = list.filter(func(h): return h[0] == hud.hint_id)
+		var busy := story.is_playing() or title_on or sleeping or knit.active
+		if busy or _hint_up > HINT_SECS or (not now.is_empty() and now[0][2]):
+			hud.hide_hint()
+			_hint_t = HINT_GAP
+		return
+	_hint_t -= delta
+	if not on or _hint_t > 0.0 or title_on or story.is_playing() or sleeping or knit.active or mode != Mode.LIVE \
+			or fps.active or cinema.active:
+		return
+	_hint_t = 0.5
+	for h in list:
+		if h[1] and not h[2] and not Game.flag("hint_" + str(h[0])):
+			Game.set_flag("hint_" + str(h[0]))
+			hud.show_hint(str(h[0]), h[3], str(h[4]))
+			_hint_up = 0.0
+			return
+
+
+## A soft glow over anyone with a story scene waiting when she talks to them (a first hello, a
+## topic, a gift of seeds), so the town shows you who to visit without a word of text.
+var _new_talk_t := 0.0
+var _glow_tex: Texture2D
+
+
+func _update_new_talk(delta: float) -> void:
+	_new_talk_t -= delta
+	var t := Time.get_ticks_msec() * 0.001
+	var check := _new_talk_t <= 0.0
+	if check:
+		_new_talk_t = 0.5
+	for v in villagers:
+		var g := v.get_node_or_null("NewTalk") as Sprite3D
+		if check:
+			var want: bool = v.visible and not story.is_playing() and not title_on and Story.find_trigger("talk", v.vid) != ""
+			if want and g == null:
+				g = _new_talk_glow(v)
+			if g:
+				g.visible = want
+		if g and g.visible:
+			var k := 0.5 + 0.5 * sin(t * 3.0 + v.position.x)
+			g.modulate.a = 0.55 + 0.45 * k
+			g.scale = Vector3.ONE * (0.85 + 0.2 * k)
+			g.position.y = float(g.get_meta("y")) + 0.06 * sin(t * 2.0)
+
+
+func _new_talk_glow(v) -> Sprite3D:
+	if _glow_tex == null:
+		var gr := Gradient.new()
+		gr.set_color(0, Color(1.0, 0.95, 0.7, 1.0))
+		gr.add_point(0.18, Color(1.0, 0.82, 0.4, 0.85))
+		gr.set_color(1, Color(1.0, 0.7, 0.3, 0.0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = gr
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(0.5, 0.0)
+		tex.width = 64
+		tex.height = 64
+		_glow_tex = tex
+	var g := Sprite3D.new()
+	g.name = "NewTalk"
+	g.texture = _glow_tex
+	g.pixel_size = 0.009
+	g.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	g.shaded = false
+	g.no_depth_test = true
+	g.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	g.transparent = true
+	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var y: float = (v.tag.position.y if v.tag else 2.0) + 0.5
+	g.set_meta("y", y)
+	g.position.y = y
+	v.add_child(g)
+	return g
+
+
+## The nearest villager with something new to say within `r` metres of her, or null.
+func _new_talker_near(r: float) -> bool:
+	for v in villagers:
+		var g := v.get_node_or_null("NewTalk") as Sprite3D
+		if g and g.visible and v.position.distance_to(player.position) < r:
+			return true
+	return false
+
+
 # --- title screen and display ----------------------------------------------------------------------
 
 var title_on := false
 var _title_clock := true
+var _title_keep := {} # the save's hour and weather, while the title shows its own golden hour
+const TITLE_HOUR := 17.4 # the title is always a clear late afternoon: low warm sun, long shadows
 
 
 func show_title(has_save: bool) -> void:
 	title_on = true
 	_title_clock = Game.time_running
 	Game.time_running = false
+	_title_keep = {"hour": Game.hour, "weather": Game.flag("weather", "clear")}
+	Game.hour = TITLE_HOUR
+	Game.set_flag("weather", "clear")
+	rain = 0.0
 	cam_follow = false
-	cam_glide = {"pos": Vector3(9.0, 0.0, -2.0), "dist": 24.0}
+	cam_glide = {"pos": Vector3(10.0, 0.0, 0.0), "dist": 21.0}
+	cam_yaw_goal = deg_to_rad(20.0)
 	hud.show_title(has_save)
 
 
 func _leave_title() -> void:
 	title_on = false
+	if not _title_keep.is_empty():
+		Game.hour = float(_title_keep["hour"])
+		Game.set_flag("weather", _title_keep["weather"])
+		_title_keep = {}
 	cam_glide = {}
 	cam_follow = true
+	cam_yaw_goal = deg_to_rad(45.0)
 	Game.time_running = _title_clock
 	hud.hide_title()
 
@@ -3022,6 +3182,14 @@ func _act1_checks() -> void:
 	story.auto_line = 0.3
 	story.auto_choices = [0, 1, 0, 1, 0]
 	homestead.start_story() # Act 1's farm: no pen, no sheep, no money
+	hints_enabled = true
+	_hint_t = 1.5
+	_hint_walked = 0.0
+	hud.hide_hint()
+	Game.wear("")
+	await _wait(0.2)
+	_check("she arrives in her thin city coat, not a sweater (coat %s, worn '%s')" % [Sweaters.coat_on(player.body), Sweaters.worn(player.body)],
+		Sweaters.coat_on(player.body) and Sweaters.worn(player.body) == "")
 	var trust0 := Game.stat("rowan", "trust")
 	var journal0: int = Game.journal().size()
 	var day0 := Game.day
@@ -3041,6 +3209,8 @@ func _act1_checks() -> void:
 	var at_sign: bool = not sign_spot.is_empty() and Vector2(player.position.x - sign_spot["pos"].x, player.position.z - sign_spot["pos"].z).length() < 1.0
 	_check("the sign beat finds the sign where the world editor put it, and she stands at it (%s)" % at_sign, at_sign)
 	_check("her selection ring is hidden while a scene plays (%s)" % player._ring.visible, not player._ring.visible)
+	_check("the faded HUD doesn't catch the mouse in a scene: no minimap tooltip over a cutscene",
+		hud.minimap == null or hud.minimap.mouse_behavior_recursive == Control.MOUSE_BEHAVIOR_DISABLED)
 	await _act1_shot("Giorgio the baker", "21_act1_town_giorgio.png")
 	var tune_on: bool = audio.tune_name == "arrival"
 	await _act1_shot("Barbara the postwoman", "21_act1_town_barbara.png")
@@ -3048,29 +3218,56 @@ func _act1_checks() -> void:
 	await _act1_shot("Good, you're here", "22_act1_wren.png")
 	var wren_v = _villager("wren")
 	var dog_gap: float = dog.position.distance_to(wren_v.global_position) if dog != null and wren_v != null else -1.0
-	await _act1_shot("Ellie's girl", "22_act1_tour_rosa.png")
-	await _act1_shot("on the house", "22_act1_tour_giorgio.png")
-	await _act1_shot("Willow Homes. Property", "22_act1_tour_gary.png")
-	await _act1_shot("...Welcome.", "22_act1_tour_steve.png")
-	await _act1_shot("That's the tour", "22_act1_tour_sabrina.png")
-	await _act1_shot("Front door sticks", "23_act1_grans_door.png")
 	_check("in Wren's scene the dog makes way for her: he waits on Nora's other side (%.1f m from Wren)" % dog_gap, dog_gap > Dog.ROOM + 0.2)
+	await _act1_shot("The Yarn Barn. Rosa", "22_act1_overview_shop.png")
+	await _act1_shot("Heart Bakery. Giorgio", "22_act1_overview_bakery.png")
+	await _act1_shot("Builder's Delight. Steve", "22_act1_overview_homegoods.png")
+	await _act1_shot("Willow Homes. That's Gary", "22_act1_overview_office.png")
+	await _act1_shot("Sabrina's Coffee Shop", "22_act1_overview_cafe.png")
+	await _act1_shot("Front door sticks", "23_act1_wren_leaves.png")
 	await _act1_until_done(120.0)
 	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, hour_end[0]], absf(hour_end[0] - hour0) < 0.001 and Game.time_running)
-	_check("the arrival: the rain stops at the sign to the arrival music (%s), the mayor's tour ends at Gran's door with a goal ('%s')" % [str(tune_on), hud.goal_label.text],
-		tune_on and Game.flag("act1_toured") == true and str(Game.flag("weather")) == "clear" and player.position.distance_to(Vector3(10.4, 0, 3.0)) < 0.6
-		and hud.goal_panel.visible and goal_marker.visible and hud.goal_label.text.begins_with("Go inside"))
+	var free_at_sign: bool = not sign_spot.is_empty() and Vector2(player.position.x - sign_spot["pos"].x, player.position.z - sign_spot["pos"].z).length() < 4.0
+	_check("the arrival: the rain stops at the sign to the arrival music (%s), Wren points out the town and leaves her free by the sign (%s) with one goal ('%s')" % [str(tune_on), free_at_sign, hud.goal_label.text],
+		tune_on and Game.flag("act1_toured") == true and str(Game.flag("weather")) == "clear" and free_at_sign
+		and hud.goal_panel.visible and goal_marker.visible and hud.goal_label.text.begins_with("Go to Gran"))
+	_check("the goal has a column of light you can see from the sign", (goal_marker.get_node("Beam") as Node3D).visible)
 	var keepers_back := 0
 	var keepers := ["giorgio", "steve", "rosa", "gary", "sabrina"]
 	for vid in keepers:
 		if _villager(vid).position.distance_to(_villager_post(vid)) < 1.5:
 			keepers_back += 1
-	_check("the shopkeepers went back to work after the tour (%d of %d)" % [keepers_back, keepers.size()], keepers_back == keepers.size())
-	await _wait(0.8)
+	_check("the shopkeepers are at work (%d of %d)" % [keepers_back, keepers.size()], keepers_back == keepers.size())
+	await _wait(2.4)
+	var glowing := []
+	for vid in keepers:
+		var g := _villager(vid).get_node_or_null("NewTalk") as Node3D
+		if g != null and g.visible:
+			glowing.append(vid)
+	_check("the shopkeepers she hasn't met glow, waiting to say hello (%s)" % str(glowing), glowing.size() == keepers.size())
+	_check("a hint shows how to walk, a keycap and a few words (%s: '%s')" % [hud.hint_id, hud.hint_text()], hud.hint_id == "walk" and hud.hint_text() != "")
+	await _shot("23_act1_free.png")
+	# she says hello to Rosa on her own
+	var hello_v := _villager("rosa")
 	var t0 := Time.get_ticks_msec()
-	player.walk(_find_path(player.position, Vector3(5.6, 0, 3.0)))
+	_do_action(hello_v, "talk")
 	var t := 0.0
-	while story.playing != "act1_note" and t < 40.0:
+	while story.playing != "meet_rosa" and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("talking to Rosa the first time plays her hello (%s)" % story.playing, story.playing == "meet_rosa")
+	await _act1_shot("worst payer", "23_act1_meet_rosa.png")
+	await _act1_until_done(30.0)
+	await _wait(0.7)
+	var rg = hello_v.get_node_or_null("NewTalk")
+	_check("after hello Rosa stops glowing, and walking there ticked off the walk hint (glow %s, hint_walk %s)" % [rg != null and rg.visible, Game.flag("hint_walk")],
+		Game.flag("met_rosa") == true and (rg == null or not rg.visible) and Game.flag("hint_walk") == true)
+	await _wait(0.8)
+	t0 = Time.get_ticks_msec()
+	player.walk(_find_path(player.position, Vector3(5.6, 0, 3.0)))
+	t = 0.0
+	while story.playing != "act1_note" and t < 90.0:
 		await _wait(0.1)
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
@@ -3112,6 +3309,8 @@ func _act1_checks() -> void:
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("finishing her first sweater starts the memory (%s)" % story.playing, story.playing == "act1_knit")
+	_check("her first sweater goes on over the city coat (wearing '%s', coat %s)" % [Sweaters.worn(player.body), Sweaters.coat_on(player.body)],
+		Sweaters.worn(player.body) != "" and not Sweaters.coat_on(player.body))
 	await _act1_shot("Babe.", "27_act1_memory.png")
 	_check("the first knit opens memory thread #1 in the faded memory look", hud.memory_on())
 	_check("no toast talks over the memory (%s)" % hud.toast_panel.visible, not hud.toast_panel.visible or hud.toast_panel.modulate.a < 0.05)
@@ -3313,6 +3512,11 @@ func _act1_checks() -> void:
 	story.auto = false
 	story.auto_line = 0.08
 	homestead.reset_sandbox() # the rest of the autotest plays on the old farm: its pen and three sheep
+	hints_enabled = false
+	hud.hide_hint()
+	for vid in ["rosa", "giorgio", "gary", "steve", "sabrina"]: # the rest of the autotest has met them all
+		Game.set_flag("seen_meet_" + vid)
+		Game.set_flag("met_" + vid)
 	_check("the sandbox farm is back for the other checks (pen %s, %d sheep)" % [str(World.pen.visible), sheep_list.size()], World.pen.visible and sheep_list.size() == Game.START_SHEEP and homestead.fences.is_empty())
 
 
@@ -4605,16 +4809,21 @@ func _polish_checks() -> void:
 	audio.set_volumes(0.7, 0.8)
 	hud.settings_panel.visible = false
 	# title screen
+	var hour_before := Game.hour
+	Game.set_flag("weather", "rain")
 	show_title(true)
 	await _wait(1.2)
 	await _shot("41_title.png")
+	_check("the title is a clear golden hour over the farm (hour %.1f, weather %s)" % [Game.hour, Game.flag("weather")],
+		absf(Game.hour - TITLE_HOUR) < 0.01 and str(Game.flag("weather")) == "clear")
 	var faded := hud.chrome.all(func(c): return c.modulate.a < 0.05)
 	_check("title screen: shown over the farm, clock paused, chrome hidden (visible %s, continue %s, chrome hidden %s)" % [hud.title_visible(), hud.title_continue_btn.visible, faded],
 		hud.title_visible() and hud.title_continue_btn.visible and not Game.time_running and faded)
 	_title_continue()
 	await _wait(1.0)
-	_check("Continue leaves the title and starts the clock again (title %s, clock %s)" % [hud.title_visible(), Game.time_running],
-		not hud.title_visible() and Game.time_running and not title_on)
+	_check("Continue leaves the title and starts the clock again, at the save's own hour and weather (title %s, clock %s, hour %.2f from %.2f)" % [hud.title_visible(), Game.time_running, Game.hour, hour_before],
+		not hud.title_visible() and Game.time_running and not title_on and Game.hour >= hour_before - 0.01 and Game.hour < hour_before + 0.6 and str(Game.flag("weather")) == "rain")
+	Game.set_flag("weather", "clear")
 	# tips
 	tips_enabled = true
 	_tip_t = 0.0
@@ -4730,6 +4939,12 @@ func _autotest() -> void:
 	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
 		await _wait(1.5)
 		await _dog_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=seethrough" in OS.get_cmdline_user_args(): # just scenery fading out of the camera's way
+		await _wait(1.5)
+		await _see_through_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -4958,6 +5173,7 @@ func _autotest() -> void:
 	await _photo_checks()
 	await _fps_checks()
 	await _minimap_checks()
+	await _see_through_checks()
 	await _early_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
@@ -6128,6 +6344,16 @@ func _dog_checks() -> void:
 	cam_dist = cd0
 
 
+## A walkable spot about `r` metres from `at` (for the autotest to stand her near something).
+func _open_near(at: Vector3, r: float) -> Vector3:
+	for i in 24:
+		var a := TAU * i / 24.0
+		var p := at + Vector3(cos(a), 0.0, sin(a)) * r
+		if _walkable(_cell(p)) and not _find_path(p, at).is_empty():
+			return p
+	return at + Vector3(r, 0, 0)
+
+
 ## The knitted sweaters: fifty designs; Nora's wardrobe (what she knits hangs there, she picks what
 ## she wears, or her city coat); villagers wear a sweater only once they buy one from her.
 func _sweater_checks() -> void:
@@ -7008,6 +7234,43 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 ## Cinematic mode (cinematic.gd): P frees the camera from Nora and stops the clock, it flies close
 ## to the ground and no higher than 300 m, F saves a photo to the album (the autotest's own folder,
 ## never the player's), the album lists, shows and deletes it, and Esc brings the camera back to Nora.
+## Scenery fading out of the camera's way (see_through.gd): she stands just behind a tall tree as
+## the camera sees it, the tree fades to see-through, and when she walks off it comes back solid.
+func _see_through_checks() -> void:
+	mode = Mode.LIVE
+	cam_follow = true
+	cam_dist = 18.0
+	cam_yaw_goal = cam_yaw
+	var tree = null
+	for el in god.els:
+		if el.scenery and el.kind.begins_with("tree_") and not el.deleted and not el.cut and absf(el.xf.origin.x - 20.0) < 30.0 and absf(el.xf.origin.z) < 30.0:
+			var box: AABB = el.xf * el.bounds
+			if box.size.y > 4.0:
+				tree = el
+				break
+	_check("there's a tall tree near the farm to stand behind", tree != null)
+	if tree == null:
+		return
+	var away := Vector3(sin(cam_yaw), 0, cos(cam_yaw)) * -1.0 # from the camera toward what it looks at, flat
+	var spot: Vector3 = tree.xf.origin + away * 1.6
+	player.walk([])
+	player.position = Vector3(spot.x, 0, spot.z)
+	cam_target = player.position
+	await _wait(1.2)
+	var f: float = see_through.fade_of(tree)
+	await _shot("58_see_through.png")
+	_check("a tree between the camera and her fades to see-through (%.2f)" % f, f > 0.5)
+	var side := Vector3(away.z, 0, -away.x)
+	player.position = tree.xf.origin + side * 14.0
+	cam_target = player.position
+	if dog:
+		dog.position = player.position + side * 1.5
+	await _wait(2.4)
+	var back: Transform3D = tree.mmi.multimesh.get_instance_transform(tree.idx)
+	_check("when she's clear of it the tree comes back solid, in its own place (fade %.2f, scale %.2f)" % [see_through.fade_of(tree), back.basis.get_scale().x],
+		see_through.fade_of(tree) == 0.0 and back.basis.get_scale().x > 0.01)
+
+
 ## The minimap under the coins: where it sits, that it shows the world, a click on it walks her
 ## there, it zooms; and a click held down on the ground walks her the way the mouse points until
 ## the button comes up.
@@ -7521,6 +7784,42 @@ func _setup_story_staging() -> void:
 	gem.name = "Gem"
 	gem.position.y = 2.4
 	goal_marker.add_child(gem)
+	# a soft column of light and a warm glow over the goal, so it can be found from across town
+	var bg := Gradient.new()
+	bg.set_color(0, Color(1.0, 0.85, 0.45, 0.0))
+	bg.set_color(1, Color(1.0, 0.82, 0.4, 0.5))
+	var btex := GradientTexture2D.new()
+	btex.gradient = bg
+	btex.fill_from = Vector2(0, 0)
+	btex.fill_to = Vector2(0, 1)
+	btex.width = 4
+	btex.height = 64
+	var bmat := StandardMaterial3D.new()
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	bmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	bmat.albedo_texture = btex
+	var beam := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.22
+	bm.bottom_radius = 0.42
+	bm.height = 7.0
+	bm.cap_top = false
+	bm.cap_bottom = false
+	beam.mesh = bm
+	beam.material_override = bmat
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.position.y = 3.5
+	beam.name = "Beam"
+	goal_marker.add_child(beam)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.8, 0.45)
+	glow.light_energy = 1.4
+	glow.omni_range = 3.5
+	glow.position.y = 1.2
+	glow.name = "Glow"
+	goal_marker.add_child(glow)
 	goal_marker.visible = false
 	add_child(goal_marker)
 	rain_fx = CPUParticles3D.new()
@@ -7637,6 +7936,11 @@ func _update_story_staging(delta: float) -> void:
 		var gem := goal_marker.get_node("Gem") as Node3D
 		gem.position.y = 2.4 + 0.18 * sin(Time.get_ticks_msec() * 0.003)
 		gem.rotation.y += delta * 1.6
+		# the column fades as she comes close, so it never washes out what she's walking up to
+		var near := clampf((goal_marker.position.distance_to(player.position) - 2.5) / 8.0, 0.0, 1.0)
+		var beam := goal_marker.get_node("Beam") as GeometryInstance3D
+		beam.transparency = 1.0 - near * (0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.002))
+		beam.visible = near > 0.01
 	_area_t += delta
 	if _area_t < 0.25 or story.is_playing() or sleeping or mode != Mode.LIVE:
 		return

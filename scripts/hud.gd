@@ -339,6 +339,7 @@ func _ready() -> void:
 	_build_goal()
 	_build_phone()
 	_build_tip()
+	_build_hint()
 	_build_settings()
 	_build_title_screen()
 
@@ -1474,6 +1475,7 @@ func story_begin() -> void:
 	story_layer.visible = true
 	story_box.visible = false
 	goal_panel.visible = false
+	chrome_mouse(false)
 	var tw := create_tween().set_parallel(true)
 	for c in chrome:
 		tw.tween_property(c, "modulate:a", 0.0, 0.35)
@@ -1484,6 +1486,8 @@ func story_begin() -> void:
 func story_end() -> void:
 	story_box.visible = false
 	story_clear_choices()
+	if not title_layer.visible:
+		chrome_mouse(true)
 	var tw := create_tween().set_parallel(true)
 	for c in chrome:
 		tw.tween_property(c, "modulate:a", 1.0, 0.4)
@@ -2088,9 +2092,9 @@ func _build_title_screen() -> void:
 	title_layer.mouse_filter = Control.MOUSE_FILTER_STOP
 	# a warm dark wash from the left, so the words sit on something calm and the farm shows through
 	var g := Gradient.new()
-	g.set_color(0, Color(0.09, 0.06, 0.05, 0.88))
-	g.set_color(1, Color(0.09, 0.06, 0.05, 0.0))
-	g.add_point(0.45, Color(0.09, 0.06, 0.05, 0.55))
+	g.set_color(0, Color(0.16, 0.08, 0.04, 0.8))
+	g.set_color(1, Color(0.2, 0.1, 0.04, 0.0))
+	g.add_point(0.42, Color(0.18, 0.09, 0.04, 0.45))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	gt.width = 256
@@ -2103,11 +2107,11 @@ func _build_title_screen() -> void:
 	title_layer.add_child(wash)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
-	var name_l := _label("Knitting Empire", 64, GOLD)
-	name_l.add_theme_constant_override("outline_size", 10)
-	name_l.add_theme_color_override("font_outline_color", Color(0.12, 0.08, 0.06, 0.9))
-	vb.add_child(name_l)
-	vb.add_child(_label("Cast on a new life.", 22, Color(TEXT, 0.88)))
+	vb.add_child(_title_logo())
+	var tag := _label("Cast on a new life.", 22, Color(1.0, 0.95, 0.86, 0.92))
+	tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.45))
+	tag.add_theme_constant_override("shadow_offset_y", 2)
+	vb.add_child(tag)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 26)
 	vb.add_child(gap)
@@ -2135,6 +2139,74 @@ func _build_title_screen() -> void:
 	root.add_child(title_layer)
 
 
+## Script faces for the logo, the first one this computer has (none ships with the game; without
+## any it falls back to the system's own font).
+const LOGO_FONTS := ["Snell Roundhand", "Savoye LET", "Apple Chancery", "Segoe Script", "Brush Script MT",
+	"Gabriola", "URW Chancery L", "Z003"]
+
+
+## The title's logo: the name in a hand-lettered script, warm cream with a brown outline, over a
+## ball of yarn whose strand runs out under the words.
+func _title_logo() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", -10)
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(LOGO_FONTS)
+	f.font_weight = 600
+	var l := Label.new()
+	l.name = "Logo"
+	l.text = "Knitting Empire"
+	l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", 92)
+	l.add_theme_color_override("font_color", Color(1.0, 0.91, 0.7))
+	l.add_theme_constant_override("outline_size", 14)
+	l.add_theme_color_override("font_outline_color", Color(0.33, 0.16, 0.07, 0.95))
+	l.add_theme_color_override("font_shadow_color", Color(0.05, 0.02, 0.0, 0.5))
+	l.add_theme_constant_override("shadow_offset_x", 3)
+	l.add_theme_constant_override("shadow_offset_y", 6)
+	box.add_child(l)
+	var yarn := YarnSwash.new()
+	yarn.custom_minimum_size = Vector2(560, 52)
+	yarn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(yarn)
+	return box
+
+
+## A ball of rose wool with two needles through it, and its strand looping out to the right.
+class YarnSwash extends Control:
+	func _draw() -> void:
+		var c := Vector2(30, 26)
+		var r := 21.0
+		var wool := Color(0.86, 0.38, 0.4)
+		var dark := Color(0.6, 0.22, 0.26)
+		# the strand first, so the ball sits on its end: a slow wave with one loop, thinning out
+		var pts := PackedVector2Array()
+		for i in 121:
+			var t := i / 120.0
+			var x := c.x + 14.0 + t * 500.0
+			var y := c.y + 6.0 + sin(t * TAU * 1.5) * 7.0 * (1.0 - t)
+			if t > 0.38 and t < 0.5: # the loop
+				var k := (t - 0.38) / 0.12 * TAU
+				x = c.x + 14.0 + 0.44 * 500.0 + sin(k) * 15.0 - 6.0
+				y = c.y + 6.0 - (1.0 - cos(k)) * 10.0
+			pts.append(Vector2(x, y))
+		draw_polyline(pts, Color(0.33, 0.16, 0.07, 0.9), 5.5, true)
+		draw_polyline(pts, wool.lightened(0.15), 3.0, true)
+		# two needles crossed behind the ball
+		for a in [-0.55, -1.05]:
+			var d := Vector2(cos(a), sin(a))
+			draw_line(c - d * 34.0, c + d * 34.0, Color(0.33, 0.16, 0.07, 0.9), 6.0, true)
+			draw_line(c - d * 34.0, c + d * 34.0, Color(0.86, 0.68, 0.42), 3.5, true)
+			draw_circle(c + d * 36.0, 4.0, Color(0.95, 0.8, 0.46))
+		draw_circle(c, r + 2.5, Color(0.33, 0.16, 0.07, 0.95))
+		draw_circle(c, r, wool)
+		# the wraps round the ball
+		for i in 5:
+			var a := -0.9 + i * 0.42
+			draw_arc(c + Vector2(cos(a), sin(a)) * 6.0, r - 5.0, a + 1.1, a + 3.3, 18, dark, 2.0, true)
+		draw_arc(c + Vector2(-4, -5), r - 9.0, -2.6, -0.6, 12, wool.lightened(0.35), 2.0, true)
+
+
 func show_title(has_save: bool) -> void:
 	title_continue_btn.visible = has_save
 	title_new_btn.text = "New Game"
@@ -2144,7 +2216,15 @@ func show_title(has_save: bool) -> void:
 	goal_panel.visible = false
 	for c in chrome:
 		c.modulate.a = 0.0
+	chrome_mouse(false)
 	settings_panel.move_to_front()
+
+
+## The everyday panels take the mouse only while they show: faded out for a scene or the title,
+## they'd still catch clicks and show tooltips ("Click to walk there" over a cutscene).
+func chrome_mouse(on: bool) -> void:
+	for c in chrome:
+		c.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_INHERITED if on else Control.MOUSE_BEHAVIOR_DISABLED
 
 
 func title_visible() -> bool:
@@ -2153,6 +2233,7 @@ func title_visible() -> bool:
 
 func hide_title() -> void:
 	settings_panel.visible = false
+	chrome_mouse(true)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(title_layer, "modulate:a", 0.0, 0.5)
 	for c in chrome:
@@ -2198,3 +2279,100 @@ func show_tip(text: String, secs := 11.0) -> void:
 	_tip_tween.tween_interval(secs)
 	_tip_tween.tween_property(tip_panel, "modulate:a", 0.0, 0.8)
 	_tip_tween.tween_callback(func(): tip_panel.visible = false)
+
+
+# --- control hints: a key or two and a few words, bottom left (main.gd _update_hints) --------------
+
+var hint_panel: PanelContainer
+var _hint_keys: HBoxContainer
+var _hint_label: Label
+var _hint_tween: Tween
+var _hint_glow: Tween
+var hint_id := "" # the hint on show, or "" once it has gone
+
+
+func _build_hint() -> void:
+	hint_panel = PanelContainer.new()
+	hint_panel.add_theme_stylebox_override("panel", _sb(Color(BG, 0.9), 12, Color(GOLD, 0.6), 10.0))
+	hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 10)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint_keys = HBoxContainer.new()
+	_hint_keys.add_theme_constant_override("separation", 4)
+	_hint_keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(_hint_keys)
+	_hint_label = _label("", 16)
+	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hb.add_child(_hint_label)
+	hint_panel.add_child(hb)
+	hint_panel.visible = false
+	root.add_child(hint_panel)
+	_place(hint_panel, 0.0, 1.0, Vector2(20, 22))
+
+
+## A key drawn as a little cream keycap.
+func _keycap(text: String) -> Control:
+	var p := PanelContainer.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := _sb_flat(Color(0.97, 0.91, 0.77), 6, Color(0.6, 0.43, 0.22), 6.0)
+	sb.shadow_color = Color(GOLD, 0.0)
+	sb.shadow_size = 8
+	p.add_theme_stylebox_override("panel", sb)
+	p.set_meta("style", sb)
+	var l := _label(text, 14, Color(0.27, 0.18, 0.1))
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size.x = 16.0
+	p.add_child(l)
+	return p
+
+
+## Shows a hint: keys (each a keycap; [] for none) and a few words. It glows softly until it goes.
+func show_hint(id: String, keys: Array, text: String) -> void:
+	hint_id = id
+	for c in _hint_keys.get_children():
+		_hint_keys.remove_child(c)
+		c.queue_free()
+	var caps: Array[StyleBoxFlat] = []
+	for k in keys:
+		var cap := _keycap(str(k))
+		_hint_keys.add_child(cap)
+		caps.append(cap.get_meta("style") as StyleBoxFlat)
+	_hint_keys.visible = not keys.is_empty()
+	_hint_label.text = text
+	hint_panel.reset_size()
+	hint_panel.visible = true
+	hint_panel.modulate.a = 0.0
+	click("ui_open")
+	if _hint_tween:
+		_hint_tween.kill()
+	_hint_tween = create_tween()
+	_hint_tween.tween_property(hint_panel, "modulate:a", 1.0, 0.45)
+	if _hint_glow:
+		_hint_glow.kill()
+	_hint_glow = create_tween().set_loops()
+	_hint_glow.tween_method(func(v: float):
+		for sb in caps:
+			sb.shadow_color = Color(GOLD, 0.55 * v), 0.0, 1.0, 0.9).set_trans(Tween.TRANS_SINE)
+	_hint_glow.tween_method(func(v: float):
+		for sb in caps:
+			sb.shadow_color = Color(GOLD, 0.55 * v), 1.0, 0.0, 0.9).set_trans(Tween.TRANS_SINE)
+
+
+func hide_hint() -> void:
+	if hint_id == "":
+		return
+	hint_id = ""
+	if _hint_tween:
+		_hint_tween.kill()
+	_hint_tween = create_tween()
+	_hint_tween.tween_property(hint_panel, "modulate:a", 0.0, 0.5)
+	_hint_tween.tween_callback(func():
+		hint_panel.visible = false
+		if _hint_glow:
+			_hint_glow.kill())
+
+
+## The words of the hint on show (for the checks).
+func hint_text() -> String:
+	return _hint_label.text if hint_panel.visible and hint_id != "" else ""

@@ -2,8 +2,10 @@
 # Flow (Alex's design, 2026-11-12; every line here is a draft for Alex):
 # act1_arrival: a new game opens on the rain bus. She walks to the Welcome to Maple Grove sign, the
 #   rain stops, the arrival music swells, the camera takes in the town (Giorgio at his stall, Barbara
-#   on her round) and comes back to her face. Wren the mayor (brisk, busy, stressed) welcomes her,
-#   walks her past the shops (Steve, Rosa, Giorgio, Gary, Sabrina) and up to Gran's house.
+#   on her round) and comes back to her face. Wren the mayor (brisk, busy, stressed) welcomes her and
+#   points out each shop from the sign, then leaves her free (Alex, 2026-11-14: the player explores
+#   as they like; the only goal is Gran's house). The shopkeepers say hello when she first talks to
+#   them (meet_<id> below), and short control hints come up as she goes (main.gd _update_hints).
 # The cast is Alex's of 2026-11-12: Rosa has the Yarn Barn and the market stall, Gary Willow Homes,
 #   Giorgio Heart Bakery, Steve Builder's Delight, Sabrina the Coffee Shop, Barbara the post.
 # act1_note (inside): Gran's note on the coffee table (she's gone to Florida and Nora minds the farm;
@@ -81,84 +83,95 @@ Wren (neutral): Nora. Ellie's granddaughter. Good, you're here. Wren, mayor. Sor
 Nora (surprised): You know who I am?
 Wren (neutral): Everyone does. Your gran told the whole town you'd come home one day. Every Sunday.
 Nora (sad): Did she.
-Wren (worried): Quick tour, then the house. Ten minutes. Leave the case, nobody here would touch it.
+Wren (worried): I can't stop, so here's Maple Grove in one breath.
 @set act1_arrived
 @home barbara off
-# the stops are "by <building> x z" (scripts/story.gd), so the tour follows the town wherever
-# the world editor puts it
-@place rosa by market_stall 0 -0.95 45
-@walk wren by market_stall 1.7 2.0 nowait
-@walk nora by market_stall 0 1.7
-@face nora rosa
+# the overview points at each building wherever the world editor puts it ("by <building>")
+@camera by building_shop 0 3 13 yaw building_shop
+Wren (neutral): The Yarn Barn. Rosa sells the wool, and she'll buy whatever you knit.
+@camera by building_bakery 0 3 13 yaw building_bakery
+Wren (neutral): Heart Bakery. Giorgio. Don't try to pay for your first loaf.
+@camera by building_homegoods 0 3 13 yaw building_homegoods
+Wren (neutral): Builder's Delight. Steve has tools, seeds and wood. No small talk.
+@camera by building_office 0 3 13 yaw building_office
+Wren (wry): Willow Homes. That's Gary. Don't worry, he'll find you.
+@camera by building_cafe 0 3 13 yaw building_cafe
+Wren (neutral): And Sabrina's Coffee Shop. Closes at five. She means it.
+@camera between wren nora 7
+Wren (neutral): Say hello whenever you like. Your gran's house is down the lane to the west, the one with the roses.
+Wren (neutral): Front door sticks: lift it and shove. She left something for you inside.
+Nora (warm): Thank you, Wren.
+Wren (worried): ...Welcome home, Nora. Really. Sorry. Meeting.
+@walk wren 46 4.4 nowait
+@wait 1.2
+@home wren off
+@home giorgio off
+@set act1_toured
+@goal Go to Gran's house | 7.2 3.0
+@camera player
+
+
+# --- first meetings (Alex, 2026-11-14: after Wren's overview the town is hers to explore; each
+# shopkeeper says hello the first time she talks to them). Drafts for Alex.
+
+== meet_rosa
+@trigger talk rosa
+@requires act1_arrived
+@once
 @face rosa nora
-@face wren nora
 @camera between rosa nora 6 low
-Rosa (happy): Ellie's girl! Oh, you've got her chin. I'm Rosa. The Yarn Barn's mine, and the stall when the market's on. Yarn, needles, and I'll buy anything you knit!
+Rosa (happy): Ellie's girl! Oh, you've got her chin. I'm Rosa. Yarn, needles, and I'll buy anything you knit!
 Rosa (wry): Your gran was my best customer for thirty years. And my worst payer.
-Wren (neutral): Next.
-@walk wren 56.0 -5.6 nowait
-@walk nora 56.9 -5.2
-@face nora giorgio
+@set met_rosa
+@camera player
+
+== meet_giorgio
+@trigger talk giorgio
+@requires act1_arrived
+@once
 @face giorgio nora
-@camera between giorgio nora 7.5 yaw -45
+@camera between giorgio nora 6
 Giorgio (warm): New face. Here, this one's on the house. Don't argue, cara, I've already buttered it.
 Nora (warm): Thank you. It smells incredible.
 Giorgio (warm): Eat. You've come a long way, I can see it. Whatever it was, it's a long way behind you now.
-@walk gary by building_office 0 3.3 nowait
-@walk wren by building_office 1.6 5.0 nowait
-@walk nora by building_office 0 4.8
-@face nora gary
+@set met_giorgio
+@camera player
+
+== meet_gary
+@trigger talk gary
+@requires act1_arrived
+@once
 @face gary nora
-@face wren nora
-@camera between gary nora 7 yaw building_office
+@camera between gary nora 6
 Gary (wry): Gary, Willow Homes. Property, land, prospects. You must be Ellie's girl, minding Birchfield. Brave.
 Gary (happy): Don't worry, everyone starts somewhere. I'll drop by and show you where people end up.
-Wren (neutral): He will. Repeatedly. Come on.
-@walk steve by building_homegoods 0 3.2 nowait
-@walk wren by building_homegoods 1.6 4.9 nowait
-@walk nora by building_homegoods 0 4.7
-@face nora steve
-@face steve nora
-@face wren nora
-@camera between steve nora 7 yaw building_homegoods
-Wren (neutral): Steve. Builder's Delight. Wood, nails, hinges.
-Steve (neutral): ...Welcome.
-Wren (wry): That's a speech, from Steve.
-@walk sabrina by building_cafe 1.6 1.9 nowait
-@walk wren by building_cafe 3.2 4.6 nowait
-@walk nora by building_cafe 1.6 4.4
-@face nora sabrina
-@face sabrina nora
-@face wren nora
-@camera between sabrina nora 7 yaw building_cafe
-Wren (neutral): Sabrina. Coffee Shop.
-Sabrina (neutral): Hi. Coffee's six coins. We close at five. That's the tour.
-Wren (wry): She warms up. Eventually. Possibly.
-@fade out 0.8
-@home giorgio off
-@home steve off
-@home rosa off
-@home gary off
-@home sabrina off
-@place nora 10.4 3.0 270
-@place wren 11.2 2.0 270
-@face wren nora
-@face nora 8.0 3.0
-@camera 9.6 2.8 8 yaw 45
-@fade in 1.0
-> Gran's house. Smaller than she remembers, and the roses have gone wild.
-@face nora wren
-Wren (neutral): Here. Front door sticks: lift it and shove. She said it kept the salesmen out.
-Wren (neutral): She left something for you inside. I haven't looked. I have to go.
-Nora (warm): Thank you, Wren. For all of it.
-Wren (worried): ...Welcome home, Nora. Really. Sorry. Meeting.
-@walk wren 24 4.4 nowait
-@wait 1.5
-@home wren off
-@set act1_toured
-@goal Go inside Gran's house | 7.2 3.0
+@set met_gary
 @camera player
-@toast Click the ground to walk. Follow the gold marker.
+
+== meet_steve
+@trigger talk steve
+@requires act1_arrived
+@once
+@face steve nora
+@camera between steve nora 6
+Steve (neutral): ...Welcome.
+Steve (neutral): Tools. Seeds. Furniture. Hoes are cheap.
+Nora (wry): Is that the whole speech?
+Steve (neutral): That's two.
+@set met_steve
+@camera player
+
+== meet_sabrina
+@trigger talk sabrina
+@requires act1_arrived
+@once
+@face sabrina nora
+@camera between sabrina nora 6
+Sabrina (neutral): Hi. Coffee's six coins. We close at five.
+Nora (warm): I'm Nora. Ellie's granddaughter.
+Sabrina (neutral): I know. Everyone knows. Coffee's still six coins.
+@set met_sabrina
+@camera player
 
 == act1_note
 @trigger area cottage_inside
