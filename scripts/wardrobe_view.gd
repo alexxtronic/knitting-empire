@@ -52,6 +52,8 @@ var _closing := false
 var _was_fps := false
 var _fps_view := Vector2.ZERO
 var _cam := {}
+var _stand := Vector3.ZERO # where she stands while it's open, held there every frame
+var _stand_yaw := 0.0
 var _light: OmniLight3D
 var _push := {} # {i: hanger, side: 1 right hand / -1 left, t: seconds}
 var _pick_t := -1.0
@@ -117,11 +119,19 @@ func open(wardrobe: Node3D) -> void:
 	_fps_view = Vector2(main.fps.yaw, main.fps.pitch)
 	# she stands square in front of it
 	var p: Node3D = main.player
+	p.cancel_activity() # first: ending one later puts her back where it began (player._return_pos)
 	p.path.clear()
+	p._on_arrive = Callable() # nor does a walk she was on finish (and send her off again)
 	var spot: Vector3 = _model.to_global(Vector3(0, 0, FRONT_Z + STAND))
 	p.position = Vector3(spot.x, p.position.y, spot.z)
-	var face: float = _model.global_rotation.y
+	_stand = p.position
+	# which way its doors face, from the model's own front (+z), not global_rotation: a piece placed
+	# from the saved layout can carry a basis that rotation alone misreads
+	var front: Vector3 = _model.global_transform.basis * Vector3.BACK
+	front.y = 0.0
+	var face: float = atan2(front.x, front.z) if front.length() > 0.001 else _model.global_rotation.y
 	p.rotation.y = face + PI
+	_stand_yaw = p.rotation.y
 	if not _was_fps:
 		main.fps.enter()
 	main.fps.locked = true
@@ -325,6 +335,11 @@ func _process(delta: float) -> void:
 		_finish()
 		return
 	delta = minf(delta, 0.05)
+	# she stays put in front of it, whatever else wants to walk her somewhere
+	var p: Node3D = main.player
+	p.path.clear()
+	p.position = Vector3(_stand.x, p.position.y, _stand.z)
+	p.rotation.y = _stand_yaw
 	# the doors
 	_door_t = clampf(_door_t + (-delta if _closing else delta) / DOOR_TIME, 0.0, 1.0)
 	var e := _door_t * _door_t * (3.0 - 2.0 * _door_t)

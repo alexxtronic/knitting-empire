@@ -6313,10 +6313,16 @@ func _wardrobe_checks() -> void:
 	await _shot("57_wardrobe_open.png")
 	var f0: int = wview.focus
 	await _key_tap(KEY_RIGHT)
-	await _wait(0.3)
+	var swing_max := 0.0 # the biggest swing on any hanger as they slide
+	var st := 0.0
+	while st < 0.35:
+		await get_tree().process_frame
+		st += get_process_delta_time()
+		for h in wview.hangers:
+			swing_max = maxf(swing_max, absf(float(h["roll"])))
 	var reach_w: float = wview.reach.weight if wview.reach else 0.0
 	var gap: float = wview.reach.hand_gap if wview.reach else 9.0
-	var swinging: bool = wview.hangers.any(func(h): return absf(float(h["roll"])) > 0.01)
+	var swinging: bool = swing_max > 0.01
 	_check("Right browses: the next one comes to the middle, her right arm reaches in for it (weight %.2f, hand %.2f m off) and the hangers swing" % [reach_w, gap],
 		wview.focus == f0 + 1 and reach_w > 0.6 and wview.reach.side == 1 and swinging)
 	await _shot("57_wardrobe_reach.png")
