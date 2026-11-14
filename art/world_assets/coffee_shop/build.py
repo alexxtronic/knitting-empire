@@ -4,8 +4,20 @@
     uv run --no-project --with pillow --with numpy python art/world_assets/coffee_shop/make_faces.py
     Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/coffee_shop/build.py
 
-Writes out/building_cafe.{blend,glb} and copies the GLB to assets/props/. One static mesh, terrace
-included. Front faces -Y (+Z in Godot); the origin is on the ground at the middle of the whole
+Writes out/building_cafe.{blend,glb} and copies the GLB to assets/props/. You can walk in (Alex,
+2026-11-14: "a cozy little cafe of dreams"), so it is exported in parts like the shops
+(art/world_assets/town_buildings; scripts/interiors.gd opens it up):
+
+    base                          the floor, the threshold, the doorstep and the terrace with its tables
+    wall_front|back|left|right    each wall at full height, hollow, boarded in warm wood inside, with its
+                                  windows (cut through), trim and dressing (the awning, plaque, lights
+                                  and ivy go with the front, the gables and the hanging basket with the sides)
+    wall_*_low                    the same wall cut down to a stub, shown when it faces the camera
+    door                          the door leaf, its origin on its hinge (left jamb), so it swings in
+    roof                          the roof, the front gable, dormers, chimney, fascia and the plank ceiling
+
+The room's walls stand at x -2.95..2.95, z -3.9..1.1 in Godot (the terrace is in front of them);
+data/interiors.json "cafe" "room" says so. Front faces -Y (+Z in Godot); the origin is on the ground at the middle of the whole
 footprint, so town.gd's building() centres it on its lot. Measured off the reference at 136 px a
 metre (X(px), Z(py)). The plaque's and the chalkboard's faces are the reference itself
 (make_faces.py), like the shop signs.
@@ -42,9 +54,12 @@ def Z(py):
     return (GY - py) / PPM
 
 
-W = 5.9  # the front wall (x 300..1105)
-D = 5.0  # its depth  # inferred
-TERRACE = 2.8  # cobbles in front of the wall
+# Alex, 2026-11-14: "make the cafe 2x larger both inside and out, this will be the main hangout for people
+# in the city". Twice the concept's width and depth: its front (x 300..1105, 5.9 m) is the middle of the
+# façade now, with a wing either side (two more shop windows, two more dormers); the height is the concept's.
+W = 11.8  # the front wall (the concept's was 5.9)
+D = 10.0  # its depth (the concept's, inferred, was 5.0)
+TERRACE = 4.0  # cobbles in front of the wall
 DT = D + TERRACE
 BACK = DT / 2
 FRONT = BACK - D  # the front wall's face; -Y is the front
@@ -56,14 +71,17 @@ GABLE_OVER = 0.4  # and past the gable ends
 G_HALF = (910 - 455) / PPM / 2  # the front gable's half width 1.67
 G_CX = X(682)  # its centre line
 G_APEX = Z(55)  # 6.84
-DOOR_X, DOOR_W = X(677), 0.99
+DOOR_X, DOOR_W = 0.0, 1.15  # on the room's centre line and wide enough to walk in (was X(677), 0.99)
 DOOR_TOP = Z(655)  # its arched top 2.43
-STEP = 0.33  # the doorstep's height (two steps)
-WIN_C = (X(402), X(932))  # the shop windows' centres
+STEP = 0.03  # the door runs from the floor (the floor boards' top): she walks in on the level
+T = 0.2  # wall thickness: the walls are hollow
+LOW = 0.62  # a cut-down wall's height
+FLOOR = 0.03
+WIN_C = (-4.55, X(402), X(932), 4.25)  # the shop windows' centres: the concept's two and one in each wing
 WIN_W, WIN_Z = 1.5, (Z(800), Z(670))  # 1.36..2.32
 AWN_TOP, AWN_EDGE, AWN_OUT = Z(535), Z(640), 1.0  # the awning, 3.31 down to 2.54, 1 m out
-AWN_X = (X(232), X(1092))
-STRIPE = (X(1092) - X(232)) / 14  # the awning's fourteen stripes
+AWN_X = (-5.75, 5.75)  # the length of the front (the concept's ran X(232)..X(1092))
+STRIPE = (X(1092) - X(232)) / 14  # the concept's stripe: fourteen across its awning
 ROOF_EDGE = Z(480)  # the front slope's lower edge, just over the fascia
 SLOPE = (RIDGE - ROOF_EDGE) / (D / 2 + 0.4)
 ROOF_WALL = ROOF_EDGE + 0.4 * SLOPE  # where the slope passes over the wall
@@ -152,6 +170,10 @@ def materials():
     M["plaid"] = K.textured("cafe_plaid", plaid("cafe_plaid"), 0.95)
     M["plaque"] = K.textured("cafe_plaque", bpy.data.images.load(os.path.join(TEX, "face_plaque.png")), 0.7)
     M["chalk"] = K.textured("cafe_chalk", bpy.data.images.load(os.path.join(TEX, "face_chalkboard.png")), 0.85)
+    i, n = CL.plank_maps("cafe_lining", TEX, base="#a8602c", light="#c47a40", dark="#77401c", knots=1, seams=5, seed=67)
+    M["lining"] = K.textured("cafe_lining", i, 0.75, normal=n, normal_strength=0.6)
+    i, n = CL.plank_maps("cafe_floor", TEX, base="#8f5228", light="#ad6a36", dark="#5e3317", knots=1, seams=4, seed=71)
+    M["floor"] = K.textured("cafe_floor", i, 0.8, normal=n, normal_strength=0.6)
     M["trim"] = K.plain("cafe_trim", CREAM, 0.6)
     M["glass"] = K.plain("cafe_glow", GLOW, 0.3, emit=0.6)
     M["bulb"] = K.plain("cafe_bulb", "#ffd98a", 0.3, emit=2.0)
@@ -246,25 +268,188 @@ def leaf_spray(M, pts, seed, size=0.16, density=3):
 
 # --- the building --------------------------------------------------------------------------------
 
-def walls(M):
+PARTS = {}
+HINGES = {}  # part name -> where its origin goes, so the game can swing it
+CUTTERS = []
+CUT_MAT = [None]   # set to the trim in build(): the faces a cut leaves take it
+
+
+class part:
+    """Everything built inside `with part("name"):` is joined into one exported object of that name."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        self.before = set(K.COLL.objects)
+
+    def __exit__(self, *a):
+        PARTS.setdefault(self.name, []).extend(o for o in K.COLL.objects if o not in self.before)
+
+
+def cut_box(cx, cy, z0, z1, sx, sy):
+    CUTTERS.append(K.box("cut", (sx, sy, z1 - z0), (cx, cy, (z0 + z1) / 2), CUT_MAT[0], bevel=0))
+
+
+def cut_arch(side, a, z0, z1, w):
+    """An arched opening right through a wall: a box up to where the arch springs, a cylinder over it.
+    a: along the wall (x for front/back, y for the sides)."""
+    spring = z1 - w / 2
+    if side in ("front", "back"):
+        y = FRONT + T / 2 if side == "front" else BACK - T / 2
+        cut_box(a, y, z0, spring, w, 1.0)
+        CUTTERS.append(K.cyl("cut", w / 2, w / 2, 1.0, (a, y, spring), CUT_MAT[0], verts=20, rot=(90, 0, 0)))
+    else:
+        x = (-1 if side == "left" else 1) * (W / 2 - T / 2)
+        cut_box(x, a, z0, spring, 1.0, w)
+        CUTTERS.append(K.cyl("cut", w / 2, w / 2, 1.0, (x, a, spring), CUT_MAT[0], verts=20, rot=(0, 90, 0)))
+
+
+def apply_cuts(targets):
+    for target in targets:
+        for c in CUTTERS:
+            m = target.modifiers.new("cut", "BOOLEAN")
+            m.operation = "DIFFERENCE"
+            m.solver = "EXACT"
+            m.material_mode = "TRANSFER"   # the cut faces take the cutter's trim
+            m.object = c
+        K.apply_mods(target)
+    for c in CUTTERS:
+        bpy.data.objects.remove(c)
+    CUTTERS.clear()
+
+
+def shell(M, side, low):
+    """The wall itself (hollow, T thick, its outer face where the old solid block's was), its stretch of
+    the stone footing, and the warm plank lining on its inside. Front and back own the corners."""
+    top = LOW if low else EAVE + 0.5
     cy = FRONT + D / 2
-    K.uv_box(K.box("footing", (W + 0.14, D + 0.14, FOOT), (0, cy, FOOT / 2), M["stone"], bevel=0.02), 1.4)
-    wall = K.box("walls", (W - 0.1, D - 0.1, EAVE + 0.5 - FOOT), (0, cy, (EAVE + 0.5 + FOOT) / 2), M["wall"], bevel=0.0)
+    if side in ("front", "back"):
+        y = FRONT + T / 2 if side == "front" else BACK - T / 2
+        out = -1 if side == "front" else 1
+        wall = K.box("wall", (W, T, top - FOOT), (0, y, (FOOT + top) / 2), M["wall"], bevel=0.0)
+        foot = K.box("footing", (W + 0.14, T + 0.07, FOOT), (0, y + out * 0.035, FOOT / 2), M["stone"], bevel=0.02)
+        lin = K.box("lining", (W - 2 * T, 0.025, top - FLOOR), (0, y - out * (T / 2 + 0.0125), (FLOOR + top) / 2), M["lining"], bevel=0.0)
+    else:
+        sx = -1 if side == "left" else 1
+        x = sx * (W / 2 - T / 2)
+        wall = K.box("wall", (T, D - 2 * T, top - FOOT), (x, cy, (FOOT + top) / 2), M["wall"], bevel=0.0)
+        foot = K.box("footing", (T + 0.07, D - 2 * T, FOOT), (x + sx * 0.035, cy, FOOT / 2), M["stone"], bevel=0.0)
+        lin = K.box("lining", (0.025, D - 2 * T - 0.05, top - FLOOR), (x - sx * (T / 2 + 0.0125), cy, (FLOOR + top) / 2), M["lining"], bevel=0.0)
+    return [wall, foot, lin]
+
+
+def finish_shell(targets):
+    apply_cuts(targets)
+    wall, foot, lin = targets[:3]
     K.uv_box(wall, 0.55, grain="z")
-    # the gable ends (left and right): triangles of boards up to the ridge
+    K.uv_box(foot, 1.4)
+    K.uv_box(lin, 0.6, grain="z")
+
+
+def corners(M, side, low):
+    top = LOW if low else EAVE
+    y = FRONT + 0.06 if side == "front" else BACK - 0.06
     for sx in (-1, 1):
-        tri = [(-D / 2 + 0.05, EAVE - 0.02), (D / 2 - 0.05, EAVE - 0.02), (0, RIDGE - 0.15)]
-        g = flat("gable_end", tri, 0, 0.1, M["wall"], bevel=0.0)
-        place(g, -90 * sx, (sx * (W / 2 - 0.1), cy, 0))
-        K.uv_box(g, 0.55, grain="z")
-    # cream corner posts and the fascia under the eaves
+        K.box("corner", (0.2, 0.2, top - FOOT), (sx * (W / 2 - 0.02), y, (top + FOOT) / 2), M["trim"], bevel=0.02)
+
+
+def inner_window(M, side, a, z0, z1, w):
+    """The window seen from inside: a cream frame round the opening and a sill."""
+    if side in ("front", "back"):
+        y = FRONT + T + 0.03 if side == "front" else BACK - T - 0.03
+        K.box("iwin_sill", (w + 0.2, 0.1, 0.05), (a, y + 0.02, z0 - 0.02), M["trim"], bevel=0.01)
+        for sa in (-1, 1):
+            K.box("iwin_jamb", (0.06, 0.04, z1 - z0), (a + sa * (w / 2 + 0.03), y, (z0 + z1) / 2), M["trim"], bevel=0.008)
+        K.box("iwin_head", (w + 0.12, 0.04, 0.06), (a, y, z1 + 0.03), M["trim"], bevel=0.008)
+    else:
+        sx = -1 if side == "left" else 1
+        x = sx * (W / 2 - T - 0.03)
+        K.box("iwin_sill", (0.1, w + 0.2, 0.05), (x - sx * 0.02, a, z0 - 0.02), M["trim"], bevel=0.01)
+        for sa in (-1, 1):
+            K.box("iwin_jamb", (0.04, 0.06, z1 - z0), (x, a + sa * (w / 2 + 0.03), (z0 + z1) / 2), M["trim"], bevel=0.008)
+
+
+# the side walls' lower windows (arched_window's own placement: x = cy + cx on the right, cy - cx on the left)
+# The left wall has none: the café's fireplace stands against it (data/interiors.json "cafe").
+# Each: (where along the wall in Blender y, sill, top, width). Godot z is -y. Between the fireplace and the
+# bookshelves on the left; over the café tables on the right (data/interiors.json "cafe").
+SIDE_WINDOWS = {"right": [(2.5, Z(800), Z(700), 0.5), (-1.0, Z(800), Z(700), 0.5)],
+                "left": [(1.65, Z(800), Z(680), 0.55), (-1.85, Z(800), Z(680), 0.55)]}
+BACK_WINDOWS = (0.55,)  # one, between the wall of bookshelves and the espresso bars
+
+
+def wall_front(M, low):
+    t = shell(M, "front", low)
+    yf = FRONT
+    if not low:
+        # the door's cream surround, cut with the wall
+        t.append(flat("door_frame", arch(DOOR_X, FLOOR, DOOR_W + 0.3, DOOR_TOP - FLOOR + 0.15, n=14), yf - 0.02, 0.07, M["trim"], bevel=0.015))
+        z0, z1 = WIN_Z
+        for c in WIN_C:
+            t.append(K.box("win_frame", (WIN_W + 0.16, 0.1, z1 - z0 + 0.16), (c, yf - 0.04, (z0 + z1) / 2), M["trim"], bevel=0.015))
+            cut_box(c, yf + T / 2, z0 + 0.03, z1 - 0.03, WIN_W - 0.06, 1.0)
+    cut_arch("front", DOOR_X, -0.1, DOOR_TOP, DOOR_W)
+    finish_shell(t)
+    corners(M, "front", low)
+    if low:
+        return
+    for c in WIN_C:
+        inner_window(M, "front", c, WIN_Z[0] + 0.03, WIN_Z[1] - 0.03, WIN_W - 0.06)
+    front(M)
+    ivy(M)
+
+
+def wall_back(M, low):
+    t = shell(M, "back", low)
+    if not low:
+        for a in BACK_WINDOWS:  # looking out the back (inferred)
+            cut_arch("back", a, 1.3, 2.3, 0.62)
+    finish_shell(t)
+    corners(M, "back", low)
+    if low:
+        return
+    for a in BACK_WINDOWS:
+        arched_window("bwin", M, -a, 1.27, 2.33, -BACK - 0.01, w=0.62, rot=180, loc=(0, 0, 0))
+        inner_window(M, "back", a, 1.3, 2.0, 0.62)
+
+
+def wall_side(M, side, low):
+    t = shell(M, side, low)
+    cy = FRONT + D / 2
+    if not low:
+        for ya, z0, z1, w in SIDE_WINDOWS[side]:
+            cut_arch(side, ya, z0 + 0.06, z1 - 0.04, w - 0.06)
+    finish_shell(t)
+    if low:
+        return
+    for ya, z0, z1, w in SIDE_WINDOWS[side]:
+        inner_window(M, side, ya, z0 + 0.06, z1 - 0.04 - w / 2, w - 0.06)
+    # the gable end above the eaves: a triangle of boards up to the ridge
+    sx = -1 if side == "left" else 1
+    tri = [(-D / 2 + 0.05, EAVE - 0.02), (D / 2 - 0.05, EAVE - 0.02), (0, RIDGE - 0.15)]
+    g = flat("gable_end", tri, 0, 0.1, M["wall"], bevel=0.0)
+    place(g, -90 * sx, (sx * (W / 2 - 0.1), cy, 0))
+    K.uv_box(g, 0.55, grain="z")
+    side_dressing(M, side)
+
+
+def ceiling(M):
+    """The fascia round the top of the walls, and inside a plank ceiling on three beams (seen in first person)."""
+    cy = FRONT + D / 2
+    for y, sx_, sy_ in ((FRONT - 0.04, W + 0.2, 0.12), (BACK + 0.04, W + 0.2, 0.12)):
+        K.box("fascia", (sx_, sy_, 0.24), (0, y, EAVE + 0.06), M["trim"], bevel=0.02)
     for sx in (-1, 1):
-        for y in (FRONT + 0.06, BACK - 0.06):
-            K.box("corner", (0.2, 0.2, EAVE - FOOT), (sx * (W / 2 - 0.02), y, (EAVE + FOOT) / 2), M["trim"], bevel=0.02)
-    K.box("fascia", (W + 0.2, D + 0.2, 0.24), (0, cy, EAVE + 0.06), M["trim"], bevel=0.02)
+        K.box("fascia", (0.12, D + 0.2, 0.24), (sx * (W / 2 + 0.04), cy, EAVE + 0.06), M["trim"], bevel=0.02)
+    c = K.box("ceiling", (W - 2 * T, D - 2 * T, 0.04), (0, cy, EAVE - 0.02), M["lining"], bevel=0.0)
+    K.uv_box(c, 0.6, grain="y")
+    for x in np.linspace(-W / 2 + 1.1, W / 2 - 1.1, 6):
+        b = K.box("beam", (0.16, D - 2 * T, 0.2), (x, cy, EAVE - 0.14), M["wood"], bevel=0.015)
+        K.uv_box(b, 0.8, grain="y")
 
 
 def roof(M):
+    ceiling(M)
     cy = FRONT + D / 2
     hd = D / 2 + OVER
     hw = W / 2 + GABLE_OVER
@@ -319,21 +504,23 @@ def roof(M):
         K.box("gbox_brace", (0.06, 0.25, 0.25), (G_CX + sx * 0.7, yf - 0.12, box_z - 0.35), M["wood"], bevel=0.01, rot=(45, 0, 0))
     # dormers (x 350 and 1045), on the front slope
     slope = SLOPE
-    for x in (X(350), X(1045)):
+    for x in (-4.7, X(350), X(1045), 4.7):
         zb, zt = Z(410), Z(232)
         yd = FRONT + (zb - ROOF_WALL) / slope + 0.05
-        K.box("dormer", (1.15, 1.4, zt - zb), (x, yd + 0.65, (zb + zt) / 2 - 0.08), M["trim"], bevel=0.03)
+        dd = (zt + 0.4 - zb) / slope + 0.3  # deep enough to reach back into the roof
+        K.box("dormer", (1.15, dd, zt - zb), (x, yd + dd / 2 - 0.05, (zb + zt) / 2 - 0.08), M["trim"], bevel=0.03)
         arched_window("dwin", M, x, zb + 0.08, zt - 0.32, yd, w=0.62)
-        hood = K.cyl("dormer_hood", 0.68, 0.68, 1.5, (x, yd + 0.6, zt - 0.3), M["roof"], verts=20, rot=(90, 0, 0))
+        hood = K.cyl("dormer_hood", 0.68, 0.68, dd + 0.1, (x, yd + dd / 2 - 0.1, zt - 0.3), M["roof"], verts=20, rot=(90, 0, 0))
         hood.scale = (1, 0.55, 1)
         K.uv_box(hood, 0.6)
         K.ball("dormer_finial", 0.1, (x, yd - 0.12, zt + 0.08), M["roof"], u=10, v=7)
     # the chimney (x 985..1135), stone with a cream brick top
-    cx_, top = X(1060), Z(18)
-    base = RIDGE - 1.2
-    K.uv_box(K.box("chimney", (0.95, 0.75, top - 0.45 - base), (cx_, cy + 0.4, (top - 0.45 + base) / 2), M["stone"], bevel=0.03), 1.2)
-    K.box("chim_top", (1.08, 0.88, 0.32), (cx_, cy + 0.4, top - 0.29), M["trim"], bevel=0.03)
-    K.box("chim_cap", (0.82, 0.62, 0.14), (cx_, cy + 0.4, top - 0.06), M["wood"], bevel=0.03)
+    # over the fireplace inside, on the left wall (data/interiors.json "cafe": Godot x -4.9, z -3.1)
+    cx_, cy_, top = -W / 2 + 0.8, 3.1, Z(18)
+    base = RIDGE - (cy_ - cy) * SLOPE - 0.6
+    K.uv_box(K.box("chimney", (0.95, 0.75, top - 0.45 - base), (cx_, cy_, (top - 0.45 + base) / 2), M["stone"], bevel=0.03), 1.2)
+    K.box("chim_top", (1.08, 0.88, 0.32), (cx_, cy_, top - 0.29), M["trim"], bevel=0.03)
+    K.box("chim_cap", (0.82, 0.62, 0.14), (cx_, cy_, top - 0.06), M["wood"], bevel=0.03)
 
 
 def uv_slope(ob, cy, sy):
@@ -356,26 +543,9 @@ def uv_gable(ob, sx):
 
 def front(M):
     yf = FRONT
-    # the door: green, an arched glass top, in a cream frame, with two steps and a mat
-    out = arch(DOOR_X, STEP, DOOR_W + 0.3, DOOR_TOP - STEP + 0.15, n=14)
-    flat("door_frame", out, yf - 0.02, 0.07, M["trim"], bevel=0.015)
-    leaf = arch(DOOR_X, STEP, DOOR_W, DOOR_TOP - STEP, n=14)
-    d = flat("door", leaf, yf - 0.09, 0.05, M["door"], bevel=0.01)
-    K.uv_box(d, 0.9, grain="z")
-    flat("door_glass", arch(DOOR_X, STEP + 1.15, DOOR_W - 0.3, DOOR_TOP - STEP - 1.3, n=12), yf - 0.14, 0.01, M["glass"], bevel=0.0)
-    K.box("door_bar", (0.05, 0.02, DOOR_TOP - STEP - 1.3), (DOOR_X, yf - 0.155, (STEP + 1.15 + DOOR_TOP - 0.15) / 2), M["door"], bevel=0.0)
-    K.box("door_bar", (DOOR_W - 0.3, 0.02, 0.05), (DOOR_X, yf - 0.155, STEP + 1.5), M["door"], bevel=0.0)
-    for zz in (STEP + 0.3, STEP + 0.8):
-        K.box("door_panel", (DOOR_W - 0.32, 0.025, 0.38), (DOOR_X, yf - 0.15, zz), M["door"], bevel=0.015)
-    K.ball("door_knob", 0.05, (DOOR_X + DOOR_W / 2 - 0.13, yf - 0.18, STEP + 1.0), M["brass"], u=10, v=7)
-    for i, (w, dpt) in enumerate(((2.2, 0.75), (1.75, 0.4))):
-        h = STEP * (2 - i) / 2
-        K.uv_box(K.box("step", (w, dpt, h), (DOOR_X + 0.05, yf - dpt / 2, h / 2), M["stone"], bevel=0.02), 1.4)
-    K.box("doormat", (0.95, 0.38, 0.025), (DOOR_X, yf - 0.22, STEP + 0.012), M["mat"], bevel=0.008)
     # the shop windows: glowing, wooden bars (three across, two up), flower boxes under
     z0, z1 = WIN_Z
     for c in WIN_C:
-        K.box("win_frame", (WIN_W + 0.16, 0.1, z1 - z0 + 0.16), (c, yf - 0.04, (z0 + z1) / 2), M["trim"], bevel=0.015)
         K.box("win_glass", (WIN_W - 0.06, 0.02, z1 - z0 - 0.06), (c, yf - 0.1, (z0 + z1) / 2), M["glass"], bevel=0.0)
         for k in (-1, 1):
             K.box("win_bar", (0.05, 0.03, z1 - z0 - 0.06), (c + k * WIN_W / 6, yf - 0.115, (z0 + z1) / 2), M["wood"], bevel=0.006)
@@ -413,7 +583,7 @@ def front(M):
             for li in poly.loop_indices:
                 lay[li].uv = ((k + 0.5) / 8, 0.5)
     # string lights under the awning's edge, in two sagging runs (y 665..690)
-    for a, b in ((X(258), X(500)), (X(855), X(1045))):
+    for a, b in ((-5.6, -3.4), (X(258), X(500)), (X(855), X(1045)), (3.3, 5.6)):
         pts = []
         for t in np.linspace(0, 1, 12):
             pts.append(Vector((a + (b - a) * t, yf - AWN_OUT + 0.08, AWN_EDGE + 0.05 - 0.14 * math.sin(math.pi * t))))
@@ -430,6 +600,35 @@ def front(M):
             K.box("lantern_bar", (0.03, 0.03, 0.36), (x + a * 0.11, yf - 0.3 + b * 0.11, z + 0.05), M["iron"], bevel=0.0)
         K.cyl("lantern_foot", 0.13, 0.05, 0.1, (x, yf - 0.3, z - 0.16), M["iron"], verts=8)
     plaque(M)
+
+
+def door(M):
+    """The door leaf: green, an arched glass top, two panels, a brass knob; set in the wall's
+    thickness and hinged on its left jamb."""
+    y = FRONT + 0.1
+    leaf = arch(DOOR_X, FLOOR, DOOR_W - 0.04, DOOR_TOP - FLOOR - 0.02, n=14)
+    d = flat("door", leaf, y, 0.05, M["door"], bevel=0.01)
+    K.uv_box(d, 0.9, grain="z")
+    gz = FLOOR + 1.2
+    for yy in (y - 0.055, y + 0.005):
+        flat("door_glass", arch(DOOR_X, gz, DOOR_W - 0.34, DOOR_TOP - gz - 0.18, n=12), yy, 0.006, M["glass"], bevel=0.0)
+    for zz in (FLOOR + 0.32, FLOOR + 0.82):
+        for yy in (y - 0.06, y + 0.01):
+            K.box("door_panel", (DOOR_W - 0.36, 0.02, 0.38), (DOOR_X, yy, zz), M["door"], bevel=0.012)
+    for yy, sy in ((y - 0.075, -1), (y + 0.025, 1)):
+        K.ball("door_knob", 0.045, (DOOR_X + DOOR_W / 2 - 0.15, yy + sy * 0.005, FLOOR + 1.0), M["brass"], u=10, v=7)
+    HINGES["door"] = (DOOR_X - DOOR_W / 2 + 0.03, y - 0.025, 0.0)
+
+
+def floor_and_step(M):
+    cy = FRONT + D / 2
+    fl = K.box("floor", (W - 2 * T + 0.02, D - 2 * T + 0.02, 0.05), (0, cy, FLOOR - 0.025), M["floor"], bevel=0.0)
+    K.uv_box(fl, 0.6, grain="y")
+    th = K.box("threshold", (DOOR_W + 0.1, T + 0.02, 0.05), (DOOR_X, FRONT + T / 2, FLOOR - 0.02), M["stone"], bevel=0.01)
+    K.uv_box(th, 1.4)
+    st = K.box("step", (1.9, 0.7, 0.06), (DOOR_X, FRONT - 0.35, 0.03), M["stone"], bevel=0.015)
+    K.uv_box(st, 1.4)
+    K.box("doormat", (0.95, 0.42, 0.02), (DOOR_X, FRONT - 0.32, 0.065), M["mat"], bevel=0.006)
 
 
 def plaque(M):
@@ -458,17 +657,18 @@ def plaque(M):
         K.box("plaque_bracket", (0.05, 0.5, 0.05), (X(685) + sx * 0.8, FRONT - 0.25, Z(500)), M["iron"], bevel=0.0)
 
 
-def right_side(M):
-    """The right gable wall: an arched window up high, a small one below, a hanging basket."""
+def side_dressing(M, side):
+    """A gable wall's windows (an arched one up in the gable, a small one high on the wall, the lower
+    one cut through), and on the right a hanging basket on a scrolled bracket."""
     cy = FRONT + D / 2
     xs = W / 2 + 0.01
-    arched_window("rwin", M, -0.7, Z(445), Z(320), -xs, w=0.5, rot=90, loc=(0, cy, 0))
-    arched_window("rwin", M, 0.9, EAVE + 0.7, EAVE + 1.6, -xs, w=0.55, rot=90, loc=(0, cy, 0))
-    for p in arched_window("rwin_lo", M, -1.4, Z(800), Z(700), -xs, w=0.5, rot=90, loc=(0, cy, 0)):
-        pass
-    # the left gable's windows match (inferred)
-    arched_window("lwin", M, 0.9, EAVE + 0.7, EAVE + 1.6, -xs, w=0.55, rot=-90, loc=(0, cy, 0))
-    arched_window("lwin", M, 0.0, Z(800), Z(680), -xs, w=0.55, rot=-90, loc=(0, cy, 0))
+    for ya, z0, z1, w in SIDE_WINDOWS[side]:  # the lower windows, cut through (x = cy + cx on the right, cy - cx on the left)
+        arched_window(side[0] + "win_lo", M, ya - cy if side == "right" else cy - ya, z0, z1, -xs, w=w, rot=90 if side == "right" else -90, loc=(0, cy, 0))
+    if side == "right":
+        arched_window("rwin", M, 0.9, EAVE + 0.7, EAVE + 1.6, -xs, w=0.55, rot=90, loc=(0, cy, 0))
+    else:
+        arched_window("lwin", M, 0.9, EAVE + 0.7, EAVE + 1.6, -xs, w=0.55, rot=-90, loc=(0, cy, 0))
+        return
     # the hanging basket on its scrolled bracket (x 1125..1265, y 555..730)
     by = FRONT + 0.9
     K.box("basket_arm", (0.62, 0.05, 0.05), (W / 2 + 0.31, by, Z(570)), M["iron"], bevel=0.0)
@@ -491,7 +691,9 @@ def ivy(M):
     pts = [(x + 0.1, FRONT - 0.1, 0.4), (x, FRONT - 0.15, 1.2), (x - 0.1, FRONT - 0.12, 2.0), (x + 0.05, FRONT - 0.15, 2.8),
            (x + 0.2, FRONT - 0.2, 3.4), (x + 0.6, FRONT - 0.45, 4.0)]
     leaf_spray(M, pts, 3, size=0.13, density=18)
-    ga = math.atan2(G_APEX - EAVE, G_HALF)
+
+
+def gable_ivy(M):
     g0 = Vector((G_CX - G_HALF - 0.2, FRONT - 0.45, EAVE + 0.05))
     g1 = Vector((G_CX - 0.15, FRONT - 0.45, G_APEX - 0.15))
     leaf_spray(M, [tuple(g0.lerp(g1, t)) for t in np.linspace(0, 1, 6)], 4, size=0.12, density=10)
@@ -523,11 +725,21 @@ def bistro(M, cx, cy, seed, throw_side):
             K.box("throw_seat", (0.32, 0.42, 0.05), (x + sx * 0.08, cy, 0.5), M["plaid"], bevel=0.02)
 
 
+# The terrace's things (Blender x, y): data/interiors.json "cafe" "outside" blocks the way round them.
+# The tables keep clear of the town post box that stands on the terrace in the world layout (Godot
+# x -1.8, z 4.3 in the café's own space; main.gd TOWN_MAILBOXES, moved in the world editor).
+BISTROS = ((-5.6, 1.6), (-3.2, 1.6), (3.2, 1.6), (5.6, 1.6))  # x, how far out from the wall
+BARREL = (-6.4, FRONT - 0.8)
+LAV_POTS = (-1.0, 1.0)  # either side of the doorstep
+BIG_POT = (6.4, FRONT - 0.8)
+CHALK = (1.7, FRONT - 3.2)  # the A-frame menu, out by the path
+
+
 def terrace(M):
     """Cobbles in front, the bistro tables, pots, the barrel, the chalkboard, fallen leaves."""
     yf = FRONT
     # the cobbled terrace: half an oval out from the wall, 10 m across
-    pts = [(5.0 * math.cos(a), yf - (TERRACE - 0.05) * math.sin(a)) for a in np.linspace(0, math.pi, 28)]
+    pts = [(7.0 * math.cos(a), yf - (TERRACE - 0.05) * math.sin(a)) for a in np.linspace(0, math.pi, 36)]
     verts = [(x, y, 0.035) for x, y in pts] + [(x, y, 0.0) for x, y in pts]
     n = len(pts)
     faces = [tuple(range(n))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
@@ -536,16 +748,16 @@ def terrace(M):
     me.update()
     ob = K._obj("terrace", me, M["cobble"])
     K.uv_box(ob, 0.55)
-    bistro(M, X(400), yf - 1.4, 41, 1)
-    bistro(M, X(945), yf - 1.4, 42, 1)
-    # a barrel of hydrangeas at the left (x 100..230)
-    bx, by = X(165), yf - 0.9
+    for k, (x, d) in enumerate(BISTROS):
+        bistro(M, x, yf - d, 41 + k, 1 if k % 2 else -1)
+    # a barrel of hydrangeas at the left
+    bx, by = BARREL
     K.lathe("barrel", [(0.3, 0.0), (0.36, 0.25), (0.37, 0.4), (0.36, 0.55), (0.3, 0.8)], M["wood"], steps=20, loc=(bx, by, 0), u_rep=6)
     for z in (0.12, 0.68):
         K.torus("barrel_hoop", 0.345, 0.018, (bx, by, z), M["iron"], major=20, minor=4)
     blooms(M, (bx, by, 0.85), 0.42, 9, 51)
     # lavender in clay pots (x 230 and 800), a pot of hydrangeas at the right (x 1285)
-    for i, x in enumerate((X(232), X(800))):
+    for i, x in enumerate(LAV_POTS):
         K.lathe("pot", [(0.13, 0.0), (0.2, 0.32), (0.22, 0.36)], M["pot"], steps=14, loc=(x, yf - 0.55, 0))
         rng = np.random.default_rng(60 + i)
         for k in range(9):
@@ -554,10 +766,10 @@ def terrace(M):
             h = rng.uniform(0.35, 0.55)
             K.cyl("lav_stem", 0.008, 0.008, h, (px, py, 0.32 + h / 2), M["leaf"], verts=4, rot=(rng.normal(0, 8), rng.normal(0, 8), 0))
             K.ball("lav_spike", 0.035, (px, py, 0.32 + h), M["lavender"], u=6, v=5, scale=(1, 1, 3.0))
-    K.lathe("pot", [(0.22, 0.0), (0.3, 0.38), (0.33, 0.44)], M["pot"], steps=16, loc=(X(1285), yf - 0.8, 0))
-    blooms(M, (X(1285), yf - 0.8, 0.5), 0.36, 8, 55)
+    K.lathe("pot", [(0.22, 0.0), (0.3, 0.38), (0.33, 0.44)], M["pot"], steps=16, loc=(BIG_POT[0], BIG_POT[1], 0))
+    blooms(M, (BIG_POT[0], BIG_POT[1], 0.5), 0.36, 8, 55)
     # the A-frame chalkboard (x 1075..1240), its face from the reference
-    cx_, cy_ = X(1158), yf - 1.15
+    cx_, cy_ = CHALK
     fw, fh = 0.62, 0.82
     for sy, tilt in ((-1, 12), (1, -12)):
         leg_y = cy_ + sy * 0.14
@@ -572,33 +784,93 @@ def terrace(M):
             lay[li].uv = (co.x / fw + 0.5, co.z / fh + 0.5)
     # fallen maple leaves on the cobbles
     rng = np.random.default_rng(71)
-    for k in range(16):
+    for k in range(26):
         a = rng.uniform(0.1, math.pi - 0.1)
-        r = rng.uniform(1.0, 4.6)
+        r = rng.uniform(1.0, 6.6)
         p = (r * math.cos(a), yf - min(TERRACE - 0.2, 0.4 + r * 0.5 * math.sin(a)), 0.045)
         K.star("fallen_leaf", 0.08, p, [M["leaf_o"], M["leaf_y"], M["leaf_o"]][k % 3], points=5, inner=0.5, turn=rng.uniform(0, 6))
+
+
+def join_part(name, obs, origin=None):
+    for o in obs:
+        K.apply_mods(o)
+        if "UVMap" not in o.data.uv_layers:
+            if o.data.uv_layers:
+                o.data.uv_layers[0].name = "UVMap"
+            else:
+                o.data.uv_layers.new(name="UVMap")
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    for o in obs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = obs[0]
+    bpy.ops.object.join()
+    ob = bpy.context.view_layer.objects.active
+    ob.name = name
+    ob.data.name = NAME + "_" + name
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    if origin is not None:  # the door: its origin on the hinge line
+        for v in ob.data.vertices:
+            v.co -= Vector(origin)
+        ob.location = origin
+    return ob
 
 
 def build():
     K.reset(NAME)
     M = materials()
-    walls(M)
-    roof(M)
-    front(M)
-    right_side(M)
-    ivy(M)
-    terrace(M)
+    CUT_MAT[0] = M["trim"]
+    with part("base"):
+        floor_and_step(M)
+        terrace(M)
+    with part("wall_front"):
+        wall_front(M, False)
+    with part("wall_front_low"):
+        wall_front(M, True)
+    with part("wall_back"):
+        wall_back(M, False)
+    with part("wall_back_low"):
+        wall_back(M, True)
+    for side in ("left", "right"):
+        with part("wall_" + side):
+            wall_side(M, side, False)
+        with part("wall_%s_low" % side):
+            wall_side(M, side, True)
+    with part("door"):
+        door(M)
+    with part("roof"):
+        roof(M)
+        gable_ivy(M)
     bpy.context.view_layer.update()
     for o in K.COLL.objects:
         if o.type == "MESH" and o.data.vertices:
             lo = min((o.matrix_world @ v.co).z for v in o.data.vertices)
             if lo < -0.05:
                 print("BELOW GROUND", o.name, round(lo, 3))
-    K.finish(NAME, OUT, max_tris=60000)
+    obs = [join_part(n, [o for o in o_ if o.name in bpy.data.objects], HINGES.get(n)) for n, o_ in PARTS.items() if o_]
+    stats = {"name": NAME, "parts": {}, "triangles": 0}
+    for o in obs:
+        t = K.tri_count(o)
+        stats["parts"][o.name] = {"triangles": t, "materials": [m.name if m else None for m in o.data.materials]}
+        stats["triangles"] += t
+    os.makedirs(OUT, exist_ok=True)
+    bpy.context.preferences.filepaths.save_version = 0
+    bpy.ops.file.pack_all()
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, NAME + ".blend"))
+    for o in bpy.context.view_layer.objects:
+        o.select_set(o in obs)
+    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, NAME + ".glb"), export_format="GLB", use_selection=True,
+                              export_apply=True, export_yup=True)
+    stats["glb_bytes"] = os.path.getsize(os.path.join(OUT, NAME + ".glb"))
+    with open(os.path.join(OUT, "stats.json"), "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2)
+    print("[ke] " + json.dumps(stats))
+    if stats["triangles"] > 90000:
+        raise SystemExit("over the triangle budget")
     os.makedirs(PROPS, exist_ok=True)
     shutil.copy(os.path.join(OUT, NAME + ".glb"), os.path.join(PROPS, NAME + ".glb"))
     print("COPIED", os.path.join(PROPS, NAME + ".glb"))
-    print("FOOTPRINT %.2f x %.2f m (terrace included)" % (10.0, DT))
+    print("ROOM x %.2f..%.2f, Godot z %.2f..%.2f" % (-W / 2, W / 2, -BACK, -FRONT))
 
 
 build()
