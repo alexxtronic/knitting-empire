@@ -110,7 +110,7 @@ func _look() -> Dictionary:
 			if el.deleted or el.cut or el.home:
 				continue
 			var box: AABB = (el.xf * el.bounds).abs()
-			if box.size.y < LOW or not _blocks(box, eye, ends):
+			if box.size.y < LOW or not _blocks(box, eye, ends, true):
 				continue
 			found[el] = true
 		elif is_instance_valid(el.node) and not el.home and not el.deleted and not (el.node is Furniture):
@@ -146,13 +146,15 @@ func _look() -> Dictionary:
 	return found
 
 
-## True if the box lies across the way from the eye to any of the ends (and doesn't hold the eye:
-## the camera inside a canopy sees out of it anyway).
-func _blocks(box: AABB, eye: Vector3, ends: Array[Vector3]) -> bool:
+## True if the box lies across the way from the eye to any of the ends. A box that holds the eye
+## counts only for scenery (`holding`): deep in the woods (the swamp's far edge, Alex 2026-11-14) the
+## camera sits inside a tree's crown and sees nothing but leaves, while a building's box round the
+## camera is mostly air.
+func _blocks(box: AABB, eye: Vector3, ends: Array[Vector3], holding := false) -> bool:
 	var core := box.abs()
 	core = core.grow(-minf(0.12, minf(core.size.x, minf(core.size.y, core.size.z)) * 0.2))
 	if core.has_point(eye):
-		return false
+		return holding
 	for e in ends:
 		# stop a little short of the person, so what they stand next to doesn't count
 		var to := eye + (e - eye) * maxf(0.0, 1.0 - 0.35 / maxf(eye.distance_to(e), 0.01))

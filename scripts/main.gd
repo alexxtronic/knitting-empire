@@ -7551,6 +7551,23 @@ func _see_through_checks() -> void:
 	var back: Transform3D = tree.mmi.multimesh.get_instance_transform(tree.idx)
 	_check("when she's clear of it the tree comes back solid, in its own place (fade %.2f, scale %.2f)" % [see_through.fade_of(tree), back.basis.get_scale().x],
 		see_through.fade_of(tree) == 0.0 and back.basis.get_scale().x > 0.01)
+	# deep in the woods the camera itself ends up inside a tree's crown (the swamp's far edge): that
+	# tree fades too, or the screen is all leaves
+	var box: AABB = (tree.xf * tree.bounds).abs()
+	var pitch := deg_to_rad(cam_pitch)
+	var keep_dist := cam_dist
+	cam_dist = (box.position.y + box.size.y * 0.65) / sin(pitch)
+	var flat := Vector3(sin(cam_yaw), 0, cos(cam_yaw)) * cos(pitch) * cam_dist
+	player.position = Vector3(tree.xf.origin.x, 0, tree.xf.origin.z) - flat
+	cam_target = player.position
+	if dog:
+		dog.position = player.position + side * 1.5
+	await _wait(1.2)
+	var inside := box.has_point(cam.global_position)
+	var fi: float = see_through.fade_of(tree)
+	await _shot("58_see_through_inside.png")
+	_check("a tree whose crown holds the camera fades too (camera inside %s, fade %.2f)" % [inside, fi], inside and fi > 0.5)
+	cam_dist = keep_dist
 
 
 ## The minimap under the coins: where it sits, that it shows the world, a click on it walks her
