@@ -1,7 +1,7 @@
 extends SkeletonModifier3D
 ## Procedural motion layered on top of the animation loops, every frame, after the
 ## AnimationPlayer has posed the skeleton:
-##   - look-at: the neck and head turn toward `look_target` (a world point) within natural limits,
+##   - look-at: the spine, neck and head turn toward `look_target` (a world point) within natural limits,
 ##     easing in and out, so people glance at whoever is near and lead turns with their eyes
 ##   - lean: the spine leans into turns and lags when starting and stopping, on a damped spring
 ##     (a little overshoot reads as weight)
@@ -34,9 +34,12 @@ var _bones := {}
 var _fwd_rest := {} # each bone's forward axis in its own space at rest
 var _ready_bones := false
 
-## How far each bone turns toward the target, down the chain: the upper chest takes a little, the neck
-## more, the head the rest. Spread out like this no one joint twists far.
-const LOOK_BONES := [["UpperChest", 0.25], ["Neck", 0.45], ["Head", 1.0]]
+## How far each bone turns toward the target, down the chain: the spine and chest take some of a turn
+## (only the turn, not the nod, so looking down doesn't bow her at the waist), the upper chest a little,
+## the neck more, the head the rest. Spread out like this no one joint twists far: with the spine left
+## out, a look to the side twisted the short neck between collar and jaw by over 50 degrees, and it wrung
+## like a rope (Nora and Rowan on their date, 2026-11-14). The third value: turn only, no nod.
+const LOOK_BONES := [["Spine", 0.2, true], ["Chest", 0.25, true], ["UpperChest", 0.25, false], ["Neck", 0.45, false], ["Head", 1.0, false]]
 const MAX_YAW := deg_to_rad(70.0)
 const MAX_PITCH_UP := deg_to_rad(25.0)
 const MAX_PITCH_DOWN := deg_to_rad(35.0)
@@ -132,7 +135,8 @@ func _process_modification_with_delta(delta: float) -> void:
 		var desired := _limit((_target - gp.origin).normalized(), fwd, up, right)
 		if cur.is_zero_approx() or not desired.is_finite() or cur.dot(desired) < -0.99:
 			continue # pointing straight back: no stable rotation, leave the animated pose
-		var q := _aim(cur, desired, up)
+		var turn_only: bool = lb[2]
+		var q: Quaternion = _turn(cur, desired, up) if turn_only else _aim(cur, desired, up)
 		q = Quaternion.IDENTITY.slerp(q, share * _w)
 		_set_global_basis(sk, bi, Basis(q) * gp.basis)
 
@@ -153,6 +157,17 @@ func _idle_glance(delta: float, sk: Skeleton3D, fwd: Vector3, up: Vector3, right
 			var head := sk.get_bone_global_pose(_bones["Head"]).origin
 			_glance = head + (fwd * cos(yaw) + right * sin(yaw) + up * randf_range(-0.25, 0.1)) * 3.0
 	return _glance_on
+
+
+## Just the turn about the vertical that faces `cur` the way `desired` goes (no nod).
+func _turn(cur: Vector3, desired: Vector3, up: Vector3) -> Quaternion:
+	var ch := cur - up * cur.dot(up)
+	var dh := desired - up * desired.dot(up)
+	if ch.length() < 0.05 or dh.length() < 0.05:
+		return Quaternion.IDENTITY
+	ch = ch.normalized()
+	dh = dh.normalized()
+	return Quaternion(up, atan2(ch.cross(dh).dot(up), ch.dot(dh)))
 
 
 ## The rotation that turns `cur` to `desired` as a person turns their head: a turn about the vertical,

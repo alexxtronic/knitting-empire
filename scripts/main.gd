@@ -5981,10 +5981,16 @@ func _bed_checks() -> void:
 
 
 ## Bones an animation moves, by name (track paths also carry the character's own node name).
+## The body bones a loop moves (bone:track type), sorted. The eye bones are left out: face.gd turns them over
+## whatever a loop holds, and the importer keeps a still eye's track on one model and drops it on another (Rowan's
+## left eye since 2026-11-14), which made the two look unalike when they play the same loops.
 func _anim_bones(a: Animation) -> Array:
 	var out := []
 	for i in a.get_track_count():
-		out.append(str(a.track_get_path(i).get_concatenated_subnames()) + ":" + str(a.track_get_type(i)))
+		var bone := str(a.track_get_path(i).get_concatenated_subnames())
+		if bone in ["LeftEye", "RightEye"]:
+			continue
+		out.append(bone + ":" + str(a.track_get_type(i)))
 	out.sort()
 	return out
 
