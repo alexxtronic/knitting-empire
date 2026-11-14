@@ -46,6 +46,8 @@ var body: Body
 var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle"...)
 var _talk_t := 0.0
 var _ring: MeshInstance3D
+var _ring_on := true # off while she's busy with an activity
+var in_scene := false # a story scene is playing (main.gd sets it): the ring hides so it isn't in the shot
 ## How she gathers and sheds speed (m/s²) and how quickly she comes round to a new heading (per
 ## second, eased): a person takes a moment over each, and without it the walk looks mechanical.
 const ACCEL := 9.0
@@ -111,7 +113,7 @@ func start_activity(text: String, duration: float, done: Callable, sit_pos = nul
 	_activity_t = 0.0
 	_activity_total = duration
 	_activity_done = done
-	_ring.visible = false
+	_ring_on = false
 	_sitting = sit_pos != null
 	if sit_pos != null:
 		_return_pos = position
@@ -344,7 +346,7 @@ func _end_activity() -> void:
 			if cover:
 				cover.visible = false
 		_lie_bed = null
-	_ring.visible = true
+	_ring_on = true
 	if not detailed:
 		_model.position.y = 0.0
 		for a in _arms:
@@ -389,6 +391,7 @@ func head_point() -> Vector3:
 
 
 func _process(delta: float) -> void:
+	_ring.visible = _ring_on and not in_scene
 	_t += delta
 	if _lying and is_instance_valid(_lie_bed):
 		if _lie_shape_wait > 0:

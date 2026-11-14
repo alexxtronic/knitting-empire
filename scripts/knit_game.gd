@@ -593,9 +593,10 @@ func _draw_play() -> void:
 	draw_rect(Rect2(790, 112, 400, 14), Color(0.22, 0.18, 0.15))
 	draw_rect(Rect2(790, 112, 400 * prog, 14), BRASS)
 	var rn := rarity_now()
-	_text("Heading for", Vector2(790, 158), 16, Color(0.85, 0.8, 0.7))
-	_text(rarity_name(rn), Vector2(790 + _font.get_string_size("Heading for", HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 10.0, 158), 22, rarity_color(rn))
-	_text("(best on this pattern: %s)" % rarity_name(max_rarity(diff)), Vector2(1190, 184), 14, Color(0.7, 0.66, 0.58), 2)
+	# one line between the progress bar and the swatch, so nothing sits on the knitting
+	_text("Heading for", Vector2(790, 150), 16, Color(0.85, 0.8, 0.7))
+	_text(rarity_name(rn), Vector2(790 + _font.get_string_size("Heading for", HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 10.0, 150), 22, rarity_color(rn))
+	_text("this pattern: up to %s" % rarity_name(max_rarity(diff)), Vector2(1190, 150), 14, Color(0.7, 0.66, 0.58), 2)
 	_draw_swatch()
 
 

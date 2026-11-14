@@ -288,6 +288,8 @@ var phone_label: Label
 var _phone_tween: Tween
 var memory_rect: ColorRect # the warm, faded look of a memory thread (story "@memory on")
 var _memory_tween: Tween
+var _memory_target := false # true from "@memory on" until "@memory off"
+var _held_toast := "" # a toast that came during a memory, shown once it ends
 var journal_panel: PanelContainer # the journal: memories and moments the story writes down
 var journal_list: VBoxContainer
 signal journal_opened
@@ -1267,11 +1269,26 @@ func set_expand_text(text: String, enabled: bool) -> void:
 
 ## A short notice at the top. With a progress (0..1) it also shows a bar.
 func show_toast(text: String, progress := -1.0) -> void:
+	if _memory_target: # a memory flashback is playing: hold it until the present comes back
+		_held_toast = text
+		return
 	toast_label.text = text
+	# wrap a long one so it stays between the need bars and the minimap
+	var room := get_viewport().get_visible_rect().size.x - 2.0 * (Minimap.SIZE + 40.0)
+	var max_w := clampf(room, 320.0, 620.0)
+	var font := toast_label.get_theme_font("font")
+	var fs := toast_label.get_theme_font_size("font_size")
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if w > max_w else TextServer.AUTOWRAP_OFF
+	toast_label.custom_minimum_size.x = max_w if w > max_w else 0.0
 	toast_meter.visible = progress >= 0.0
 	if progress >= 0.0:
 		toast_meter.set_value(progress)
 	toast_panel.reset_size()
+	# keep it centred under the goal: resizing alone grows it to the right, under the minimap
+	var half := toast_panel.get_combined_minimum_size().x * 0.5
+	toast_panel.offset_left = -half
+	toast_panel.offset_right = half
 	toast_panel.visible = true
 	toast_panel.modulate.a = 1.0
 	if toast_tween:
@@ -1692,6 +1709,12 @@ void fragment() {
 func set_memory(on: bool, secs := 1.2) -> void:
 	if _memory_tween:
 		_memory_tween.kill()
+	_memory_target = on
+	if on and toast_panel.visible and toast_panel.modulate.a > 0.05: # don't let a toast talk over the past
+		_held_toast = toast_label.text
+		if toast_tween:
+			toast_tween.kill()
+		toast_panel.visible = false
 	var m := memory_rect.material as ShaderMaterial
 	memory_rect.visible = true
 	var from := _memory_amount()
@@ -1699,6 +1722,10 @@ func set_memory(on: bool, secs := 1.2) -> void:
 	_memory_tween.tween_method(func(v): m.set_shader_parameter("amount", v), from, 1.0 if on else 0.0, maxf(secs, 0.01))
 	await _memory_tween.finished
 	memory_rect.visible = on
+	if not on and not _memory_target and _held_toast != "":
+		var t := _held_toast
+		_held_toast = ""
+		show_toast(t)
 
 
 func memory_on() -> bool:

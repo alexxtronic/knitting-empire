@@ -51,9 +51,10 @@ Nora (sad): It'll stop. It has to stop eventually.
 @prop_remove bus
 > She hauls the suitcase up by its one good handle. Through the rain, up ahead, a painted sign.
 @prop_remove case
-@walk nora 36.2 2.4
-@face nora 37.6 -1.2
-@camera 37.6 -1.2 6
+# the sign beat follows the sign wherever the world editor puts it
+@walk nora by welcome_sign -1.4 3.6
+@face nora by welcome_sign 0 0
+@camera by welcome_sign 0 0.6 6
 @wait 1.2
 > WELCOME TO MAPLE GROVE. Someone keeps the paint fresh.
 @weather clear
@@ -68,11 +69,11 @@ Nora (sad): It'll stop. It has to stop eventually.
 @camera barbara 7
 @wait 1.0
 > Barbara the postwoman is on her round: a letter for every door, and a kind word for everyone who opens one.
-@face nora 38.4 4.6
+@face nora by welcome_sign 0.8 5.8
 @camera nora 3 low yaw 45
 @wait 1.0
 Nora (warm): I think I'm going to like it here.
-@walk wren 38.0 2.6
+@walk wren by welcome_sign 0.4 3.8
 @face nora wren
 @face wren nora
 @camera between wren nora 7
@@ -110,7 +111,7 @@ Giorgio (warm): Eat. You've come a long way, I can see it. Whatever it was, it's
 @face gary nora
 @face wren nora
 @camera between gary nora 7 yaw building_office
-Gary (wry): Gary, Willow Homes. Property, land, prospects. You must be the new owner of Birchfield. Brave.
+Gary (wry): Gary, Willow Homes. Property, land, prospects. You must be Ellie's girl, minding Birchfield. Brave.
 Gary (happy): Don't worry, everyone starts somewhere. I'll drop by and show you where people end up.
 Wren (neutral): He will. Repeatedly. Come on.
 @walk steve by building_homegoods 0 3.2 nowait
@@ -235,7 +236,7 @@ Nora (surprised): Sheep? Gran's flock went years ago.
 @camera between rowan nora 6.5
 Rowan (wry): Afternoon. Friends of yours?
 Nora (surprised): I was about to ask you the same thing.
-Rowan (neutral): Not mine. No marks on them. Strays off the ridge, I'd guess. They turn up every spring, looking for somebody soft.
+Rowan (neutral): Not mine. No marks on them. Strays off the ridge, I'd guess. They come down every autumn, looking for somebody soft.
 Nora (wry): And they found me.
 Rowan (neutral): Rowan. I keep the flock up on the hill. Ellie and I traded favours. Mostly she fed me and I fixed things.
 Nora (neutral): Nora. The granddaughter. The one from the city.

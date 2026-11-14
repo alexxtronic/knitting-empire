@@ -137,6 +137,7 @@ var _area_t := 0.0
 var goal_marker: Node3D
 var props := {} # name -> Node3D placed by @prop
 var rain_fx: CPUParticles3D
+var rain_splash: CPUParticles3D # rings where the drops land
 var rain := 0.0 # 0 clear .. 1 raining (eases toward the weather flag)
 var _shake_t := 0.0
 var _shake_len := 0.0
@@ -940,7 +941,20 @@ func _roof_lifted(r: Rect2) -> bool:
 		return false
 	if mode == Mode.BUILD or ghost != null or (god != null and god.active):
 		return true
-	return player != null and r.grow(0.3).has_point(Vector2(player.position.x, player.position.z))
+	if player == null:
+		return false
+	# in a story scene on the porch or at the door she's outside, and the house should look like one
+	var grow := 0.0 if _scene_outdoors() else 0.3
+	return r.grow(grow).has_point(Vector2(player.position.x, player.position.z))
+
+
+## A story scene is playing with Nora outside her house and the cottage: the house's walls stay up
+## and its roof on, so the shot shows a home rather than a cutaway.
+func _scene_outdoors() -> bool:
+	if story == null or not story.is_playing() or player == null:
+		return false
+	var p := Vector2(player.position.x, player.position.z)
+	return not interior_rect().has_point(p) and not (cottage_owned() and cottage_interior().has_point(p))
 
 
 func _update_walls() -> void:
@@ -953,11 +967,12 @@ func _update_walls() -> void:
 		if lifted:
 			open_rects.append((rf["rect"] as Rect2).grow(0.5))
 	var cdir := Vector3(sin(cam_yaw), 0, cos(cam_yaw))
+	var outdoors := _scene_outdoors()
 	for w in walls:
 		# with its roof on (she's outside), a house keeps all four walls
 		var at: Vector3 = (w["tall"] as Node3D).get_parent().global_position if (w["tall"] as Node3D).is_inside_tree() else Vector3.ZERO
 		var open := roofs.is_empty() or open_rects.any(func(r): return (r as Rect2).has_point(Vector2(at.x, at.z)))
-		var hide_it: bool = w["cut"] and open and not walls_up and (w["normal"] as Vector3).dot(cdir) > 0.25
+		var hide_it: bool = w["cut"] and open and not walls_up and not outdoors and (w["normal"] as Vector3).dot(cdir) > 0.25
 		w["tall"].visible = not hide_it
 		w["short"].visible = hide_it
 
@@ -1118,6 +1133,8 @@ func _line_clear(a: Vector3, b: Vector3) -> bool:
 func _process(delta: float) -> void:
 	if title_on:
 		cam_yaw_goal += delta * 0.035 # a slow drift round the farm behind the title
+	player.in_scene = story.is_playing()
+	_update_tags(delta)
 	_update_camera(delta)
 	_update_walls()
 	_update_held_tool()
@@ -1506,6 +1523,29 @@ func _update_hover(mpos: Vector2) -> void:
 	if t != null:
 		clickable = (mode == Mode.BUILD and t is Furniture and furniture.has(t)) or (mode == Mode.LIVE and not _actions_for(t).is_empty())
 	Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if clickable else Input.CURSOR_ARROW)
+	_hover_v = t if t != null and villagers.has(t) else null
+
+
+## Name tags: only the villager under the mouse and the one nearest Nora (within TAG_NEAR) show
+## theirs, fading in and out, so two people standing together never stack their names.
+const TAG_NEAR := 7.0
+var _hover_v = null
+
+
+func _update_tags(delta: float) -> void:
+	var nearest = null
+	var best := TAG_NEAR
+	for v in villagers:
+		var d: float = (v.position - player.position).length()
+		if d < best and v.visible:
+			best = d
+			nearest = v
+	for v in villagers:
+		if v.tag == null:
+			continue
+		var want := 1.0 if (v == _hover_v or v == nearest) else 0.0
+		v.tag.modulate.a = move_toward(v.tag.modulate.a, want, delta * 4.0)
+		v.tag.outline_modulate.a = v.tag.modulate.a
 
 
 # --- the dog -------------------------------------------------------------------------
@@ -2946,6 +2986,10 @@ func _act1_checks() -> void:
 	await _act1_shot("Last stop", "20_act1_rain_bus.png")
 	await _act1_shot("No name", "21_act1_phone.png")
 	await _act1_shot("WELCOME TO MAPLE GROVE", "21_act1_sign.png")
+	var sign_spot: Dictionary = _spot_at({"building": "welcome_sign", "pos": [-1.4, 3.6]})
+	var at_sign: bool = not sign_spot.is_empty() and Vector2(player.position.x - sign_spot["pos"].x, player.position.z - sign_spot["pos"].z).length() < 1.0
+	_check("the sign beat finds the sign where the world editor put it, and she stands at it (%s)" % at_sign, at_sign)
+	_check("her selection ring is hidden while a scene plays (%s)" % player._ring.visible, not player._ring.visible)
 	await _act1_shot("Giorgio the baker", "21_act1_town_giorgio.png")
 	var tune_on: bool = audio.tune_name == "arrival"
 	await _act1_shot("Barbara the postwoman", "21_act1_town_barbara.png")
@@ -3019,6 +3063,7 @@ func _act1_checks() -> void:
 	_check("finishing her first sweater starts the memory (%s)" % story.playing, story.playing == "act1_knit")
 	await _act1_shot("Babe.", "27_act1_memory.png")
 	_check("the first knit opens memory thread #1 in the faded memory look", hud.memory_on())
+	_check("no toast talks over the memory (%s)" % hud.toast_panel.visible, not hud.toast_panel.visible or hud.toast_panel.modulate.a < 0.05)
 	await _act1_until_done(40.0)
 	_check("the memory is in her journal, and two strays are bleating out by the pond (%d strays, goal '%s')" % [homestead.strays.size(), hud.goal_label.text],
 		Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory" and homestead.strays.size() == 2 and hud.goal_label.text.begins_with("Find"))
@@ -3094,6 +3139,8 @@ func _act1_checks() -> void:
 			await _wait(0.4)
 			homestead._update_ghost(cam.unproject_position(Vector3(o.x + 0.5, 0, o.y + 3)))
 			await _shot("26_act1_building.png")
+	var toast_r: Rect2 = hud.toast_panel.get_global_rect()
+	_check("a long toast wraps and stays clear of the minimap (%s)" % toast_r, hud.minimap == null or not toast_r.intersects(hud.minimap.get_global_rect()))
 	var spare := Homestead.edge_key(o.x + 1, o.y + 1, true) # inside the pen-to-be
 	var wood_before := Game.count("wood")
 	var spare_ok := homestead.place(spare, "fence") == "" and homestead.remove(spare)
@@ -7097,16 +7144,68 @@ func _setup_story_staging() -> void:
 	rain_fx.initial_velocity_min = 15.0
 	rain_fx.initial_velocity_max = 18.0
 	rain_fx.gravity = Vector3(0, -6, 0)
-	var drop := BoxMesh.new()
-	drop.size = Vector3(0.014, 0.5, 0.014)
+	# a thin streak that turns to face the camera and fades out at both ends, not a white stick
+	var drop := QuadMesh.new()
+	drop.size = Vector2(0.012, 0.55)
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0.0), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.0)])
+	var streak := GradientTexture2D.new()
+	streak.gradient = fade
+	streak.width = 4
+	streak.height = 64
+	streak.fill_from = Vector2(0, 0)
+	streak.fill_to = Vector2(0, 1)
 	var dm := StandardMaterial3D.new()
 	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dm.albedo_color = Color(0.82, 0.87, 0.95, 0.32)
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	dm.albedo_texture = streak
+	dm.albedo_color = Color(0.84, 0.89, 0.96, 0.26)
 	drop.material = dm
 	rain_fx.mesh = drop
 	rain_fx.emitting = false
 	add_child(rain_fx)
+	# where the drops land: small rings that spread and fade on the ground round her
+	rain_splash = CPUParticles3D.new()
+	rain_splash.amount = 260
+	rain_splash.lifetime = 0.35
+	rain_splash.local_coords = false
+	rain_splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	rain_splash.emission_box_extents = Vector3(14, 0.0, 14)
+	rain_splash.direction = Vector3.UP
+	rain_splash.initial_velocity_min = 0.0
+	rain_splash.initial_velocity_max = 0.0
+	rain_splash.gravity = Vector3.ZERO
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.25))
+	grow.add_point(Vector2(1, 1.0))
+	rain_splash.scale_amount_curve = grow
+	var out := Gradient.new()
+	out.colors = PackedColorArray([Color(1, 1, 1, 0.55), Color(1, 1, 1, 0.0)])
+	rain_splash.color_ramp = out
+	var ring_fade := Gradient.new()
+	ring_fade.offsets = PackedFloat32Array([0.0, 0.62, 0.8, 1.0])
+	ring_fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	var ring_tex := GradientTexture2D.new()
+	ring_tex.gradient = ring_fade
+	ring_tex.fill = GradientTexture2D.FILL_RADIAL
+	ring_tex.fill_from = Vector2(0.5, 0.5)
+	ring_tex.fill_to = Vector2(1.0, 0.5)
+	ring_tex.width = 32
+	ring_tex.height = 32
+	var sm := StandardMaterial3D.new()
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.vertex_color_use_as_albedo = true
+	sm.albedo_texture = ring_tex
+	sm.albedo_color = Color(0.85, 0.9, 0.97, 0.5)
+	var splash := PlaneMesh.new() # flat on the ground
+	splash.size = Vector2(0.22, 0.22)
+	splash.material = sm
+	rain_splash.mesh = splash
+	rain_splash.emitting = false
+	add_child(rain_splash)
 
 
 ## After a load (or a fresh start): goal, weather and villagers a scene moved.
@@ -7142,6 +7241,8 @@ func _update_story_staging(delta: float) -> void:
 	var indoors := interior_rect().has_point(Vector2(cam_target.x, cam_target.z)) and cam_dist < 16.0
 	rain_fx.emitting = raining and not indoors
 	rain_fx.position = cam_target + Vector3(0, 13, 0)
+	rain_splash.emitting = rain_fx.emitting
+	rain_splash.position = Vector3(cam_target.x, 0.03, cam_target.z)
 	if goal_marker.visible:
 		var gem := goal_marker.get_node("Gem") as Node3D
 		gem.position.y = 2.4 + 0.18 * sin(Time.get_ticks_msec() * 0.003)
@@ -7366,6 +7467,18 @@ func _spot_at(at: Dictionary) -> Dictionary:
 		var talk: Vector3 = xf * Vector3(t.x, 0, t.y)
 		var front: Vector3 = xf.basis.z
 		return {"pos": Vector3(pos.x, 0, pos.z), "talk": Vector3(talk.x, 0, talk.z), "yaw": atan2(front.x, front.z), "roam": Vector2.ZERO}
+	# not a building: a single piece of town decor by its id ("by welcome_sign 0 3"), wherever the
+	# world editor has put it
+	for f in decor:
+		if not is_instance_valid(f) or f.item_id != str(at["building"]) or not f.visible:
+			continue
+		var dx: Transform3D = f.global_transform
+		var dp: Vector2 = Data.vec2(at["pos"])
+		var dt: Vector2 = Data.vec2(at.get("talk", [dp.x, dp.y + 1.2]))
+		var dpos: Vector3 = dx * Vector3(dp.x, 0, dp.y)
+		var dtalk: Vector3 = dx * Vector3(dt.x, 0, dt.y)
+		var dfront: Vector3 = dx.basis.z
+		return {"pos": Vector3(dpos.x, 0, dpos.z), "talk": Vector3(dtalk.x, 0, dtalk.z), "yaw": atan2(dfront.x, dfront.z), "roam": Vector2.ZERO}
 	return {}
 
 
@@ -8153,6 +8266,8 @@ func _town_checks() -> void:
 	cam_dist = 30.0
 	await _wait(0.8)
 	await _shot("09_town.png")
+	var tags_shown := villagers.filter(func(v): return v.tag != null and v.tag.modulate.a > 0.5).size()
+	_check("in town only the nearest villager's name tag shows (%d)" % tags_shown, tags_shown <= 1)
 	await _wait(2.0)
 	print("FPS in town view: ", Engine.get_frames_per_second())
 	_set_cam_lock(true)
