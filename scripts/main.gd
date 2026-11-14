@@ -34,6 +34,7 @@ const FirstPerson = preload("res://scripts/first_person.gd")
 const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
+const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -96,6 +97,7 @@ var town_rounds := true # the cast's routines (_update_rounds); off in the autot
 var _flock_t := 0.0
 var _flock_seen := false
 var bin: Node3D
+var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
 const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
 const MAILBOX_YAW := PI
@@ -284,6 +286,11 @@ func _ready() -> void:
 	add_child(hud)
 	hud.letters.mail = mail
 	minimap = Minimap.new()
+	wardrobe_ui = WardrobePanel.new()
+	wardrobe_ui.setup(hud)
+	hud.root.add_child(wardrobe_ui)
+	hud._place(wardrobe_ui, 0.5, 0.5, Vector2.ZERO)
+	hud.wardrobe_pressed.connect(func(): wardrobe_ui.open())
 	minimap.main = self
 	hud.add_minimap(minimap)
 	if _autotest_dir != "":
@@ -1469,6 +1476,8 @@ func _ray_target(mpos: Vector2) -> Variant:
 	var res := get_world_3d().direct_space_state.intersect_ray(q)
 	if res.is_empty():
 		return null
+			elif wardrobe_ui.visible:
+				wardrobe_ui.close()
 	var col: Object = res["collider"]
 	if col and col.has_meta("target"):
 		return col.get_meta("target")
@@ -1783,6 +1792,67 @@ func _tool_in_fist(sk: Skeleton3D, id: String) -> Transform3D:
 	var b: Basis = (want * have.inverse()).scaled(Vector3.ONE * float(hold[3]))
 	return Transform3D(b, rest.affine_inverse() * FIST_C - b * (hold[0] as Vector3))
 
+	var bought: Dictionary = Game.flag("npc_sweaters", {}) # villagers wear only what they bought from her
+	for v in villagers:
+		if v.body and v.body.skeleton:
+			var w: String = str(bought.get(v.vid, ""))
+			if w != Sweaters.worn(v.body):
+				Sweaters.wear(v.body, w)
+
+
+## What a villager pays for one of her sweaters to wear: Rosa's price for it.
+func _wear_price(rarity: int) -> int:
+	return int(round(_rosa_price() * float(Game.RARITY_PRICE[clampi(rarity, 1, 5) - 1])))
+
+
+## The rows to sell a villager one of her sweaters to wear (only those a sweater is fitted to; one a
+## day each): one row per design she carries, its index in Game.sweaters in the id.
+func _wear_sale_actions(v) -> Array:
+	if not Sweaters.fits(v.vid) or Game.count("sweater") == 0:
+		return []
+	if int(Game.flag("npc_sweater_day", {}).get(v.vid, 0)) == Game.day:
+		var done := _act("noop", "Already bought a sweater today", false)
+		done["group"] = "Sell a sweater to wear"
+		return [done]
+	Game.sync_sweaters()
+	var seen := {}
+	var rows := []
+	var mine: String = str(Game.flag("npc_sweaters", {}).get(v.vid, ""))
+	for i in Game.sweaters.size():
+		var did: String = str(Game.sweater_designs[i])
+		var key := "%s/%d" % [did, int(Game.sweaters[i])]
+		var d := Sweaters.design(did)
+		if seen.has(key) or d.is_empty() or did == mine:
+			continue
+		seen[key] = true
+		var row := _act("wearsell_%d" % i, "%s  %s  (%dc)" % [d["name"], "★".repeat(int(d["stars"])), _wear_price(int(Game.sweaters[i]))])
+		row["group"] = "Sell a sweater to wear"
+		rows.append(row)
+	return rows
+
+
+## She sells the villager her i-th sweater; they pay, put it on and keep it.
+func _sell_to_wear(v, i: int) -> bool:
+	if i < 0 or i >= Game.sweaters.size() or not Sweaters.fits(v.vid):
+		return false
+	var price := _wear_price(int(Game.sweaters[i]))
+	var sw := Game.remove_sweater(i)
+	var d := Sweaters.design(str(sw.get("design", "")))
+	if d.is_empty():
+		return false
+	Game.coins += price
+	var bought: Dictionary = Game.flag("npc_sweaters", {}).duplicate()
+	bought[v.vid] = str(d["id"])
+	Game.set_flag("npc_sweaters", bought)
+	var days: Dictionary = Game.flag("npc_sweater_day", {}).duplicate()
+	days[v.vid] = Game.day
+	Game.set_flag("npc_sweater_day", days)
+	Game.add_friendship(v.vid, 10)
+	Game.add_need("happiness", 4.0)
+	var said: Array = ["Oh, it's lovely! I'm putting it on right now.", "You made this? It's beautiful. I'll wear it straight home.", "Warm already. Here, %dc, and worth every one." % price]
+	_say(v, said[(Game.day + i) % said.size()])
+	hud.show_toast("Sold %s to %s for %dc. They're wearing it!" % [d["name"], v.title, price])
+	return true
 
 ## A right-handed frame from a main direction and a second one squared off against it.
 func _frame(main_dir: Vector3, second: Vector3) -> Basis:
@@ -2013,6 +2083,8 @@ func _actions_for(t) -> Array:
 	return []
 
 
+			"wardrobe":
+				return [_act("wardrobe", "Choose a sweater…")]
 func _stand_point(t) -> Vector3:
 	# a shopkeeper's spot in front of the counter, while they are at work (a scene may take them out)
 	if t is Villager and t.talk_spot != null and t.position.distance_to(t.talk_spot) < 3.0:
@@ -2144,6 +2216,8 @@ func _begin_knit(chair) -> void:
 	knit.open(opts)
 
 
+		"wardrobe":
+			wardrobe_ui.open()
 func _on_knit_finished(res: Dictionary) -> void:
 	Game.time_running = _knit_clock_was
 	player.quiet_needles = false
@@ -5968,8 +6042,8 @@ func _dog_checks() -> void:
 	cam_dist = cd0
 
 
-## The knitted sweaters: fifty designs, Nora in the one she knit (and back in her coat), the fitted
-## sweater on Steve and Barbara, the skin tucked under the knit.
+## The knitted sweaters: fifty designs; Nora's wardrobe (what she knits hangs there, she picks what
+## she wears, or her city coat); villagers wear a sweater only once they buy one from her.
 func _sweater_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -5980,17 +6054,24 @@ func _sweater_checks() -> void:
 		by[clampi(int(d["stars"]), 1, 4) - 1] += 1
 	_check("fifty sweater designs, 20 common, 15 rare, 10 ultra rare and 5 legendary (%s)" % str(by), ds.size() == 50 and by == [20, 15, 10, 5])
 	_check("every design has its colour map", ds.all(func(d): return ResourceLoader.exists(Sweaters.TEX + str(d["id"]) + ".png")))
-	var keep_q := Game.worn_quality
-	var keep_d := Game.worn_design
-	Game.worn_quality = 1
-	Game.worn_design = ""
+	var keep := {"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate(), "s": Game.sweaters.duplicate(),
+		"sd": Game.sweater_designs.duplicate(), "n": Game.count("sweater"), "c": Game.coins,
+		"bought": Game.flag("npc_sweaters", {}), "days": Game.flag("npc_sweater_day", {})}
+	# her wardrobe
+	Game.wear("")
 	await _wait(0.2)
 	_check("in her city coat she wears no knitted sweater", Sweaters.worn(player.body) == "")
-	Game.worn_quality = 4
-	Game.worn_design = "flock"
+	var xp0 := Game.knit_xp
+	var q := Game.knit_sweater(4)
+	var knitted: String = str(Game.sweater_designs[-1])
+	_check("a sweater she knits has a design of its stars, one like it hangs in her wardrobe and she puts it on (%s, %s)" % [knitted, Game.worn_design],
+		Sweaters.stars_for(q) == int(Sweaters.design(knitted).get("stars", 0)) and Game.wardrobe.has(knitted) and Game.worn_design == knitted)
+	Game.knit_xp = xp0
+	Game.wardrobe = {"flock": 4, "cranberry": 2, "northern_lights": 5, "snowfall_yoke": 3}
+	Game.wear("flock")
 	await _wait(0.2)
 	var sw := player.body.skeleton.get_node_or_null(Sweaters.NODE) as MeshInstance3D
-	_check("she wears the sweater she knit, on her own skeleton (%s)" % Sweaters.worn(player.body),
+	_check("she wears the sweater from her wardrobe, on her own skeleton (%s)" % Sweaters.worn(player.body),
 		Sweaters.worn(player.body) == "flock" and sw != null and sw.visible and sw.skin != null)
 	var tuck_on := Sweaters._body_meshes(player.body).any(func(m): return m.find_blend_shape_by_name(Sweaters.KEY) >= 0 and m.get_blend_shape_value(m.find_blend_shape_by_name(Sweaters.KEY)) > 0.99)
 	_check("the skin under it is tucked in (%d points)" % Sweaters.tucked_points(player.body), Sweaters.tucked_points(player.body) > 1000 and tuck_on)
@@ -6005,7 +6086,7 @@ func _sweater_checks() -> void:
 	cam2.look_at(mid, Vector3.UP)
 	cam2.current = true
 	for id in ["flock", "cranberry", "northern_lights"]:
-		Game.worn_design = id
+		Game.wear(id)
 		await _wait(0.3)
 		await _shot("55_sweater_%s.png" % id)
 	cam2.global_position = mid - fwd.rotated(Vector3.UP, 0.35) * 3.4 + Vector3(0, 0.25, 0)
@@ -6018,31 +6099,95 @@ func _sweater_checks() -> void:
 	await _wait(0.6)
 	await _shot("55_sweater_walk.png")
 	player.body.play("Idle")
-	for vid in ["steve", "barbara"]:
-		var v := _villager(vid)
+	# the villagers: none wears one until they buy it from her
+	Game.set_flag("npc_sweaters", {})
+	Game.set_flag("npc_sweater_day", {})
+	await _wait(0.2)
+	var dressed := villagers.filter(func(v): return v.body != null and Sweaters.worn(v.body) != "")
+	_check("no villager wears a sweater she didn't sell them (%d do)" % dressed.size(), dressed.is_empty())
+	var fitted := villagers.filter(func(v): return v.body != null and Sweaters.fits(v.vid))
+	_check("the villagers with models have sweaters fitted to them (%s)" % ", ".join(fitted.map(func(v): return v.vid)), fitted.size() >= 6)
+	for pair in [["steve", "snowfall_yoke", 3], ["barbara", "oatmeal_stripe", 1]]:
+		var v := _villager(pair[0])
 		if v == null or v.body == null:
-			_check("%s is in town to try a sweater on" % vid, false)
+			_check("%s is in town to buy a sweater" % pair[0], false)
 			continue
-		var ok := Sweaters.wear(v.body, "snowfall_yoke" if vid == "steve" else "oatmeal_stripe")
-		_check("%s wears a sweater fitted to them (%s, %d points tucked)" % [vid, Sweaters.worn(v.body), Sweaters.tucked_points(v.body)],
-			ok and Sweaters.worn(v.body) != "" and Sweaters.tucked_points(v.body) > 1000)
+		Game.add_sweater(int(pair[2]), str(pair[1]))
+		var offer: Array = _villager_actions(v).filter(func(a): return str(a["id"]).begins_with("wearsell_") and str(a["label"]).begins_with(str(Sweaters.design(pair[1])["name"])))
+		var coins0 := Game.coins
+		var n0 := Game.count("sweater")
+		if not offer.is_empty():
+			_villager_action(v, str(offer[0]["id"]))
+		await _wait(0.3)
+		_check("%s buys %s from her and puts it on (offered %d, coins %d→%d, sweaters %d→%d, wearing '%s', %d points tucked)" % [pair[0], pair[1], offer.size(), coins0, Game.coins, n0, Game.count("sweater"), Sweaters.worn(v.body), Sweaters.tucked_points(v.body)],
+			offer.size() == 1 and Game.coins > coins0 and Game.count("sweater") == n0 - 1 and Sweaters.worn(v.body) == pair[1] and Sweaters.tucked_points(v.body) > 1000)
+		_check("%s buys only one a day" % pair[0], _villager_actions(v).filter(func(a): return str(a["id"]).begins_with("wearsell_")).is_empty())
+		hud.hide_dialogue()
 		var vf: Vector3 = v.body.global_transform.basis.z.normalized()
 		var vm := v.global_position + Vector3(0, 1.05, 0)
 		cam2.global_position = vm + vf * 3.4 + Vector3(0, 0.25, 0)
 		cam2.look_at(vm, Vector3.UP)
 		await _wait(0.4)
-		await _shot("55_sweater_%s.png" % vid)
-		Sweaters.take_off(v.body)
-		_check("%s can take it off again" % vid, Sweaters.worn(v.body) == "")
-	var gary := _villager("gary")
-	_check("someone without a fitted sweater can't wear one yet", gary != null and gary.body != null and not Sweaters.wear(gary.body, "flock"))
+		await _shot("55_sweater_%s.png" % pair[0])
+	for vid in ["rowan", "wren", "gary", "giorgio", "sabrina", "rosa", "lars"]:
+		var v := _villager(vid)
+		if v == null or v.body == null or not Sweaters.fits(vid):
+			continue
+		var home := v.global_position
+		v.global_position = player.global_position + Vector3(3, 0, 3) # out in the open, for the picture
+		var dress: Dictionary = Game.flag("npc_sweaters", {})
+		dress[vid] = "grans_heirloom" # as if she'd sold them one; _update_sweater dresses them from this
+		Game.set_flag("npc_sweaters", dress)
+		var vf: Vector3 = v.body.global_transform.basis.z.normalized()
+		var vm := v.global_position + Vector3(0, 1.05, 0)
+		cam2.global_position = vm + vf * 3.4 + Vector3(0, 0.25, 0)
+		cam2.look_at(vm, Vector3.UP)
+		await _wait(0.4)
+		await _shot("55_fit_%s.png" % vid)
+		_check("%s's sweater fits (wearing '%s', %d points tucked)" % [vid, Sweaters.worn(v.body), Sweaters.tucked_points(v.body)], Sweaters.worn(v.body) == "grans_heirloom" and Sweaters.tucked_points(v.body) > 1000)
+		dress.erase(vid)
+		Game.set_flag("npc_sweaters", dress)
+		await _wait(0.1)
+		v.global_position = home
 	cam2.queue_free()
-	Game.worn_quality = keep_q
-	Game.worn_design = keep_d
-	await _wait(0.1)
+	Game.set_flag("npc_sweaters", keep["bought"])
+	Game.set_flag("npc_sweater_day", keep["days"])
+	Game.wardrobe = keep["w"]
+	Game.worn_quality = keep["q"]
+	Game.worn_design = keep["d"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["sd"]
+	Game.inv["sweater"] = keep["n"]
+	Game.coins = keep["c"]
+	await _wait(0.2)
+
+
+## The wardrobe piece in her house, if there is one.
+func _wardrobe_piece():
+	for f in furniture:
+		if is_instance_valid(f) and f.item_id == "wardrobe":
+			return f
+	return null
 
 
 func _face_checks() -> void:
+	if _wardrobe_piece():
+		_check("the wardrobe in her house offers her sweaters", _actions_for(_wardrobe_piece()).any(func(a): return a["id"] == "wardrobe"))
+	wardrobe_ui.open()
+	await _wait(0.2)
+	var rows := wardrobe_ui._list.get_children()
+	_check("the wardrobe lists her city coat and her four sweaters, best first (%d rows)" % rows.size(),
+		rows.size() == 5 and str(rows[1].get_meta("design")) == "northern_lights" and str(rows[0].get_meta("design")) == "")
+	var picked := str(rows[3].get_meta("design")) # rows: the coat, then Northern Lights, Flock, Snowfall Yoke, Cranberry
+	(rows[3] as Button).pressed.emit()
+	await _wait(0.3)
+	_check("picking one there puts it on (%s, warmth from %s)" % [Game.worn_design, Game.stars(Game.worn_quality)], Game.worn_design == picked and Sweaters.worn(player.body) == Game.worn_design and Game.worn_quality == int(Game.wardrobe[Game.worn_design]))
+	await _shot("55_wardrobe.png")
+	(wardrobe_ui._list.get_child(0) as Button).pressed.emit()
+	await _wait(0.2)
+	_check("and the city coat takes it off", Game.worn_design == "" and Game.worn_quality == 1 and Sweaters.worn(player.body) == "")
+	wardrobe_ui.close()
+	Game.wear("flock")
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
 	Game.hour = 11.0
@@ -7630,6 +7775,7 @@ func _villager_action(v, id: String) -> void:
 				_rebuild_grid()
 				_say(v, "Look at you, a property owner. Keys to Rosewood Cottage. Furnish it in Build mode: cozier means more rent every morning. You're welcome.")
 				hud.show_toast("You bought Rosewood Cottage!")
+	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 		_:
 			if id.begins_with("gift_"):
 				var item := id.substr(5)
@@ -7661,6 +7807,9 @@ func _villager_action(v, id: String) -> void:
 
 func open_chat(v) -> void:
 	if hud.is_chat_open():
+	if id.begins_with("wearsell_"):
+		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
+		return
 		close_chat()
 	chat_v = v
 	hud.hide_menu()

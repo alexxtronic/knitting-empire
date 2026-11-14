@@ -266,9 +266,7 @@ func post_sweater(oid: String) -> bool:
 	var i := sweater_for(o)
 	if i < 0:
 		return false
-	o["rarity"] = int(Game.sweaters[i])
-	Game.sweaters.remove_at(i)
-	Game.inv["sweater"] = Game.sweaters.size()
+	o["rarity"] = int(Game.remove_sweater(i).get("rarity", 0))
 	o["state"] = "posted"
 	update_flag()
 	return true

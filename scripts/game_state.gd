@@ -64,6 +64,11 @@ var warmth_target: float = 70.0
 var knit_xp: int = 0
 ## The rarity (1 Common .. 5 Legendary) of each sweater she carries; its length is inv["sweater"].
 var sweaters: Array = []
+## The design of each of those sweaters (data/sweaters.json), in the same order.
+var sweater_designs: Array = []
+## Her wardrobe: every design she has knit, kept to wear (design id -> the best rarity she knit it in).
+## She knits one like it for herself; the sweaters in her bag are for selling.
+var wardrobe: Dictionary = {}
 ## Quality of the warmest thing she owns to wear: 1 = the thin city coat she arrived in.
 var worn_quality: int = 1
 ## The design of the sweater she wears (data/sweaters.json, scripts/sweaters.gd); "" in the city coat.
@@ -123,6 +128,8 @@ func reset() -> void:
 	worn_quality = 1
 	worn_design = ""
 	sweaters = []
+	sweater_designs = []
+	wardrobe = {}
 	sync_sweaters()
 	day = 1
 	hour = 8.0
@@ -167,15 +174,30 @@ func knit_quality() -> int:
 
 
 ## Records a finished sweater of this rarity (the knitting game's result; 0 = by skill alone) and adds
-## it to what she carries. Returns its rarity. She wears the best one she's made.
+## it to what she carries, in a design of its stars. Returns its rarity. One like it goes in her
+## wardrobe, and she puts it on if it's warmer than what she's wearing.
 func knit_sweater(rarity := 0) -> int:
 	var q := clampi(rarity, 1, 5) if rarity > 0 else knit_quality()
 	knit_xp += 1
-	add_sweater(q)
+	var design := Sweaters.design_for(q, randi())
+	add_sweater(q, design)
+	wardrobe[design] = maxi(q, int(wardrobe.get(design, 0)))
 	if q > worn_quality:
-		worn_quality = q
-		worn_design = Sweaters.design_for(q, randi())
+		wear(design)
 	return q
+
+
+## Puts on a design from her wardrobe, or her city coat for "". False if it isn't in her wardrobe.
+func wear(design: String) -> bool:
+	if design == "":
+		worn_design = ""
+		worn_quality = 1
+		return true
+	if not wardrobe.has(design):
+		return false
+	worn_design = design
+	worn_quality = clampi(int(wardrobe[design]), 1, 5)
+	return true
 
 
 static func stars(q: int) -> String:
@@ -240,21 +262,48 @@ func add_item(id: String, n: int = 1) -> void:
 		sync_sweaters()
 
 
-## A sweater she has knitted, of this rarity.
-func add_sweater(rarity: int) -> void:
+## A sweater she has knitted, of this rarity and design (one of its stars if not given).
+func add_sweater(rarity: int, design := "") -> void:
+	_sync_designs()
 	sweaters.append(clampi(rarity, 1, 5))
+	sweater_designs.append(design if design != "" else Sweaters.design_for(rarity, randi()))
 	inv["sweater"] = sweaters.size()
+
+
+## Takes the i-th sweater out of what she carries: {rarity, design}.
+func remove_sweater(i: int) -> Dictionary:
+	_sync_designs()
+	if i < 0 or i >= sweaters.size():
+		return {}
+	var out := {"rarity": int(sweaters[i]), "design": str(sweater_designs[i])}
+	sweaters.remove_at(i)
+	sweater_designs.remove_at(i)
+	inv["sweater"] = sweaters.size()
+	return out
+
+
+## The designs list as long as the rarities list (code that sets `sweaters` directly, old saves).
+func _sync_designs() -> void:
+	while sweater_designs.size() < sweaters.size():
+		sweater_designs.append(Sweaters.design_for(int(sweaters[sweater_designs.size()]), knit_xp + sweater_designs.size()))
+	if sweater_designs.size() > sweaters.size():
+		sweater_designs = sweater_designs.slice(0, sweaters.size())
 
 
 ## Keeps the list of sweater rarities as long as the sweater count: any the list doesn't know about
 ## are ordinary ones (BASE_RARITY), and if there are too many, the lowest rarities go first.
 func sync_sweaters() -> void:
+	_sync_designs()
 	var n := int(inv.get("sweater", 0))
 	while sweaters.size() < n:
 		sweaters.append(BASE_RARITY)
+	_sync_designs()
 	if sweaters.size() > n:
-		sweaters.sort()
-		sweaters = sweaters.slice(sweaters.size() - n)
+		var order := range(sweaters.size())
+		order.sort_custom(func(a, b): return int(sweaters[a]) < int(sweaters[b]) or (int(sweaters[a]) == int(sweaters[b]) and a < b))
+		order = order.slice(order.size() - n)
+		sweaters = order.map(func(i): return sweaters[i])
+		sweater_designs = order.map(func(i): return sweater_designs[i])
 
 
 ## What all her sweaters would sell for, if a Rare one sells for `unit`.
@@ -408,6 +457,7 @@ func to_dict() -> Dictionary:
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
 		"knit_xp": knit_xp, "worn_quality": worn_quality, "worn_design": worn_design, "sweaters": sweaters,
+		"sweater_designs": sweater_designs, "wardrobe": wardrobe,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
@@ -514,6 +564,16 @@ func from_dict(d: Dictionary) -> void:
 	sweaters = []
 	for r in d.get("sweaters", []):
 		sweaters.append(clampi(int(r), 1, 5))
+	sweater_designs = []
+	for x in d.get("sweater_designs", []):
+		sweater_designs.append(str(x))
+	wardrobe = {}
+	var wd = d.get("wardrobe", {})
+	if wd is Dictionary:
+		for k in wd:
+			wardrobe[str(k)] = clampi(int(wd[k]), 1, 5)
+	if worn_design != "" and not wardrobe.has(worn_design): # what she wears is always in her wardrobe
+		wardrobe[worn_design] = worn_quality
 	sync_sweaters()
 	day = int(d.get("day", 1))
 	hour = float(d.get("hour", 8.0))

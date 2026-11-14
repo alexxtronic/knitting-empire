@@ -45,6 +45,13 @@ CHARS = {
     "nora": dict(blend="tools/character_build/nora_tripo_eyes/nora_tripo_eyes.blend", rig="Nora", body="nora_tripoMesh"),
     "steve": dict(blend="tools/character_build/steve_tripo_eyes/steve_tripo_eyes.blend", rig="Rowan", body="steve_tripoMesh", neck=0.075),
     "barbara": dict(blend="tools/character_build/barbara_tripo_eyes/barbara_tripo_eyes.blend", rig="Nora", body="barbara_tripoMesh"),
+    "rowan": dict(blend="tools/character_build/rowan_tripo_eyes/rowan_tripo_eyes.blend", rig="Rowan", body="rowan_tripoMesh", neck=0.075),
+    "wren": dict(blend="tools/character_build/wren_tripo_eyes/wren_tripo_eyes.blend", rig="Nora", body="wren_tripoMesh"),
+    "gary": dict(blend="tools/character_build/gary_tripo_eyes/gary_tripo_eyes.blend", rig="Rowan", body="gary_tripoMesh", neck=0.075),
+    "giorgio": dict(blend="tools/character_build/giorgio_tripo_eyes/giorgio_tripo_eyes.blend", rig="Rowan", body="giorgio_tripoMesh", neck=0.075),
+    "sabrina": dict(blend="tools/character_build/sabrina_tripo_eyes/sabrina_tripo_eyes.blend", rig="Nora", body="sabrina_tripoMesh"),
+    "rosa": dict(blend="tools/character_build/rosa_tripo_eyes/rosa_tripo_eyes.blend", rig="Rosa", body="rosa_tripoMesh"),
+    "lars": dict(blend="tools/character_build/lars_tripo_eyes/lars_tripo_eyes.blend", rig="Lars", body="lars_tripoMesh", neck=0.075),
 }
 
 NC = 64          # points round the body

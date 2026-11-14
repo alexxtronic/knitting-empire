@@ -19,6 +19,7 @@ signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
 signal cinematic_pressed # Menu > Cinematic camera (cinematic.gd)
 signal first_person_pressed # Menu > First person (first_person.gd)
+signal wardrobe_pressed # Menu > Wardrobe (main.gd's wardrobe_panel.gd)
 signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
 signal rotate_pressed
@@ -576,6 +577,7 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Letters", func(): shut.call(); letters.open()))
 	vb.add_child(_button("First person (V)", func(): shut.call(); first_person_pressed.emit()))
 	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
+	vb.add_child(_button("Wardrobe", func(): shut.call(); wardrobe_pressed.emit()))
 	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))
 	vb.add_child(_button("How to Play", func(): shut.call(); help_panel.visible = true))
 	var new_btn := _button("New Game", func(): pass)
