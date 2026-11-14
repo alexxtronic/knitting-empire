@@ -52,6 +52,8 @@ LID_PAST = 0.006                    # the lids reach this far above and below th
 #   iris    the iris's radius (default: half the two arcs' heights together)
 #   rim     the lid rim's width round the opening
 #   R       the eyeball's radius (default: from the face's own curve round the eye)
+#   reach   paint touching the eye is painted out if it ends within this of the outline (default 16; Nora's
+#           liner flicks out 17 mm)
 #   loose   1 also paints out dark marks near the eye that don't touch it (a lash flick painted above the outer
 #           corner, Lars), as long as they end within REACH; a brow or hair runs on past it and stays
 EYES = {
@@ -60,17 +62,19 @@ EYES = {
     "steve_tripo": dict(mid=0.4, dx=49.85, z=1739.0, a=19.5, up=13.0, lo=7.0, k_up=-0.05, k_lo=-0.05, p=0.7, lash=1.5),
     "barbara_tripo": dict(mid=-0.5, dx=54.2, z=1568.5, a=25.5, up=20.5, lo=9.0, tilt=3.0, k_up=-0.03, p=0.7, lash=2.2, rim=2.5),
     "sabrina_tripo": dict(mid=-0.7, dx=38.6, z=1502.0, a=19.2, up=9.5, lo=9.5, tilt=4.5, k_up=0.1, k_lo=0.07, p=0.85, lash=2.0),
+    "nora_tripo": dict(mid=-3.5, dx=52.2, z=1480.75, a=24.8, up=16.6, lo=13.5, tilt=9.0, k_up=-0.2, k_lo=0.1, p=0.75, lash=2.4, rim=2.5, reach=18.0),
+    "rowan_tripo": dict(mid=-3.75, dx=43.15, z=1625.3, a=21.0, up=14.2, lo=10.6, tilt=3.1, k_up=-0.1, k_lo=-0.05, p=0.75, lash=2.0),
     "wren_tripo": dict(mid=-0.6, dx=45.6, z=1446.9, a=21.1, up=13.2, lo=8.8, tilt=6.0, k_up=0.2, k_lo=-0.03, p=0.7, lash=2.2),
     "rosa_tripo": dict(mid=-0.3, dx=44.3, z=1299.5, a=23.3, up=15.0, lo=9.0, tilt=-4.0, k_up=-0.1, p=0.75, lash=2.2, rim=2.5),
     "max_tripo": dict(mid=-0.25, dx=38.25, z=1622.75, a=17.75, up=10.0, lo=6.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.6, iris=11.0),
     "lars_tripo": dict(mid=-0.4, dx=45.9, z=1665.5, a=18.0, up=10.0, lo=6.8, tilt=-1.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.8, iris=11.0, loose=1),
 }
-DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0)
+DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0, reach=16.0)
 SPEC = None
 if CID in EYES:
     SPEC = dict(DEFAULTS)
     SPEC.update(EYES[CID])
-    for k_ in ("mid", "dx", "z", "a", "up", "lo", "tilt", "lash", "iris", "rim", "R"):
+    for k_ in ("mid", "dx", "z", "a", "up", "lo", "tilt", "lash", "iris", "rim", "R", "reach"):
         SPEC[k_] *= MM
 
 RECESS = 0.6 * MM                   # the eyeball's front sits this far behind where the painted eye was
@@ -413,7 +417,7 @@ log("skin", skin.round(3), "iris", iris_col.round(3), "lash", lash_col.round(3))
 dark_ = hit & (col0.max(-1) < 0.62 * skin.max())
 nonskin = hit & ((diff > 0.28) | dark_)
 near_px = np.zeros_like(hit)
-REACH = 0.016                                           # paint touching the eye that ends within this is the eye's
+REACH = SPEC["reach"]                                   # paint touching the eye that ends within this is the eye's
 for kind_ in (dark_, nonskin & ~dark_):
     lab, nlab = components(kind_ & (EX < 0.030))       # (looked at well past that, so a brow or a lock of hair shows
     reach = np.zeros(nlab + 1)                          # it runs on)
@@ -430,6 +434,10 @@ for kind_ in (dark_, nonskin & ~dark_):
         n_ = int((lab == k_).sum())
         if n_ > 200:
             log("  %s paint at the eyes: %d px, reaching %.1f mm out%s" % ("dark" if kind_ is dark_ else "coloured", n_, reach[k_] * 1000, "" if reach[k_] <= REACH else " (left: it runs on)"))
+# a painted mark's soft edge (a liner's blurred fringe) is neither dark nor far enough from skin to count as
+# paint, and was left as a jagged brown line (Rowan): take the off-skin pixels right round a mark going too
+for _ in range(2):
+    near_px |= grow(near_px, 4) & hit & (diff > 0.12) & (EX < REACH)
 M = hit & ((EX < SPEC["rim"] + 0.0006) | near_px)
 solve = M | nonskin                                     # no paint (a lash, a brow, a frame) is a colour to grow skin from
 fill = col0.copy()
@@ -867,6 +875,82 @@ for E in EYE:
                 "end degrees", len(adj[lp[0]]), len(adj[lp[-1]]))
         log("  degrees", {d_: deg.count(d_) for d_ in set(deg)})
         raise RuntimeError("%s eye: the cut's edge is not one closed loop" % E["side"])
+    # The cut runs along the head's own triangles, so its edge is a saw: from 0.3 to 1.5 mm past the rim, its
+    # teeth doubling back on themselves. Slide the points that stand furthest out in along their ray from the
+    # eye's centre to SNAP past the rim, onto the skin there, so the edge runs smooth and the stitch to it can't
+    # fold (dark notches under Rowan's lids). Sliding in only moves a point away from the head's faces round it.
+    SNAP, n_snap = 0.4 * MM, 0
+
+    def front_area(f, v=None, co=None):
+        P = [((co if u is v else u.co).x, (co if u is v else u.co).z) for u in f.verts]
+        return sum(P[k][0] * P[(k + 1) % len(P)][1] - P[(k + 1) % len(P)][0] * P[k][1] for k in range(len(P)))
+
+    def slide(v, co):
+        """Move v toward co, only as far as none of the head's faces round it turns over (seen from the front)."""
+        before = [(f, front_area(f)) for f in v.link_faces]
+        for t_ in (1.0, 0.5, 0.25):
+            c_ = v.co.lerp(co, t_)
+            if all(a_ * front_area(f, v, c_) > 0 and abs(front_area(f, v, c_)) > 0.05 * abs(a_) for f, a_ in before):
+                v.co = c_
+                return True
+        return False
+
+    def on_line(x_, z_, y_):
+        try:
+            return Vector(surf.near(x_, z_, C, Rf)[0])
+        except RuntimeError:
+            return Vector((x_, y_, z_))
+    for v in loop:
+        dx_, dz_ = v.co.x - al.c[0], v.co.z - al.c[1]
+        rho = math.hypot(dx_, dz_)
+        ex_ = float(al.excess(v.co.x, v.co.z))
+        if ex_ > Wr + SNAP and rho > 1e-6:
+            k_ = (rho - (ex_ - Wr - SNAP)) / rho
+            n_snap += slide(v, on_line(al.c[0] + dx_ * k_, al.c[1] + dz_ * k_, v.co.y))
+    # and where a tooth of the saw doubles back round the eye, ease each point to halfway round between its
+    # neighbours (on the same line past the rim), again only as far as the head's faces allow
+    ang = lambda u: math.atan2(u.co.z - al.c[1], u.co.x - al.c[0])
+    sgn = 1.0 if sum(((ang(loop[(i + 1) % len(loop)]) - ang(loop[i]) + math.pi) % (2 * math.pi) - math.pi)
+                     for i in range(len(loop))) > 0 else -1.0
+    n_ease = 0
+    for it in range(6):
+        moved = 0
+        for i, v in enumerate(loop):
+            pa, na = ang(loop[i - 1]), ang(loop[(i + 1) % len(loop)])
+            a0 = ang(v)
+            back = sgn * (((a0 - pa + math.pi) % (2 * math.pi)) - math.pi) <= 0 or \
+                sgn * (((na - a0 + math.pi) % (2 * math.pi)) - math.pi) <= 0
+            if not back:
+                continue
+            mid_ = pa + (((na - pa + math.pi) % (2 * math.pi)) - math.pi) / 2
+            r_ = float(al.r(mid_)) + Wr + SNAP
+            if slide(v, on_line(al.c[0] + r_ * math.cos(mid_), al.c[1] + r_ * math.sin(mid_), v.co.y)):
+                moved += 1
+        n_ease += moved
+        if not moved:
+            break
+    # a short stretch that still runs back round the eye: weld its two ends into one (the stitch over it would lie
+    # face down and shade dark), where that turns none of the head's faces over
+    n_weld = 0
+    for it in range(80):
+        welded = False
+        for i in range(len(loop)):
+            a_, b_ = loop[i], loop[(i + 1) % len(loop)]
+            d_ = sgn * ((((ang(b_) - ang(a_)) + math.pi) % (2 * math.pi)) - math.pi)
+            if d_ > 0 or (a_.co - b_.co).length > 0.6 * MM:
+                continue
+            for keep, gone in ((a_, b_), (b_, a_)):
+                faces_ = [f for f in gone.link_faces if keep not in f.verts]
+                if all(front_area(f) * front_area(f, gone, keep.co) > 0 for f in faces_):
+                    bmesh.ops.weld_verts(bm, targetmap={gone: keep})
+                    n_weld += 1
+                    welded = True
+                    break
+            if welded:
+                break
+        loop = [v for v in loop if v.is_valid]
+        if not welded:
+            break
     tb = np.array([math.atan2(v.co.z - al.c[1], v.co.x - al.c[0]) for v in loop])
     if np.sum(np.diff(np.unwrap(tb))) < 0:
         loop, tb = loop[::-1], tb[::-1]
@@ -874,7 +958,8 @@ for E in EYE:
     loop, tb = loop[st:] + loop[:st], np.concatenate([tb[st:], tb[:st]])
     tb = np.maximum.accumulate(np.unwrap(tb))
     exl = np.array([al.excess(v.co.x, v.co.z) for v in loop]) - Wr
-    log(E["side"], "eye: cut edge of %d points, %d other loops, %.1f..%.1f mm past the rim" % (len(loop), len(loops) - 1, exl.min() * 1000, exl.max() * 1000))
+    log(E["side"], "eye: cut edge of %d points, %d other loops, %.1f..%.1f mm past the rim (%d slid in, %d eased round, %d welded)" % (
+        len(loop), len(loops) - 1, exl.min() * 1000, exl.max() * 1000, n_snap, n_ease, n_weld))
     # the rim: rows from just inside the outline out to the face, at even steps round it
     Mc = 160
     P2, th, upf = al.around(Mc)
@@ -934,15 +1019,74 @@ for E in EYE:
     if out_ < 0:
         for f in new_faces:
             f.normal_flip()
-    # stitch the rim's outer row to the cut's edge (Blender's bridge pairs two loops of any lengths)
-    ea = [bm.edges.get((grid[j][-1], grid[(j + 1) % Mc][-1])) for j in range(Mc)]
-    eb = [bm.edges.get((loop[i], loop[(i + 1) % len(loop)])) for i in range(len(loop))]
-    br = bmesh.ops.bridge_loops(bm, edges=ea + eb)
+    # stitch the rim's outer row to the cut's edge, walking both round the eye by angle together: each step goes on
+    # along whichever loop's next point comes first, so no strip folds over itself. (Blender's bridge paired the
+    # two loops by count, and where the cut's points crowd, under the eye, the pairs slid apart and the strip folded:
+    # dark notches under Rowan's lids.)
+    nb = len(loop)
+    ta = (th - th[0]) % (2 * np.pi)
+    ta = np.maximum.accumulate(ta)
+    tb_ = (tb - th[0]) % (2 * np.pi)
+    sb = int(np.argmin(tb_))
+    order_b = [(sb + i) % nb for i in range(nb)]
+    tbs = np.maximum.accumulate(np.unwrap(tb_[order_b]))
+    A = [grid[j][-1] for j in range(Mc)] + [grid[0][-1]]
+    ta = np.concatenate([ta, [2 * np.pi]])
+    B = [loop[k] for k in order_b] + [loop[order_b[0]]]
+    tbs = np.concatenate([tbs, [tbs[0] + 2 * np.pi]])
+    # (seen from the front, a triangle laid this way runs clockwise; one that doesn't lies face down)
+
+    def cw(tri):
+        P = [(v_.co.x, v_.co.z) for v_ in tri]
+        return sum(P[k][0] * P[(k + 1) % 3][1] - P[(k + 1) % 3][0] * P[k][1] for k in range(3)) < 0
+    st_faces, ja, ib, n_fold = [], 0, 0, 0
+    while ja < Mc or ib < nb:
+        t1 = (A[ja], A[ja + 1], B[ib]) if ja < Mc else None
+        t2 = (A[ja], B[ib + 1], B[ib]) if ib < nb else None
+        tri = t1 if t2 is None or (t1 is not None and ta[ja + 1] <= tbs[ib + 1]) else t2
+        other = t2 if tri is t1 else t1
+        if not cw(tri) and other is not None and cw(other):  # where the edge still turns back: the other step
+            tri = other
+        n_fold += 0 if cw(tri) else 1
+        if tri is t1:
+            ja += 1
+        else:
+            ib += 1
+        st_faces.append(bm.faces.new(tri))
+
+    def start_of(face, edge):
+        return next(l_.vert for l_ in face.loops if l_.edge is edge)
+
+    def agreement(faces, others):
+        # (edges wound like their neighbour across them, edges wound against it)
+        ok = bad = 0
+        for f in faces:
+            for e in f.edges:
+                for g_ in e.link_faces:
+                    if g_ in others:
+                        if start_of(f, e) is start_of(g_, e):
+                            bad += 1
+                        else:
+                            ok += 1
+        return ok, bad
+    rim_set = set(new_faces)
+    ok, bad = agreement(st_faces, rim_set)
+    if bad > ok:                                         # wind the stitch like the rim
+        for f in st_faces:
+            f.normal_flip()
+    st_set = set(st_faces)
+    head_ok, head_bad = agreement(st_faces, {g_ for f in st_faces for e in f.edges for g_ in e.link_faces
+                                             if g_ not in st_set and g_ not in rim_set})
+    if head_bad > head_ok:                               # the head's winding is the one that faces out
+        for f in st_faces + new_faces:
+            f.normal_flip()
+        head_ok, head_bad = head_bad, head_ok
+    log(E["side"], "eye: stitch of %d triangles (%d still lying face down from the front), wound like the head on %d of %d edges" % (
+        len(st_faces), n_fold, head_ok, head_ok + head_bad))
+    br = {"faces": st_faces}
     n_st = 0
     for f in br["faces"]:
         f.normal_update()
-        if f.normal.dot(f.calc_center_median() - Cv) < 0:
-            f.normal_flip()
         new_faces.append(f)
         n_st += 1
     for f in new_faces:                                  # the rim and its stitch wear the skin patch

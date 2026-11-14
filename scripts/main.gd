@@ -6729,13 +6729,14 @@ func _fps_checks() -> void:
 	var tri_orig := 0
 	var tri_copy := 0
 	for c in fps._copies:
+		if c[1] == null:
+			continue # a mesh that is all head (her eyes) has no copy: none of it is drawn for this camera
 		var o := c[0] as MeshInstance3D
 		for sidx in o.mesh.get_surface_count():
 			tri_orig += o.mesh.surface_get_array_index_len(sidx) / 3
-		if c[1] != null:
-			var m := (c[1] as MeshInstance3D).mesh
-			for sidx in m.get_surface_count():
-				tri_copy += m.surface_get_array_index_len(sidx) / 3
+		var m := (c[1] as MeshInstance3D).mesh
+		for sidx in m.get_surface_count():
+			tri_copy += m.surface_get_array_index_len(sidx) / 3
 	var shown := fps._copies.all(func(c): return c[1] == null or (c[1] as MeshInstance3D).visible == (c[0] as MeshInstance3D).visible)
 	_check("her head isn't drawn for this camera: her %d meshes only cast their shadow (head drawn %s) and %d headless copies are drawn with them (%s; %d of %d triangles kept)" % [fps._copies.size(), fps.head_drawn(), copies.size(), shown, tri_copy, tri_orig],
 		not fps.head_drawn() and not copies.is_empty() and shown and tri_copy > tri_orig * 0.4 and tri_copy < tri_orig)
