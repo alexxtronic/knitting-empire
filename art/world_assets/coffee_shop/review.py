@@ -44,7 +44,9 @@ sc.collection.objects.link(g)
 cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
 sc.collection.objects.link(cam)
 sc.camera = cam
-model = bpy.data.objects["model"]
+parts = [o for o in bpy.data.objects if o.type == "MESH" and o.name != "ground"]  # the walk-in parts
+for o in parts:  # the game shows a wall's low version only while she's inside; seen from out here it's the full one
+    o.hide_render = o.name.endswith("_low")
 
 
 def shot(name, az, el, dist, look=(0, 0, 4.6), lens=50, res=(1254, 1254), ortho=None):
@@ -61,20 +63,22 @@ def shot(name, az, el, dist, look=(0, 0, 4.6), lens=50, res=(1254, 1254), ortho=
     bpy.ops.render.render(write_still=True)
 
 
-# the reference (1448 x 1086): the 5.9 m front wall is 805 px, its foot 101 px from the bottom,
-# seen about 12 degrees right and 12 up; the front wall's foot is y = FRONT = -1.1
+# the reference (1448 x 1086): its 5.9 m front wall is 805 px, seen about 12 degrees right and 12 up.
+# Since the café was doubled (2026-11-14) that wall is the middle of an 11.8 m front, whose foot is
+# y = FRONT = -3.0; the camera keeps the concept's angle with the whole front in frame.
 RES = (1448, 1086)
-LENS = 36 * 120 / (5.9 * 1448 / 805)
-REF = dict(az=12, el=12, dist=120, look=(0, -1.1, 3.55), lens=LENS, res=RES)
+LENS = 36 * 120 / (12.6 * 1448 / 805)
+REF = dict(az=12, el=12, dist=120, look=(0, -3.0, 3.55), lens=LENS, res=RES)
 shot("ref_cam", REF["az"], REF["el"], REF["dist"], look=REF["look"], lens=LENS, res=RES)
-shot("q_left", -40, 18, 24, look=(0, 0, 2.8))
-shot("back", 160, 15, 24, look=(0, 0, 2.8))
-shot("game", 25, 48, 26, look=(0, 0, 2.5), res=(1280, 800))
+shot("q_left", -40, 18, 40, look=(0, 0, 2.8))
+shot("back", 160, 15, 40, look=(0, 0, 2.8))
+shot("game", 25, 48, 42, look=(0, 0, 2.5), res=(1280, 800))
 clay = bpy.data.materials.new("clay")
 clay.use_nodes = True
 clay.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.75, 0.75, 0.75, 1)
-for i in range(len(model.data.materials)):
-    model.data.materials[i] = clay
+for o in parts:
+    for i in range(len(o.data.materials)):
+        o.data.materials[i] = clay
 shot("clay_ref_cam", REF["az"], REF["el"], REF["dist"], look=REF["look"], lens=LENS, res=RES)
 
 try:

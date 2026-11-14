@@ -1,63 +1,143 @@
 {
   "name": "building_cafe",
-  "triangles": 39806,
-  "materials": [
-    "cafe_stone",
-    "cafe_wall",
-    "cafe_trim",
-    "cafe_roof",
-    "cafe_glow",
-    "cafe_wood",
-    "cafe_leaf",
-    "cafe_bloom",
-    "cafe_door",
-    "cafe_brass",
-    "cafe_mat",
-    "cafe_awning",
-    "cafe_iron",
-    "cafe_bulb",
-    "cafe_plaque",
-    "cafe_leaf_o",
-    "cafe_leaf_y",
-    "cafe_cobble",
-    "cafe_plaid",
-    "cafe_pot",
-    "cafe_lavender",
-    "cafe_chalkframe",
-    "cafe_chalk"
-  ],
-  "size_m": [
-    10.0,
-    8.145,
-    7.12
-  ],
-  "min_m": [
-    -5.0,
-    -3.845,
-    -0.0
-  ],
-  "max_m": [
-    5.0,
-    4.3,
-    7.12
-  ],
-  "images": [
-    "cafe_awning",
-    "cafe_boards",
-    "cafe_boards_n",
-    "cafe_cobble",
-    "cafe_cobble_n",
-    "cafe_door",
-    "cafe_door_n",
-    "cafe_plaid",
-    "cafe_stone",
-    "cafe_stone_n",
-    "cafe_tiles",
-    "cafe_tiles_n",
-    "cafe_wood",
-    "cafe_wood_n",
-    "face_chalkboard.png",
-    "face_plaque.png"
-  ],
-  "glb_bytes": 4754420
+  "parts": {
+    "base": {
+      "triangles": 15572,
+      "materials": [
+        "cafe_floor",
+        "cafe_stone",
+        "cafe_mat",
+        "cafe_cobble",
+        "cafe_wood",
+        "cafe_iron",
+        "cafe_bulb",
+        "cafe_brass",
+        "cafe_trim",
+        "cafe_leaf",
+        "cafe_bloom",
+        "cafe_plaid",
+        "cafe_pot",
+        "cafe_lavender",
+        "cafe_chalkframe",
+        "cafe_chalk",
+        "cafe_leaf_o",
+        "cafe_leaf_y"
+      ]
+    },
+    "wall_front": {
+      "triangles": 26716,
+      "materials": [
+        "cafe_wall",
+        "cafe_trim",
+        "cafe_stone",
+        "cafe_lining",
+        "cafe_glow",
+        "cafe_wood",
+        "cafe_leaf",
+        "cafe_bloom",
+        "cafe_awning",
+        "cafe_iron",
+        "cafe_bulb",
+        "cafe_plaque",
+        "cafe_leaf_o",
+        "cafe_leaf_y"
+      ]
+    },
+    "wall_front_low": {
+      "triangles": 416,
+      "materials": [
+        "cafe_wall",
+        "cafe_trim",
+        "cafe_stone",
+        "cafe_lining"
+      ]
+    },
+    "wall_back": {
+      "triangles": 1496,
+      "materials": [
+        "cafe_wall",
+        "cafe_trim",
+        "cafe_stone",
+        "cafe_lining",
+        "cafe_glow",
+        "cafe_wood"
+      ]
+    },
+    "wall_back_low": {
+      "triangles": 348,
+      "materials": [
+        "cafe_wall",
+        "cafe_stone",
+        "cafe_lining",
+        "cafe_trim"
+      ]
+    },
+    "wall_left": {
+      "triangles": 2688,
+      "materials": [
+        "cafe_wall",
+        "cafe_trim",
+        "cafe_stone",
+        "cafe_lining",
+        "cafe_glow",
+        "cafe_wood"
+      ]
+    },
+    "wall_left_low": {
+      "triangles": 36,
+      "materials": [
+        "cafe_wall",
+        "cafe_stone",
+        "cafe_lining"
+      ]
+    },
+    "wall_right": {
+      "triangles": 4854,
+      "materials": [
+        "cafe_wall",
+        "cafe_trim",
+        "cafe_stone",
+        "cafe_lining",
+        "cafe_glow",
+        "cafe_wood",
+        "cafe_iron",
+        "cafe_leaf",
+        "cafe_bloom"
+      ]
+    },
+    "wall_right_low": {
+      "triangles": 36,
+      "materials": [
+        "cafe_wall",
+        "cafe_stone",
+        "cafe_lining"
+      ]
+    },
+    "door": {
+      "triangles": 996,
+      "materials": [
+        "cafe_door",
+        "cafe_glow",
+        "cafe_brass"
+      ]
+    },
+    "roof": {
+      "triangles": 10996,
+      "materials": [
+        "cafe_trim",
+        "cafe_lining",
+        "cafe_wood",
+        "cafe_roof",
+        "cafe_wall",
+        "cafe_glow",
+        "cafe_leaf",
+        "cafe_bloom",
+        "cafe_stone",
+        "cafe_leaf_y",
+        "cafe_leaf_o"
+      ]
+    }
+  },
+  "triangles": 64154,
+  "glb_bytes": 6310616
 }
