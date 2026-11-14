@@ -1,0 +1,7 @@
+THINNED fox: 57884 -> 30000 triangles
+MEASURE fox: height 0.680, paws fore y -0.155 x +-0.099, hind y 0.124 x +-0.114
+HEAD nose at y -0.354 z 0.425; head 0.241 m long; tail 4 points
+BAKED fox colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 3404 rigid on the head
+STRIDE {'Walk': 0.524, 'Run': 1.737}
+EXPORTED fox: 30000 triangles, 19 bones -> assets/wildlife/fox.glb

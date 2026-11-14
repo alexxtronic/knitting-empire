@@ -1,0 +1,8 @@
+THINNED sable: 67216 -> 30000 triangles
+MEASURE sable: height 0.340, paws fore y -0.184 x +-0.050, hind y -0.009 x +-0.069
+HEAD nose at y -0.325 z 0.251; head 0.116 m long; tail 4 points
+BAKED sable colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 2217 rigid on the head
+RETRY Run (Run: a paw misses its spot by 0.0082 m (RF at frame 9, reach 17%; crouch 0.053 m)): step now 0.133 m
+STRIDE {'Walk': 0.421, 'Run': 2.01}
+EXPORTED sable: 30000 triangles, 19 bones -> assets/wildlife/sable.glb

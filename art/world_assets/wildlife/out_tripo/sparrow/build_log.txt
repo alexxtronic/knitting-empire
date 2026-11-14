@@ -1,0 +1,11 @@
+FIT sparrow wings: scaled x0.981, moved 0.001 0.092 0.014 m
+THINNED sparrow: 50828 -> 16000 triangles
+BAKED sparrow colour and normal at 1024 px
+THINNED sparrow_fly: 80004 -> 16000 triangles
+BAKED sparrow_fly colour and normal at 1024 px
+HEAD sparrow: crown at y -0.049 z 0.200, beak tip y -0.113; neck at y -0.028 z 0.120
+WINGS sparrow: span 0.412 m, roots at x 0.059 y 0.010 z 0.122
+SKIN sparrow: 2403 of 8002 standing vertices on the head, 4715 of 8000 flying vertices on the wings
+LOOP Idle: 144 frames, 2.40 s
+LOOP Fly: 12 frames, 0.20 s
+EXPORTED sparrow: 16000 + 16000 triangles, 6 bones -> assets/wildlife/sparrow.glb

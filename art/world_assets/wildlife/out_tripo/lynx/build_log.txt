@@ -1,0 +1,7 @@
+THINNED lynx: 54218 -> 30000 triangles
+MEASURE lynx: height 0.900, paws fore y -0.309 x +-0.113, hind y 0.265 x +-0.170
+HEAD nose at y -0.534 z 0.633; head 0.174 m long; tail 3 points
+BAKED lynx colour and normal at 2048 px
+SKIN 15002 vertices on 18 bones, 2025 rigid on the head
+STRIDE {'Walk': 0.726, 'Run': 2.405}
+EXPORTED lynx: 30000 triangles, 18 bones -> assets/wildlife/lynx.glb

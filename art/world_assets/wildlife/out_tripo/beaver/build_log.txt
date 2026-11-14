@@ -1,0 +1,7 @@
+THINNED beaver: 52286 -> 30000 triangles
+MEASURE beaver: height 0.380, paws fore y -0.219 x +-0.075, hind y -0.036 x +-0.073
+HEAD nose at y -0.379 z 0.292; head 0.123 m long; tail 4 points
+BAKED beaver colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 1523 rigid on the head
+STRIDE {'Walk': 0.274, 'Run': 0.78}
+EXPORTED beaver: 30000 triangles, 19 bones -> assets/wildlife/beaver.glb

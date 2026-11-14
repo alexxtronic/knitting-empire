@@ -1,0 +1,7 @@
+THINNED chinchilla: 63158 -> 30000 triangles
+MEASURE chinchilla: height 0.320, paws fore y -0.062 x +-0.057, hind y 0.029 x +-0.058
+HEAD nose at y -0.221 z 0.176; head 0.142 m long; tail 4 points
+BAKED chinchilla colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 3555 rigid on the head
+STRIDE {'Walk': 0.311, 'Run': 0.903}
+EXPORTED chinchilla: 30000 triangles, 19 bones -> assets/wildlife/chinchilla.glb

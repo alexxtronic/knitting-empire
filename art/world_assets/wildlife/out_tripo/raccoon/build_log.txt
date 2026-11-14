@@ -1,0 +1,7 @@
+THINNED raccoon: 57354 -> 30000 triangles
+MEASURE raccoon: height 0.420, paws fore y -0.207 x +-0.071, hind y -0.015 x +-0.085
+HEAD nose at y -0.363 z 0.266; head 0.133 m long; tail 4 points
+BAKED raccoon colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 1688 rigid on the head
+STRIDE {'Walk': 0.454, 'Run': 1.504}
+EXPORTED raccoon: 30000 triangles, 19 bones -> assets/wildlife/raccoon.glb

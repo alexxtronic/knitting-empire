@@ -1,0 +1,7 @@
+THINNED coyote: 70958 -> 30000 triangles
+MEASURE coyote: height 0.760, paws fore y -0.265 x +-0.087, hind y 0.046 x +-0.129
+HEAD nose at y -0.510 z 0.532; head 0.150 m long; tail 4 points
+BAKED coyote colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 1122 rigid on the head
+STRIDE {'Walk': 0.694, 'Run': 2.298}
+EXPORTED coyote: 30000 triangles, 19 bones -> assets/wildlife/coyote.glb

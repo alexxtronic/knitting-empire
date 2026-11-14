@@ -7,3 +7,11 @@ review/*/*
 !review/*/sheet.png
 !review/*/gate_side.png
 !review/*/gate.txt
+# The Tripo pipeline (tripo_split.py, tripo_build.py, tripo_birds.py): the split sources, the rigged
+# blends, the bakes and the measuring views are rebuilt from the Tripo exports (in Alex's Downloads);
+# only each build_log.txt is kept, and each animal's review/<id>/tripo_sheet.png.
+out_tripo/*/*.blend
+out_tripo/*/*.blend1
+out_tripo/*/*.png
+out_tripo/*/views/
+!review/*/tripo_sheet.png

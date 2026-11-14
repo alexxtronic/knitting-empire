@@ -1,0 +1,7 @@
+THINNED rabbit: 58634 -> 30000 triangles
+MEASURE rabbit: height 0.420, paws fore y -0.066 x +-0.044, hind y 0.053 x +-0.055
+HEAD nose at y -0.185 z 0.204; head 0.137 m long; tail 2 points
+BAKED rabbit colour and normal at 2048 px
+SKIN 15002 vertices on 17 bones, 5598 rigid on the head
+STRIDE {'Walk': 0.352, 'Run': 1.024}
+EXPORTED rabbit: 30000 triangles, 17 bones -> assets/wildlife/rabbit.glb

@@ -81,3 +81,34 @@
 
 ## Optimize
 - Skipped for the game copy (no Draco, no WebP), as with every Godot asset.
+
+## Tripo rebuild (2026-11-14)
+Alex found the metaball animals above "terrible, low poly" and asked for the sheep's quality, made in
+Tripo, five animals to an image to save credits. `build.py`, `species.py` and `birds.py` no longer make
+the game's models; `gait.py` still keys the loops.
+
+- Pictures: three ChatGPT lineups in `tripo/ref/` (one row, all facing left, plain background):
+  coyote, lynx, fox, raccoon, beaver; rabbit, sable, mink, chinchilla, gull; and lynx again (its first
+  ear tufts came out of Tripo as antlers), a sparrow, a robin and a sparrow and a gull in flight.
+- Tripo Studio: H3.1 Best Quality, Ultra mesh, 4K PBR textures with the lighting removed, 300k
+  triangles; three generations at 55 credits each. Each animal got 42k to 80k faces.
+- `tripo_split.py`: welds the export, cuts it into its five loose parts, turns each to face -Y (Tripo
+  keeps the three-quarter pose it was drawn in: lined up by the long axis of the feet, with `YAW`
+  corrections for the raccoon and the chinchilla), scales it to its game height and renders grid views.
+- `tripo_build.py`: thins to 30k triangles, bakes Tripo's colour and normal detail at 2048 px, places
+  the joints from `HAND` (read off the grid views; the automatic tail and trunk tracing ran across the
+  body), skins by bone heat with a rigid head, keys Idle, Walk and Run with `gait.py`, exports.
+- `tripo_birds.py`: one rig carries the standing bird (Body, Head) and the bird in flight (FlyBody,
+  WingL, WingR); Idle scales the flier to nothing and pecks, Fly scales the stander to nothing and
+  beats the wings. The robin flies on the sparrow's wings with its pale feathers turned orange.
+
+Rounds:
+- Rabbit, sable, mink: the bounding Run's crouch left a lifted paw too close to the shoulder to reach
+  (missed by 2 to 15 mm) → the stride and lift shorten 12% at a time until every paw lands.
+- Rabbit: its long ears made it bounce like a 42 cm animal and its near-straight legs crouched it flat
+  → motion scaled by the hips (`U = min(H, hips / 0.35)`), a shorter higher hop, elbows and knees bent
+  further off the line to the paw (`bend`).
+- Gull: the beak tip lay outside the head's weights and bent when it pecked → the head reaches past
+  the beak tip. Robin in flight: the first recolour caught 2% of the map → 16%.
+- In the game (`--only=wildlife`, 16 checks pass): the lynx's short tufts still read a little twiggy
+  close up; the fox's inner ear is dark where the bake reached into the fold.

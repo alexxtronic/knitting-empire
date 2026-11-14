@@ -1,0 +1,9 @@
+THINNED mink: 53574 -> 30000 triangles
+MEASURE mink: height 0.300, paws fore y -0.207 x +-0.052, hind y -0.001 x +-0.064
+HEAD nose at y -0.383 z 0.232; head 0.144 m long; tail 4 points
+BAKED mink colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 2172 rigid on the head
+RETRY Run (Run: a paw misses its spot by 0.0153 m (RF at frame 9, reach 10%; crouch 0.055 m)): step now 0.116 m
+RETRY Run (Run: a paw misses its spot by 0.0073 m (LF at frame 8, reach 17%; crouch 0.041 m)): step now 0.102 m
+STRIDE {'Walk': 0.393, 'Run': 1.651}
+EXPORTED mink: 30000 triangles, 19 bones -> assets/wildlife/mink.glb

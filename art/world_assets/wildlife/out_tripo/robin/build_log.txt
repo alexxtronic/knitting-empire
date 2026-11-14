@@ -1,0 +1,12 @@
+FIT robin wings: scaled x0.986, moved -0.000 0.107 0.006 m
+RECOLOURED robin_fly_color: 16% of the map turned robin orange
+THINNED robin: 42724 -> 15998 triangles
+BAKED robin colour and normal at 1024 px
+THINNED robin_fly: 80004 -> 16000 triangles
+BAKED robin_fly colour and normal at 1024 px
+HEAD robin: crown at y -0.029 z 0.200, beak tip y -0.100; neck at y -0.007 z 0.116
+WINGS robin: span 0.414 m, roots at x 0.060 y 0.027 z 0.116
+SKIN robin: 2291 of 8001 standing vertices on the head, 4653 of 8000 flying vertices on the wings
+LOOP Idle: 168 frames, 2.80 s
+LOOP Fly: 12 frames, 0.20 s
+EXPORTED robin: 15998 + 16000 triangles, 6 bones -> assets/wildlife/robin.glb
