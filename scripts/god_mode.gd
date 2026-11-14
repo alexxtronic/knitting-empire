@@ -42,6 +42,7 @@ const Town = preload("res://scripts/town.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 const Grass = preload("res://scripts/grass.gd")
 const Nature = preload("res://scripts/nature.gd")
+const Regions = preload("res://scripts/regions.gd")
 const Furniture = preload("res://scripts/furniture.gd")
 const Mail = preload("res://scripts/mail.gd")
 
@@ -520,7 +521,7 @@ func _block_rects(el: El) -> Array:
 	var out: Array = []
 	var o := Vector2(el.xf.origin.x, el.xf.origin.z)
 	if el.scenery:
-		if not Nature.WALK.has_point(o):
+		if not Regions.BOUNDS.has_point(o): # the whole map is walkable now, so anything on it stands in the way
 			return out
 		var s: Vector3 = el.xf.basis.get_scale()
 		if el.kind.begins_with("tree_"):

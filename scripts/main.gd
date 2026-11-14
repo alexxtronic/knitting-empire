@@ -1038,16 +1038,26 @@ func _rebuild_grid() -> void:
 		_mark_rect((r as Rect2).grow(0.2))
 
 
-## Where she may walk: her land, the road, the town, and the ground round every building wherever
-## the world editor has put it, so a shop moved to the edge of town can still be walked into.
+## Where she may walk: the whole map (Alex, 2026-11-14: she, and the dog, can go anywhere until the
+## map ends), from the mountains' foot down to the shore. Her land, the road, the town, the lands
+## and the ground round every building are listed too, so a shop moved to the edge still counts.
+## What stands in the way (trees, rocks, buildings, pools) blocks it in _rebuild_grid.
 func walk_areas() -> Array:
 	var areas: Array = [LOT, Town.ROAD, Town.TOWN]
+	areas.append(whole_map())
 	areas.append_array(regions.walk_areas())
 	for b in Town.built:
 		var n := b[0] as Node3D
 		if is_instance_valid(n) and n.visible:
 			areas.append(Rect2(n.global_position.x - 6.5, n.global_position.z - 6.5, 13.0, 13.0))
 	return areas
+
+
+## All of the map she can walk on: the grid's bounds, short of the sea.
+func whole_map() -> Rect2:
+	var b := CAM_BOUNDS.grow(-0.5)
+	var shore: float = regions.shore_z - 1.5 if regions and regions.shore_z > 0.0 else b.end.y
+	return Rect2(b.position, Vector2(b.size.x, minf(b.end.y, shore) - b.position.y))
 
 
 func _mark_rect(r: Rect2) -> void:
@@ -6060,6 +6070,7 @@ func _dog_checks() -> void:
 	autotest_jog = false
 	player.running = false
 	player.walk([])
+	player.position = Vector3(9.0, 0, 8.0) # out in the yard: the checks before may leave her indoors, walls all round
 	var start := player.position
 	dog.position = start + Vector3(1.2, 0, 0.8)
 	cam_target = dog.position
@@ -6088,6 +6099,25 @@ func _dog_checks() -> void:
 		dog.current_loop() == "Run" and dog.speed > 3.0 and absf(rate_run - dog.speed) < 0.15)
 	_check("the camera follows the dog", cam_target.distance_to(dog.position) < 2.5)
 	await _shot("48_dog_run.png")
+	# he (and she) can go anywhere on the map, not just the farm, the town and the trails (Alex,
+	# 2026-11-14): through the woods into the swamp's far edge, and into the woods between the lands
+	var far := Vector3(-90.0, 0, -2.0)
+	var woods := Vector3(-60.0, 0, -70.0) # north-west: no land, no trail
+	var off_trails: bool = regions.region_at(woods.x, woods.z) == "" and not regions.trails.any(func(t): return (t as Rect2).has_point(Vector2(woods.x, woods.z)))
+	var to_woods := _find_path(dog.position, woods)
+	var to_far := _find_path(dog.position, far)
+	hold_release() # the clicks above count as a held button in the test: let go, or it keeps steering him at the mouse
+	dog.walk(to_far.duplicate()) # he uses the path up as he goes
+	var tw := 0.0
+	while not dog.path.is_empty() and tw < 60.0:
+		await _wait(0.5)
+		tw += 0.5
+	var got_far := Vector2(dog.position.x - far.x, dog.position.z - far.z).length()
+	await _shot("48_dog_far.png")
+	_check("he can run anywhere on the map: to the swamp's far edge (%.1f m short, %.0f s) and into the woods between the lands (off the trails %s, path ends %.1f m from it)" % [got_far, tw, off_trails, (to_woods[-1] as Vector3).distance_to(woods) if not to_woods.is_empty() else -1.0],
+		not to_far.is_empty() and got_far < 2.0 and off_trails and not to_woods.is_empty() and (to_woods[-1] as Vector3).distance_to(woods) < 1.5)
+	dog.position = player.position + Vector3(1.2, 0, 0.8)
+	cam_target = dog.position
 	autotest_jog = false
 	await _key_tap(KEY_TAB)
 	_check("Tab again gives the clicks back to Nora", not dog.controlled)
