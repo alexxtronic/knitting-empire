@@ -10,7 +10,7 @@
 ## once, sharing her skeleton and skin) is drawn instead. The model itself is never changed.
 ## Like cinematic.gd, main.gd hands over the camera (_update_camera returns early) and the
 ## keys and mouse while it's on, and it gives them back when a story scene, bed, the knitting
-## game, a chat, the world editor or the cinematic camera starts.
+## game, the world editor or the cinematic camera starts.
 extends Node
 
 const World = preload("res://scripts/world.gd")

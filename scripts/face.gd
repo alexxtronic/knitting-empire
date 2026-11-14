@@ -8,7 +8,7 @@ extends Node
 ##   look_target: a world point the eyes turn toward, within a few degrees; the head (rig.gd)
 ##                does the rest. null = straight ahead, with small glances now and then.
 
-## Lid shapes for each mood a story line or a chat reply can carry. Anything else is neutral.
+## Lid shapes for each mood a story line can carry. Anything else is neutral.
 const MOODS := {
 	"neutral": {},
 	"happy": {"squint": 0.75},

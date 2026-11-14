@@ -34,7 +34,7 @@ Nora (happy): I might.
 > He tips his head and goes back to watching the road, like he's waiting for something that never comes.
 
 # --- Romance v1: talk topics, one a day (@daily), as he warms up --------------------------------
-# Order matters: the first scene whose conditions hold plays. Canon is in data/personas.json:
+# Order matters: the first scene whose conditions hold plays. Canon is in docs/CHARACTERS.md:
 # Ellie first, then the long evenings, and Anna only once he trusts her.
 
 == rowan_topic_flock
@@ -253,7 +253,7 @@ Rowan (wry): Don't thank me. It's just how I'm built. Slow.
 # --- After the date ------------------------------------------------------------------------------
 
 == rowan_topic_anna
-# canon (personas.json): he lost his wife, Anna, five years ago, to illness.
+# canon (docs/CHARACTERS.md): he lost his wife, Anna, five years ago, to illness.
 @trigger talk rowan
 @requires date1_done
 @when trust rowan >= 14

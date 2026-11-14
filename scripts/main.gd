@@ -19,7 +19,6 @@ const Story = preload("res://scripts/story.gd")
 const StoryPlayer = preload("res://scripts/story_player.gd")
 const Landmark = preload("res://scripts/landmark.gd")
 const Dialogue = preload("res://scripts/dialogue.gd")
-const AiChat = preload("res://scripts/ai_chat.gd")
 const GameAudio = preload("res://scripts/audio.gd")
 const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
@@ -121,9 +120,6 @@ var audio: GameAudio
 var story: StoryPlayer
 var villagers: Array = []
 var minimap: Minimap # the map under the coins (minimap.gd): click it to walk there
-var ai: AiChat # typed chat with villagers, voiced by Claude
-var chat_v = null # the villager you're chatting with
-var _chat_clock_was := true
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
 var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
@@ -430,15 +426,6 @@ func _connect_hud() -> void:
 	hud.cam_lock_pressed.connect(func(): _set_cam_lock(not cam_follow, true))
 	hud.cam_rotate.connect(func(d): cam_yaw_goal += d * PI * 0.5)
 	hud.cam_zoom.connect(func(d): cam_dist = clampf(cam_dist + d * 3.0, 8.0, 45.0))
-	ai = AiChat.new()
-	add_child(ai)
-	ai.replied.connect(_on_chat_reply)
-	hud.chat.sent.connect(_chat_send)
-	hud.chat.closed.connect(close_chat)
-	hud.chat.key_entered.connect(func(k: String):
-		ai.save_key(k)
-		hud.chat.set_online(ai.available())
-		hud.chat.show_note("Key saved on this computer (not in the game files). Say hello!" if ai.available() else "That key didn't take."))
 
 
 func _set_cam_lock(on: bool, announce := false) -> void:
@@ -1153,7 +1140,6 @@ func _process(delta: float) -> void:
 	_update_story_staging(delta)
 	_update_needs(delta)
 	_update_gaze()
-	_update_chat()
 	_update_tips(delta)
 	if not title_on and not get_tree().paused: # how long she has played this save (Max's visit waits for it)
 		Game.flags["play_secs"] = float(Game.flags.get("play_secs", 0.0)) + delta
@@ -1259,7 +1245,7 @@ func _update_camera(delta: float) -> void:
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
 	var pan := hud.cam_pad_pan if not story.is_playing() else Vector2.ZERO
-	if not sleeping and not story.is_playing() and not hud.is_chat_open():
+	if not sleeping and not story.is_playing():
 		if _held(KEY_W) or _held(KEY_UP):
 			pan.y -= 1
 		if _held(KEY_S) or _held(KEY_DOWN):
@@ -1291,11 +1277,11 @@ func _update_camera(delta: float) -> void:
 
 
 ## What stops first person (first_person.gd), or ends it when it starts: a story scene, sleep,
-## the title, the knitting game, a chat, the cinematic camera, the world editor, building mode
+## the title, the knitting game, the cinematic camera, the world editor, building mode
 ## and playing the dog.
 func fp_blocked() -> bool:
 	return sleeping or title_on or knit.active or story.is_playing() or cinema.active or god.active \
-		or hud.is_chat_open() or mode != Mode.LIVE or (dog != null and dog.controlled)
+		or mode != Mode.LIVE or (dog != null and dog.controlled)
 
 
 ## Layout-proof key check: matches the key by its label or by its physical position.
@@ -1355,9 +1341,6 @@ func _unhandled_input(e: InputEvent) -> void:
 				if mb.pressed:
 					if hud.is_menu_open() and mode == Mode.LIVE:
 						hud.hide_menu() # a click outside the ring just closes it
-						return
-					if hud.is_chat_open():
-						close_chat() # clicking away ends the chat (it's saved)
 						return
 					hud.hide_dialogue()
 					if mode == Mode.BUILD:
@@ -1424,12 +1407,6 @@ func _input(e: InputEvent) -> void:
 			KEY_1, KEY_2, KEY_3, KEY_4:
 				hud.story_key_choice(kc - KEY_0)
 		get_viewport().set_input_as_handled()
-		return
-	if hud.is_chat_open():
-		# typing goes to the chat box; only Escape is ours
-		if kc == KEY_ESCAPE:
-			close_chat()
-			get_viewport().set_input_as_handled()
 		return
 	if cinema.active:
 		cinema.handle_key(kc) # every key belongs to the free camera while it flies
@@ -3792,8 +3769,8 @@ func _cast_checks() -> void:
 			if not ResourceLoader.exists("res://assets/portraits/%s_%s.png" % [str(c.get("id", "")), mood]):
 				no_portrait.append("%s_%s" % [str(c.get("id", "")), mood])
 	_check("every character has a portrait for each story mood (missing: %s)" % str(no_portrait), no_portrait.is_empty())
-	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id) and ai.has_persona(id)))
-	_check("every villager has an intro, lines and a chat persona (missing: %s)" % str(missing), missing.is_empty())
+	var missing: Array = ids.filter(func(id): return not (Dialogue.INTRO.has(id) and Dialogue.LINES.has(id)))
+	_check("every villager has an intro and lines (missing: %s)" % str(missing), missing.is_empty())
 	var old_f = Game.friends.get("sabrina")
 	Game.friends.erase("sabrina")
 	_check("Sabrina starts cool (trust %d)" % Game.stat("sabrina", "trust"), Game.stat("sabrina", "trust") == -20)
@@ -4887,7 +4864,6 @@ func _autotest() -> void:
 	_check("save file written", FileAccess.file_exists(Game.save_path))
 	await _town_checks()
 	_data_checks()
-	await _chat_checks()
 	await _story_checks()
 	await _act1_checks()
 	await _romance_checks()
@@ -5800,73 +5776,6 @@ func _god_reload_checks() -> void:
 	await _shot("63_god_line_and_placed.png")
 	print("AUTOTEST DONE")
 	get_tree().quit()
-
-
-## Typed chat, all offline: the request we'd send, reading replies and errors, and the chat
-## window with a stand-in for the API (ai.mock), so the test never touches the network.
-func _chat_checks() -> void:
-	var rosa = _villager("rosa")
-	var hist: Array = []
-	AiChat.push_history(hist, "assistant", "dropped") # a conversation must start with Nora
-	AiChat.push_history(hist, "user", "Hi Rosa!")
-	var body := ai.build_request("rosa", hist, ai.situation_text("rosa", _chat_context(rosa)))
-	var sys: Array = body["system"]
-	_check("chat request: %s, cached character bible + live situation, starts with Nora" % body["model"],
-		body["model"] == ai.model and sys.size() == 2 and sys[0].has("cache_control") and not sys[1].has("cache_control")
-		and str(sys[0]["text"]).contains("Rosa Marchetti") and str(sys[1]["text"]).contains("Day ") and hist.size() == 1 and hist[0]["role"] == "user"
-		and not JSON.stringify(body).contains("x-api-key"))
-	# the API rejects fields a model doesn't support, so check the request each model would get
-	var keep_model: String = ai.model
-	ai.model = "claude-haiku-5-5"
-	var b_haiku := ai.build_request("rosa", hist, "")
-	ai.model = "claude-opus-5-5"
-	var b_opus := ai.build_request("rosa", hist, "")
-	ai.model = keep_model
-	_check("Haiku is the default and gets no fallback list; Opus keeps it; both at low effort",
-		AiChat.DEFAULT_MODEL == "claude-haiku-5-5" and not b_haiku.has("fallbacks") and b_haiku.get("output_config", {}).get("effort") == "low"
-		and (ai.proxy_url != "" or b_opus.has("fallbacks")) and b_opus.get("output_config", {}).get("effort") == "low")
-	_check("villagers only share secrets once they trust Nora",
-		not ai.situation_text("rowan", {"trust": 0, "familiarity": 5}).contains("Anna") and ai.situation_text("rowan", {"trust": 50, "familiarity": 60}).contains("Anna"))
-	var long: Array = []
-	for i in 30:
-		AiChat.push_history(long, "user" if i % 2 == 0 else "assistant", str(i))
-	_check("chat history is trimmed to the last %d lines, starting with Nora (%d)" % [AiChat.MAX_HISTORY, long.size()], long.size() <= AiChat.MAX_HISTORY and long[0]["role"] == "user")
-	var good := AiChat.parse_response(200, JSON.stringify({"content": [{"type": "text", "text": "[warm] *wipes her hands* Hello, pet!"}], "stop_reason": "end_turn"}))
-	_check("a reply is read: mood %s, text '%s'" % [good["mood"], good["text"]], good["ok"] and good["mood"] == "warm" and good["text"] == "*wipes her hands* Hello, pet!")
-	var errs := [AiChat.parse_response(401, "{}")["error"], AiChat.parse_response(529, "{}")["error"],
-		AiChat.parse_response(200, JSON.stringify({"content": [], "stop_reason": "refusal"}))["error"], AiChat.parse_response(200, JSON.stringify({"content": []}))["error"]]
-	_check("API errors are told apart (%s)" % str(errs), errs == ["key", "busy", "refusal", "empty"])
-	_check("chat text can't inject markup", AiChat.to_bbcode("[b]hi *nods*") == "[lb]b]hi [i][color=#d9c9a8]nods[/color][/i]")
-
-	var clock0 := Game.time_running
-	var love0 := Game.love
-	var fam0 := Game.stat("rosa", "familiarity")
-	ai.mock = func(_b): return {"code": 200, "body": JSON.stringify({"content": [{"type": "text", "text": "[happy] Oh, lovely to see you, love! Busy as bees today."}], "stop_reason": "end_turn"})}
-	player.position = rosa.talk_spot if rosa.talk_spot != null else rosa.position + Vector3(0, 0, 1.4)
-	_villager_action(rosa, "chat")
-	await _wait(0.3)
-	_check("the chat window opens and the clock waits", hud.is_chat_open() and not Game.time_running and rosa.listening)
-	hud.chat.input.text = "Hello Rosa! How's the market today?"
-	hud.chat._send()
-	await _wait(0.4)
-	var msgs: Array = Game.chat("rosa")["msgs"]
-	_check("Rosa answers in the chat (love %.0f→%.0f, familiarity %d→%d)" % [love0, Game.love, fam0, Game.stat("rosa", "familiarity")],
-		hud.chat.transcript().contains("lovely to see you") and msgs.size() >= 2 and msgs[-1]["role"] == "assistant"
-		and str(ai.last_request["messages"][-1]["content"]).contains("market") and Game.love > love0 and Game.stat("rosa", "familiarity") > fam0)
-	var cam0 := cam_target
-	await _shot("07_chat.png")
-	ai.mock = func(_b): return {"code": 529, "body": "{}"}
-	hud.chat.input.text = "Are you busy?"
-	hud.chat._send()
-	await _wait(0.4)
-	msgs = Game.chat("rosa")["msgs"]
-	_check("when the API is busy, the line comes back to the box and history stays in turns (last=%s, box='%s', note='%s', camera moved %.2f)" % [msgs[-1]["role"], hud.chat.input.text, hud.chat.note.text, cam_target.distance_to(cam0)],
-		msgs[-1]["role"] == "assistant" and hud.chat.input.text == "Are you busy?" and hud.chat.note.text.contains("busy") and cam_target.distance_to(cam0) < 0.01)
-	var saved := Game.to_dict()
-	_check("the chat is saved with the game, and no API key is", (saved["chats"]["rosa"]["msgs"] as Array).size() >= 2 and not JSON.stringify(saved).contains("sk-ant"))
-	close_chat()
-	_check("closing the chat starts the clock again", not hud.is_chat_open() and Game.time_running == clock0 and not rosa.listening)
-	ai.mock = Callable()
 
 
 func _character_checks() -> void:
@@ -7691,7 +7600,7 @@ func gary_visit_due() -> bool:
 func _update_gary_visit() -> void:
 	if not gary_visit_due() or Game.hour < 10.0 or Game.hour > 16.0 or mode != Mode.LIVE or sleeping:
 		return
-	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or hud.is_chat_open() or knit.active:
+	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or knit.active:
 		return
 	if homestead.story_farm() and not Game.flag("act1_note"):
 		return
@@ -7716,7 +7625,7 @@ func max_visit_due() -> bool:
 func _update_max_visit() -> void:
 	if not max_visit_due() or story.is_playing() or Game.hour < 10.0 or Game.hour > 17.0 or mode != Mode.LIVE or sleeping:
 		return
-	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or hud.is_chat_open() or knit.active:
+	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or knit.active:
 		return
 	var id := Story.find_trigger("event", "max_visit")
 	if id == "":
@@ -7936,8 +7845,6 @@ func _update_price_board() -> void:
 
 func _villager_actions(v) -> Array:
 	var acts := [_act("talk", "Talk")]
-	if ai.has_persona(v.vid):
-		acts.append(_act("chat", "Chat..."))
 	match v.vid:
 		"rosa": # the Yarn Barn, and some mornings the market stall
 			var sw := Game.count("sweater")
@@ -8035,8 +7942,6 @@ func _villager_action(v, id: String) -> void:
 				story.play(scene_id)
 			else:
 				_say(v, line)
-		"chat":
-			open_chat(v)
 		"sell_sweater":
 			var n := Game.count("sweater")
 			var price := _rosa_price()
@@ -8124,154 +8029,6 @@ func _villager_action(v, id: String) -> void:
 				else:
 					_say(v, str(Dialogue.GIFT_LINES.get(v.vid, {}).get(item, "Oh, a %s! That's very thoughtful of you. Thank you." % item)))
 	_update_price_board()
-
-
-# --- typed chat (ai_chat.gd, chat_panel.gd) -------------------------------------------
-
-func open_chat(v) -> void:
-	if hud.is_chat_open():
-		close_chat()
-	chat_v = v
-	hud.hide_menu()
-	hud.hide_dialogue()
-	_chat_clock_was = Game.time_running
-	Game.time_running = false # like a story scene, the day waits while you talk
-	v.listening = true
-	v.face_point(player.position, 2.0)
-	player.face_point(v.position)
-	var c := Game.chat(v.vid)
-	hud.chat.open(v.title, Game.hearts(v.vid), c["msgs"], ai.available())
-
-
-func close_chat() -> void:
-	if chat_v == null:
-		return
-	chat_v.listening = false
-	chat_v.hold_time = 2.0
-	chat_v = null
-	Game.time_running = _chat_clock_was
-	hud.chat.visible = false
-
-
-func _update_chat() -> void:
-	if chat_v == null:
-		return
-	if story.is_playing() or sleeping or player.position.distance_to(chat_v.position) > 4.0:
-		close_chat()
-		return
-	chat_v.face_point(player.position, 2.0)
-
-
-func _chat_send(text: String) -> void:
-	if chat_v == null or ai.busy:
-		return
-	text = text.substr(0, AiChat.MAX_INPUT)
-	var v = chat_v
-	var c := Game.chat(v.vid)
-	AiChat.push_history(c["msgs"], "user", text)
-	hud.chat.add_line("user", text)
-	player.talk(1.5)
-	if not ai.available() and not ai.mock.is_valid():
-		_chat_reaction(v, "*smiles* " + ai.offline_line(v.vid), "neutral", false)
-		c["msgs"].pop_back() # nothing was really said back; don't keep it
-		return
-	hud.chat.set_thinking(true)
-	hud.chat.show_note("")
-	ai.send(v.vid, c["msgs"], ai.situation_text(v.vid, _chat_context(v)))
-
-
-func _on_chat_reply(vid: String, r: Dictionary) -> void:
-	hud.chat.set_thinking(false)
-	var c := Game.chat(vid)
-	var v = chat_v if chat_v != null and chat_v.vid == vid else null
-	if not r["ok"]:
-		# the line Nora typed wasn't answered: take it back out so the history stays in turns
-		if c["msgs"].size() > 0 and c["msgs"][-1]["role"] == "user":
-			var t: String = c["msgs"].pop_back()["content"]
-			if v != null and hud.chat.input.text == "":
-				hud.chat.input.text = t
-		if r["error"] == "refusal":
-			if v != null:
-				_chat_reaction(v, "*shifts a little* Let's talk about something else, eh?", "neutral", false)
-		else:
-			hud.chat.set_online(ai.available() and r["error"] != "key")
-			hud.chat.show_note(AiChat.error_note(r["error"]))
-		return
-	AiChat.push_history(c["msgs"], "assistant", str(r.get("raw", r["text"])))
-	if v == null:
-		return
-	_chat_reaction(v, str(r["text"]), str(r["mood"]), true)
-	if int(c["day"]) != Game.day:
-		# the first real chat of the day: time with people fills Love, and you get to know them
-		c["day"] = Game.day
-		Game.add_need("love", 4.0)
-		Game.add_need("happiness", 1.0)
-		Game.add_friendship(vid, 3)
-		hud.chat.set_hearts(Game.hearts(vid))
-
-
-func _chat_reaction(v, text: String, mood: String, keep: bool) -> void:
-	if keep:
-		hud.chat.add_line("assistant", text, mood)
-	else:
-		hud.chat.add_line("assistant", text)
-	v.speak_time = clampf(text.length() * 0.05, 1.2, 5.0)
-	if v.get("body") != null and v.body:
-		v.body.set_mood(mood) # their eyes show the reply's mood
-
-
-## What the villager knows about this moment, for the prompt (ai_chat.gd situation_text).
-func _chat_context(v) -> Dictionary:
-	var f := Game.friend(v.vid)
-	var place := {"rosa": "the Yarn Barn, your shop" if not rosa_at_stall else "your market stall on the plaza", "gary": "Willow Homes, your office", "giorgio": "Heart Bakery, your bakery", "steve": "Builder's Delight, the shop you work in", "sabrina": "the terrace of the Coffee Shop, where you work"}
-	var where: String = place.get(v.vid, "")
-	if where == "":
-		where = "Maple Grove, near the plaza" if v.position.x > 30.0 else "Birchfield Farm, Nora's place"
-	var weather := "raining" if rain > 0.5 else "dry"
-	var h := Game.hour
-	var part := "early morning" if h < 9.0 else ("morning" if h < 12.0 else ("afternoon" if h < 17.0 else ("evening" if h < 21.0 else "late at night")))
-	var facts: Array = []
-	match v.vid:
-		"rowan":
-			if Game.flag("nora_opened"):
-				facts.append("When the gate slammed she flinched hard, then said: 'Sorry. Loud noises. Long story.' You didn't push.")
-			elif Game.flag("nora_deflected"):
-				facts.append("When the gate slammed she flinched hard and said she was fine, it just made her jump. It was more than that.")
-			if Game.flag("act1_done"):
-				facts.append("You owe her a fixed fence; she owes you tea.")
-		"rosa":
-			facts.append("Today you're paying %dc a sweater, and a bundle of 3 wool costs %dc and a sheep %dc." % [_rosa_price(), _yarn_price(Game.WOOL_PACK_PRICE), _yarn_price(Game.SHEEP_PRICE)])
-		"gary":
-			facts.append("Nora has %dc. The cheapest land you're selling costs %sc." % [Game.coins, _thousands(_cheapest_plot())])
-		"sabrina":
-			if Game.stat("sabrina", "trust") < 0:
-				facts.append("You haven't decided whether you like Nora yet. You're not making it easy for her.")
-	if int(f["gift"]) == Game.day:
-		facts.append("Nora already gave you a gift today.")
-	if Game.knit_xp > 0:
-		facts.append("Nora has knitted %d sweater%s so far." % [Game.knit_xp, "" if Game.knit_xp == 1 else "s"])
-	var looks: Array = []
-	if Game.warmth < 35.0:
-		looks.append("cold" + (", still in that thin city coat" if Game.worn_quality <= 1 else ""))
-	elif Game.worn_quality >= 3:
-		looks.append("cosy in a good hand-knit sweater")
-	if Game.energy < 30.0:
-		looks.append("tired")
-	if Game.fullness < 30.0:
-		looks.append("hungry")
-	if Game.happiness > 75.0:
-		looks.append("in good spirits")
-	elif Game.happiness < 30.0:
-		looks.append("low")
-	var ctx := {
-		"day": Game.day, "day_of_season": Game.day_of_season(), "season": Game.season_name(), "clock": "%s (%s)" % [part, Game.clock_text()],
-		"weather": weather, "place": where,
-		"familiarity": int(f["familiarity"]), "trust": int(f["trust"]), "romance": int(f["romance"]),
-		"facts": facts, "last_day": int(Game.chat(v.vid)["day"]),
-	}
-	if looks.size() > 0:
-		ctx["nora"] = ", ".join(looks)
-	return ctx
 
 
 ## She owns Rosewood Cottage and it's in the game (Town.COTTAGE_ON): an old save that bought it

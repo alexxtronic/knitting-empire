@@ -102,7 +102,7 @@ func face_point(p: Vector3) -> void:
 		rotation.y = atan2(d.x, d.z)
 
 
-## Gesture while chatting with a villager.
+## Talking gesture for a few seconds.
 func talk(seconds := 4.0) -> void:
 	_talk_t = seconds
 

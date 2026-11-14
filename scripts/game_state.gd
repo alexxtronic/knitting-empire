@@ -79,13 +79,11 @@ var hour: float = 8.0
 var clock_frozen := false # god mode (settings): the hour stands still, everything else carries on
 var house_level: int = 0
 var time_running := true
-var friends := {} # villager id -> {"familiarity", "trust", "romance", "talk" (last day talked), "gift" (last day gifted), "n" (chats)}
+var friends := {} # villager id -> {"familiarity", "trust", "romance", "talk" (last day talked), "gift" (last day gifted), "n" (times talked)}
 var owns_cottage := false
 var sheep_count: int = 3
 ## Story progress: named flags set by scenes and choices ("met_rowan", "act1_done", ...).
 var flags := {}
-## Typed chats (ai_chat.gd): villager id -> {"day": last day you chatted, "msgs": [{role, content}]}.
-var chats := {}
 
 
 func _init() -> void:
@@ -139,7 +137,6 @@ func reset() -> void:
 	owns_cottage = false
 	sheep_count = START_SHEEP
 	flags = {}
-	chats = {}
 
 
 func _process(delta: float) -> void:
@@ -423,13 +420,6 @@ func add_stat(id: String, stat_name: String, amount: int) -> int:
 
 # --- story flags ---------------------------------------------------------------
 
-## The saved conversation with a villager (created empty on first use).
-func chat(id: String) -> Dictionary:
-	if not chats.has(id):
-		chats[id] = {"day": 0, "msgs": []}
-	return chats[id]
-
-
 func set_flag(flag_name: String, value: Variant = true) -> void:
 	flags[flag_name] = value
 
@@ -453,7 +443,7 @@ func add_journal(kind: String, title: String, text: String) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": SAVE_VERSION, "flags": flags, "chats": chats,
+		"version": SAVE_VERSION, "flags": flags,
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
 		"knit_xp": knit_xp, "worn_quality": worn_quality, "worn_design": worn_design, "sweaters": sweaters,
@@ -490,8 +480,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		d["worn_quality"] = 1
 		v = 4
 	if v < 5:
-		d["chats"] = {}
-		v = 5
+		v = 5 # v5 added typed chats with villagers, since removed
 	if v < 6:
 		d["sweaters"] = [] # the sweaters she carries are ordinary (Rare) ones; sync_sweaters fills them in
 		v = 6
@@ -587,13 +576,3 @@ func from_dict(d: Dictionary) -> void:
 	owns_cottage = bool(d.get("owns_cottage", false))
 	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), 0, MAX_SHEEP) # Act 1 starts with none
 	flags = (d.get("flags", {}) as Dictionary).duplicate(true)
-	chats = {}
-	var saved_chats: Dictionary = d.get("chats", {})
-	for id in saved_chats:
-		var c = saved_chats[id]
-		if c is Dictionary:
-			var msgs: Array = []
-			for m in c.get("msgs", []):
-				if m is Dictionary and str(m.get("role", "")) in ["user", "assistant"]:
-					msgs.append({"role": str(m["role"]), "content": str(m.get("content", ""))})
-			chats[str(id)] = {"day": int(c.get("day", 0)), "msgs": msgs}

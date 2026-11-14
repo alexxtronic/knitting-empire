@@ -89,7 +89,7 @@ func _text(s: String, size: int) -> Label:
 ## Whether it can start now: not in a story scene, asleep, knitting, on the title or in the world editor.
 func can_enter() -> bool:
 	return not active and not main.sleeping and not main.title_on and not main.knit.active \
-		and not main.story.is_playing() and not main.god.active and not main.hud.is_chat_open()
+		and not main.story.is_playing() and not main.god.active
 
 
 func toggle() -> void:

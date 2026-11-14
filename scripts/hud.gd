@@ -249,7 +249,6 @@ var holding_bar: HBoxContainer
 var sell_btn: Button
 var chrome: Array[Control] = [] # the everyday panels, faded out during story scenes
 var pie # pie_menu.gd: the ring of actions round whatever you clicked
-var chat # chat_panel.gd: typing to a villager
 var help_panel: PanelContainer
 var fade: ColorRect
 var lock_btn: Button
@@ -319,7 +318,6 @@ func _ready() -> void:
 	_build_toast()
 	_build_dialogue()
 	_build_menu()
-	_build_chat()
 	_build_help()
 	_build_journal()
 	_build_game_menu()
@@ -1191,17 +1189,6 @@ func hide_dialogue() -> void:
 
 func make_icon(kind: String) -> Control:
 	return Icon.new(kind)
-
-
-func _build_chat() -> void:
-	chat = preload("res://scripts/chat_panel.gd").new()
-	chat.build(self)
-	root.add_child(chat)
-	_place(chat, 0.5, 1.0, Vector2(0, 96))
-
-
-func is_chat_open() -> bool:
-	return chat != null and chat.visible
 
 
 func _build_menu() -> void:

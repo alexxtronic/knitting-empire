@@ -304,7 +304,7 @@ func update(delta: float) -> void:
 		_update_nudge()
 		return
 	var pl = main.player
-	if pl.busy or not pl.path.is_empty() or main.knit.active or main.hud.is_chat_open():
+	if pl.busy or not pl.path.is_empty() or main.knit.active:
 		_idle_t = 0.0
 		return
 	var s: Dictionary = shift["stops"][int(shift["i"])]

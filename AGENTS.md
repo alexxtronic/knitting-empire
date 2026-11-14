@@ -54,7 +54,7 @@ grep -E '^FAIL|SCRIPT ERROR|Parse Error' /tmp/ke_autotest.log   # expect nothing
 - Only run one autotest at a time. Two Godot windows at once slow the machine down, and the time-based checks then fail at random.
 - The test window ignores the real mouse (clicks pass through to whatever is behind it) and the real keyboard (the game only acts on the keys the test presses itself), so you can keep working while it runs.
 - macOS stops drawing a window that is completely covered, and the test then waits forever at its next screenshot. If Alex has the game open, start the test where a strip of it stays visible and without taking focus: `open -g -n -a /Applications/Godot.app --stdout /tmp/ke_autotest.log --stderr /tmp/ke_autotest.log --args --path "$PWD" --resolution 1280x800 --position 0,30 -- --autotest=/tmp/ke_shots`, then wait for `AUTOTEST DONE` in the log.
-- The autotest mutes all sound, never touches the network (AI chat uses a stand-in), and doesn't write the player's settings.
+- The autotest mutes all sound, never touches the network, and doesn't write the player's settings.
 - The autotest's last step is the world editor (`_god_checks`): it builds the world again without the saved layout, edits it, saves a layout to its own file in Godot's user folder (never `data/world_layout.json`), then loads the scene again from that file. To run only that step (about a minute): `-- --godcheck=/tmp/ke_god`.
 
 ## The world layout: `data/world_layout.json`
@@ -122,12 +122,12 @@ Alex arranges the map himself in the game: Settings > God mode > "Edit the world
 - Her head is hidden from this camera only: her body meshes switch to shadows only (so her shadow keeps its head), and a copy of each without the triangles that follow the `Head` bone and the bones under it is drawn instead, sharing her skeleton and skin; their blend shapes (her grip, her knitting hands) are copied across each frame. The model isn't changed. If a character's hair or hat isn't weighted to the head, it would show.
 - While it's on, the walls are up and every roof stays on round her.
 - Roofs: every building has one, and they all follow one rule. From above (third person) a roof lifts off while she's inside, so you can see her; in first person it stays on. The barn (`World.update_barn`) and the walk-in shops (`Interiors.update`) lift theirs; Nora's house and Rosewood Cottage get a gable roof from `_house_roof()` in `main.gd` (shingled slopes, eaves, a plastered gable whose underside is the ceiling), and `_roof_lifted()` also lifts them in building mode, while placing a piece and in the world editor, so the rooms can be furnished. While a house's roof is on, all its walls stand: only a house with its roof lifted cuts the walls toward the camera down (`_update_walls`). The house's roof is rebuilt with it when it grows. A new building should do the same.
-- `main.fp_blocked()` lists what stops it or ends it: a story scene, sleep, the title, the knitting game, a chat, the cinematic camera, the world editor, building mode, playing the dog.
+- `main.fp_blocked()` lists what stops it or ends it: a story scene, sleep, the title, the knitting game, the cinematic camera, the world editor, building mode, playing the dog.
 
 ## Cinematic mode and the photo album: `scripts/cinematic.gd`, `scripts/photo_album.gd`
 
 - P (or Menu > Cinematic camera) hands the camera to `main.cinema`. While `cinema.active`, `_update_camera()` returns at once, and `_input()` and `_unhandled_input()` give every key and mouse event to `cinema.handle_key()` and `cinema.handle_mouse()`. Nothing reaches Nora, the clock is stopped and the HUD is hidden. On the way out it restores the camera's near and far planes, depth of field and shadow distance.
-- Limits: `Cinematic.MAX_HEIGHT` (300 m), `GROUND_CLEAR` and `BOUNDS` (the map with plenty of room round it). It won't start in a story scene, asleep, knitting, on the title screen, in a chat or in the world editor.
+- Limits: `Cinematic.MAX_HEIGHT` (300 m), `GROUND_CLEAR` and `BOUNDS` (the map with plenty of room round it). It won't start in a story scene, asleep, knitting, on the title screen or in the world editor.
 - Photos are PNGs in `Cinematic.dir` (`user://photos`). They are named `YYYY-MM-DD_HH-MM-SS_dayN_H-MMam.png`, so sorting by name puts the newest first. The album (`hud.album`, in the Esc menu) reads that folder each time it opens.
 
 ## Key bindings: `scripts/keybinds.gd`
@@ -189,7 +189,7 @@ Eyes: `tools/add_eyes.py` (rebuilt 2026-11-13 after Alex found the first eyes "t
 
 ## Rules
 
-- **Never commit secrets.** That means API keys, tokens, `.env` files, passwords, certificates, and `.p8`/`.p12` keys. Villager chat needs an Anthropic API key, but it is never stored in the repo or the game. Players paste it into the game (it's saved in Godot's user folder) or set `ANTHROPIC_API_KEY`. Don't add a key, a default key or a key file to the project.
+- **Never commit secrets.** That means API keys, tokens, `.env` files, passwords, certificates, and `.p8`/`.p12` keys.
 - **Every character model gets real eyes.** Run `tools/add_eyes.py` on each new character and point its `model` in `data/characters.json` at the `_eyes` GLB, so it blinks, takes moods in story scenes and shuts its eyes asleep. Look at the review sheet before using it.
 - **Every character model gets a rigid head.** Any new character, and any new tool that rigs or re-skins one, must run `tools/rigid_head.py` (`rigid_head.make_rigid(mesh, rig)`) before export, so the face turns in one piece. It stops with an error if anything above the jaw line still follows another bone. Check a new character with its head turned about 70°, close up.
 - GitHub rejects files over 100 MB. Keep large source exports (Tripo GLBs, renders) out of the repo.

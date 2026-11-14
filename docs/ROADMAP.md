@@ -24,7 +24,7 @@ It is written so that a coding agent can pick up any item without re-reviewing t
 | 7 | One 3,600-line file | `scripts/main.gd` holds world building, input, actions, saves and about 1,500 lines of tests; the map is hard-coded coordinates |
 | 8 | Not shippable | raw key checks (no controller, Steam Deck or rebinding), no export preset, no translation hooks, no licence on a public repo |
 | 9 | Performance | autotest measured 18 FPS in the town view on an M4 MacBook Air at 1280x800 |
-| 10 | AI chat cost | needs each player's own Anthropic key (`scripts/ai_chat.gd`); shipping needs a proxy and a budget per player |
+| 10 | AI chat cost | settled: Alex took AI chat out of the game on 2026-11-14; villagers speak only hand-written lines |
 | 11 | Save risks (seen in code, not reproduced) | a save while moving furniture drops the piece (`ghost` is out of the `furniture` array); an autosave mid-scene does not store where the scene was |
 
 **On "AAA".** AAA means budgets in the tens of millions and teams of hundreds. The target that fits this game is a premium indie hit (Stardew Valley, Spiritfarer, Unpacking): one clear hook, a distinct look, 20–40 hours of content, sold once for about $20–25. Everything below aims there.
@@ -168,9 +168,9 @@ Goal: a 60–90 minute Steam demo of Chapter 1, good enough for Steam Next Fest 
 | 3 | Daily life | Full order board (villager tastes, deadlines of several days, never punishing). End-of-day card finished. Saturday market. Villager schedules (home, work, plaza by hour). 3 more crops and dye plants; generalise the crop code that names turnips and pumpkins. | adding a crop is a JSON edit only; a week of play has no two identical days |
 | 4 | Chapter 1 content | Write and stage days 2–28 (section 4): about 12 new scenes, memory thread 2, Max's visit, the Harvest Fair as a playable festival. 2 new villagers with models through the Tripo pipeline (rigid heads, `AGENTS.md` rule). | Chapter 1 plays from the bus to the Fair with no dead days |
 | 5 | Feel and performance | Find the town's 18 FPS cause with `--fpsprobe` and reach 60 FPS on the M4 Air at Medium and 30 FPS on Steam Deck settings. Animation pass on knitting, shearing, gifting. Real music (2–3 tracks) and replaced key sounds. UI pass: inventory, journal and pattern book in the stitched style. Onboarding without text walls. | a new player needs no explanation for the first 15 minutes |
-| 6 | Ship the demo | Export presets for macOS and Windows; a GitHub Actions build. Steam page: capsule art, 5 screenshots, a 45-second trailer led by the stitch game. Playtest with 10 people from the target audience; fix the top 5 problems they hit. AI chat off in the demo unless the proxy exists. | a stranger can download, play 60 minutes and wishlist |
+| 6 | Ship the demo | Export presets for macOS and Windows; a GitHub Actions build. Steam page: capsule art, 5 screenshots, a 45-second trailer led by the stitch game. Playtest with 10 people from the target audience; fix the top 5 problems they hit. | a stranger can download, play 60 minutes and wishlist |
 
-Decisions Alex needs to make in these weeks: final game name; the heroine's name and whether there is a character creator; repo visibility; whether AI chat ships at all (see section 8).
+Decisions Alex needs to make in these weeks: final game name; the heroine's name and whether there is a character creator; repo visibility.
 
 ## 7. Six-month plan (to Early Access)
 
@@ -191,7 +191,6 @@ Decisions Alex needs to make in these weeks: final game name; the heroine's name
 
 | Risk | Why it matters | Mitigation |
 |---|---|---|
-| AI chat cost and safety | per-message cost on a one-time purchase; a model speaking freely inside a story about an abusive marriage | ship hand-written dialogue as the default; offer AI chat as an optional extra through a proxy with a spending cap per player, or leave it out of 1.0 |
 | Generated assets | Steam requires disclosure of AI-generated content; some players and press react badly; style drifts between models | disclose plainly; pass every model through the Woolcore import tool and a human finish; check the licence terms of each generator for commercial use |
 | The subject | divorce and coercive control must be handled with care for this audience | a sensitivity read of the script; content note at the start; never make the trauma a puzzle or a twist |
 | Scope | a year of story, a shop sim and a romance game is three games | the pillars in section 2; cut anything that does not feed knitting; ship Chapter 1 before building Chapter 3 systems |
