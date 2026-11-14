@@ -1471,6 +1471,8 @@ func _input(e: InputEvent) -> void:
 				hud.album.close()
 			elif hud.letters.visible:
 				hud.letters.close()
+			elif wardrobe_ui.visible:
+				wardrobe_ui.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -1488,8 +1490,6 @@ func _ray_target(mpos: Vector2) -> Variant:
 	var res := get_world_3d().direct_space_state.intersect_ray(q)
 	if res.is_empty():
 		return null
-			elif wardrobe_ui.visible:
-				wardrobe_ui.close()
 	var col: Object = res["collider"]
 	if col and col.has_meta("target"):
 		return col.get_meta("target")
@@ -2055,6 +2055,8 @@ func _actions_for(t) -> Array:
 				return [_act("spin", "Spin wool  (just for fun)", Game.has_item("wool"))]
 			"bookshelf":
 				return [_act("read", "Read a knitting book")]
+			"wardrobe":
+				return [_act("wardrobe", "Choose a sweater…")]
 		return []
 	if t is Plot:
 		if t.crop == "":
@@ -2095,8 +2097,6 @@ func _actions_for(t) -> Array:
 	return []
 
 
-			"wardrobe":
-				return [_act("wardrobe", "Choose a sweater…")]
 func _stand_point(t) -> Vector3:
 	# a shopkeeper's spot in front of the counter, while they are at work (a scene may take them out)
 	if t is Villager and t.talk_spot != null and t.position.distance_to(t.talk_spot) < 3.0:
@@ -2188,6 +2188,8 @@ func _perform(t, id: String) -> void:
 			player.start_activity("Spinning", 3.0, func():
 				Game.add_need("happiness", 4.0)
 				hud.show_toast("The wheel hums. Your wool is nice and even now."))
+		"wardrobe":
+			wardrobe_ui.open()
 		"read":
 			player.start_activity("Reading", 3.0, func():
 				Game.energy = minf(100.0, Game.energy + 8.0)
@@ -2228,8 +2230,6 @@ func _begin_knit(chair) -> void:
 	knit.open(opts)
 
 
-		"wardrobe":
-			wardrobe_ui.open()
 func _on_knit_finished(res: Dictionary) -> void:
 	Game.time_running = _knit_clock_was
 	player.quiet_needles = false
