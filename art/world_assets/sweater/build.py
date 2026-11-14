@@ -602,7 +602,9 @@ def tuck_key(body, sweater, co, dom, marks, lip):
     verts = [mw @ v.co for v in me.vertices]
     polys = [tuple(p.vertices) for p in me.polygons if not any(i in lip for i in p.vertices)]
     tree = BVHTree.FromPolygons(verts, polys)
-    skip = np.isin(dom, ["Head", "LeftHand", "RightHand", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "LeftToes", "RightToes"])
+    skip = np.isin(dom, ["Head", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "LeftToes", "RightToes"])
+    # the hands, and on a Mixamo rig every finger bone (LeftHandIndex1 ...)
+    skip |= np.char.startswith(dom.astype(str), "LeftHand") | np.char.startswith(dom.astype(str), "RightHand")
     bw = body.matrix_world
     bwi = bw.inverted()
     moved = 0
@@ -617,6 +619,9 @@ def tuck_key(body, sweater, co, dom, marks, lip):
         loc, n = hit[0], hit[1]
         if (p - loc).dot(n) < -0.08:          # well inside already, or under some other part
             continue
+        d = p - loc
+        if d.length > 0.01 and abs(d.dot(n)) < 0.8 * d.length:
+            continue                          # past a cuff or the hem: the knit is beside it, not over it
         q = p - (bw.to_3x3() @ v.normal).normalized() * (ARM_TUCK if "Arm" in str(dom[i]) else TUCK)
         if (q - loc).dot(n) > -MARGIN:
             q = q - n * ((q - loc).dot(n) + MARGIN)
