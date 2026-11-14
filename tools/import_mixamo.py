@@ -6,7 +6,7 @@ a Tripo sculpt: its arms bend at the elbow and stay round, where ours curved lik
 colour only) and auto-rigging it on mixamo.com (Standard Skeleton, 65 bones); download FBX Binary, With
 Skin, T-pose.
 
-  Blender -b --factory-startup -P tools/import_mixamo.py -- <project_dir> <mixamo.fbx> <out_id> [--like <old.blend>] [--rig-name Name]
+  Blender -b --factory-startup -P tools/import_mixamo.py -- <project_dir> <mixamo.fbx> <out_id> [--like <old.blend>] [--rig-name Name] [--height m]
 
 It:
   1. imports the FBX and bakes Mixamo's centimetre scale and Y-up turn into the armature, so the rig sits at
@@ -32,6 +32,7 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 PROJECT, FBX, OUT_ID = os.path.abspath(argv[0]), os.path.abspath(argv[1]), argv[2]
 LIKE = argv[argv.index("--like") + 1] if "--like" in argv else None
 RIG_NAME = argv[argv.index("--rig-name") + 1] if "--rig-name" in argv else "Rig"
+HEIGHT = float(argv[argv.index("--height") + 1]) if "--height" in argv else None
 
 NAMES = {
     "Hips": "Hips", "Spine": "Spine", "Spine1": "Chest", "Spine2": "UpperChest", "Neck": "Neck", "Head": "Head",
@@ -83,6 +84,11 @@ rig.animation_data_clear()
 mw = body.matrix_world.copy()
 body.parent = None
 body.matrix_world = mw
+if HEIGHT:   # scale rig and mesh together about the feet, e.g. to the size of the model it replaces
+    k = HEIGHT / max((mw @ v.co).z for v in body.data.vertices)
+    for o in (rig, body):
+        o.matrix_world = Matrix.Scale(k, 4) @ o.matrix_world
+    print("SCALED by", round(k, 4), "to", HEIGHT, "m")
 for o in (rig, body):
     bpy.ops.object.select_all(action="DESELECT")
     o.select_set(True)

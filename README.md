@@ -241,11 +241,11 @@ To see what each graphics effect costs, the frame-cost probe times the town at n
 
 Pictures are in `art/turnarounds/nora/tripo/` and `art/turnarounds/rowan/tripo/`. For the next character, Tripo's Clean Topology (quad) mode should bend better at elbows and knees; Generate in Parts and 8K textures don't help here. A turnaround with the arms a little away from the body keeps hands from fusing to hips.
 
-**Mixamo (Sabrina, Rosa, Max and Lars).** For a Tripo model that rigs badly on our own skeleton, Mixamo's auto-rigger does better:
+**Mixamo (Sabrina, Rosa, Max, Lars and Giorgio).** For a Tripo model that rigs badly on our own skeleton, Mixamo's auto-rigger does better:
 
 1. `tools/to_mixamo.py` makes a light copy (welded, lightly smoothed, cut to 30k faces, unwrapped afresh, colours baked from the full model) and zips it as OBJ, MTL and texture: `Blender -b --factory-startup -P tools/to_mixamo.py -- <tripo.glb> <out.zip> <height_m>`.
 2. Upload the zip to mixamo.com, place the markers, and download the rigged T-pose as FBX.
-3. `Blender -b --factory-startup -P tools/import_mixamo.py -- "$PWD" <T-Pose.fbx> <id> --rig-name <Name>` renames the bones to ours, fills in any face the colour bake missed (those come out pure black: Lars's brows, patches of Rosa's and Max's clothes), makes the head rigid and saves `tools/character_build/<id>/<id>.blend`.
+3. `Blender -b --factory-startup -P tools/import_mixamo.py -- "$PWD" <T-Pose.fbx> <id> --rig-name <Name>` renames the bones to ours, fills in any face the colour bake missed (those come out pure black: Lars's brows, patches of Rosa's and Max's clothes), makes the head rigid and saves `tools/character_build/<id>/<id>.blend`. `--height m` scales the rig and mesh to a height (the top of the head or hat, in metres), for a model whose upload came out a different size from the one it replaces.
 4. A long skirt or dress: `Blender -b tools/character_build/<id>/<id>.blend -P tools/skirt_weights.py -- "$PWD" <id>`, so it swings as one bell instead of two trouser legs (Mixamo splits it down the middle and hangs the hem from the feet).
 5. The loops: `tools/retarget_anims.py` with Quaternius's library (it grounds each standing loop by the body's soles and sits a new rig with its seat on the origin), then again with `--same-bones --map SitKnit=lib_SitKnit` and `assets/nora_tripo.glb` to borrow the knitting loop. Put the stride speeds it prints in `data/characters.json`.
 6. Real eyes with `tools/add_eyes.py` (below), then import and add the character to `data/characters.json`.
