@@ -14,10 +14,10 @@
 Giorgio (warm): Cara. Sit a minute. The oven doesn't need me for ten.
 Giorgio (neutral): Rent on Ellie's place, a tin of coins, a flock that eats more than it grows. I know that arithmetic. I did it once myself, in another city.
 > He doesn't say which city. He wipes the counter where it's already clean.
-Giorgio (warm): So. I need hands at six in the morning. Four hours: the oven, the flour, the shelves. Forty-five coins a shift, and you don't go home hungry.
+Giorgio (warm): So. I need hands at six in the morning. Four hours: the oven, the flour, the shelves. I can't pay much, a few coins for your pocket, but you don't go home hungry. And the regulars will get to know you.
 Nora (worried): I haven't worked anywhere with people in a long time. I'm not... good, in the mornings. With people.
 Giorgio (warm): Bread doesn't ask questions. That's why I like it. You knead, it rises, nobody needs to talk.
-? A steady wage, any morning she wants one.
+? A morning's work, a few coins, and Giorgio's regulars.
 - I'll take it. Six o'clock? | set job bakery; trust giorgio +2; familiarity giorgio +2
 - Can I think about it? -> later | familiarity giorgio +1
 Giorgio (happy): Six. Not five past. The dough knows.
@@ -35,7 +35,7 @@ Sabrina (neutral): Okay, so. Don't make this weird.
 Sabrina (wry): My aunt needs someone on the terrace after lunch. She asked if I knew anyone who isn't, quote, "a disaster."
 Sabrina (neutral): You're the least disaster person I know. Which is a low bar. It's basically on the floor.
 Nora (happy): Are you offering me a job?
-Sabrina (wry): I'm relaying information. Afternoons, four hours, forty coins. You carry cups, you wipe tables, you don't ask about my feelings.
+Sabrina (wry): I'm relaying information. Afternoons, four hours, pocket money and all the gossip on the terrace. You carry cups, you wipe tables, you don't ask about my feelings.
 ? Afternoons on the terrace with Sabrina.
 - Deal. No feelings. | set job cafe; trust sabrina +2
 - Let me think about it. -> later | familiarity sabrina +1
@@ -52,7 +52,7 @@ Sabrina (neutral): Sure. It's not like I'll be sitting here waiting. I'll litera
 @camera between barbara nora 6
 Barbara (warm): Sweetheart, walk with me a minute. My knees and I have been having words.
 Barbara (neutral): Forty years I've carried this bag round Maple Grove. Either it's getting heavier or I'm getting honest.
-Barbara (warm): I could use someone on the morning round. Every door in town, letters in, a kind word for whoever opens up. Three hours, thirty-eight coins, and all the fresh air you can breathe.
+Barbara (warm): I could use someone on the morning round. Every door in town, letters in, a kind word for whoever opens up. Three hours, a few coins, and every door in town gets to know your face.
 Nora (wry): I've walked out of a lot of doors lately. Mostly away from things.
 Barbara (warm): Then you'll be good at this. A round always brings you back where you started. That's the comfort of it.
 ? Mornings on the post round.

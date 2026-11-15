@@ -13,15 +13,18 @@ extends Node
 const Data = preload("res://scripts/data.gd")
 const Story = preload("res://scripts/story.gd")
 const Town = preload("res://scripts/town.gd")
+const Catalog = preload("res://scripts/catalog.gd")
+const Hud = preload("res://scripts/hud.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 
 const RESUME_AFTER := 2.0 # s idle away from the next task before she picks the shift up again
 const LEAVE_DIST := 30.0 # m from the next task: past this, she has walked off the job
 
-## Jobs are parked (Alex, 2026-11-15: the game is about the knitting empire; the buildings serve
-## the story and the business, not shift work). Off: nobody offers one, no menu has Work rows, a
-## save that had a job keeps the flag but gets nothing from it. The jobs check turns it on for itself.
-static var on := false
+## Jobs are back, but not for money (Alex, 2026-11-15: sweaters are the economy). A shift pays a
+## little petty cash, builds the boss's familiarity and trust (so they come to ask for sweaters) and
+## drops one random thing ("loot" in data/economy.json "jobs"). Off in the autotest but for the jobs
+## check (main.gd sets it), so talking to a boss doesn't start a job offer in other checks.
+static var on := true
 
 var main: Node
 var nudge := true # after Act 1, a goal that sends her to Giorgio (off in the autotest)
@@ -35,7 +38,7 @@ static func defs() -> Dictionary:
 	var out := {}
 	var all: Dictionary = Data.economy().get("jobs", {})
 	for k in all:
-		if not str(k).begins_with("_"):
+		if not str(k).begins_with("_") and all[k] is Dictionary: # "loot" is the drops' table, not a job
 			out[str(k)] = all[k]
 	return out
 
@@ -276,7 +279,8 @@ func finish() -> int:
 		var perk: Dictionary = d.get("perk", {})
 		for need in perk:
 			Game.add_need(str(need), float(perk[need]))
-		text = "Shift done at %s: +%dc. %s" % [str(d["name"]), pay, str(d.get("perk_text", ""))]
+		var got := drop()
+		text = "Shift done at %s: +%dc. %s%s" % [str(d["name"]), pay, str(d.get("perk_text", "")), ("  You found %s." % got) if got != "" else ""]
 		var v = main._villager(boss)
 		if v and v.position.distance_to(main.player.position) < 6.0:
 			main._say(v, _line(d, "done"))
@@ -295,6 +299,39 @@ func finish() -> int:
 	if full:
 		main._story_event_soon("shift_" + id) # a hook for scenes: "@trigger event shift_bakery"
 	return pay
+
+
+## A full shift's drop: one thing from data/economy.json "jobs" "loot", by weight. Things go in her
+## bag; a "piece" is furniture she can place from the catalogue for nothing (Game.flags["given"]).
+## Returns what she found, for the toast ("" if the table is empty). `roll` (0..1) is for tests.
+static func drop(roll := -1.0) -> String:
+	var table: Array = Data.economy().get("jobs", {}).get("loot", [])
+	var total := 0.0
+	for e in table:
+		total += float(e.get("weight", 1))
+	if total <= 0.0:
+		return ""
+	var r := (roll if roll >= 0.0 else randf()) * total
+	for e in table:
+		r -= float(e.get("weight", 1))
+		if r > 0.0:
+			continue
+		if e.has("piece"):
+			var id := str(e["piece"])
+			give_piece(id)
+			return "a %s for the house" % str(Catalog.ITEMS.get(id, {}).get("name", id)).to_lower()
+		var n: Array = e.get("n", [1, 1])
+		var k := randi_range(int(n[0]), int(n[1]))
+		Game.add_item(str(e["item"]), k)
+		return "%d %s" % [k, Hud.Slot.item_name(str(e["item"])).to_lower()]
+	return ""
+
+
+## A piece of furniture of hers to place for nothing (a job's drop).
+static func give_piece(id: String) -> void:
+	var g: Dictionary = (Game.flag("given", {}) as Dictionary).duplicate()
+	g[id] = int(g.get(id, 0)) + 1
+	Game.set_flag("given", g)
 
 
 ## Twice a second from main._process: picks an interrupted shift up again, ends one she walked

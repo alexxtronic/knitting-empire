@@ -49,8 +49,15 @@ static func wood_cost(id: String) -> int:
 	return int(ITEMS.get(id, {}).get("wood", 0))
 
 
-## Its price as the catalog shows it: "120c", or "120c or 24 wood".
+## How many of this piece she was given (a job's drop) and can place for nothing.
+static func given(id: String) -> int:
+	return int((Game.flag("given", {}) as Dictionary).get(id, 0))
+
+
+## Its price as the catalog shows it: "120c", or "120c or 24 wood" (or "Yours: 2 given").
 static func price_text(id: String) -> String:
+	if given(id) > 0:
+		return "Yours: %d given" % given(id)
 	var w := wood_cost(id)
 	var c := int(ITEMS.get(id, {}).get("price", 0))
 	return "%dc or %d wood" % [c, w] if w > 0 else "%dc" % c
@@ -58,6 +65,8 @@ static func price_text(id: String) -> String:
 
 ## Whether she can pay for it, in wood or in coins.
 static func affordable(id: String, coins: int, wood: int) -> bool:
+	if given(id) > 0:
+		return true
 	var w := wood_cost(id)
 	return coins >= int(ITEMS.get(id, {}).get("price", 0)) or (w > 0 and wood >= w)
 ## Ids that have a builder in build(). A furniture.json entry without one shows a magenta box.

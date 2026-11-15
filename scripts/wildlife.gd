@@ -568,24 +568,9 @@ func knit_floor(id: String) -> int:
 	return clampi(int(fibre_info(id).get("knit_floor", 1)), 1, 5)
 
 
-func fibre_worth() -> int:
-	var total := 0
-	for id in fibres():
-		total += Game.count(id) * int(fibre_info(id).get("price", 10))
-	return total
-
-
 func fibre_count() -> int:
 	var n := 0
 	for id in fibres():
 		n += Game.count(id)
 	return n
-
-
-## Ships every wild fibre in her bag; returns the coins.
-func ship_fibres() -> int:
-	var earned := fibre_worth()
-	for id in fibres():
-		Game.take_item(id, Game.count(id))
-	return earned
 

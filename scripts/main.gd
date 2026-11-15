@@ -37,6 +37,7 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 const WardrobeView = preload("res://scripts/wardrobe_view.gd")
+const SweaterSale = preload("res://scripts/sweater_sale.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
@@ -102,6 +103,7 @@ var _flock_t := 0.0
 var _flock_seen := false
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
+var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
 const MAILBOX_POS := Vector3(11.6, 0, 5.0) # beside the lane, just past the porch; its door faces the lane
 const MAILBOX_YAW := PI
@@ -299,6 +301,10 @@ func _ready() -> void:
 	hud.root.add_child(wardrobe_ui)
 	hud._place(wardrobe_ui, 0.5, 0.5, Vector2.ZERO)
 	hud.wardrobe_pressed.connect(func(): wardrobe_ui.open())
+	sale = SweaterSale.new()
+	sale.setup(hud, self)
+	hud.root.add_child(sale)
+	hud._place(sale, 0.5, 0.5, Vector2.ZERO)
 	minimap = Minimap.new()
 	minimap.main = self
 	hud.add_minimap(minimap)
@@ -374,6 +380,7 @@ func _ready() -> void:
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
+	Jobs.on = _autotest_dir == "" # and no boss offers a job but in the jobs check, which turns them on
 	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
 	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
@@ -1514,6 +1521,8 @@ func _input(e: InputEvent) -> void:
 				hud.letters.close()
 			elif wardrobe_ui.visible:
 				wardrobe_ui.close()
+			elif sale.visible:
+				sale.close()
 			elif mode == Mode.BUILD:
 				set_mode(Mode.LIVE)
 			else:
@@ -1857,53 +1866,25 @@ func _wear_price(rarity: int) -> int:
 	return int(round(_rosa_price() * float(Game.RARITY_PRICE[clampi(rarity, 1, 5) - 1])))
 
 
-## The rows to sell a villager one of her sweaters to wear (only those a sweater is fitted to; one a
-## day each): one row per design she carries, its index in Game.sweaters in the id.
-func _wear_sale_actions(v) -> Array:
-	if not Sweaters.fits(v.vid) or Game.count("sweater") == 0:
-		return []
-	if int(Game.flag("npc_sweater_day", {}).get(v.vid, 0)) == Game.day:
-		var done := _act("noop", "Already bought a sweater today", false)
-		done["group"] = "Sell a sweater to wear"
-		return [done]
-	Game.sync_sweaters()
-	var seen := {}
-	var rows := []
-	var mine: String = str(Game.flag("npc_sweaters", {}).get(v.vid, ""))
-	for i in Game.sweaters.size():
-		var did: String = str(Game.sweater_designs[i])
-		var key := "%s/%d" % [did, int(Game.sweaters[i])]
-		var d := Sweaters.design(did)
-		if seen.has(key) or d.is_empty() or did == mine:
-			continue
-		seen[key] = true
-		var row := _act("wearsell_%d" % i, "%s  %s  (%dc)" % [d["name"], "★".repeat(int(d["stars"])), _wear_price(int(Game.sweaters[i]))])
-		row["group"] = "Sell a sweater to wear"
-		rows.append(row)
-	return rows
-
-
-## She sells the villager her i-th sweater; they pay, put it on and keep it.
-func _sell_to_wear(v, i: int) -> bool:
-	if i < 0 or i >= Game.sweaters.size() or not Sweaters.fits(v.vid):
+## She sells the villager her i-th sweater for `price` (agreed in sweater_sale.gd); they pay and
+## keep it, and anyone with a sweater fitted to them puts it on.
+func sell_sweater_to(v, i: int, price: int) -> bool:
+	if i < 0 or i >= Game.sweaters.size():
 		return false
-	var price := _wear_price(int(Game.sweaters[i]))
 	var sw := Game.remove_sweater(i)
 	var d := Sweaters.design(str(sw.get("design", "")))
-	if d.is_empty():
-		return false
 	Game.coins += price
-	var bought: Dictionary = Game.flag("npc_sweaters", {}).duplicate()
-	bought[v.vid] = str(d["id"])
-	Game.set_flag("npc_sweaters", bought)
+	if Sweaters.fits(v.vid) and not d.is_empty():
+		var bought: Dictionary = Game.flag("npc_sweaters", {}).duplicate()
+		bought[v.vid] = str(d["id"])
+		Game.set_flag("npc_sweaters", bought)
 	var days: Dictionary = Game.flag("npc_sweater_day", {}).duplicate()
 	days[v.vid] = Game.day
 	Game.set_flag("npc_sweater_day", days)
 	Game.add_friendship(v.vid, 10)
 	Game.add_need("happiness", 4.0)
-	var said: Array = ["Oh, it's lovely! I'm putting it on right now.", "You made this? It's beautiful. I'll wear it straight home.", "Warm already. Here, %dc, and worth every one." % price]
-	_say(v, said[(Game.day + i) % said.size()])
-	hud.show_toast("Sold %s to %s for %dc. They're wearing it!" % [d["name"], v.title, price])
+	var wearing := Sweaters.fits(v.vid) and not d.is_empty()
+	hud.show_toast("Sold %s to %s for %dc.%s" % [str(d.get("name", "a sweater")), v.title, price, " They're wearing it!" if wearing else ""])
 	return true
 
 
@@ -2467,31 +2448,15 @@ func _finish_pet(s) -> void:
 ## send off for the plain price, paid at once. scripts/mail.gd adds them to the mailbox's menu.
 func ship_rows() -> Array:
 	var sw := Game.count("sweater")
-	var crops: int = Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
-	var wool := Game.count("wool")
-	return [
-		_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0),
-		_act("ship_crops", "Ship crops (%dc)" % crops, crops > 0),
-		_act("ship_wool", "Ship raw wool (%d × %dc)" % [wool, Game.SELL_PRICES["wool"]], wool > 0),
-	] + ([_act("ship_fibre", "Ship wild fibre (%d, %dc)" % [wildlife.fibre_count(), wildlife.fibre_worth()])] if wildlife.fibre_count() > 0 else [])
+	# only sweaters (Alex, 2026-11-15: sweaters are the economy): crops are to eat, wool and wild fibre to knit
+	return [_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0)]
 
 
 func _ship(kind: String) -> void:
 	var earned := 0
-	var items: Array = []
-	match kind:
-		"ship_sweater":
-			items = ["sweater"]
-		"ship_crops":
-			items = ["turnip", "pumpkin"]
-		"ship_wool":
-			items = ["wool"]
-		"ship_fibre":
-			earned = wildlife.ship_fibres()
-	for k in items:
-		var n := Game.count(k)
-		earned += Game.sweater_worth(int(Game.SELL_PRICES[k])) if k == "sweater" else n * int(Game.SELL_PRICES[k]) # sweaters sell by rarity
-		Game.take_item(k, n)
+	if kind == "ship_sweater": # sweaters sell by rarity, at the plain price: less than in person
+		earned = Game.sweater_worth(int(Game.SELL_PRICES["sweater"]))
+		Game.take_item("sweater", Game.count("sweater"))
 	if earned > 0:
 		Game.coins += earned
 		hud.show_toast("Shipped! +%dc" % earned)
@@ -2587,6 +2552,14 @@ func _begin_place(id: String) -> void:
 ## Pays for a new piece: a wooden one from her wood when she has enough (felled or bought from
 ## Steve), otherwise in coins. False if she can do neither.
 func _pay_for(id: String) -> bool:
+	if Catalog.given(id) > 0: # a job's drop: hers already
+		var g: Dictionary = (Game.flag("given", {}) as Dictionary).duplicate()
+		g[id] = int(g[id]) - 1
+		if int(g[id]) <= 0:
+			g.erase(id)
+		Game.set_flag("given", g)
+		hud.show_toast("Placed the %s you were given." % str(Catalog.ITEMS[id]["name"]).to_lower())
+		return true
 	var w := Catalog.wood_cost(id)
 	if w > 0 and Game.count("wood") >= w and Game.take_item("wood", w):
 		hud.show_toast("Built it from %d wood." % w)
@@ -4307,11 +4280,11 @@ func _job_checks() -> void:
 	autotest_jog = true
 	hud.hide_dialogue()
 	hud.tip_panel.visible = false
-	# jobs are parked (Jobs.on): nobody offers one and no menu has Work rows. The rest of this check
-	# turns them on for itself, so they still work the day they come back
+	# jobs are off in the autotest (Jobs.on, on in the game): nobody offers one and no menu has Work
+	# rows, so talking to a boss elsewhere starts no offer. The rest of this check turns them on
 	Game.set_flag("job", "bakery")
 	var parked_rows: Array = _villager_actions(_villager("giorgio")).filter(func(a): return str(a.get("group", "")) == "Work")
-	_check("jobs are parked: no job, no offer and no Work rows (on %s, job '%s', offer '%s', rows %d)" % [Jobs.on, Jobs.current(), Jobs.offer_scene("giorgio"), parked_rows.size()],
+	_check("jobs are off in the autotest: no job, no offer and no Work rows (on %s, job '%s', offer '%s', rows %d)" % [Jobs.on, Jobs.current(), Jobs.offer_scene("giorgio"), parked_rows.size()],
 		not Jobs.on and Jobs.current() == "" and Jobs.offer_scene("giorgio") == "" and parked_rows.is_empty())
 	Jobs.on = true
 	var defs := Jobs.defs()
@@ -5108,6 +5081,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=sale" in OS.get_cmdline_user_args(): # just the money: sweaters the only income, asking and haggling, jobs' drops
+		await _wait(1.5)
+		await _sale_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=empire" in OS.get_cmdline_user_args(): # just the empire: the 20-minute day, bright nights, lantern, needles, catching, requests
 		await _wait(1.5)
 		await _empire_checks()
@@ -5364,6 +5343,7 @@ func _autotest() -> void:
 	await _dog_checks()
 	await _wildlife_checks()
 	await _empire_checks()
+	await _sale_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
 	await _photo_checks()
@@ -6771,10 +6751,12 @@ func _wildlife_checks() -> void:
 	_check("knitting with lynx fluff, a Common knit comes out at least %s (%s), from 2 wool and the fluff" % [KnitGame.rarity_name(wildlife.knit_floor("lynx_fibre")), KnitGame.rarity_name(got)],
 		got >= wildlife.knit_floor("lynx_fibre") and Game.count("wool") == keep["wool"] and Game.count("lynx_fibre") == 0)
 	Game.add_item("fox_fibre", 2)
-	var worth := wildlife.fibre_worth()
 	var c0 := Game.coins
+	var ship_ids: Array = ship_rows().map(func(a): return str(a["id"]))
 	_ship("ship_fibre")
-	_check("the mailbox ships wild fibre (+%dc)" % (Game.coins - c0), worth > 0 and Game.coins - c0 == worth and wildlife.fibre_count() == 0)
+	_check("wild fibre can't be sold, only knitted (mailbox rows %s, coins +%d, fibre kept %d)" % [str(ship_ids), Game.coins - c0, Game.count("fox_fibre")],
+		ship_ids == ["ship_sweater"] and Game.coins == c0 and Game.count("fox_fibre") == 2)
+	Game.take_item("fox_fibre", 2)
 	Game.worn_quality = keep["q"]
 	Game.worn_design = keep["d"]
 	Game.wardrobe = keep["w"]
@@ -6795,9 +6777,124 @@ func _wildlife_checks() -> void:
 	wildlife.clear()
 
 
-## after dark; Rosa's better needles lift every knit; played as the dog, a right click barks, a bark fills
+## Sweaters are the economy (Alex, 2026-11-15): the mailbox and Rosa buy nothing but sweaters, jobs
+## pay petty cash; anyone in town may be looking for a sweater, some days not; she sets a price and
+## a meter shows how likely they are to say yes; too dear and they turn it down or come back with
+## their own; three refusals and they walk away; a job's drop goes in her bag, or is a piece of
+## furniture she places for nothing. Saves 61_sale_haggle.png.
+func _sale_checks() -> void:
+	var day0 := Game.day
+	var flags0: Dictionary = Game.flags.duplicate(true)
+	var coins_start := Game.coins
+	var inv0: Dictionary = Game.inv.duplicate(true)
+	var sw0: Array = Game.sweaters.duplicate()
+	var sd0: Array = Game.sweater_designs.duplicate()
+	var friends0: Dictionary = Game.friends.duplicate(true)
+	hud.hide_dialogue()
+	Game.add_item("turnip", 3)
+	Game.add_item("wool", 3)
+	var ship_ids: Array = ship_rows().map(func(a): return str(a["id"]))
+	var rosa_ids: Array = _villager_actions(_villager("rosa")).map(func(a): return str(a["id"]))
+	var pays: Array = Jobs.defs().values().map(func(d): return int(d["pay"]))
+	_check("only sweaters earn money: the mailbox ships %s, Rosa's menu has no crops to buy (%s), and a job pays petty cash (%s)" % [str(ship_ids), str(rosa_ids.has("sell_crops")), str(pays)],
+		ship_ids == ["ship_sweater"] and not rosa_ids.has("sell_crops") and rosa_ids.has("sell_sweater") and pays.all(func(p): return p <= 15))
+	# some days they're not looking
+	var wren := _villager("wren")
+	Game.friend("wren")["familiarity"] = 0
+	Game.set_flag("npc_sweater_day", {})
+	Game.add_sweater(1, "")
+	Game.add_sweater(3, "")
+	var no_day := -1
+	var yes_day := -1
+	for d in range(day0, day0 + 60):
+		Game.day = d
+		if no_day < 0 and not SweaterSale.looking("wren"):
+			no_day = d
+		if yes_day < 0 and SweaterSale.looking("wren"):
+			yes_day = d
+	Game.day = no_day
+	var ask_row: Array = sale.rows_for(wren)
+	_villager_action(wren, "sale_ask")
+	var after_no: Array = sale.rows_for(wren)
+	_check("asked on a day she isn't looking, Wren says no and the panel stays shut ('%s' -> '%s', panel %s, %d%% chance)" % [str(ask_row[0]["label"]) if not ask_row.is_empty() else "?", str(after_no[0]["label"]) if not after_no.is_empty() else "?", sale.visible, int(SweaterSale.yes_chance("wren") * 100)],
+		not ask_row.is_empty() and ask_row[0]["id"] == "sale_ask" and not after_no.is_empty() and not after_no[0]["enabled"] and not sale.visible)
+	hud.hide_dialogue()
+	# a day she is: the panel, the meter, and haggling
+	Game.day = yes_day
+	_villager_action(wren, "sale_ask")
+	await _wait(0.4)
+	var rare := Game.sweaters.find(3)
+	sale.pick(rare)
+	var fair := sale.fair(3)
+	var res := sale.reserve("wren", 3)
+	var at_fair := sale.chance("wren", 3, fair)
+	sale.set_price(int(res * 1.1))
+	await _wait(0.3)
+	await _shot("61_sale_haggle.png")
+	var at_dear := sale.chance("wren", 3, int(fair * 2))
+	_check("on a day she's looking, the panel opens on her best sweater at Rosa's price, and the meter falls as the price rises (open %s, fair %dc: %d%%, her top %dc, at %dc: %d%%)" % [sale.visible, fair, int(at_fair * 100), res, int(fair * 2), int(at_dear * 100)],
+		sale.visible and at_fair > at_dear and at_fair > 0.3 and at_dear < 0.2 and absf(sale.chance("wren", 3, res) - 0.5) < 0.01)
+	sale.force_roll = 0.99 # whatever the meter says, this one is turned down
+	sale.set_price(int(res * 3))
+	var r1 := sale.offer()
+	sale.set_price(int(res * 1.15))
+	var r2 := sale.offer()
+	var countered := sale.counter
+	var c0 := Game.coins
+	var n0 := Game.sweaters.size()
+	sale.take_counter()
+	sale.force_roll = -1.0
+	hud.hide_dialogue()
+	_check("far too dear she turns it down ('%s'); a little dear and she names her own price ('%s', %dc under her %dc); taking it sells the Rare (+%dc, bag %d -> %d, panel %s, '%s')" % [r1, r2, countered, res, Game.coins - c0, n0, Game.sweaters.size(), sale.visible, str(sale.rows_for(wren)[0]["label"]) if not sale.rows_for(wren).is_empty() else "-"],
+		r1 == "no" and r2 == "counter" and countered > 0 and countered < int(res * 1.15) and Game.coins - c0 == countered and Game.sweaters.size() == n0 - 1 and not Game.sweaters.has(3) and not sale.visible and SweaterSale.bought_today("wren"))
+	# three refusals and they walk away for the day
+	var stv := _villager("steve")
+	var asked: Dictionary = (Game.flag("sweater_asked", {}) as Dictionary).duplicate()
+	asked["steve"] = {"day": Game.day, "yes": true, "tries": 0}
+	Game.set_flag("sweater_asked", asked)
+	_villager_action(stv, "sale_haggle")
+	sale.force_roll = 0.99
+	var outs := []
+	for i in 3:
+		sale.set_price(sale.fair(1) * 4)
+		outs.append(sale.offer())
+	sale.force_roll = -1.0
+	hud.hide_dialogue()
+	var done_row: Array = sale.rows_for(stv)
+	_check("turned down three times, Steve walks away for the day (%s, panel %s, '%s')" % [str(outs), sale.visible, str(done_row[0]["label"]) if not done_row.is_empty() else "?"],
+		outs[-1] == "gone" and not sale.visible and not done_row.is_empty() and not done_row[0]["enabled"])
+	# a job's drop
+	Game.flags.erase("given")
+	var w0 := Game.count("wool")
+	var got_wool := Jobs.drop(0.0) # the first in the table: wool
+	var table: Array = Data.economy()["jobs"]["loot"]
+	var total := 0.0
+	var before := 0.0
+	for e in table:
+		total += float(e["weight"])
+	for e in table:
+		if e.has("piece"):
+			break
+		before += float(e["weight"])
+	var got_piece := Jobs.drop((before + 0.5) / total)
+	var piece: String = (Game.flag("given", {}) as Dictionary).keys()[0] if not (Game.flag("given", {}) as Dictionary).is_empty() else ""
+	var label := Catalog.price_text(piece) if piece != "" else ""
+	var coins1 := Game.coins
+	var paid := _pay_for(piece) if piece != "" else false
+	_check("a job drops wool ('%s', +%d) or a piece for the house ('%s': the catalogue says '%s', placing it costs nothing: %s, coins %d -> %d, left %d)" % [got_wool, Game.count("wool") - w0, got_piece, label, paid, coins1, Game.coins, Catalog.given(piece)],
+		Game.count("wool") > w0 and piece != "" and label.begins_with("Yours") and paid and Game.coins == coins1 and Catalog.given(piece) == 0)
+	Game.flags = flags0
+	Game.day = day0
+	Game.coins = coins_start
+	Game.inv = inv0
+	Game.sweaters = sw0
+	Game.sweater_designs = sd0
+	Game.friends = friends0
+
+
 ## The knitting empire's loop (Alex, 2026-11-15; docs/DIRECTION.md): a day is 20 real minutes, 14 of
 ## day and 6 of night; the darkest night still has light to see by; Steve's lantern lights itself
+## after dark; Rosa's better needles lift every knit; played as the dog, a right click barks, a bark fills
 ## a wild animal's fright meter and it bolts, at full fright it follows him, three at most, and he
 ## leads them home to a pen that holds four; she combs them there, a second pen makes room, the dog
 ## can be sent from Nora's side, and another animal turns up in the wild later; a local asks for a
@@ -7091,10 +7188,38 @@ func _empire_checks() -> void:
 		wild_now.is_empty() and wild_later.size() == 1 and again.size() == 2 and again.all(func(a): return a.species == "rabbit"))
 	wildlife.clear()
 	Game.sheep_count = sheep0
-	# a local's request: Sabrina wants angora
+	# a local's request: nobody asks until they like her; then Steve wants a better-than-plain one
 	Game.flags.erase("request")
 	Game.flags.erase("requests_done")
+	Game.flags.erase("requests_filled")
 	Game.flags.erase("request_day")
+	var req_friends0: Dictionary = Game.friends.duplicate(true)
+	for vid in Game.friends:
+		Game.friends[vid]["familiarity"] = 0
+	var cold: Dictionary = empire.due()
+	Game.friend("steve")["familiarity"] = 20 # one heart
+	var warm: Dictionary = empire.due()
+	var stv := _villager("steve")
+	_villager_action(stv, "request_ask")
+	hud.hide_dialogue()
+	var want_row: Array = _villager_actions(stv).filter(func(a): return str(a.get("group", "")) == "Request")
+	Game.add_sweater(1, "")
+	Game.add_sweater(3, "")
+	var n_sw := Game.sweaters.size()
+	var give1: Array = _villager_actions(stv).filter(func(a): return a["id"] == "request_give")
+	c0 = Game.coins
+	var pay1: int = empire.payout()
+	_villager_action(stv, "request_give")
+	hud.hide_dialogue()
+	_check("nobody asks for a sweater until they like her (%s); at a heart Steve asks for an Uncommon or better ('%s', row '%s'), and the plainest in her bag that will do pays %dc (+%d, bag %d -> %d, Common kept %s)" % [str(cold.get("id", "none")), str(warm.get("id", "")), str(want_row[0]["label"]) if not want_row.is_empty() else "?", pay1, Game.coins - c0, n_sw, Game.sweaters.size(), Game.sweaters.has(1)],
+		cold.is_empty() and str(warm.get("id", "")) == "steve_warm" and not give1.is_empty() and pay1 >= 140 and Game.coins - c0 == pay1 and Game.sweaters.size() == n_sw - 1 and Game.sweaters.has(1) and empire.filled() == ["steve_warm"])
+	Game.remove_sweater(Game.sweaters.find(1))
+	# Sabrina wants angora, once she likes her (the plain-wool ones before it filled)
+	Game.set_flag("requests_filled", ["steve_warm", "wren_first", "barbara_rain", "giorgio_good"])
+	Game.set_flag("requests_done", 0)
+	Game.flags.erase("request_day")
+	Game.friend("sabrina")["familiarity"] = 40
+	Game.friend("steve")["familiarity"] = 0 # his thanks brought him to two hearts: his fox request would come next
 	var sab := _villager("sabrina")
 	var due: Dictionary = empire.due()
 	var ask_rows: Array = _villager_actions(sab).filter(func(a): return a["id"] == "request_ask")
@@ -7115,12 +7240,15 @@ func _empire_checks() -> void:
 	hud.hide_dialogue()
 	_check("Sabrina asks for an angora sweater (due %s/%s, she glows %s, row %d): the goal sends her for a rabbit ('%s'), the one she knits with angora is put by (grade %d, bag %d -> %d, '%s'), and handing it over pays %dc (+%d)" % [str(due.get("who", "")), str(due.get("fibre", "")), not ask_rows.is_empty(), ask_rows.size(), goal1, made, s0, Game.sweaters.size(), goal2, pay, Game.coins - c0],
 		str(due.get("who", "")) == "sabrina" and not ask_rows.is_empty() and goal1.contains("rabbit") and made >= 2 and Game.sweaters.size() == s0 and goal2.contains("Sabrina")
-		and not give_rows.is_empty() and pay >= 180 and Game.coins - c0 == pay and empire.request().is_empty() and empire.requests_done() == 1)
+		and not give_rows.is_empty() and pay >= 180 and Game.coins - c0 == pay and empire.request().is_empty() and empire.filled().has("sabrina_angora"))
 	var soon: Dictionary = empire.due()
 	Game.day += 2
+	var not_yet: Dictionary = empire.due()
+	Game.friend("barbara")["familiarity"] = 40
 	var next: Dictionary = empire.due()
-	_check("the next local asks a couple of days later (none the same day: %s; then %s wants %s)" % [soon.is_empty(), str(next.get("who", "")), str(next.get("fibre", ""))],
-		soon.is_empty() and str(next.get("who", "")) == "barbara")
+	_check("the next local asks a couple of days later, once they like her (none the same day: %s; Barbara at no hearts: %s; at two she wants %s)" % [soon.is_empty(), str(not_yet.get("id", "nobody")), str(next.get("fibre", ""))],
+		soon.is_empty() and not_yet.is_empty() and str(next.get("id", "")) == "barbara_raccoon")
+	Game.friends = req_friends0
 	# Rosa has only so much wool a day
 	Game.flags.erase("wool_bought")
 	Game.coins = 1000
@@ -7264,15 +7392,23 @@ func _sweater_checks() -> void:
 			_check("%s is in town to buy a sweater" % pair[0], false)
 			continue
 		Game.add_sweater(int(pair[2]), str(pair[1]))
-		var offer: Array = _villager_actions(v).filter(func(a): return str(a["id"]).begins_with("wearsell_") and str(a["label"]).begins_with(str(Sweaters.design(pair[1])["name"])))
+		# they're looking today (the haggle itself is _sale_checks'), and say yes to the fair price
+		var asked: Dictionary = (Game.flag("sweater_asked", {}) as Dictionary).duplicate()
+		asked[v.vid] = {"day": Game.day, "yes": true, "tries": 0}
+		Game.set_flag("sweater_asked", asked)
+		var offer: Array = _villager_actions(v).filter(func(a): return str(a["id"]) == "sale_haggle")
 		var coins0 := Game.coins
 		var n0 := Game.count("sweater")
 		if not offer.is_empty():
-			_villager_action(v, str(offer[0]["id"]))
+			_villager_action(v, "sale_haggle")
+			sale.pick(Game.sweater_designs.find(str(pair[1])))
+			sale.force_roll = 0.0
+			sale.offer()
+			sale.force_roll = -1.0
 		await _wait(0.3)
 		_check("%s buys %s from her and puts it on (offered %d, coins %d→%d, sweaters %d→%d, wearing '%s', %d points tucked)" % [pair[0], pair[1], offer.size(), coins0, Game.coins, n0, Game.count("sweater"), Sweaters.worn(v.body), Sweaters.tucked_points(v.body)],
 			offer.size() == 1 and Game.coins > coins0 and Game.count("sweater") == n0 - 1 and Sweaters.worn(v.body) == pair[1] and Sweaters.tucked_points(v.body) > 1000)
-		_check("%s buys only one a day" % pair[0], _villager_actions(v).filter(func(a): return str(a["id"]).begins_with("wearsell_")).is_empty())
+		_check("%s buys only one a day" % pair[0], _villager_actions(v).filter(func(a): return str(a["id"]).begins_with("sale_")).is_empty() or Game.count("sweater") == 0)
 		hud.hide_dialogue()
 		var vf: Vector3 = v.body.global_transform.basis.z.normalized()
 		var vm := v.global_position + Vector3(0, 1.05, 0)
@@ -9293,10 +9429,6 @@ func _rosa_price() -> int:
 	return int(round(Game.market_price("sweater") * (1.0 + 0.04 * Game.hearts("rosa"))))
 
 
-func _crop_value() -> int:
-	return Game.count("turnip") * Game.market_price("turnip") + Game.count("pumpkin") * Game.market_price("pumpkin")
-
-
 ## Rosa's Yarn Barn prices (wool, sheep), a little less for every heart.
 ## Rosa only has so much wool a day (data/economy.json "store" wool_packs_a_day), so buying it in
 ## can't replace her own animals. Game.flags["wool_bought"] is [day, packs bought that day].
@@ -9371,8 +9503,6 @@ func _villager_actions(v) -> Array:
 		"rosa": # the Yarn Barn, and some mornings the market stall
 			var sw := Game.count("sweater")
 			acts.append(_act("sell_sweater", "Sell sweaters  (%d, %dc)" % [sw, Game.sweater_worth(_rosa_price())], sw > 0))
-			var crops := _crop_value()
-			acts.append(_act("sell_crops", "Sell crops  (%dc)" % crops, crops > 0))
 			var wp := _yarn_price(Game.WOOL_PACK_PRICE)
 			if _wool_packs_left() > 0:
 				acts.append(_act("buy_wool", "Buy 3 wool  (%dc · %d left today)" % [wp, _wool_packs_left()], Game.coins >= wp))
@@ -9434,7 +9564,7 @@ func _villager_actions(v) -> Array:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
-	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
+	acts.append_array(sale.rows_for(v)) # ask if they want a sweater, and haggle (sweater_sale.gd)
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
 	else:
@@ -9471,8 +9601,8 @@ func _villager_action(v, id: String) -> void:
 	if id.begins_with("job_"):
 		jobs.action(v, id)
 		return
-	if id.begins_with("wearsell_"):
-		_sell_to_wear(v, int(id.trim_prefix("wearsell_")))
+	if id == "sale_ask" or id == "sale_haggle":
+		sale.ask(v)
 		return
 	if id.begins_with("buy_tool_") or id.begins_with("buy_seeds_"):
 		_buy_from_store(v, id)
@@ -9517,14 +9647,6 @@ func _villager_action(v, id: String) -> void:
 				var praise: Array = ["Oh, these are gorgeous!", "Lovely work, as always.", "The city folks will snap these up!"]
 				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], worth, n, "s" if n > 1 else ""])
 				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", worth])
-		"sell_crops":
-			var value := _crop_value()
-			if value > 0:
-				Game.take_item("turnip", Game.count("turnip"))
-				Game.take_item("pumpkin", Game.count("pumpkin"))
-				Game.coins += value
-				_say(v, "Fresh from Birchfield! %dc it is." % value)
-				hud.show_toast("Sold your crops for %dc!" % value)
 		"buy_wool":
 			if _wool_packs_left() > 0 and Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
 				Game.set_flag("wool_bought", [Game.day, _wool_packs_bought() + 1])

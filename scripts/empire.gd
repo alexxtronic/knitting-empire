@@ -205,28 +205,66 @@ func requests_done() -> int:
 	return int(Game.flag("requests_done", 0))
 
 
+## The ids of the requests she has filled. A save from before they had ids (and before they waited
+## on hearts) kept only a count: the first that many fibre requests, in the list's order.
+func filled() -> Array:
+	var f: Variant = Game.flag("requests_filled", null)
+	if f is Array:
+		return f
+	var out := []
+	for d in request_defs():
+		if out.size() >= requests_done():
+			break
+		if d.has("fibre"):
+			out.append(str(d.get("id", "")))
+	return out
+
+
+const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
+
+
+## The plainest sweater in her bag at least `rarity` good (its index in Game.sweaters), or -1.
+func sweater_for(rarity: int) -> int:
+	var best := -1
+	for i in Game.sweaters.size():
+		var q := int(Game.sweaters[i])
+		if q >= rarity and (best < 0 or q < int(Game.sweaters[best])):
+			best = i
+	return best
+
+
+## How good the sweater she'd hand over is (0: none yet): the one put by for a fibre request, or
+## the plainest in her bag that will do for a rarity one.
+func _made(r: Dictionary) -> int:
+	if r.has("rarity"):
+		var i := sweater_for(int(r["rarity"]))
+		return int(Game.sweaters[i]) if i >= 0 else 0
+	return int(r.get("made", 0))
+
+
 ## True once the story lets locals ask: Act 1 is behind her (or the farm never had it).
 func open() -> bool:
 	return Game.flag("act1_done") == true or Game.flag("story_farm") != true
 
 
-## The request waiting to be asked for ({} if none is due): the next in the list, once the last
-## one is filled and a day or two has passed.
+## The request waiting to be asked for ({} if none is due): the first in the list not yet filled
+## whose villager likes her enough (its "hearts"), once the last one is filled and a day or two
+## has passed (Alex, 2026-11-15: a good relationship brings requests, and a request pays a bonus).
 func due() -> Dictionary:
-	if not open() or not request().is_empty():
+	if not open() or not request().is_empty() or Game.day < int(Game.flag("request_day", 0)):
 		return {}
-	var defs := request_defs()
-	var i := requests_done()
-	if i >= defs.size() or Game.day < int(Game.flag("request_day", 0)):
-		return {}
-	return defs[i]
+	var done := filled()
+	for d in request_defs():
+		if not done.has(str(d.get("id", ""))) and Game.hearts(str(d["who"])) >= int(d.get("hearts", 0)):
+			return d
+	return {}
 
 
 ## Whether `vid` has something to say about a request: they want to ask, or she has their sweater.
 func wants(vid: String) -> bool:
 	var r := request()
 	if not r.is_empty():
-		return str(r.get("who", "")) == vid and int(r.get("made", 0)) > 0
+		return str(r.get("who", "")) == vid and _made(r) > 0
 	return str(due().get("who", "")) == vid
 
 
@@ -251,8 +289,10 @@ func rows_for(v) -> Array:
 		if str(d.get("who", "")) == v.vid:
 			rows.append(_row("request_ask", "Ask what %s wanted" % v.title))
 	elif str(r.get("who", "")) == v.vid:
-		if int(r.get("made", 0)) > 0:
+		if _made(r) > 0:
 			rows.append(_row("request_give", "Give %s the sweater  (+%dc)" % [v.title, payout()]))
+		elif r.has("rarity"):
+			rows.append(_row("noop", "A %s sweater or better  (+%dc)" % [RARITY[clampi(int(r["rarity"]), 1, 5) - 1], int(r["pay"])], false))
 		else:
 			rows.append(_row("noop", "A sweater of %s  (find a %s, comb it, knit with its fibre)" % [_fibre_name(str(r["fibre"])).to_lower(), _animal_of(str(r["fibre"]))], false))
 	return rows
@@ -267,11 +307,22 @@ func ask(v) -> void:
 	var d := due()
 	if str(d.get("who", "")) != v.vid:
 		return
-	var fibre := str(d["fibre"])
-	Game.set_flag("request", {"i": requests_done(), "who": v.vid, "fibre": fibre, "pay": int(d.get("pay", 200)), "made": 0, "design": ""})
+	var r := {"id": str(d.get("id", "")), "who": v.vid, "pay": int(d.get("pay", 200)), "made": 0, "design": ""}
+	if d.has("rarity"):
+		r["rarity"] = clampi(int(d["rarity"]), 1, 5)
+	else:
+		r["fibre"] = str(d["fibre"])
+	Game.set_flag("request", r)
 	main._say(v, str(d.get("ask", "Could you knit me something special?")))
 	_show_goal()
-	main.hud.show_toast("New request: a %s sweater for %s.  (%dc)" % [_fibre_name(fibre).to_lower(), v.title, int(d.get("pay", 200))])
+	main.hud.show_toast("New request: %s for %s.  (%dc)" % [_what(r), v.title, int(d.get("pay", 200))])
+
+
+## What a request asks for, in words: "a fox fluff sweater", "a Rare sweater or better".
+func _what(r: Dictionary) -> String:
+	if r.has("rarity"):
+		return "a %s sweater or better" % RARITY[clampi(int(r["rarity"]), 1, 5) - 1]
+	return "a %s sweater" % _fibre_name(str(r["fibre"])).to_lower()
 
 
 ## What handing it over pays: the price agreed, and a tenth more for each grade above what the
@@ -280,7 +331,8 @@ func payout() -> int:
 	var r := request()
 	if r.is_empty():
 		return 0
-	var extra := maxi(0, int(r.get("made", 0)) - int(main.wildlife.knit_floor(str(r["fibre"]))))
+	var least := int(r["rarity"]) if r.has("rarity") else int(main.wildlife.knit_floor(str(r["fibre"])))
+	var extra := maxi(0, _made(r) - least)
 	return int(round(int(r["pay"]) * (1.0 + 0.1 * extra)))
 
 
@@ -288,7 +340,7 @@ func payout() -> int:
 ## her bag and put by for them. True if it was.
 func knitted(fibre: String, rarity: int) -> bool:
 	var r := request()
-	if r.is_empty() or str(r.get("fibre", "")) != fibre or int(r.get("made", 0)) > 0 or Game.sweaters.is_empty():
+	if r.is_empty() or r.has("rarity") or str(r.get("fibre", "")) != fibre or int(r.get("made", 0)) > 0 or Game.sweaters.is_empty():
 		return false
 	var sw: Dictionary = Game.remove_sweater(Game.sweaters.size() - 1)
 	r = r.duplicate()
@@ -302,24 +354,34 @@ func knitted(fibre: String, rarity: int) -> bool:
 ## She hands it over: the coins, their thanks, and they put it on.
 func give(v) -> bool:
 	var r := request()
-	if r.is_empty() or str(r.get("who", "")) != v.vid or int(r.get("made", 0)) <= 0:
+	if r.is_empty() or str(r.get("who", "")) != v.vid or _made(r) <= 0:
 		return false
 	var coins := payout()
-	Game.coins += coins
 	var design := str(r.get("design", ""))
+	if r.has("rarity"): # the plainest sweater in her bag that will do
+		design = str(Game.remove_sweater(sweater_for(int(r["rarity"]))).get("design", ""))
+	Game.coins += coins
 	if Sweaters.fits(v.vid) and not Sweaters.design(design).is_empty():
 		var worn: Dictionary = (Game.flag("npc_sweaters", {}) as Dictionary).duplicate()
 		worn[v.vid] = design
 		Game.set_flag("npc_sweaters", worn)
 	Game.add_friendship(v.vid, 20)
 	Game.add_need("happiness", 12.0)
-	var d: Dictionary = request_defs()[int(r.get("i", 0))] if int(r.get("i", 0)) < request_defs().size() else {}
+	var d: Dictionary = {}
+	for e in request_defs():
+		if str(e.get("id", "")) == str(r.get("id", "")):
+			d = e
+		elif not r.has("id") and str(e.get("who", "")) == str(r.get("who", "")) and str(e.get("fibre", "")) == str(r.get("fibre", "-")):
+			d = e # taken before requests had ids
+	var done := filled().duplicate()
+	done.append(str(d.get("id", r.get("id", ""))))
+	Game.set_flag("requests_filled", done)
 	Game.flags.erase("request")
 	Game.set_flag("requests_done", requests_done() + 1)
 	Game.set_flag("request_day", Game.day + int(_req.get("every_days", 2)))
 	main.set_goal("")
 	main._say(v, str(d.get("thanks", "It's perfect. Thank you!")))
-	main.hud.show_toast("%s paid %dc for the %s sweater." % [v.title, coins, _fibre_name(str(r["fibre"])).to_lower()])
+	main.hud.show_toast("%s paid %dc for %s." % [v.title, coins, _what(r).replace(" or better", "")])
 	main.story.trigger("event", "request_done")
 	return true
 
@@ -331,7 +393,9 @@ func _show_goal() -> void:
 		return
 	var v = main._villager(str(r["who"]))
 	var who: String = v.title if v else str(r["who"]).capitalize()
-	if int(r.get("made", 0)) > 0:
-		main.set_goal("Take %s the %s sweater" % [who, _fibre_name(str(r["fibre"])).to_lower()], Vector2(v.position.x, v.position.z) if v else null)
+	if _made(r) > 0:
+		main.set_goal("Take %s %s" % [who, _what(r).replace(" or better", "")], Vector2(v.position.x, v.position.z) if v else null)
+	elif r.has("rarity"):
+		main.set_goal("Knit %s %s" % [who, _what(r)])
 	else:
 		main.set_goal("Find a %s and knit %s a sweater with its %s" % [_animal_of(str(r["fibre"])), who, _fibre_name(str(r["fibre"])).to_lower()])
