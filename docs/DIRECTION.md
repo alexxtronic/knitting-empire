@@ -9,7 +9,7 @@ A Sims-like life on a farm with a Pokémon-like hunt: go out with your dog, find
 ## The core loop
 
 1. **Find animals.** Common ones (sheep, rabbits) live by the farm. Rare ones live far out: the swamp, the foothills, the far meadows, the mountains' foot. The rarer, the fewer and the further.
-2. **Round them up with the dog.** Play the dog and bark (Space). Each bark frightens the animals nearby and fills their fright meter; they bolt, so he has to keep after them. At full fright an animal gives in and follows the dog, up to three at a time. He leads them home to a pen. A pen holds four animals, and she can build as many pens as she can afford.
+2. **Round them up with the dog.** Play the dog and bark (right click). Each bark frightens the animals nearby and fills their fright meter; they bolt, so he has to keep after them. At full fright an animal gives in and follows the dog, up to three at a time. He leads them home to a pen. A pen holds four animals, and she can build as many pens as she can afford.
 3. **Comb or shear them** for fibre, every few days.
 4. **Knit.** The rhythm game sets the sweater's quality. Rare fibre and better needles lift the least it can be.
 5. **Sell.** Rosa and the mailbox (it ships what she makes) pay a plain price. A local's request for a particular fibre pays far more. Later: online orders and Nora's own shop.
@@ -36,7 +36,7 @@ Two rules sit over all of it:
 | The darkest night still has light to see by | `scripts/sky_bodies.gd` (moonlight floor), `scripts/lighting.gd` (night fill) |
 | A lantern from Steve: after dark she carries it in her left hand and it lights her way | `scripts/empire.gd`, `data/economy.json` "gear", `art/world_assets/lantern/` |
 | Better needles from Rosa, a step at a time: steel, rosewood, silver | `scripts/empire.gd`, `data/economy.json` "gear" |
-| Space barks as the dog; a bark fills a wild animal's fright meter; at full fright it follows him home, three at a time | `scripts/wildlife.gd`, `scripts/wild_animal.gd`, `scripts/dog.gd`, `main.dog_bark()` |
+| A right click barks as the dog; a bark fills a wild animal's fright meter; at full fright it follows him home, three at a time | `scripts/wildlife.gd`, `scripts/wild_animal.gd`, `scripts/dog.gd`, `main.dog_bark()` |
 | A pen holds four animals, and every closed, gated patch of fence is a pen; Lars's barn adds four places while its rent is paid | `homestead.pens`, `wildlife.pen_capacity()`, `data/wildlife.json` "pen_size", "barn_stalls" |
 | Locals ask for a sweater of a rare fibre; a goal sends her to find the animal; delivery pays well | `scripts/empire.gd`, `data/requests.json` |
 | Jobs parked | `Jobs.on` |

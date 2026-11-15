@@ -13,7 +13,7 @@ extends Node3D
 ##
 ## Birds peck about in small flocks and fly off when she or the dog comes near (scripts/bird.gd).
 ##
-## Catching (Alex, 2026-11-15: the game's core loop): play the dog (Tab) and bark (Space). A bark
+## Catching (Alex, 2026-11-15: the game's core loop): play the dog (Tab) and bark (right click). A bark
 ## frightens every wild animal within BARK_RANGE: each has a fright meter, and the rarer it is the
 ## more barks fill it (`barks` in the data); it bolts, so he has to keep after it, and it calms
 ## down if he lets up. At full fright it gives in and follows the dog, up to `max_herd` (three) at

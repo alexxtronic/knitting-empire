@@ -1484,11 +1484,7 @@ func _input(e: InputEvent) -> void:
 		KEY_V:
 			fps.enter()
 		KEY_SPACE:
-			if dog and dog.controlled: # as the dog, Space barks (and the camera comes back to him)
-				dog_bark()
-				_set_cam_lock(true)
-			else:
-				_set_cam_lock(not cam_follow, true)
+			_set_cam_lock(not cam_follow, true)
 		KEY_B:
 			set_mode(Mode.LIVE if mode == Mode.BUILD else Mode.BUILD)
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
@@ -1611,11 +1607,11 @@ func toggle_dog(on = null) -> void:
 	dog.path = []
 	if dog.controlled:
 		player.walk([])
-		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, %s to bark at wild animals, Tab to go back to Nora." % OS.get_keycode_string(Keys.key_for(KEY_SPACE, ["world"])))
+		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, right-click to bark at wild animals, Tab to go back to Nora.")
 	_set_cam_lock(true)
 
 
-## The dog barks (Space while you play him, or by himself when sent to round an animal up): the
+## The dog barks (a right click while you play him, or by himself when sent to round an animal up): the
 ## sound, and every wild animal near him takes fright (wildlife.gd). False if he has no breath yet.
 func dog_bark() -> bool:
 	if dog == null or not dog.bark():
@@ -1748,6 +1744,10 @@ var _rclick_from := Vector2(-999, -999)
 ## ground, walking there and (with her hoe) digging a bed. Beds are only ever dug from here, so a
 ## plain click never turns the lawn over by accident.
 func _right_click(mpos: Vector2) -> void:
+	if dog and dog.controlled: # as the dog, a right click barks (and the camera comes back to him)
+		dog_bark()
+		_set_cam_lock(true)
+		return
 	var t = _ray_target(mpos)
 	if t != null:
 		var acts := _actions_for(t)
@@ -6727,7 +6727,7 @@ func _wildlife_checks() -> void:
 	wildlife.clear()
 
 
-## after dark; Rosa's better needles lift every knit; played as the dog, Space barks, a bark fills
+## after dark; Rosa's better needles lift every knit; played as the dog, a right click barks, a bark fills
 ## The knitting empire's loop (Alex, 2026-11-15; docs/DIRECTION.md): a day is 20 real minutes, 14 of
 ## day and 6 of night; the darkest night still has light to see by; Steve's lantern lights itself
 ## a wild animal's fright meter and it bolts, at full fright it follows him, three at most, and he
@@ -6866,14 +6866,20 @@ func _empire_checks() -> void:
 	hud.hide_dialogue()
 	await _wait(0.5)
 	var barks0: int = dog.barks
-	await _key_tap(Keys.key_for(KEY_SPACE, ["world"]))
+	var fm0 = rabbit.get_node_or_null("Fright")
+	var waiting: bool = fm0 != null and fm0.visible and rabbit.fright <= 0.0 # the empty meter, up as soon as he is near
+	await _key_tap(Keys.key_for(KEY_SPACE, ["world"])) # Space is the camera's again: no bark
+	await _wait(0.1)
+	var space_barks: int = dog.barks - barks0
+	_right_click(get_viewport().get_visible_rect().size * 0.5)
 	await _wait(0.1)
 	var fright1: float = rabbit.fright
 	var bolted: bool = rabbit.fleeing > 0.0
 	var meter: bool = rabbit.get_node_or_null("Fright") != null and rabbit.get_node("Fright").visible
+	var word: String = (rabbit.get_node("Fright/Word") as Label3D).text if meter else ""
 	await _shot("60_bark.png")
-	_check("as the dog, Space barks (%d bark): the rabbit nearby takes fright (meter %.2f, shown %s) and bolts (%s), and he can't bark again at once (%s)" % [dog.barks - barks0, fright1, meter, bolted, not dog_bark()],
-		dog.barks - barks0 == 1 and fright1 > 0.3 and fright1 < 1.0 and meter and bolted)
+	_check("as the dog, a right click barks (%d bark) and Space doesn't (%d): the rabbit's meter was up, empty, as he came near (%s); it takes fright (meter %.2f, shown %s, it says '%s') and bolts (%s), and he can't bark again at once (%s)" % [dog.barks - barks0, space_barks, waiting, fright1, meter, word, bolted, not dog_bark()],
+		dog.barks - barks0 == 1 and space_barks == 0 and waiting and fright1 > 0.3 and fright1 < 1.0 and meter and word == "Fright" and bolted)
 	# he keeps after them, barking: up to three give in and follow him
 	var tw := 0.0
 	while wildlife.following().size() < 3 and tw < 45.0:
@@ -6894,6 +6900,11 @@ func _empire_checks() -> void:
 		cam_target = dog.position
 	dog.running = false
 	var herd: Array = wildlife.following()
+	var gave_in := "" # what the full meter says over the one that has just given in
+	for a in herd:
+		var fm = a.get_node_or_null("Fright")
+		if fm != null and fm.visible:
+			gave_in = (fm.get_node("Word") as Label3D).text
 	if not herd.is_empty():
 		key0 = herd[0].key # its place in the wild, before the pen gives it a new key
 	var fourth = null
@@ -6909,8 +6920,8 @@ func _empire_checks() -> void:
 		for i in 4:
 			await _wait(BARK_WAIT)
 			dog_bark()
-	_check("barking fills their meters and three give in and follow him (%d after %.1f s); a fourth only bolts (caught %s, fright %.2f -> %.2f, '%s')" % [herd.size(), tw, fourth.caught if fourth != null else true, f4, fourth.fright if fourth != null else -1.0, wildlife.round_up_problem(fourth) if fourth != null else "?"],
-		herd.size() == 3 and fourth != null and not fourth.caught and fourth.fright <= f4 + 0.001 and wildlife.round_up_problem(fourth).contains("3 at a time"))
+	_check("barking fills their meters and three give in and follow him (%d after %.1f s; the full meter says '%s'); a fourth only bolts (caught %s, fright %.2f -> %.2f, '%s')" % [herd.size(), tw, gave_in, fourth.caught if fourth != null else true, f4, fourth.fright if fourth != null else -1.0, wildlife.round_up_problem(fourth) if fourth != null else "?"],
+		herd.size() == 3 and gave_in == "Following!" and fourth != null and not fourth.caught and fourth.fright <= f4 + 0.001 and wildlife.round_up_problem(fourth).contains("3 at a time"))
 	Game.sheep_count = 1
 	# home: he runs back to the pen and they follow him in
 	var pen: Rect2 = wildlife.pen()

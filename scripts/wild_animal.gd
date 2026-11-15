@@ -11,7 +11,7 @@ extends Node3D
 ## species' regrow_days.
 ##
 ## Catching (Alex, 2026-11-15: hunt for animals with the dog and round them up in the pen): the
-## dog's bark frightens it (`fright`, 0..1, shown as a meter over its head; the rarer the animal the
+## dog's bark frightens it (`fright`, 0..1, shown as a "Fright" meter over its head; the rarer the animal the
 ## more barks it takes, and it calms down again if he lets up). At full fright it is `caught`: it
 ## gives in and follows the dog along the walking grid, and wildlife.gd pens it when he brings it
 ## to a pen. `penned`, it wanders its pen, never bolts, and is combed there.
@@ -22,7 +22,9 @@ const MIN_RATE := 0.55 # a loop never plays slower than this: a first step is qu
 const ACCEL := 5.0
 const BRAKE := 6.0
 const TURN := 7.0
-const METER_W := 0.62 # the fright meter's width, metres
+const METER_W := 0.9 # the fright meter's width, metres
+const METER_FULL := 1.4 # seconds the full meter stays up once it gives in
+const METER_NEAR := 1.5 # the empty meter shows this many bark ranges from a dog the player is playing
 const CALM_AFTER := 2.0 # seconds after a bark before its fright starts to fade
 const CALM_RATE := 0.07 # fright lost a second after that
 const FLEE_TIME := 2.6 # seconds it keeps running once something has scared it
@@ -42,7 +44,9 @@ var fright := 0.0 # 0..1: how frightened the dog's barking has made it (1 = it g
 var caught := false # frightened into following the dog home
 var penned := false # lives in one of her pens
 var _calm_t := 0.0 # seconds since the last bark that reached it
-var _meter: Node3D # the fright meter over its head: a back bar and its fill
+var _meter: Node3D # the fright meter over its head: a back bar, its fill and the word over them
+var _full_t := 0.0 # seconds the full meter still shows after it gave in
+var _in_earshot := false # the dog being played is close enough to bark at it
 var _path: Array = [] # caught: the way to the dog
 var _repath := 0.0
 var _flee_dir := Vector3.ZERO
@@ -220,6 +224,12 @@ func _process(delta: float) -> void:
 		scare(threat)
 	if not caught and not penned and fright > 0.0:
 		_calm(delta)
+	var hear: bool = not caught and not penned and main.dog != null and main.dog.controlled and main.dog.visible \
+		and Vector2(main.dog.position.x - position.x, main.dog.position.z - position.z).length() < wl.BARK_RANGE * METER_NEAR
+	if hear != _in_earshot or _full_t > 0.0:
+		_in_earshot = hear
+		_full_t = maxf(0.0, _full_t - delta)
+		_show_meter()
 	var want := 0.0
 	var dir := Vector3.ZERO
 	if caught:
@@ -267,6 +277,8 @@ func _process(delta: float) -> void:
 func frighten(gain: float) -> bool:
 	fright = clampf(fright + gain, 0.0, 1.0)
 	_calm_t = 0.0
+	if fright >= 1.0:
+		_full_t = METER_FULL # the full meter stays up a moment: this is when it starts to follow
 	_show_meter()
 	return fright >= 1.0
 
@@ -279,10 +291,13 @@ func _calm(delta: float) -> void:
 	_show_meter()
 
 
-## The fright meter: a small bar over its head that fills from yellow to red. Hidden when it's
-## calm, caught or penned.
+## The fright meter: the word "Fright" and a bar over its head that fills from yellow to red.
+## It shows, empty, as soon as a dog the player is playing comes within earshot, so there is
+## something to fill; full, it turns green and says "Following!" for a moment, which is when the
+## animal falls in behind the dog. Hidden when it's calm with no dog about, caught or penned.
 func _show_meter() -> void:
-	var show := fright > 0.001 and not caught and not penned
+	var full := _full_t > 0.0
+	var show := full or ((fright > 0.001 or _in_earshot) and not caught and not penned)
 	if _meter == null:
 		if not show:
 			return
@@ -290,10 +305,19 @@ func _show_meter() -> void:
 		_meter.name = "Fright"
 		_meter.position.y = float(info.get("click", 0.5)) + 0.5
 		add_child(_meter)
+		var word := Label3D.new()
+		word.name = "Word"
+		word.font_size = 44
+		word.pixel_size = 0.0042
+		word.outline_size = 12
+		word.no_depth_test = true
+		word.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		word.position.y = 0.2
+		_meter.add_child(word)
 		for i in 2: # the dark back, then the fill on top of it
 			var mi := MeshInstance3D.new()
 			var q := QuadMesh.new()
-			q.size = Vector2(METER_W + 0.06, 0.13) if i == 0 else Vector2(METER_W, 0.07)
+			q.size = Vector2(METER_W + 0.07, 0.18) if i == 0 else Vector2(METER_W, 0.11)
 			var m := StandardMaterial3D.new()
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
@@ -307,10 +331,14 @@ func _show_meter() -> void:
 			_meter.add_child(mi)
 	_meter.visible = show
 	if show:
-		var q: QuadMesh = (_meter.get_child(1) as MeshInstance3D).mesh
-		q.size.x = METER_W * fright
-		q.center_offset.x = -METER_W * 0.5 * (1.0 - fright)
-		(q.material as StandardMaterial3D).albedo_color = Color(1.0, 0.86, 0.3).lerp(Color(1.0, 0.25, 0.18), fright)
+		var fill := 1.0 if full else fright
+		var q: QuadMesh = (_meter.get_child(2) as MeshInstance3D).mesh
+		q.size.x = METER_W * fill
+		q.center_offset.x = -METER_W * 0.5 * (1.0 - fill)
+		(q.material as StandardMaterial3D).albedo_color = Color(0.45, 0.9, 0.4) if full else Color(1.0, 0.86, 0.3).lerp(Color(1.0, 0.25, 0.18), fright)
+		var word := _meter.get_child(0) as Label3D
+		word.text = "Following!" if full else "Fright"
+		word.modulate = Color(0.75, 1.0, 0.7) if full else Color(1.0, 0.95, 0.82)
 
 
 ## Caught: the next direction along the way to the dog (to Nora if he isn't about), or null when

@@ -27,7 +27,7 @@ const ACTIONS := [
 	["bag", "Open the bag", ["world"], KEY_I],
 	["turn_left", "Turn the camera left", ["world"], KEY_Q],
 	["turn_right", "Turn the camera right", ["world"], KEY_E],
-	["follow", "Camera follows / stays · the dog barks", ["world"], KEY_SPACE],
+	["follow", "Camera follows / stays", ["world"], KEY_SPACE],
 	["walls", "Walls up / down", ["world"], KEY_C],
 	["build", "Build & Buy", ["world"], KEY_B],
 	["rotate", "Turn a piece while placing", ["world"], KEY_R],
