@@ -103,6 +103,8 @@ static func animate(lights: Array, flames: Array, t: float, dark: float) -> void
 		l.light_energy = e
 	for i in flames.size():
 		var f: MeshInstance3D = flames[i]
+		if f.has_meta("self_lit"): # a shader flame (shaders/fire.gdshader, candle_flame.gdshader) moves itself
+			continue
 		if f.has_meta("candle"):
 			# the flame stretches and shrinks with its light and leans a little in the draught
 			var ft := t + float(f.get_meta("phase", 0.0))

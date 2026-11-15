@@ -5144,6 +5144,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=fire" in OS.get_cmdline_user_args(): # just the fire and the candle flames, close up at night
+		await _wait(1.5)
+		await _fire_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=shops" in OS.get_cmdline_user_args(): # just the walk-in shops and their pictures
 		await _wait(1.5)
 		await _shop_checks()
@@ -5794,7 +5800,7 @@ func _cafe_checks() -> void:
 	add_child(probe)
 	probe.setup("candle", 0)
 	_check("the candle is in Builder's Delight's catalogue with the books, and lit (%d light, %d flames, %d halo)" % [probe.lights.size(), probe.flames.size(), probe.find_children("*", "Sprite3D", false, false).size()],
-		"candle" in Catalog.INDOOR and "book_plum" in Catalog.INDOOR and "book_stack" in Catalog.INDOOR and probe.lights.size() == 1 and probe.flames.size() == 2
+		"candle" in Catalog.INDOOR and "book_plum" in Catalog.INDOOR and "book_stack" in Catalog.INDOOR and probe.lights.size() == 1 and probe.flames.size() == 1
 		and probe.find_children("*", "Sprite3D", false, false).size() == 1 and probe.lights[0].has_meta("no_shadow"))
 	probe.queue_free()
 	var s = Interiors.shops.get("cafe")
@@ -6002,6 +6008,54 @@ func _cafe_checks() -> void:
 	Game.hour = 11.0
 	_set_cam_lock(true)
 	await _wait(0.5)
+
+
+## The fire in her fireplace and the candles on its mantel at night (shaders/fire.gdshader,
+## candle_flame.gdshader): three sheets of flame, the coals and the sparks; a camera of its own looks
+## at them close up a few moments apart, then from the game's own camera. Saves 61_fire_*.png.
+func _fire_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var fps_ := furniture.filter(func(f): return is_instance_valid(f) and f.item_id == "fireplace")
+	if fps_.is_empty():
+		_check("there is a fireplace in her house", false)
+		return
+	var fp: Furniture = fps_[0]
+	var sheets: Array = fp.flames.filter(func(m): return not m.has_meta("candle") and m.material_override is ShaderMaterial)
+	var candles: Array = fp.flames.filter(func(m): return m.has_meta("candle") and m.material_override is ShaderMaterial)
+	var sparks := fp.find_child("Sparks", false, false) as GPUParticles3D
+	_check("the fire is three living sheets of flame over glowing coals with sparks rising, and the mantel's candles burn with real flames (%d sheets, %d candle flames, sparks %s)" % [sheets.size(), candles.size(), sparks != null and sparks.emitting],
+		sheets.size() == 3 and candles.size() == 2 and sparks != null and sparks.emitting)
+	Game.hour = 21.5
+	player.walk([])
+	player.position = fp.global_transform * Vector3(0, 0, 2.6)
+	player.position.y = 0.0
+	await _wait(1.5)
+	var eye := Camera3D.new()
+	eye.fov = 45.0
+	add_child(eye)
+	var xf := fp.global_transform
+	eye.look_at_from_position(xf * Vector3(0.0, 0.75, 2.0), xf * Vector3(0.0, 0.5, -0.1))
+	eye.make_current()
+	for i in 3:
+		await _wait(0.35)
+		await _shot("61_fire_%d.png" % i)
+	eye.look_at_from_position(xf * Vector3(0.45, 1.62, 0.75), xf * Vector3(0.62, 1.6, 0.18))
+	await _wait(0.4)
+	await _shot("61_fire_candle.png")
+	eye.look_at_from_position(xf * Vector3(0.0, 1.2, 1.6), xf * Vector3(0.0, 0.45, -0.1))
+	await _wait(0.4)
+	await _shot("61_fire_above.png")
+	cam.make_current()
+	eye.queue_free()
+	cam_target = fp.global_position + Vector3(0, 0.8, 0)
+	var cd := cam_dist
+	cam_dist = 9.0
+	await _wait(1.2)
+	await _shot("61_fire_overhead.png")
+	cam_dist = cd
+	Game.hour = 11.0
+	await _wait(0.3)
 
 
 func _shop_checks() -> void:
