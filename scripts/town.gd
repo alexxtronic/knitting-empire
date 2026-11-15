@@ -19,7 +19,7 @@ const OFFICE := Rect2(61.5, -13.5, 5.5, 5.0) # Willow Homes (Gary: property and 
 const BAKERY := Rect2(39.0, -13.0, 5.5, 4.5)
 const HOMEGOODS := Rect2(45.2, -14.6, 5.0, 4.4) # Builder's Delight (Steve), in the gap between Heart Bakery and the Yarn Barn
 const MAYOR := Rect2(40.2, 4.4, 11.6, 11.2) # the Mayor's Office (art/world_assets/mayors_office), south of the road, its front to the camera (south) like the shops
-const CAFE := Rect2(27.4, 4.2, 10.0, 7.8) # the coffee shop (art/world_assets/coffee_shop), terrace included: just past the farm's yard (x < 27) on the way to town, south of the path, its front to the camera (south)
+const CAFE := Rect2(25.4, 1.1, 14.0, 14.0) # the coffee shop (art/world_assets/coffee_shop, twice its concept since 2026-11-14), terrace included: just past the farm's yard (x < 27) on the way to town, south of the path, its front to the camera (south)
 ## Buildings whose model carries its own name (the café's plaque): no painted label is added.
 const OWN_SIGN := ["cafe"]
 const MODEL_DIR := "res://assets/props/"

@@ -87,26 +87,33 @@ func _process(delta: float) -> void:
 	if lights.is_empty() and flames.is_empty():
 		return
 	_t += delta
-	var dark := maxf(1.0 - Game.daylight(), gloom * 0.8)
-	var candle := candle_flicker(_t)
+	animate(lights, flames, _t, maxf(1.0 - Game.daylight(), gloom * 0.8))
+
+
+## Brings the lights up as it gets dark (`dark` 0..1) and flickers the fires and candles at time t.
+## A candle's light and flame with a "phase" meta flicker in its own time (Catalog.lit_candle).
+## Also used for a shop's furnishings (interiors.gd), which aren't Furniture.
+static func animate(lights: Array, flames: Array, t: float, dark: float) -> void:
 	for l in lights:
 		var e := lerpf(float(l.get_meta("day_energy")), float(l.get_meta("night_energy")), dark)
 		if l.has_meta("fire"):
-			e *= 0.85 + 0.15 * sin(_t * 9.0) * sin(_t * 5.3 + 1.0)
+			e *= 0.85 + 0.15 * sin(t * 9.0) * sin(t * 5.3 + 1.0)
 		elif l.has_meta("candle"):
-			e *= candle
+			e *= candle_flicker(t + float(l.get_meta("phase", 0.0)))
 		l.light_energy = e
 	for i in flames.size():
-		var f := flames[i]
+		var f: MeshInstance3D = flames[i]
 		if f.has_meta("candle"):
 			# the flame stretches and shrinks with its light and leans a little in the draught
+			var ft := t + float(f.get_meta("phase", 0.0))
+			var candle := candle_flicker(ft)
 			if not f.has_meta("base_scale"):
 				f.set_meta("base_scale", f.scale)
 			var b: Vector3 = f.get_meta("base_scale")
 			f.scale = Vector3(b.x * (0.9 + 0.1 * candle), b.y * (0.55 + 0.5 * candle), b.z * (0.9 + 0.1 * candle))
-			f.rotation = Vector3(0.08 * sin(_t * 2.1 + 0.7), 0, 0.1 * sin(_t * 1.7) * sin(_t * 4.3 + 2.0))
+			f.rotation = Vector3(0.08 * sin(ft * 2.1 + 0.7), 0, 0.1 * sin(ft * 1.7) * sin(ft * 4.3 + 2.0))
 			continue
-		var s := 1.0 + 0.12 * sin(_t * (8.0 + i * 2.3) + i)
+		var s := 1.0 + 0.12 * sin(t * (8.0 + i * 2.3) + i)
 		f.scale = Vector3(1.0, 1.5 * s, 0.6) if i == 0 else Vector3(s, s, s)
 
 

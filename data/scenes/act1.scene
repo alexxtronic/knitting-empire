@@ -95,7 +95,7 @@ Wren (neutral): Heart Bakery. Giorgio. Don't try to pay for your first loaf.
 Wren (neutral): Builder's Delight. Steve has tools, seeds and wood. No small talk.
 @camera by building_office 0 3 13 yaw building_office
 Wren (wry): Willow Homes. That's Gary. Don't worry, he'll find you.
-@camera by building_cafe 0 3 13 yaw building_cafe
+@camera by building_cafe 0 4 20 yaw building_cafe
 Wren (neutral): And Sabrina's Coffee Shop. Closes at five. She means it.
 @camera between wren nora 7
 Wren (neutral): Say hello whenever you like. Your gran's house is down the lane to the west, the one with the roses.

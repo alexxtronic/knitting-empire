@@ -52,7 +52,7 @@
       "role": "The Coffee Shop",
       "loves": "sweater",
       "likes": ["pumpkin"],
-      "at": {"building": "building_cafe", "pos": [1.6, 1.9], "talk": [1.6, 3.1]},
+      "at": {"building": "building_cafe", "pos": [1.1, 4.0], "talk": [1.1, 5.2]},
       "start": {"trust": -20},
       "pos": [51.1, 0.0, 6.4],
       "roam": [0.5, 0.2],

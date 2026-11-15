@@ -452,7 +452,7 @@ func reapply_scenery() -> void:
 ## The painted cobbles leave the shops' floors alone (shaders/cobble_painted.gdshader).
 func _road_holes() -> void:
 	var holes := PackedVector4Array()
-	for r in Interiors.floors().slice(0, 4):
+	for r in Interiors.floors().slice(0, 8): # shaders/cobble_painted.gdshader holes[8]
 		holes.append(Vector4((r as Rect2).position.x, (r as Rect2).position.y, (r as Rect2).size.x, (r as Rect2).size.y))
 	for mesh in _tile_meshes:
 		for i in (mesh as ArrayMesh).get_surface_count():
