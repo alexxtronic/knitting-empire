@@ -49,6 +49,7 @@ var gfx := 2
 var _sun_fog_energy := 1.3
 var _anisotropy := 0.6
 var _ambient_inject := 0.04
+var _exposure := 0.95
 
 
 ## Morning mist by the hour: rising from 4:45, at its thickest from about 6:15 (she wakes at 6),
@@ -64,6 +65,7 @@ func setup(m: Node) -> void:
 	_sun_fog_energy = sun.light_volumetric_fog_energy
 	_anisotropy = env.volumetric_fog_anisotropy
 	_ambient_inject = env.volumetric_fog_ambient_inject
+	_exposure = env.tonemap_exposure
 	mist_mat = ShaderMaterial.new()
 	mist_mat.shader = preload("res://shaders/mist.gdshader")
 	var tex := NoiseTexture3D.new()
@@ -108,9 +110,13 @@ func update(rain: float, dl: float) -> void:
 	# the light comes from the sun by day and the moon (or starlight) by night; the moon's phase
 	# sets how bright the night is, its sky light too
 	bodies.update(h, dl, rain)
-	var moon := lerpf(0.72, 1.12, SkyBodies.illumination(bodies.current_phase) * bodies.moon_up)
+	var moon := lerpf(NIGHT_FILL, NIGHT_FILL_FULL, SkyBodies.illumination(bodies.current_phase) * bodies.moon_up)
 	env.ambient_light_energy *= lerpf(1.0, moon, 1.0 - dl)
 	_depth(dl, rain)
+	# the night sky itself is too dark to light anything: a blue fill of its own stands in for it,
+	# so the ground, the trees and Nora can always be seen
+	env.ambient_light_sky_contribution = lerpf(NIGHT_SKY_SHARE, env.ambient_light_sky_contribution, dl)
+	env.ambient_light_color = NIGHT_FILL_COLOR.lerp(env.ambient_light_color, dl)
 	# rain brings its own grey haze; the morning mist burns off in it too
 	mist = morning(h) * (1.0 - 0.7 * rain) if mist_enabled else 0.0
 	var lit := clampf(dl * 1.5, 0.0, 1.0) # before sunrise the mist is there but nothing shines through it
@@ -127,6 +133,10 @@ func update(rain: float, dl: float) -> void:
 	env.volumetric_fog_albedo = env.volumetric_fog_albedo.lerp(Color(0.95, 0.93, 0.88), mist)
 	# a little of the sky's light in the mist, so it glows softly in the shade rather than going dark
 	env.volumetric_fog_ambient_inject = lerpf(_ambient_inject, 0.1, mist)
+	# eyes get used to the dark: the whole picture is exposed a little more at night
+	env.tonemap_exposure = lerpf(_exposure * NIGHT_EXPOSURE, _exposure, dl)
+	# at night mist that takes no light is a black veil (the swamp's was): it takes the night's fill
+	env.volumetric_fog_ambient_inject = maxf(env.volumetric_fog_ambient_inject, NIGHT_MIST_GLOW * (1.0 - dl))
 	# Low graphics has no volumetric fog: a plain ground fog gives the look of the mist from afar
 	env.fog_height = 0.6
 	env.fog_height_density = (0.32 if gfx == 0 else 0.03) * mist
@@ -139,6 +149,16 @@ func update(rain: float, dl: float) -> void:
 ## keep their warm glow; rain keeps its grey. depth_enabled off gives the old look (the autotest's
 ## before-and-after picture, 48_light_noon_flat.png).
 var depth_enabled := true
+
+## The night's own fill light (Alex, 2026-11-15: even the darkest night must be easy to see in):
+## how much of the ambient light still comes from the sky, the fill's colour, and how strong the
+## ambient light is at new moon and at full moon (times main.gd's night level).
+const NIGHT_SKY_SHARE := 0.15
+const NIGHT_FILL_COLOR := Color(0.42, 0.52, 0.86)
+const NIGHT_EXPOSURE := 1.7 # the camera's exposure at night, times the day's
+const NIGHT_MIST_GLOW := 0.6 # how much of the fill the mist and haze take at night
+const NIGHT_FILL := 3.4
+const NIGHT_FILL_FULL := 4.0
 
 
 func _depth(dl: float, rain: float) -> void:

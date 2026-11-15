@@ -1,0 +1,296 @@
+extends Node
+## The knitting empire's own systems (Alex, 2026-11-15, docs/DIRECTION.md): the things her money
+## buys to make better knits and go further, and the locals' requests that send her out for rare
+## animals.
+##
+## Needles (data/economy.json "gear", sold by Rosa): each better pair sets the least a sweater she
+## knits can be (`floor`, 1 Common .. 5 Legendary on the knitting game's scale). Her pair is
+## Game.flags["needles"]; she starts with Gran's bamboo ones.
+##
+## The lantern (sold by Steve): once she has one it lights her way whenever it's dark out.
+##
+## Requests (data/requests.json): one local at a time wants a sweater knitted from a wild animal's
+## fibre. Asked, they say what they want and a goal sends her to find the animal; the sweater she
+## then knits with that fibre is put by for them, and handing it over pays far more than Rosa
+## would. The state is Game.flags["request"] ({"i", "who", "fibre", "pay", "made", "design"}),
+## "requests_done" (how many she has filled) and "request_day" (the day the next one may come).
+
+const Data = preload("res://scripts/data.gd")
+const KnitGame = preload("res://scripts/knit_game.gd")
+const Sweaters = preload("res://scripts/sweaters.gd")
+const Hud = preload("res://scripts/hud.gd")
+
+var main: Node # main.gd
+var _gear := {}
+var _req := {}
+var _lamp: OmniLight3D
+
+
+func _ready() -> void:
+	name = "Empire"
+	_gear = Data.load_json("economy").get("gear", {})
+	_req = Data.load_json("requests")
+
+
+# --- needles -----------------------------------------------------------------------------------
+
+func needle_defs() -> Array:
+	return _gear.get("needles", [])
+
+
+func needle_def(id: String) -> Dictionary:
+	for d in needle_defs():
+		if str(d.get("id", "")) == id:
+			return d
+	return {}
+
+
+## Her pair's place in the list (-1: Gran's bamboo ones).
+func needle_rank() -> int:
+	var mine := str(Game.flag("needles", ""))
+	var defs := needle_defs()
+	for i in defs.size():
+		if str(defs[i].get("id", "")) == mine:
+			return i
+	return -1
+
+
+func needle_name() -> String:
+	var r := needle_rank()
+	return str(needle_defs()[r].get("name", "")) if r >= 0 else str(_gear.get("first_needles", "Gran's bamboo needles"))
+
+
+## The least a sweater she knits can be (1..5) with the needles she has.
+func needle_floor() -> int:
+	var r := needle_rank()
+	return clampi(int(needle_defs()[r].get("floor", 1)), 1, 5) if r >= 0 else 1
+
+
+## Rosa's rows: the next pair up, or what she already knits with.
+func needle_rows() -> Array:
+	var defs := needle_defs()
+	var next := needle_rank() + 1
+	if next >= defs.size():
+		return [main._act("noop", "%s  (the best there are)" % needle_name(), false)]
+	var d: Dictionary = defs[next]
+	var price := int(d.get("price", 0))
+	return [main._act("buy_needles", "Buy %s  (%dc · every knit %s or better)" % [str(d.get("name", "needles")).to_lower(), price, KnitGame.rarity_name(int(d.get("floor", 1)))], Game.coins >= price)]
+
+
+func buy_needles(v) -> bool:
+	var defs := needle_defs()
+	var next := needle_rank() + 1
+	if next >= defs.size():
+		return false
+	var d: Dictionary = defs[next]
+	if not Game.spend(int(d.get("price", 0))):
+		return false
+	Game.set_flag("needles", str(d["id"]))
+	main._say(v, str(d.get("line", "Good needles make good knitting, love.")))
+	main.hud.show_toast("New needles: %s. Every sweater you knit is %s or better now." % [str(d["name"]), KnitGame.rarity_name(needle_floor())])
+	return true
+
+
+# --- the lantern -------------------------------------------------------------------------------
+
+func lantern_price() -> int:
+	return int(_gear.get("lantern", 45))
+
+
+func has_lantern() -> bool:
+	return Game.has_item("lantern")
+
+
+func lantern_rows() -> Array:
+	if has_lantern():
+		return [main._act("noop", "Lantern  (you have one)", false)]
+	return [main._act("buy_lantern", "Buy a lantern  (%dc · lights your way at night)" % lantern_price(), Game.coins >= lantern_price())]
+
+
+func buy_lantern(v) -> bool:
+	if has_lantern() or not Game.spend(lantern_price()):
+		return false
+	Game.add_item("lantern", 1)
+	main._say(v, "Storm lantern. Burns all night. Don't leave it in the barn.")
+	main.hud.show_toast("New: a lantern. It lights itself whenever it's dark out.")
+	return true
+
+
+## How brightly it burns now (0 = out): only when it's dark, and only if she has one.
+func lantern_level() -> float:
+	if not has_lantern() or main.sleeping or main.title_on:
+		return 0.0
+	return 1.0 - smoothstep(0.25, 0.6, Game.daylight())
+
+
+func lantern_lit() -> bool:
+	return _lamp != null and _lamp.visible
+
+
+## Every frame from main._process: the lantern's warm light at her hip, fading in at dusk.
+func update(_delta: float) -> void:
+	var level := lantern_level()
+	if level <= 0.01:
+		if _lamp:
+			_lamp.visible = false
+		return
+	if _lamp == null:
+		_lamp = OmniLight3D.new()
+		_lamp.name = "Lantern"
+		_lamp.light_color = Color(1.0, 0.78, 0.48)
+		_lamp.omni_range = 16.0
+		_lamp.omni_attenuation = 0.9
+		_lamp.shadow_enabled = false
+		main.add_child(_lamp)
+	var who: Node3D = main.dog if main.dog and main.dog.controlled else main.player
+	_lamp.visible = true
+	_lamp.light_energy = 4.5 * level
+	_lamp.position = who.position + Vector3(0.0, 1.3, 0.0)
+
+
+# --- requests ----------------------------------------------------------------------------------
+
+func request_defs() -> Array:
+	return _req.get("requests", [])
+
+
+## The request she has taken ({} if none).
+func request() -> Dictionary:
+	var r: Variant = Game.flag("request", {})
+	return r if r is Dictionary else {}
+
+
+func requests_done() -> int:
+	return int(Game.flag("requests_done", 0))
+
+
+## True once the story lets locals ask: Act 1 is behind her (or the farm never had it).
+func open() -> bool:
+	return Game.flag("act1_done") == true or Game.flag("story_farm") != true
+
+
+## The request waiting to be asked for ({} if none is due): the next in the list, once the last
+## one is filled and a day or two has passed.
+func due() -> Dictionary:
+	if not open() or not request().is_empty():
+		return {}
+	var defs := request_defs()
+	var i := requests_done()
+	if i >= defs.size() or Game.day < int(Game.flag("request_day", 0)):
+		return {}
+	return defs[i]
+
+
+## Whether `vid` has something to say about a request: they want to ask, or she has their sweater.
+func wants(vid: String) -> bool:
+	var r := request()
+	if not r.is_empty():
+		return str(r.get("who", "")) == vid and int(r.get("made", 0)) > 0
+	return str(due().get("who", "")) == vid
+
+
+func _fibre_name(id: String) -> String:
+	return str(main.wildlife.item_name(id))
+
+
+func _animal_of(fibre: String) -> String:
+	var species: Dictionary = main.wildlife.data.get("animals", {})
+	for id in species:
+		if str(species[id].get("fibre", "")) == fibre:
+			return str(species[id].get("name", id)).to_lower()
+	return "animal"
+
+
+## The villager's menu rows: ask what they want, or hand over their sweater.
+func rows_for(v) -> Array:
+	var r := request()
+	var rows := []
+	if r.is_empty():
+		var d := due()
+		if str(d.get("who", "")) == v.vid:
+			rows.append(_row("request_ask", "Ask what %s wanted" % v.title))
+	elif str(r.get("who", "")) == v.vid:
+		if int(r.get("made", 0)) > 0:
+			rows.append(_row("request_give", "Give %s the sweater  (+%dc)" % [v.title, payout()]))
+		else:
+			rows.append(_row("noop", "A sweater of %s  (find a %s, comb it, knit with its fibre)" % [_fibre_name(str(r["fibre"])).to_lower(), _animal_of(str(r["fibre"]))], false))
+	return rows
+
+
+func _row(id: String, label: String, enabled := true) -> Dictionary:
+	return {"id": id, "label": label, "enabled": enabled, "group": "Request"}
+
+
+## They say what they want, and it becomes her goal.
+func ask(v) -> void:
+	var d := due()
+	if str(d.get("who", "")) != v.vid:
+		return
+	var fibre := str(d["fibre"])
+	Game.set_flag("request", {"i": requests_done(), "who": v.vid, "fibre": fibre, "pay": int(d.get("pay", 200)), "made": 0, "design": ""})
+	main._say(v, str(d.get("ask", "Could you knit me something special?")))
+	_show_goal()
+	main.hud.show_toast("New request: a %s sweater for %s.  (%dc)" % [_fibre_name(fibre).to_lower(), v.title, int(d.get("pay", 200))])
+
+
+## What handing it over pays: the price agreed, and a tenth more for each grade above what the
+## fibre alone gives.
+func payout() -> int:
+	var r := request()
+	if r.is_empty():
+		return 0
+	var extra := maxi(0, int(r.get("made", 0)) - int(main.wildlife.knit_floor(str(r["fibre"]))))
+	return int(round(int(r["pay"]) * (1.0 + 0.1 * extra)))
+
+
+## Called when a sweater is knitted with `fibre`: if that's the one asked for, it is taken out of
+## her bag and put by for them. True if it was.
+func knitted(fibre: String, rarity: int) -> bool:
+	var r := request()
+	if r.is_empty() or str(r.get("fibre", "")) != fibre or int(r.get("made", 0)) > 0 or Game.sweaters.is_empty():
+		return false
+	var sw: Dictionary = Game.remove_sweater(Game.sweaters.size() - 1)
+	r = r.duplicate()
+	r["made"] = clampi(rarity, 1, 5)
+	r["design"] = str(sw.get("design", ""))
+	Game.set_flag("request", r)
+	_show_goal()
+	return true
+
+
+## She hands it over: the coins, their thanks, and they put it on.
+func give(v) -> bool:
+	var r := request()
+	if r.is_empty() or str(r.get("who", "")) != v.vid or int(r.get("made", 0)) <= 0:
+		return false
+	var coins := payout()
+	Game.coins += coins
+	var design := str(r.get("design", ""))
+	if Sweaters.fits(v.vid) and not Sweaters.design(design).is_empty():
+		var worn: Dictionary = (Game.flag("npc_sweaters", {}) as Dictionary).duplicate()
+		worn[v.vid] = design
+		Game.set_flag("npc_sweaters", worn)
+	Game.add_friendship(v.vid, 20)
+	Game.add_need("happiness", 12.0)
+	var d: Dictionary = request_defs()[int(r.get("i", 0))] if int(r.get("i", 0)) < request_defs().size() else {}
+	Game.flags.erase("request")
+	Game.set_flag("requests_done", requests_done() + 1)
+	Game.set_flag("request_day", Game.day + int(_req.get("every_days", 2)))
+	main.set_goal("")
+	main._say(v, str(d.get("thanks", "It's perfect. Thank you!")))
+	main.hud.show_toast("%s paid %dc for the %s sweater." % [v.title, coins, _fibre_name(str(r["fibre"])).to_lower()])
+	main.story.trigger("event", "request_done")
+	return true
+
+
+## The goal line for the request she has: find the animal, or take them the sweater.
+func _show_goal() -> void:
+	var r := request()
+	if r.is_empty():
+		return
+	var v = main._villager(str(r["who"]))
+	var who: String = v.title if v else str(r["who"]).capitalize()
+	if int(r.get("made", 0)) > 0:
+		main.set_goal("Take %s the %s sweater" % [who, _fibre_name(str(r["fibre"])).to_lower()], Vector2(v.position.x, v.position.z) if v else null)
+	else:
+		main.set_goal("Find a %s and knit %s a sweater with its %s" % [_animal_of(str(r["fibre"])), who, _fibre_name(str(r["fibre"])).to_lower()])

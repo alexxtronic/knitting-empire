@@ -263,6 +263,22 @@ def wing_flutter():
     return normalize(x * fade(n, 0.002, 0.2), 0.45)
 
 
+def dog_bark():
+    """One bark from a big friendly dog: a short voiced burst whose pitch drops, with a breath of
+    noise at the front and a little room after it. Its own random stream."""
+    r = np.random.default_rng(31)
+    n = int(0.3 * SR)
+    t = np.arange(n) / SR
+    f = 150.0 + 330.0 * np.exp(-t / 0.045)  # the voice falls from a yelp to a woof
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    voice = sum(np.sin(k * phase) / k ** 0.9 for k in range(1, 12))  # a buzzy, throaty tone
+    voice = band(voice, 280, 2400) * 1.2 + band(voice, 700, 1500) * 0.8  # the mouth's formants
+    env = np.minimum(t / 0.008, 1.0) * np.exp(-t / 0.075)
+    breath = band(r.standard_normal(n), 900, 5000) * np.exp(-t / 0.03) * 0.5
+    x = np.tanh((voice * env + breath) * 1.6)
+    return normalize(reverb(x * fade(n, 0.002, 0.08), secs=0.5, wet=0.12, tone=3500), 0.8)
+
+
 # --- ambience loops ----------------------------------------------------------------------------
 
 def wind(secs, level=1.0, low=420):
@@ -434,7 +450,8 @@ if __name__ == "__main__":
     print("writing to", OUT)
     if "--only" in sys.argv:  # one effect, leaving the rest as they are: --only coins
         {"coins": lambda: write_wav("coins", cha_ching()),
-         "flutter": lambda: write_wav("flutter", wing_flutter())}[sys.argv[sys.argv.index("--only") + 1]]()
+         "flutter": lambda: write_wav("flutter", wing_flutter()),
+         "bark": lambda: write_wav("bark", dog_bark())}[sys.argv[sys.argv.index("--only") + 1]]()
         sys.exit(0)
     for i in range(4):
         write_wav("step_grass_%d" % (i + 1), footstep_grass(i))
@@ -446,6 +463,7 @@ if __name__ == "__main__":
     write_wav("journal", journal_chime())
     write_wav("coins", cha_ching())
     write_wav("flutter", wing_flutter())
+    write_wav("bark", dog_bark())
     write_ogg("amb_day", ambience_day(), 4)
     write_ogg("amb_night", ambience_night(), 4)
     write_ogg("amb_rain", rain(), 4)

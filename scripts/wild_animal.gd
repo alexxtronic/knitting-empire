@@ -9,6 +9,12 @@ extends Node3D
 ##
 ## Its coat is in Game.flags["wild"][key]: the day it was last combed. It grows back in the
 ## species' regrow_days.
+##
+## Catching (Alex, 2026-11-15: hunt for animals with the dog and round them up in the pen): the
+## dog's bark frightens it (`fright`, 0..1, shown as a meter over its head; the rarer the animal the
+## more barks it takes, and it calms down again if he lets up). At full fright it is `caught`: it
+## gives in and follows the dog along the walking grid, and wildlife.gd pens it when he brings it
+## to a pen. `penned`, it wanders its pen, never bolts, and is combed there.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const BLEND := 0.3
@@ -16,6 +22,9 @@ const MIN_RATE := 0.55 # a loop never plays slower than this: a first step is qu
 const ACCEL := 5.0
 const BRAKE := 6.0
 const TURN := 7.0
+const METER_W := 0.62 # the fright meter's width, metres
+const CALM_AFTER := 2.0 # seconds after a bark before its fright starts to fade
+const CALM_RATE := 0.07 # fright lost a second after that
 const FLEE_TIME := 2.6 # seconds it keeps running once something has scared it
 const PROBE := 1.2 # metres ahead it checks the ground is walkable
 const STEER := [0.0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6] # radians to try when the way ahead is blocked
@@ -29,6 +38,13 @@ var habitats: Array = [] # Rect2s (x, z) it wanders in
 var speed := 0.0 # ground speed right now
 var fleeing := 0.0 # seconds of bolting left
 var walked := 0.0 # metres covered (for the autotest)
+var fright := 0.0 # 0..1: how frightened the dog's barking has made it (1 = it gives in)
+var caught := false # frightened into following the dog home
+var penned := false # lives in one of her pens
+var _calm_t := 0.0 # seconds since the last bark that reached it
+var _meter: Node3D # the fright meter over its head: a back bar and its fill
+var _path: Array = [] # caught: the way to the dog
+var _repath := 0.0
 var _flee_dir := Vector3.ZERO
 var _target := Vector3.ZERO
 var _going := false
@@ -120,6 +136,8 @@ func hold(seconds: float) -> void:
 
 
 func scare(from: Vector3) -> void:
+	if caught or penned:
+		return
 	var away := global_position - from
 	away.y = 0.0
 	if away.length() < 0.05:
@@ -153,6 +171,8 @@ func comb() -> void:
 
 ## Its menu: comb it (or wait for its coat), or just watch it. Opening the menu holds it still.
 func ke_actions() -> Array:
+	if caught:
+		return [main._act("noop", "It's following the dog home to the pen", false)]
 	hold(12.0)
 	var fname: String = wl.item_name(fibre())
 	var verb := "Shear  (+1 %s)" % fname if species == "sheep" else "Comb its coat  (+1 %s)" % fname
@@ -161,7 +181,14 @@ func ke_actions() -> Array:
 		a["label"] = "Shear" if species == "sheep" else "Comb its coat"
 		a["hint"] = "coat growing back"
 		a["progress"] = regrow()
-	return [a, main._act("watch", "Watch it a while")]
+	var rows := [a]
+	if penned:
+		rows.append(main._act("free", "Let it go"))
+	else:
+		var why: String = wl.round_up_problem(self)
+		rows.append(main._act("round_up", "Send the dog to round it up" + ("" if why == "" else "  (%s)" % why), why == ""))
+	rows.append(main._act("watch", "Watch it a while"))
+	return rows
 
 
 func ke_action(id: String) -> void:
@@ -173,6 +200,10 @@ func ke_action(id: String) -> void:
 			if Game.use_energy(3.0):
 				hold(4.0)
 				main.player.start_activity("Shearing" if species == "sheep" else "Combing", 2.0, Callable(wl, "combed").bind(self))
+		"round_up":
+			wl.round_up(self)
+		"free":
+			wl.set_free(self)
 		"watch":
 			hold(5.0)
 			Game.add_need("happiness", 3.0)
@@ -184,12 +215,19 @@ func ke_action(id: String) -> void:
 func _process(delta: float) -> void:
 	if main == null:
 		return
-	var threat = wl.threat_to(self)
+	var threat = null if (caught or penned) else wl.threat_to(self)
 	if threat != null and fleeing < FLEE_TIME * 0.6:
 		scare(threat)
+	if not caught and not penned and fright > 0.0:
+		_calm(delta)
 	var want := 0.0
 	var dir := Vector3.ZERO
-	if fleeing > 0.0:
+	if caught:
+		var step_to = _follow(delta)
+		if step_to != null:
+			dir = (step_to as Vector3)
+			want = _follow_speed()
+	elif fleeing > 0.0:
 		fleeing -= delta
 		dir = _clear_way(_flee_dir, false)
 		_flee_dir = dir if dir != Vector3.ZERO else _flee_dir
@@ -222,6 +260,100 @@ func _process(delta: float) -> void:
 		walked += step.length()
 		rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-delta * TURN))
 	_play_gait()
+
+
+## A bark reached it: `gain` more fright, and the meter shows. True if that was enough to make
+## it give in.
+func frighten(gain: float) -> bool:
+	fright = clampf(fright + gain, 0.0, 1.0)
+	_calm_t = 0.0
+	_show_meter()
+	return fright >= 1.0
+
+
+## Left alone for a couple of seconds it starts to calm down again.
+func _calm(delta: float) -> void:
+	_calm_t += delta
+	if _calm_t > CALM_AFTER:
+		fright = maxf(0.0, fright - delta * CALM_RATE)
+	_show_meter()
+
+
+## The fright meter: a small bar over its head that fills from yellow to red. Hidden when it's
+## calm, caught or penned.
+func _show_meter() -> void:
+	var show := fright > 0.001 and not caught and not penned
+	if _meter == null:
+		if not show:
+			return
+		_meter = Node3D.new()
+		_meter.name = "Fright"
+		_meter.position.y = float(info.get("click", 0.5)) + 0.5
+		add_child(_meter)
+		for i in 2: # the dark back, then the fill on top of it
+			var mi := MeshInstance3D.new()
+			var q := QuadMesh.new()
+			q.size = Vector2(METER_W + 0.06, 0.13) if i == 0 else Vector2(METER_W, 0.07)
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			m.no_depth_test = true
+			m.render_priority = i
+			m.albedo_color = Color(0.14, 0.1, 0.08, 0.85)
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			q.material = m
+			mi.mesh = q
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_meter.add_child(mi)
+	_meter.visible = show
+	if show:
+		var q: QuadMesh = (_meter.get_child(1) as MeshInstance3D).mesh
+		q.size.x = METER_W * fright
+		q.center_offset.x = -METER_W * 0.5 * (1.0 - fright)
+		(q.material as StandardMaterial3D).albedo_color = Color(1.0, 0.86, 0.3).lerp(Color(1.0, 0.25, 0.18), fright)
+
+
+## Caught: the next direction along the way to the dog (to Nora if he isn't about), or null when
+## it's close enough (or they are too far off to follow, and it waits).
+func _follow(delta: float) -> Variant:
+	var lead: Node3D = wl.leader()
+	var gap := Vector2(lead.position.x - position.x, lead.position.z - position.z).length()
+	if gap < 2.0 or gap > wl.CULL:
+		_path = []
+		return null
+	_repath -= delta
+	if _repath <= 0.0 or _path.is_empty():
+		_repath = 0.6
+		_path = main._find_path(position, lead.position)
+	while not _path.is_empty():
+		var to: Vector3 = (_path[0] as Vector3) - position
+		to.y = 0.0
+		if to.length() < 0.3:
+			_path.remove_at(0)
+			continue
+		return to.normalized()
+	return null
+
+
+## It keeps up with him whatever its legs: a little faster than he is going, never slower than
+## its own walk.
+func _follow_speed() -> float:
+	return clampf(float(wl.leader().speed) + 0.6, float(info.get("walk", 0.5)), 4.6)
+
+
+## Moves into her pen for good: a new key for its coat, the pen for a habitat.
+func make_penned(pen_key: String, pen: Rect2) -> void:
+	key = pen_key
+	name = "Penned_" + pen_key
+	caught = false
+	penned = true
+	fleeing = 0.0
+	fright = 0.0
+	_show_meter()
+	_path = []
+	_going = false
+	habitats = [pen]
+	_wait = randf_range(0.5, 2.0)
 
 
 ## The way to go: straight on if the ground ahead is open, else the nearest turn that is. While it

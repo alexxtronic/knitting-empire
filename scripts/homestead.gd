@@ -57,6 +57,7 @@ var main: Node
 var ui: PlayUi
 var fences := {} # "x,z,h" (from x,z to x+1,z) or "x,z,v" (to x,z+1) -> "fence" or "gate"
 var pen_cells := {} # Vector2i -> true: the 1 m cells inside the pen ({} = no pen yet)
+var pens: Array = [] # every pen's inner Rect2, the biggest (the pen, where the sheep live) first
 var pen_inner := Rect2() # the largest rectangle of the pen's cells: where penned sheep graze
 var strays: Array = [] # the loose sheep, not yet penned
 var herders: Array = [] # what the sheep move away from (Nora; the dog joins when it's in)
@@ -334,11 +335,13 @@ func _gate(a: Vector2, yaw: float) -> Node3D:
 	return hinge
 
 
-## Which cells the fences close in. The pen is the biggest closed-in patch of at least four cells
-## with a gate in its fence.
+## Which cells the fences close in. Every closed-in patch of at least four cells with a gate in its
+## fence is a pen (Alex, 2026-11-15: she can build many, and each holds four animals: wildlife.gd);
+## the biggest is the pen, where her sheep live.
 func _find_pen() -> void:
 	pen_cells = {}
 	pen_inner = Rect2()
+	pens = []
 	if fences.is_empty():
 		_after_pen_change()
 		return
@@ -362,6 +365,7 @@ func _find_pen() -> void:
 				todo.append(n)
 	var seen := {}
 	var best := {}
+	var found: Array = [] # every pen's cells
 	for i in w:
 		for j in h:
 			var c := Vector2i(i, j)
@@ -381,10 +385,15 @@ func _find_pen() -> void:
 				for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 					if fences.get(_edge_between(q, q + d, x0, z0), "") == "gate":
 						gated = true
-			if gated and comp.size() >= 4 and comp.size() > best.size():
-				best = comp
+			if gated and comp.size() >= 4:
+				found.append(comp)
+				if comp.size() > best.size():
+					best = comp
 	pen_cells = best
 	pen_inner = _largest_rect(best)
+	found.sort_custom(func(a, b): return (a as Dictionary).size() > (b as Dictionary).size())
+	for comp in found:
+		pens.append(pen_inner if comp == best else _largest_rect(comp))
 	_after_pen_change()
 
 

@@ -123,7 +123,7 @@ func on_new_day() -> void:
 
 func _process(delta: float) -> void:
 	if crop != "" and watered and not is_ready() and Game.time_running:
-		growth += delta / Game.HOUR_SECONDS
+		growth += delta / Game.hour_seconds()
 	if stage() != _stage:
 		refresh()
 	if is_ready():

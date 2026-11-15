@@ -19,9 +19,12 @@ const SUNRISE := 6.0
 const SUNSET := 19.5
 const PEAK := 60.0 # the sun's height at midday, degrees
 const NOON_YAW := -25.0 # the light's yaw at midday (rises at 35, sets at -85, as main.gd had it)
-const MOON_FULL := 0.55 # moonlight at full moon (the sun is 1.85 at noon)
-const MOON_NEW := 0.05
-const STARLIGHT := 0.06
+## Nights are never black (Alex, 2026-11-15: players couldn't see anything): there's always a bit
+## of moonlight, even at new moon or with the moon down, and a full moon is brighter still.
+const MOON_FULL := 0.95 # moonlight at full moon (the sun is 1.85 at noon)
+const MOON_NEW := 0.6
+const NIGHT_SHADOW := 0.5 # how dark a shadow is by moonlight (1 = as by day)
+const STARLIGHT := 0.6 # the light when the moon is down: as much as a new moon gives
 const MOON_COLOR := Color(0.62, 0.72, 1.0)
 
 ## For the autotest and screenshots: a fixed phase (0 new, 0.5 full) instead of the game day's; -1 is off.
@@ -124,6 +127,7 @@ func update(h: float, dl: float, rain: float) -> void:
 	sun.quaternion = q_night.slerp(q_day, k)
 	sun.light_energy = lerpf(night_e, sun.light_energy, k)
 	sun.light_color = MOON_COLOR.lerp(sun.light_color, k)
+	sun.shadow_opacity = lerpf(NIGHT_SHADOW, 1.0, k) # moon shadows are soft: under the trees it's dim, not black
 	sky_mat.set_shader_parameter("sun_dir", sun_d)
 	sky_mat.set_shader_parameter("moon_dir", moon_d)
 	sky_mat.set_shader_parameter("moon_phase", p)

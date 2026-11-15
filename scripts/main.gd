@@ -39,6 +39,7 @@ const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 const WardrobeView = preload("res://scripts/wardrobe_view.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
+const Empire = preload("res://scripts/empire.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -113,6 +114,7 @@ var astar := AStarGrid2D.new()
 var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
+var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
 var fps: FirstPerson # first person: the camera at her eyes (first_person.gd), V
@@ -365,6 +367,9 @@ func _ready() -> void:
 	add_child(wildlife)
 	if _autotest_dir == "": # the autotest places them only for its own check (_wildlife_checks)
 		wildlife.build()
+	empire = Empire.new()
+	empire.main = self
+	add_child(empire)
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -373,6 +378,7 @@ func _ready() -> void:
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
+	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
 	var skip_title := bool(Engine.get_meta("ke_skip_title", false))
 	Engine.set_meta("ke_skip_title", false)
@@ -1178,6 +1184,7 @@ func _process(delta: float) -> void:
 		Game.flags["play_secs"] = float(Game.flags.get("play_secs", 0.0)) + delta
 	_update_rounds(delta)
 	jobs.update(delta)
+	empire.update(delta)
 	if Game.hour >= 24.0 and not sleeping:
 		hud.show_toast("You stayed up too late and fell asleep where you stood!")
 		_go_to_sleep(true)
@@ -1481,7 +1488,11 @@ func _input(e: InputEvent) -> void:
 		KEY_V:
 			fps.enter()
 		KEY_SPACE:
-			_set_cam_lock(not cam_follow, true)
+			if dog and dog.controlled: # as the dog, Space barks (and the camera comes back to him)
+				dog_bark()
+				_set_cam_lock(true)
+			else:
+				_set_cam_lock(not cam_follow, true)
 		KEY_B:
 			set_mode(Mode.LIVE if mode == Mode.BUILD else Mode.BUILD)
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
@@ -1604,8 +1615,19 @@ func toggle_dog(on = null) -> void:
 	dog.path = []
 	if dog.controlled:
 		player.walk([])
-		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, Tab to go back to Nora.")
+		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, %s to bark at wild animals, Tab to go back to Nora." % OS.get_keycode_string(Keys.key_for(KEY_SPACE, ["world"])))
 	_set_cam_lock(true)
+
+
+## The dog barks (Space while you play him, or by himself when sent to round an animal up): the
+## sound, and every wild animal near him takes fright (wildlife.gd). False if he has no breath yet.
+func dog_bark() -> bool:
+	if dog == null or not dog.bark():
+		return false
+	audio.play("bark", -3.0, 0.12)
+	if wildlife:
+		wildlife.barked(dog.global_position)
+	return true
 
 
 func _update_dog() -> void:
@@ -2359,16 +2381,21 @@ func _finish_knit(rarity := 0) -> void:
 	if fibre != "" and not (Game.has_item("wool", 2) and Game.has_item(fibre)):
 		fibre = ""
 	var paid := false
-	if fibre != "": # a wild fibre lifts the sweater to at least its floor
+	# better needles set the least any sweater can be (empire.gd); a wild fibre lifts it to its own floor
+	rarity = maxi(rarity if rarity > 0 else Game.knit_quality(), empire.needle_floor())
+	if fibre != "":
 		paid = Game.take_item("wool", 2) and Game.take_item(fibre)
-		rarity = maxi(rarity if rarity > 0 else Game.knit_quality(), wildlife.knit_floor(fibre))
+		rarity = maxi(rarity, wildlife.knit_floor(fibre))
 	else:
 		paid = Game.take_item("wool", 3)
 	if paid:
 		var worn0 := Game.worn_quality
 		var q := Game.knit_sweater(rarity)
 		Game.add_need("happiness", 14.0)
-		if q > worn0:
+		if fibre != "" and empire.knitted(fibre, q): # the one a local asked for: put by for them
+			var who = _villager(str(empire.request().get("who", "")))
+			hud.show_toast("A %s %s sweater, just as %s asked. Take it to them for %dc." % [KnitGame.rarity_name(q), wildlife.item_name(fibre).to_lower(), who.title if who else "they", empire.payout()])
+		elif q > worn0:
 			hud.show_toast("A %s sweater! Warmer than anything she owns. She'll wear one like it." % KnitGame.rarity_name(q))
 		else:
 			hud.show_toast("You knitted a %s sweater! Ship it for %dc." % [KnitGame.rarity_name(q), Game.sweater_worth(Game.SELL_PRICES["sweater"]) if Game.count("sweater") == 1 else int(round(Game.SELL_PRICES["sweater"] * float(Game.RARITY_PRICE[q - 1])))])
@@ -2506,6 +2533,8 @@ func _on_day_started(_day: int) -> void:
 	_update_price_board()
 	if forage:
 		forage.apply() # what she cut a while ago grows back
+	if wildlife:
+		wildlife.restock() # another animal turns up where one was caught, once its time is up
 	for p in plots:
 		p.on_new_day()
 	for s in sheep_list:
@@ -2916,7 +2945,7 @@ func _update_new_talk(delta: float) -> void:
 	for v in villagers:
 		var g := v.get_node_or_null("NewTalk") as Sprite3D
 		if check:
-			var want: bool = v.visible and not story.is_playing() and not title_on and Story.find_trigger("talk", v.vid) != ""
+			var want: bool = v.visible and not story.is_playing() and not title_on and (Story.find_trigger("talk", v.vid) != "" or empire.wants(v.vid))
 			if want and g == null:
 				g = _new_talk_glow(v)
 			if g:
@@ -4235,6 +4264,13 @@ func _job_checks() -> void:
 	autotest_jog = true
 	hud.hide_dialogue()
 	hud.tip_panel.visible = false
+	# jobs are parked (Jobs.on): nobody offers one and no menu has Work rows. The rest of this check
+	# turns them on for itself, so they still work the day they come back
+	Game.set_flag("job", "bakery")
+	var parked_rows: Array = _villager_actions(_villager("giorgio")).filter(func(a): return str(a.get("group", "")) == "Work")
+	_check("jobs are parked: no job, no offer and no Work rows (on %s, job '%s', offer '%s', rows %d)" % [Jobs.on, Jobs.current(), Jobs.offer_scene("giorgio"), parked_rows.size()],
+		not Jobs.on and Jobs.current() == "" and Jobs.offer_scene("giorgio") == "" and parked_rows.is_empty())
+	Jobs.on = true
 	var defs := Jobs.defs()
 	var bad: Array = []
 	for id in defs:
@@ -4417,6 +4453,7 @@ func _job_checks() -> void:
 	Game.hour = hour0
 	_show_goal()
 	await _wait(0.3) # jobs.update sees the job go back to how it was
+	Jobs.on = false
 	story.auto = auto0
 	story.auto_choices = []
 	autotest_jog = jog0
@@ -4966,6 +5003,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=empire" in OS.get_cmdline_user_args(): # just the empire: the 20-minute day, bright nights, lantern, needles, catching, requests
+		await _wait(1.5)
+		await _empire_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=wildlife" in OS.get_cmdline_user_args(): # just the wild animals and birds: placing, combing, fleeing, flushing
 		await _wait(1.5)
 		await _wildlife_checks()
@@ -5205,6 +5248,7 @@ func _autotest() -> void:
 	await _world_checks()
 	await _dog_checks()
 	await _wildlife_checks()
+	await _empire_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
 	await _photo_checks()
@@ -5352,8 +5396,8 @@ func _sky_checks() -> void:
 		Game.hour = 23.0
 		await _wait(0.3)
 		night[ph] = [sun.light_energy, sun.global_basis.z, SB.dir_of(SB.moon_angles(23.0, ph))]
-	_check("a full moon lights the night from where it hangs (%.2f, from %.0f deg up); with no moon, faint starlight (%.2f)" % [night[0.5][0], rad_to_deg(asin(night[0.5][1].y)), night[0.0][0]],
-		night[0.5][0] > 0.4 and night[0.0][0] < 0.12 and night[0.5][1].dot(night[0.5][2]) > 0.95)
+	_check("a full moon lights the night from where it hangs (%.2f, from %.0f deg up); with no moon there's still some light to see by (%.2f)" % [night[0.5][0], rad_to_deg(asin(night[0.5][1].y)), night[0.0][0]],
+		night[0.5][0] > 0.6 and night[0.0][0] > 0.3 and night[0.0][0] < night[0.5][0] - 0.2 and night[0.5][1].dot(night[0.5][2]) > 0.95)
 	# pictures: the low sun before evening, a full moon rising, a crescent at dusk; the camera looks up at each
 	for v in [["sun", 17.4, -1.0], ["clouds", 17.4, -1.0], ["full_moon", 20.7, 0.5], ["crescent", 19.9, 0.12]]:
 		SB.phase_override = v[2]
@@ -6634,6 +6678,347 @@ func _wildlife_checks() -> void:
 	_check("animals far from her and the camera are hidden and still (%d of %d shown from the yard)" % [shown, wildlife.animals.size()],
 		shown < wildlife.animals.size() and not by["chinchilla"][0].visible and by["chinchilla"][0].process_mode == Node.PROCESS_MODE_DISABLED)
 	wildlife.clear()
+
+
+## The knitting empire's loop (Alex, 2026-11-15; docs/DIRECTION.md): a day is 20 real minutes, 12 of
+## day and 8 of night; the darkest night still has light to see by; Steve's lantern lights itself
+## after dark; Rosa's better needles lift every knit; played as the dog, Space barks, a bark fills
+## a wild animal's fright meter and it bolts, at full fright it follows him, three at most, and he
+## leads them home to a pen that holds four; she combs them there, a second pen makes room, the dog
+## can be sent from Nora's side, and another animal turns up in the wild later; a local asks for a
+## sweater of a wild fibre, the one she knits is put by for them, and handing it over pays.
+## Saves 60_night_new_moon.png, 60_night_woods.png, 60_night_lantern.png, 60_bark.png,
+## 60_round_up.png and 60_penned.png.
+func _empire_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var SB := Lighting.SkyBodies
+	var keep := {"flags": Game.flags.duplicate(true), "coins": Game.coins, "inv": Game.inv.duplicate(true), "day": Game.day, "hour": Game.hour,
+		"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate(), "s": Game.sweaters.duplicate(),
+		"sd": Game.sweater_designs.duplicate(), "xp": Game.knit_xp, "jog": autotest_jog, "cd": cam_dist, "ph": SB.phase_override, "cl": SB.clouds_override}
+	var friends0: Dictionary = Game.friends.duplicate(true)
+	player.walk([])
+	autotest_jog = false
+	# the clock: 12 minutes of day and 8 of night (the rest of the autotest runs on the old fast one)
+	Game.fast_clock = false
+	var day_s := 0.0
+	var night_s := 0.0
+	for i in 240:
+		var h := i * 0.1 + 0.05
+		if h >= Game.DAY_START and h < Game.DAY_END:
+			day_s += Game.hour_seconds(h) * 0.1
+		else:
+			night_s += Game.hour_seconds(h) * 0.1
+	Game.hour = 12.0
+	var h0 := Game.hour
+	await _wait(2.0)
+	var moved := (Game.hour - h0) * Game.hour_seconds(12.0)
+	Game.fast_clock = true
+	_check("a day is 20 real minutes: %.0f s of daytime (6:00 to 20:00) and %.0f s of night; two seconds move the clock two seconds on (%.1f)" % [day_s, night_s, moved],
+		absf(day_s - 720.0) < 1.0 and absf(night_s - 480.0) < 1.0 and absf(moved - 2.0) < 0.4)
+	# the darkest night: no moon, 1 a.m.
+	SB.phase_override = 0.0
+	SB.clouds_override = 0.1
+	Game.hour = 1.0
+	player.position = Vector3(9.0, 0, 8.0)
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+	cam_dist = 20.0
+	cam_target = player.position
+	_set_cam_lock(true)
+	await _wait(0.8)
+	var dark_sun := sun.light_energy
+	var dark_fill := env.ambient_light_energy
+	await _shot("60_night_new_moon.png")
+	var lum_farm := _screen_brightness()
+	player.position = Vector3(-52.0, 0, -8.0) # in the swamp's trees
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+	cam_target = player.position
+	await _wait(0.8)
+	await _shot("60_night_woods.png")
+	var lum_woods := _screen_brightness()
+	_check("the darkest night (no moon, 1 a.m.) still has light to see by: moonlight %.2f, fill %.2f, the picture's brightness %.2f on the farm and %.2f in the swamp" % [dark_sun, dark_fill, lum_farm, lum_woods],
+		dark_sun > 0.5 and dark_fill > 1.0 and lum_farm > 0.2 and lum_woods > 0.13)
+	# the lantern
+	var steve := _villager("steve")
+	Game.coins = 5000
+	var lrow: Array = _villager_actions(steve).filter(func(a): return a["id"] == "buy_lantern")
+	_villager_action(steve, "buy_lantern")
+	hud.hide_dialogue()
+	await _wait(0.5)
+	var lit_night: bool = empire.lantern_lit()
+	await _shot("60_night_lantern.png")
+	var lum_lantern := _screen_brightness()
+	Game.hour = 12.0
+	await _wait(0.4)
+	_check("Steve sells a lantern (%s, %d left): it lights itself in the dark (%s, the picture %.2f against %.2f without) and is out by day (%s)" % [str(lrow[0]["label"]) if not lrow.is_empty() else "no row", Game.coins, lit_night, lum_lantern, lum_woods, empire.lantern_lit()],
+		not lrow.is_empty() and Game.coins == 5000 - empire.lantern_price() and Game.has_item("lantern") and lit_night and lum_lantern > lum_woods * 1.15 and not empire.lantern_lit())
+	SB.phase_override = keep["ph"]
+	SB.clouds_override = keep["cl"]
+	# needles
+	var rosa := _villager("rosa")
+	Game.flags.erase("needles")
+	var floor0: int = empire.needle_floor()
+	var nrow: Array = _villager_actions(rosa).filter(func(a): return a["id"] == "buy_needles")
+	var c0 := Game.coins
+	_villager_action(rosa, "buy_needles")
+	hud.hide_dialogue()
+	Game.add_item("wool", 3)
+	var s0 := Game.sweaters.size()
+	_knit_fibre = ""
+	_finish_knit(1)
+	var got: int = Game.sweaters[-1] if Game.sweaters.size() > s0 else 0
+	_check("Rosa sells better needles a step at a time (%s): with Gran's a knit can be Common (floor %d), with steel a Common knit comes out %s (-%dc)" % [str(nrow[0]["label"]) if not nrow.is_empty() else "no row", floor0, KnitGame.rarity_name(got), c0 - Game.coins],
+		not nrow.is_empty() and floor0 == 1 and str(Game.flag("needles", "")) == "steel" and got == 2 and c0 - Game.coins == 150)
+	# catching: play the dog and bark; a frightened animal follows him home to a pen
+	Game.flags.erase("penned")
+	Game.flags.erase("wild_gone")
+	Game.flags.erase("wild")
+	wildlife.build()
+	await _wait(0.5)
+	var rabbits: Array = wildlife.animals.filter(func(a): return a.species == "rabbit" and not a.penned)
+	var sheep0 := Game.sheep_count
+	Game.sheep_count = 1 # room for three in the one pen
+	_check("a pen holds four animals, sheep included (%d pen, %d places, %d left with one sheep), and there are wild rabbits to catch (%d)" % [wildlife.pens().size(), wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0), wildlife.pen_room(), rabbits.size()],
+		wildlife.pens().size() == 1 and wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0) == 4 and rabbits.size() >= 4)
+	if rabbits.size() < 4:
+		wildlife.clear()
+		Game.sheep_count = sheep0
+		return
+	var rabbit = rabbits[0]
+	var key0 := ""
+	# four rabbits in a field by the farm, the dog among them
+	var field := Vector3(-6.0, 0, 22.0)
+	for i in 4:
+		rabbits[i].position = field + Vector3([2.5, -2.5, 0.0, 6.5][i], 0, [0.0, 1.0, -2.5, 5.0][i])
+		rabbits[i].hold(30.0)
+	player.position = field + Vector3(0, 0, 9.0)
+	dog.position = field
+	dog.path = []
+	cam_target = field
+	cam_dist = 17.0
+	_set_cam_lock(false)
+	toggle_dog(true)
+	hud.hide_dialogue()
+	await _wait(0.5)
+	var barks0: int = dog.barks
+	await _key_tap(Keys.key_for(KEY_SPACE, ["world"]))
+	await _wait(0.1)
+	var fright1: float = rabbit.fright
+	var bolted: bool = rabbit.fleeing > 0.0
+	var meter: bool = rabbit.get_node_or_null("Fright") != null and rabbit.get_node("Fright").visible
+	await _shot("60_bark.png")
+	_check("as the dog, Space barks (%d bark): the rabbit nearby takes fright (meter %.2f, shown %s) and bolts (%s), and he can't bark again at once (%s)" % [dog.barks - barks0, fright1, meter, bolted, not dog_bark()],
+		dog.barks - barks0 == 1 and fright1 > 0.3 and fright1 < 1.0 and meter and bolted)
+	# he keeps after them, barking: up to three give in and follow him
+	var tw := 0.0
+	while wildlife.following().size() < 3 and tw < 45.0:
+		var near = null
+		var best := INF
+		for a in rabbits.slice(0, 4):
+			var d: float = a.position.distance_to(dog.position)
+			if not a.caught and d < best:
+				best = d
+				near = a
+		if near != null:
+			dog.running = true
+			if best > 2.5:
+				dog.walk(_find_path(dog.position, near.position))
+			dog_bark()
+		await _wait(0.25)
+		tw += 0.25
+		cam_target = dog.position
+	dog.running = false
+	var herd: Array = wildlife.following()
+	if not herd.is_empty():
+		key0 = herd[0].key # its place in the wild, before the pen gives it a new key
+	var fourth = null
+	for a in rabbits.slice(0, 4):
+		if not a.caught:
+			fourth = a
+	var f4 := 0.0
+	Game.sheep_count = 0 # a place free in the pen, so it's the herd's size that stops a fourth
+	if fourth != null: # a fourth won't join: three is all he can herd
+		f4 = fourth.fright
+		dog.position = fourth.position + Vector3(1.5, 0, 0)
+		dog.path = []
+		for i in 4:
+			await _wait(BARK_WAIT)
+			dog_bark()
+	_check("barking fills their meters and three give in and follow him (%d after %.1f s); a fourth only bolts (caught %s, fright %.2f -> %.2f, '%s')" % [herd.size(), tw, fourth.caught if fourth != null else true, f4, fourth.fright if fourth != null else -1.0, wildlife.round_up_problem(fourth) if fourth != null else "?"],
+		herd.size() == 3 and fourth != null and not fourth.caught and fourth.fright <= f4 + 0.001 and wildlife.round_up_problem(fourth).contains("3 at a time"))
+	Game.sheep_count = 1
+	# home: he runs back to the pen and they follow him in
+	var pen: Rect2 = wildlife.pen()
+	var gate := Vector3(pen.get_center().x, 0, pen.end.y + 9.0)
+	for off in [Vector3(0, 0, pen.size.y * 0.5 + 9.0), Vector3(pen.size.x * 0.5 + 9.0, 0, 0), Vector3(-pen.size.x * 0.5 - 9.0, 0, 0), Vector3(0, 0, -pen.size.y * 0.5 - 9.0)]:
+		var c: Vector3 = Vector3(pen.get_center().x, 0, pen.get_center().y) + (off as Vector3)
+		if _walkable(_cell(c)):
+			gate = c
+			break
+	dog.position = gate
+	dog.path = []
+	for i in herd.size():
+		herd[i].position = gate + Vector3(1.2 + i, 0, 1.0)
+	cam_target = dog.position
+	_set_cam_lock(true)
+	await _wait(0.3)
+	var shot_home := false
+	dog.walk(_find_path(dog.position, Vector3(pen.get_center().x, 0, pen.get_center().y)))
+	tw = 0.0
+	var followed := 0.0
+	var p_was: Vector3 = herd[0].position if not herd.is_empty() else Vector3.ZERO
+	while wildlife.penned().size() < 3 and tw < 40.0:
+		await _wait(0.2)
+		tw += 0.2
+		if not herd.is_empty():
+			followed += herd[0].position.distance_to(p_was)
+			p_was = herd[0].position
+		if not shot_home and tw > 1.0:
+			shot_home = true
+			await _shot("60_round_up.png")
+	dog.walk([])
+	toggle_dog(false)
+	hud.hide_dialogue()
+	player.position = gate
+	cam_target = Vector3(pen.get_center().x, 0, pen.get_center().y)
+	_set_cam_lock(false)
+	cam_dist = 13.0
+	await _wait(0.8)
+	await _shot("60_penned.png")
+	var inside: int = wildlife.penned().filter(func(a): return pen.grow(0.3).has_point(Vector2(a.position.x, a.position.z))).size()
+	_check("they follow him home (%.1f m on their own legs) and move into the pen (%d penned, %d inside it, %d on her list); with her one sheep the pen is full (%d places left, Rosa: %s)" % [followed, wildlife.penned().size(), inside, wildlife.penned_list().size(), wildlife.pen_room(), str(_villager_actions(rosa).filter(func(a): return str(a["label"]).begins_with("Buy a sheep")).map(func(a): return a["label"]))],
+		wildlife.penned().size() == 3 and inside == 3 and followed > 2.0 and wildlife.penned_list().size() == 3 and (Game.flag("wild_gone", {}) as Dictionary).has(key0)
+		and (wildlife.pen_room() == 0 or wildlife.stalls_rented()))
+	rabbit = wildlife.penned()[0] if not wildlife.penned().is_empty() else rabbit
+	var a0 := Game.count("angora")
+	var rows_pen: Array = rabbit.ke_actions()
+	wildlife.combed(rabbit)
+	dog_bark()
+	_check("in the pen she combs one (+%d angora), a bark doesn't trouble it (fleeing %.1f, fright %.2f), and its menu lets it go (%s)" % [Game.count("angora") - a0, rabbit.fleeing, rabbit.fright, str(rows_pen.map(func(a): return a["id"]))],
+		Game.count("angora") == a0 + 1 and rabbit.fleeing <= 0.0 and rabbit.fright <= 0.0 and rows_pen.any(func(a): return a["id"] == "free") and not rows_pen.any(func(a): return a["id"] == "round_up"))
+	# a second pen makes room for four more; the caught ones spread over the pens
+	var pens0: Array = homestead.pens.duplicate()
+	var second := Rect2(pen.position + Vector2(pen.size.x + 4.0, 0.0), Vector2(3.0, 3.0))
+	homestead.pens = [pen, second]
+	var cap2: int = wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0)
+	Game.sheep_count = 2 # two sheep in the first pen: one caught rabbit has to move to the second
+	wildlife._assign_pens()
+	var in_second: int = wildlife.penned().filter(func(a): return second.grow(0.3).has_point(Vector2(a.position.x, a.position.z))).size()
+	_check("another pen makes room for four more (%d places with two pens), and her animals spread over them (%d of 3 moved to the second with two sheep in the first)" % [cap2, in_second],
+		cap2 == 8 and in_second == 1)
+	homestead.pens = pens0
+	Game.sheep_count = 1
+	wildlife._assign_pens()
+	# sent from Nora's side, he chases and barks by himself
+	var wild_one = null
+	for a in rabbits:
+		if is_instance_valid(a) and not a.caught and not a.penned:
+			wild_one = a
+			break
+	wildlife.set_free(wildlife.penned()[0])
+	hud.hide_dialogue()
+	player.position = field + Vector3(0, 0, 4.0)
+	dog.position = player.position + Vector3(1.0, 0, 0.5)
+	dog.path = []
+	wild_one.position = field
+	wild_one.fright = 0.0
+	wild_one.hold(5.0)
+	cam_target = field
+	await _wait(0.3)
+	var arow: Array = wild_one.ke_actions().filter(func(a): return a["id"] == "round_up")
+	var why: String = wildlife.round_up_problem(wild_one)
+	wildlife.round_up(wild_one)
+	tw = 0.0
+	while not wild_one.caught and wildlife.chasing != null and tw < 45.0:
+		await _wait(0.2)
+		tw += 0.2
+		cam_target = wild_one.position
+	_check("from Nora, its menu sends the dog after it (%s, problem '%s'): he runs it down barking and it gives in (caught %s after %.1f s)" % [str(arow[0]["label"]) if not arow.is_empty() else "no row", why, wild_one.caught, tw],
+		why == "" and not arow.is_empty() and arow[0]["enabled"] and wild_one.caught and dog.chase == null)
+	# its place in the wild stays empty for a while, then another turns up; the pens survive a rebuild
+	var wild_now: Array = wildlife.animals.filter(func(a): return a.key == key0)
+	Game.day += 5
+	wildlife.restock()
+	var wild_later: Array = wildlife.animals.filter(func(a): return a.key == key0 and not a.penned)
+	wildlife.build()
+	await _wait(0.4)
+	var again: Array = wildlife.penned()
+	_check("another rabbit turns up in its place after a few days (%d there before, %d after); the penned ones are back after a reload (%d, all rabbits %s)" % [wild_now.size(), wild_later.size(), again.size(), again.all(func(a): return a.species == "rabbit")],
+		wild_now.is_empty() and wild_later.size() == 1 and again.size() == 2 and again.all(func(a): return a.species == "rabbit"))
+	wildlife.clear()
+	Game.sheep_count = sheep0
+	# a local's request: Sabrina wants angora
+	Game.flags.erase("request")
+	Game.flags.erase("requests_done")
+	Game.flags.erase("request_day")
+	var sab := _villager("sabrina")
+	var due: Dictionary = empire.due()
+	var ask_rows: Array = _villager_actions(sab).filter(func(a): return a["id"] == "request_ask")
+	_villager_action(sab, "request_ask")
+	hud.hide_dialogue()
+	var goal1 := str(Game.flag("goal", ""))
+	Game.add_item("wool", 2)
+	Game.add_item("angora", 1)
+	s0 = Game.sweaters.size()
+	_knit_fibre = "angora"
+	_finish_knit(1)
+	var made := int(empire.request().get("made", 0))
+	var goal2 := str(Game.flag("goal", ""))
+	var give_rows: Array = _villager_actions(sab).filter(func(a): return a["id"] == "request_give")
+	c0 = Game.coins
+	var pay: int = empire.payout()
+	_villager_action(sab, "request_give")
+	hud.hide_dialogue()
+	_check("Sabrina asks for an angora sweater (due %s/%s, she glows %s, row %d): the goal sends her for a rabbit ('%s'), the one she knits with angora is put by (grade %d, bag %d -> %d, '%s'), and handing it over pays %dc (+%d)" % [str(due.get("who", "")), str(due.get("fibre", "")), not ask_rows.is_empty(), ask_rows.size(), goal1, made, s0, Game.sweaters.size(), goal2, pay, Game.coins - c0],
+		str(due.get("who", "")) == "sabrina" and not ask_rows.is_empty() and goal1.contains("rabbit") and made >= 2 and Game.sweaters.size() == s0 and goal2.contains("Sabrina")
+		and not give_rows.is_empty() and pay >= 180 and Game.coins - c0 == pay and empire.request().is_empty() and empire.requests_done() == 1)
+	var soon: Dictionary = empire.due()
+	Game.day += 2
+	var next: Dictionary = empire.due()
+	_check("the next local asks a couple of days later (none the same day: %s; then %s wants %s)" % [soon.is_empty(), str(next.get("who", "")), str(next.get("fibre", ""))],
+		soon.is_empty() and str(next.get("who", "")) == "barbara")
+	# back as it was
+	Game.flags = keep["flags"]
+	Game.friends = friends0
+	Game.coins = keep["coins"]
+	Game.inv = keep["inv"]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	Game.worn_quality = keep["q"]
+	Game.worn_design = keep["d"]
+	Game.wardrobe = keep["w"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["sd"]
+	Game.knit_xp = keep["xp"]
+	Game.sync_slots()
+	autotest_jog = keep["jog"]
+	cam_dist = keep["cd"]
+	player.position = Vector3(9.0, 0, 8.0)
+	if dog:
+		dog.chase = null
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+	cam_target = player.position
+	_set_cam_lock(true)
+	_show_goal()
+	await _wait(0.3)
+
+
+const BARK_WAIT := 0.65 # a little longer than the dog needs between barks (Dog.BARK_EVERY)
+
+
+## How bright the picture on screen is, 0..1 (the mean of its pixels' luminance), for the night checks.
+func _screen_brightness() -> float:
+	var img := get_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		return 0.0
+	img.resize(64, 40, Image.INTERPOLATE_BILINEAR)
+	var sum := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			sum += img.get_pixel(x, y).get_luminance()
+	return sum / float(img.get_width() * img.get_height())
 
 
 ## The knitted sweaters: fifty designs; Nora's wardrobe (what she knits hangs there, she picks what
@@ -8801,8 +9186,11 @@ func _villager_actions(v) -> Array:
 			acts.append(_act("sell_crops", "Sell crops  (%dc)" % crops, crops > 0))
 			var wp := _yarn_price(Game.WOOL_PACK_PRICE)
 			acts.append(_act("buy_wool", "Buy 3 wool  (%dc)" % wp, Game.coins >= wp))
+			acts.append_array(empire.needle_rows()) # better needles, a step at a time
 			if homestead.story_farm() and not homestead.has_pen():
 				acts.append(_act("noop", "Buy a sheep  (build a pen first)", false))
+			elif wildlife.pen_room() <= 0: # a pen holds four animals; another pen makes room
+				acts.append(_act("noop", "Buy a sheep  (your pens are full)", false))
 			elif Game.sheep_count < Game.MAX_SHEEP:
 				var sp := _yarn_price(Game.SHEEP_PRICE)
 				acts.append(_act("buy_sheep", "Buy a sheep  (%dc · you have %d)" % [sp, Game.sheep_count], Game.coins >= sp))
@@ -8824,6 +9212,7 @@ func _villager_actions(v) -> Array:
 			for crop in seeds:
 				var pack: Array = seeds[crop]
 				acts.append(_act("buy_seeds_" + crop, "Buy %d %s seeds  (%dc)" % [int(pack[0]), crop, int(pack[1])], Game.coins >= int(pack[1])))
+			acts.append_array(empire.lantern_rows())
 		"giorgio":
 			var pp := _pastry_price()
 			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
@@ -8849,6 +9238,7 @@ func _villager_actions(v) -> Array:
 				else:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
+	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
 	acts.append_array(_wear_sale_actions(v)) # a sweater to wear, bought from her
 	if int(Game.friend(v.vid)["gift"]) == Game.day:
 		acts.append(_act("noop", "Already gave a gift today", false))
@@ -8887,6 +9277,19 @@ func _villager_action(v, id: String) -> void:
 	if id.begins_with("buy_tool_") or id.begins_with("buy_seeds_"):
 		_buy_from_store(v, id)
 		return
+	match id: # the empire's own rows (empire.gd)
+		"buy_needles":
+			empire.buy_needles(v)
+			return
+		"buy_lantern":
+			empire.buy_lantern(v)
+			return
+		"request_ask":
+			empire.ask(v)
+			return
+		"request_give":
+			empire.give(v)
+			return
 	match id:
 		"talk":
 			var scene_id := Jobs.offer_scene(v.vid) # a job offer comes first, once it's due

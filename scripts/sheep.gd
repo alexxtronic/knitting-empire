@@ -180,7 +180,7 @@ func _update_look() -> void:
 
 func _process(delta: float) -> void:
 	if wool < 1.0:
-		wool = wool + delta / (Game.HOUR_SECONDS * REGROW_HOURS)
+		wool = wool + delta / (Game.hour_seconds() * REGROW_HOURS)
 	if hold_time > 0.0:
 		hold_time -= delta
 		_speed = 0.0

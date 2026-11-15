@@ -31,10 +31,15 @@ const BRAKE := 8.0
 const TURN := 9.0
 const HEEL := 1.3 # how close to Nora he settles
 const ROOM := 1.1 # in a story scene, anyone who comes this close moves him round to her other side
+const BARK_EVERY := 0.6 # seconds between barks
 const SCARE_RADIUS := 3.4 # sheep move off when he is this close (Nora: homestead.HERD_RADIUS)
 
 var main: Node # main.gd
 var controlled := false # the player's clicks move him (Tab)
+var chase: Node3D = null # a wild animal he's been sent to round up (wildlife.gd): he runs it down
+var barks := 0 # how many times he has barked (for the autotest)
+var _bark_t := 0.0 # seconds until he can bark again
+var _woof: Label3D
 var running := false # Shift held, while he's the one you play
 var walk_speed := 1.6 # a brisk trot when you send him somewhere
 var run_speed := 4.2 # the gallop
@@ -106,8 +111,46 @@ func walk(p: Array) -> void:
 	path = p
 
 
+## He barks, if he has his breath back (BARK_EVERY seconds between barks): a "Woof!" over his
+## head. main.gd plays the sound and tells the wild animals. True if he did.
+func bark() -> bool:
+	if _bark_t > 0.0 or not visible:
+		return false
+	_bark_t = BARK_EVERY
+	barks += 1
+	if _woof == null:
+		_woof = Label3D.new()
+		_woof.name = "Woof"
+		_woof.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_woof.no_depth_test = true
+		_woof.pixel_size = 0.007
+		_woof.font_size = 44
+		_woof.outline_size = 12
+		_woof.outline_modulate = Color(0.25, 0.14, 0.08, 0.95)
+		_woof.modulate = Color(1.0, 0.95, 0.8)
+		_woof.text = "Woof!"
+		add_child(_woof)
+	_woof.visible = true
+	_woof.position = Vector3(0.0, 1.15, 0.0)
+	return true
+
+
 func _process(delta: float) -> void:
-	if not controlled:
+	if _bark_t > 0.0:
+		_bark_t -= delta
+	if _woof and _woof.visible: # the "Woof!" rises and fades in the time between barks
+		var k := clampf(_bark_t / BARK_EVERY, 0.0, 1.0)
+		_woof.position.y = 1.15 + 0.5 * (1.0 - k)
+		_woof.modulate.a = k
+		_woof.visible = k > 0.02
+	if chase != null and not is_instance_valid(chase):
+		chase = null
+	if chase != null and not controlled:
+		_repath -= delta
+		if _repath <= 0.0:
+			_repath = 0.25
+			path = main._find_path(position, chase.position)
+	elif not controlled:
 		_follow_nora(delta)
 	var walking := not path.is_empty()
 	if walking:
@@ -138,6 +181,8 @@ func _process(delta: float) -> void:
 func _top_speed() -> float:
 	if controlled:
 		return run_speed if running else walk_speed
+	if chase != null:
+		return run_speed
 	# keeping up with Nora: a walk beside her, a trot when she's drawn ahead, a gallop to catch up
 	var d := _to_nora().length()
 	if d > 7.0:

@@ -624,6 +624,7 @@ class Slot extends Button:
 		"gate": ["Pen gate", Color(0.6, 0.45, 0.3)],
 		"gran_note": ["Gran's note", Color(0.96, 0.92, 0.82)],
 		"leaves": ["Leaves", Color(0.45, 0.68, 0.32)],
+		"lantern": ["Lantern", Color(0.98, 0.76, 0.36)],
 		"turnip_seeds": ["Turnip seeds", Color(0.78, 0.66, 0.86)],
 		"pumpkin_seeds": ["Pumpkin seeds", Color(0.95, 0.8, 0.55)],
 		# tools: a third entry says what a click does with it in her hand

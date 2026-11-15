@@ -8,7 +8,12 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 signal toast(text: String)
 signal day_started(day: int)
 
-const HOUR_SECONDS := 10.0 # real seconds per in-game hour
+const HOUR_SECONDS := 10.0 # real seconds per in-game hour on the fast clock (the autotest's)
+## A day is 20 real minutes (Alex, 2026-11-15): 12 of daytime, 6:00 to 20:00, and 8 of night.
+const DAY_START := 6.0
+const DAY_END := 20.0
+const DAY_SECONDS := 720.0
+const NIGHT_SECONDS := 480.0
 const SEASONS := ["Spring", "Summer", "Autumn", "Winter"]
 const MAX_HOUSE_LEVEL := 3
 ## Save files carry a version; migrate() upgrades older ones step by step.
@@ -80,6 +85,7 @@ const NEEDS := ["energy", "fullness", "happiness", "love", "warmth", "fitness"]
 var day: int = 1
 var hour: float = 8.0
 var clock_frozen := false # god mode (settings): the hour stands still, everything else carries on
+var fast_clock := false # the autotest: 10 seconds an hour, as the game ran before the 20-minute day
 var house_level: int = 0
 var time_running := true
 var friends := {} # villager id -> {"familiarity", "trust", "romance", "talk" (last day talked), "gift" (last day gifted), "n" (times talked)}
@@ -146,7 +152,7 @@ func _process(delta: float) -> void:
 	if not time_running:
 		return
 	if not clock_frozen:
-		hour += delta / HOUR_SECONDS
+		hour += delta / hour_seconds()
 	fullness = maxf(0.0, fullness - delta * 0.22)
 	if fullness <= 0.0:
 		energy = maxf(0.0, energy - delta * 0.4)
@@ -225,6 +231,17 @@ func clock_text() -> String:
 
 
 ## 1.0 in full daylight, 0.0 at night, smooth at dawn and dusk.
+## Real seconds an in-game hour takes now: a day hour is a little longer than a night hour, so the
+## day lasts 12 minutes and the night 8. The autotest keeps the old fast clock (`fast_clock`).
+func hour_seconds(h := -1.0) -> float:
+	if fast_clock:
+		return HOUR_SECONDS
+	h = fposmod(hour if h < 0.0 else h, 24.0)
+	if h >= DAY_START and h < DAY_END:
+		return DAY_SECONDS / (DAY_END - DAY_START)
+	return NIGHT_SECONDS / (24.0 - (DAY_END - DAY_START))
+
+
 func daylight() -> float:
 	var h := hour
 	if h < 5.5 or h >= 20.5:

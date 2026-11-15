@@ -133,6 +133,16 @@
     "seeds": {"turnip": [5, 40], "pumpkin": [3, 75]},
     "seed_tin": {"turnip": 6, "pumpkin": 2}
   },
+  "_about_gear": "What her money buys to knit better and go further (scripts/empire.gd; Alex, 2026-11-15). 'lantern': Steve's price for the lantern that lights her way at night. 'needles': better pairs, in order, sold by Rosa one step at a time; 'floor' is the least a sweater knitted with them can be (1 Common .. 5 Legendary). 'first_needles' is what she starts with. Names, prices and lines are drafts.",
+  "gear": {
+    "lantern": 45,
+    "first_needles": "Gran's bamboo needles",
+    "needles": [
+      {"id": "steel", "name": "Steel needles", "price": 150, "floor": 2, "line": "Steel, love. They don't bend and they don't snag. You'll feel the difference by the second row."},
+      {"id": "rosewood", "name": "Rosewood needles", "price": 500, "floor": 3, "line": "Rosewood. Warm in the hand. My own mother knitted with a pair just like these."},
+      {"id": "silver", "name": "Silver needles", "price": 1500, "floor": 4, "line": "Silver. I've had these in the case eleven years waiting for someone good enough. Go on, they're yours."}
+    ]
+  },
   "_about_forage": "Her axe and shears out in the world (scripts/forage.gd): a felled tree gives 'tree_wood' and grows back after 'tree_regrow_days'; a trimmed plant gives 'leaves' by kind (the start of its model name) and grows back after 'plant_regrow_days'. 'mulch_leaves' leaves mulch a growing bed, bringing it on by 'mulch_growth' of its whole growing time. Trees in Maple Grove itself aren't hers to fell.",
   "forage": {
     "tree_wood": 8,

@@ -18,6 +18,11 @@ const Interiors = preload("res://scripts/interiors.gd")
 const RESUME_AFTER := 2.0 # s idle away from the next task before she picks the shift up again
 const LEAVE_DIST := 30.0 # m from the next task: past this, she has walked off the job
 
+## Jobs are parked (Alex, 2026-11-15: the game is about the knitting empire; the buildings serve
+## the story and the business, not shift work). Off: nobody offers one, no menu has Work rows, a
+## save that had a job keeps the flag but gets nothing from it. The jobs check turns it on for itself.
+static var on := false
+
 var main: Node
 var nudge := true # after Act 1, a goal that sends her to Giorgio (off in the autotest)
 var shift := {} # the shift she is working: {"id", "stops", "i", "hour0", "goal"}
@@ -41,6 +46,8 @@ static func def(id: String) -> Dictionary:
 
 ## The job she has ("" if none).
 static func current() -> String:
+	if not on:
+		return ""
 	var j: Variant = Game.flag("job", "")
 	return str(j) if j is String else ""
 
@@ -74,7 +81,7 @@ static func offer_due(id: String) -> bool:
 ## The offer scene to play when she talks to `vid`, the first time it's due ("" if none).
 static func offer_scene(vid: String) -> String:
 	var id := job_of(vid)
-	if id == "" or current() == id or Game.flag("job_offer_" + id) == true:
+	if not on or id == "" or current() == id or Game.flag("job_offer_" + id) == true:
 		return ""
 	var sc := "job_" + id
 	if not Story.has_scene(sc) or Game.flag("seen_" + sc) == true or not offer_due(id):
@@ -100,7 +107,7 @@ func shift_problem(id: String) -> String:
 ## The rows the boss's menu gets: take the job, work a shift, stop early, or leave the job.
 func actions_for(vid: String) -> Array:
 	var id := job_of(vid)
-	if id == "":
+	if id == "" or not on:
 		return []
 	var d := def(id)
 	var rows := []
@@ -336,7 +343,7 @@ func _announce() -> void:
 
 
 func _update_nudge() -> void:
-	if not nudge or Game.flag("job_nudged") == true or Game.flag("story_farm") != true or Game.flag("act1_done") != true:
+	if not on or not nudge or Game.flag("job_nudged") == true or Game.flag("story_farm") != true or Game.flag("act1_done") != true:
 		return
 	if current() != "" or Game.flag("seen_job_bakery") == true or str(Game.flag("goal", "")) not in ["", "false"]:
 		return
