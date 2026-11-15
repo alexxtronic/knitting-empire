@@ -12,7 +12,7 @@ A Sims-like life on a farm with a Pokémon-like hunt: go out with your dog, find
 2. **Round them up with the dog.** Play the dog and bark (Space). Each bark frightens the animals nearby and fills their fright meter; they bolt, so he has to keep after them. At full fright an animal gives in and follows the dog, up to three at a time. He leads them home to a pen. A pen holds four animals, and she can build as many pens as she can afford.
 3. **Comb or shear them** for fibre, every few days.
 4. **Knit.** The rhythm game sets the sweater's quality. Rare fibre and better needles lift the least it can be.
-5. **Sell.** Rosa and the shipping bin pay a plain price. A local's request for a particular fibre pays far more. Later: online orders and Nora's own shop.
+5. **Sell.** Rosa and the mailbox (it ships what she makes) pay a plain price. A local's request for a particular fibre pays far more. Later: online orders and Nora's own shop.
 6. **Reinvest.** Better needles, a bigger pen, rented stalls, a bigger house, land, a shop with a worker, and at the very end a city of her own with Nora as mayor.
 
 Two rules sit over all of it:
@@ -32,9 +32,9 @@ Two rules sit over all of it:
 
 | Piece | Where |
 |---|---|
-| A day is 20 real minutes: 12 of daytime (6:00 to 20:00), 8 of night | `Game.hour_seconds()` in `scripts/game_state.gd` |
+| A day is 20 real minutes: 14 of daytime (6:00 to 20:00), 6 of night | `Game.hour_seconds()` in `scripts/game_state.gd` |
 | The darkest night still has light to see by | `scripts/sky_bodies.gd` (moonlight floor), `scripts/lighting.gd` (night fill) |
-| A lantern from Steve that lights itself after dark | `scripts/empire.gd`, `data/economy.json` "gear" |
+| A lantern from Steve: after dark she carries it in her left hand and it lights her way | `scripts/empire.gd`, `data/economy.json` "gear", `art/world_assets/lantern/` |
 | Better needles from Rosa, a step at a time: steel, rosewood, silver | `scripts/empire.gd`, `data/economy.json` "gear" |
 | Space barks as the dog; a bark fills a wild animal's fright meter; at full fright it follows him home, three at a time | `scripts/wildlife.gd`, `scripts/wild_animal.gd`, `scripts/dog.gd`, `main.dog_bark()` |
 | A pen holds four animals, and every closed, gated patch of fence is a pen; Lars's barn adds four places while its rent is paid | `homestead.pens`, `wildlife.pen_capacity()`, `data/wildlife.json` "pen_size", "barn_stalls" |
@@ -43,10 +43,10 @@ Two rules sit over all of it:
 
 ### Phase 2: money and space
 
-1. **Economy pass for the 20-minute day.** Crops and wool still grow by the game's hours, so everything takes five times longer in real time than it did. Rent, prices, wool regrowth and the needs' decay all need tuning against a played half hour. Target: the first week is tight, the first needles take about three days.
+1. **Economy pass for the 20-minute day.** A first pass is in (2026-11-15, `data/economy.json` "_about_balance"): a fleece a day per sheep, two packs of wool a day from Rosa, a plain sweater at 90c, crops priced for eating, Gran's rent at 90c a week, one full bar of hunger a day. It was set by arithmetic, not by play: it needs a played first week to check that the week is tight and the first needles take about three days.
 2. **Pens and stalls.** Each pen holds four and the barn's rent already buys four more places. Next: pens that can be upgraded to hold more, more stalls for more rent, the animals actually sleeping in them, and fence panels priced so another pen is a real purchase.
 3. **Selling online.** The post already carries sweater orders. Grow it into a steady order book: more customers, pickier wants (fibre, design, stars), a reputation that raises pay.
-4. **Rare animals matter more.** Per-fibre sweater prices at Rosa's and the bin, so a mink sweater is worth more even without a request. Requests that repeat with new fibres once the first nine are done.
+4. **Rare animals matter more.** Per-fibre sweater prices at Rosa's and the mailbox, so a mink sweater is worth more even without a request. Requests that repeat with new fibres once the first nine are done.
 
 ### Phase 3: the shop
 

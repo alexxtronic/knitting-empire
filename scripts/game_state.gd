@@ -9,11 +9,12 @@ signal toast(text: String)
 signal day_started(day: int)
 
 const HOUR_SECONDS := 10.0 # real seconds per in-game hour on the fast clock (the autotest's)
-## A day is 20 real minutes (Alex, 2026-11-15): 12 of daytime, 6:00 to 20:00, and 8 of night.
+## A day is 20 real minutes (Alex, 2026-11-15): 14 of daytime, 6:00 to 20:00, and 6 of night.
+const HUNGER := 0.13 # fullness lost a real second: three good meals see her through a day
 const DAY_START := 6.0
 const DAY_END := 20.0
-const DAY_SECONDS := 720.0
-const NIGHT_SECONDS := 480.0
+const DAY_SECONDS := 840.0
+const NIGHT_SECONDS := 360.0
 const SEASONS := ["Spring", "Summer", "Autumn", "Winter"]
 const MAX_HOUSE_LEVEL := 3
 ## Save files carry a version; migrate() upgrades older ones step by step.
@@ -153,7 +154,7 @@ func _process(delta: float) -> void:
 		return
 	if not clock_frozen:
 		hour += delta / hour_seconds()
-	fullness = maxf(0.0, fullness - delta * 0.22)
+	fullness = maxf(0.0, fullness - delta * HUNGER) # about one full bar over a 14-minute day
 	if fullness <= 0.0:
 		energy = maxf(0.0, energy - delta * 0.4)
 	warmth = move_toward(warmth, warmth_target, delta * 1.2)
@@ -232,7 +233,7 @@ func clock_text() -> String:
 
 ## 1.0 in full daylight, 0.0 at night, smooth at dawn and dusk.
 ## Real seconds an in-game hour takes now: a day hour is a little longer than a night hour, so the
-## day lasts 12 minutes and the night 8. The autotest keeps the old fast clock (`fast_clock`).
+## day lasts 14 minutes and the night 6. The autotest keeps the old fast clock (`fast_clock`).
 func hour_seconds(h := -1.0) -> float:
 	if fast_clock:
 		return HOUR_SECONDS

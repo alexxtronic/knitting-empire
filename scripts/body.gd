@@ -24,6 +24,8 @@ var ok := false # true when the model loaded with every loop
 var anim: AnimationPlayer
 var skeleton: Skeleton3D
 var props: Node3D # knitting needles and swatch, shown only while knitting
+var hold_left := false # her left hand is closed round something (the lantern's ring: empire.gd)
+
 ## Her meshes with the knitting fists (shape keys knit_R and knit_L, tools/add_grip.py), closed
 ## round the needles while she knits.
 var _knit_meshes: Array = []
@@ -151,7 +153,7 @@ func play(loop_name: String, ground_speed := 0.0) -> void:
 		for key in ["knit_R", "knit_L"]:
 			var k: int = mi.find_blend_shape_by_name(key)
 			if k >= 0:
-				mi.set_blend_shape_value(k, 1.0 if loop_name == "SitKnit" else 0.0)
+				mi.set_blend_shape_value(k, 1.0 if loop_name == "SitKnit" or (hold_left and key == "knit_L") else 0.0)
 
 
 ## How far her fingers are closed round both knitting needles: 0 open, 1 closed (no keys: 0).

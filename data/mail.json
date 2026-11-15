@@ -37,13 +37,13 @@
     "needs": "act1_done",
     "every": 3,
     "max_open": 2,
-    "tip_per_star": 30,
+    "tip_per_star": 20,
     "customers": [
       {
         "from": "Marjorie Fenn",
         "place": "Sarasota, Florida",
         "stars": 1,
-        "pay": 170,
+        "pay": 110,
         "subject": "From your gran's bridge table",
         "body": "Dear Nora,\n\nYou don't know me. I'm the one at your grandmother's bridge table who can't count trumps. Ellie showed us the scarf you knitted her years ago and I haven't stopped thinking about it.\n\nIt's never cold here, but the supermarket air conditioning is a crime. Could you send me a sweater? Anything warm will do. I'll pay {pay} coins, and I'll tell everyone who made it.\n\nWith thanks,\nMarjorie Fenn",
         "thanks": "Dear Nora,\n\nIt came! I wore it to the supermarket and a woman in frozen foods asked where I got it. I told her. Your grandmother pretended not to be proud and failed completely.\n\nPayment enclosed, as promised.\n\nMarjorie"
@@ -52,7 +52,7 @@
         "from": "Tom Beckett",
         "place": "Duluth, Minnesota",
         "stars": 2,
-        "pay": 210,
+        "pay": 140,
         "subject": "A sweater for a long winter",
         "body": "Hello,\n\nI drove through Maple Grove in the summer and stopped at the Yarn Barn for directions. Rosa had one of your sweaters in the window and talked about you for twenty minutes. I left without the directions but with your name.\n\nOur winters go on until about May. I'd like a good warm sweater, Uncommon or better if you have one. I can pay {pay} coins.\n\nTom Beckett",
         "thanks": "Hello again,\n\nThe sweater arrived the same day as the first snow. Good timing. I wore it to shovel the drive and didn't come in for an hour.\n\nPayment enclosed, with my thanks.\n\nTom"
@@ -61,7 +61,7 @@
         "from": "Ruth Hollis",
         "place": "Portland, Maine",
         "stars": 3,
-        "pay": 270,
+        "pay": 180,
         "subject": "For my father's eightieth",
         "body": "Dear Ms. Nora,\n\nMy father turns eighty next month. He has everything, and what he doesn't have he says he doesn't want. But he grew up on a sheep farm and he still talks about his mother's knitting.\n\nBarbara, your postwoman, is my cousin's friend, and she says you're the real thing. Would you knit him one? A Rare one if you can. I'll pay {pay} coins and gladly.\n\nRuth Hollis",
         "thanks": "Dear Nora,\n\nHe put it on and didn't say anything for a long time. Then he said it smelled like home. That's the most he's said about anything in years.\n\nThank you. Payment enclosed.\n\nRuth"
@@ -70,7 +70,7 @@
         "from": "Priya Nair",
         "place": "Boston, Massachusetts",
         "stars": 4,
-        "pay": 420,
+        "pay": 280,
         "subject": "A window piece",
         "body": "Dear Nora,\n\nI run a small knitwear shop on Charles Street. One of my customers came in wearing your work and I've been trying to find you for weeks.\n\nI'd like one exceptional sweater for the window: Epic or better. Something people stop for. I'll pay {pay} coins, and if it does what I think it will, I'll write again.\n\nWarmly,\nPriya Nair",
         "thanks": "Dear Nora,\n\nThree people stopped in the first hour. One of them cried a little, which I'm taking as a review.\n\nPayment enclosed. I meant it about writing again.\n\nPriya"

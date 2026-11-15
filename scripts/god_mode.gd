@@ -8,7 +8,7 @@ extends Node3D
 ## data/. Every launch reads it after the world is built and applies it, so the layout is the map
 ## every player gets. The file holds:
 ##   "nodes"    changes to single things the code builds (shop fronts, fountain, stall, signposts,
-##              barn, shipping bin, crop plots, lamp posts, benches): moved, turned or deleted,
+##              barn, mailbox, crop plots, lamp posts, benches): moved, turned or deleted,
 ##              each named by its kind and where the code first put it
 ##   "added"    extra lamp posts, benches and other decor copied in the editor
 ##   "scenery"  for each kind of scattered scenery you have edited (trees, rocks, bushes, hedges,
@@ -77,7 +77,7 @@ const TITLES := {
 	"bush_round": "Round bush", "bush_tall": "Tall bush", "bush_berry": "Berry bush", "bush_autumn": "Autumn bush",
 	"tuft_small": "Grass tuft (small)", "tuft_mid": "Grass tuft", "tuft_tall": "Grass tuft (tall)", "flowers_daisy": "Daisies",
 	"flowers_buttercup": "Buttercups", "flowers_wild": "Wild flowers", "flowers_poppy": "Poppies", "clover_patch": "Clover",
-	"barn": "Barn", "bin": "Shipping bin", "mailbox": "Mailbox", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
+	"barn": "Barn", "mailbox": "Mailbox", "plot": "Crop plot", "pen": "Sheep pen", "pond": "Pond",
 	"leaf_yellow": "Maple leaf (gold)", "leaf_red": "Maple leaf (red)", "leaf_green": "Maple leaf (green)",
 	"maplewood_bus": "Maplewood bus",
 }
@@ -209,8 +209,6 @@ func collect() -> void:
 	if World.barn != null and is_instance_valid(World.barn):
 		var p: Vector3 = World.barn.position
 		_collect_node(World.barn, "barn", "Barn", World.barn_blocks(p) if not World.barn_parts.is_empty() else [Rect2(p.x - 2.6, p.z - 2.1, 5.2, 4.2)])
-	var bp: Vector3 = main.bin.position
-	_collect_node(main.bin, "bin", "Shipping bin", [Rect2(bp.x - 0.5, bp.z - 0.35, 1.0, 0.7)])
 	if main.mail and main.mail.box:
 		var mp: Vector3 = main.mail.box.position
 		var ms: Vector2 = Mail.SIZE

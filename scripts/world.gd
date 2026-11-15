@@ -1,5 +1,5 @@
 extends RefCounted
-## Static scenery: ground, paths, trees, barn, pond, sheep pen, shipping bin.
+## Static scenery: ground, paths, trees, barn, pond, sheep pen.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const Planks = preload("res://scripts/planks.gd")
@@ -491,33 +491,3 @@ static func build_pen(world: Node3D, rect: Rect2, gate: Vector2) -> Array:
 	pen_blocks = rects
 	return rects
 
-
-static func build_bin(root: Node3D, pos: Vector3) -> Node3D:
-	var b := Node3D.new()
-	b.position = pos
-	root.add_child(b)
-	Catalog.box(b, Vector3(1.0, 0.6, 0.7), Vector3(0, 0.3, 0), Catalog.WOOD)
-	for y in [0.15, 0.3, 0.45]:
-		Catalog.box(b, Vector3(1.02, 0.02, 0.72), Vector3(0, y, 0), Catalog.WOOD_DARK)
-	Catalog.box(b, Vector3(1.06, 0.06, 0.76), Vector3(0, 0.66, -0.05), Catalog.WOOD_DARK, Vector3(-12, 0, 0))
-	Catalog.box(b, Vector3(0.6, 0.2, 0.02), Vector3(0, 0.36, 0.36), Catalog.CREAM)
-	var l := Label3D.new()
-	l.text = "SHIPPING"
-	l.font_size = 40
-	l.pixel_size = 0.0035
-	l.modulate = Color(0.3, 0.18, 0.1)
-	l.outline_size = 0
-	l.position = Vector3(0, 0.36, 0.375)
-	b.add_child(l)
-	var body := StaticBody3D.new()
-	body.collision_layer = 2
-	body.collision_mask = 0
-	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(1.0, 0.8, 0.7)
-	cs.shape = bs
-	cs.position.y = 0.4
-	body.add_child(cs)
-	body.set_meta("target", b)
-	b.add_child(body)
-	return b

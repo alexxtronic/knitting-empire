@@ -9,7 +9,7 @@ extends Node3D
 ## coat (scripts/wild_animal.gd); run at it, or let the dog charge, and it bolts.
 ##
 ## A fibre's tier sets the least a sweater knitted with it can be: the chair's "Knit with ..." rows
-## take two wool and one fibre (knit_floor in the data). Fibres ship from the bin.
+## take two wool and one fibre (knit_floor in the data). Fibres ship from the mailbox.
 ##
 ## Birds peck about in small flocks and fly off when she or the dog comes near (scripts/bird.gd).
 ##

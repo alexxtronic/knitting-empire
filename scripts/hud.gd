@@ -1222,9 +1222,9 @@ func _build_help() -> void:
 	rt.custom_minimum_size = Vector2(600, 0)
 	rt.add_theme_font_size_override("normal_font_size", 15)
 	rt.add_theme_font_size_override("bold_font_size", 15)
-	rt.text = """[b]The loop:[/b] shear your sheep → knit sweaters in the rocking chair → ship them in the shipping bin → spend coins on furniture and house expansions.
+	rt.text = """[b]The loop:[/b] shear your sheep → knit sweaters in the rocking chair → ship them from the mailbox → spend coins on furniture and house expansions.
 
-[b]Live mode:[/b] click the ground to walk; hold [b]Shift[/b] to jog. Click things (chair, bed, kitchen, soil plots, sheep, shipping bin) for a menu of actions.
+[b]Live mode:[/b] click the ground to walk; hold [b]Shift[/b] to jog. Click things (chair, bed, kitchen, soil plots, sheep, mailbox) for a menu of actions.
 [b]Farming:[/b] plant seeds in the soil plots, water them every day, harvest when they glow. Eat crops at the kitchen or ship them.
 [b]Build & Buy[/b] ([b]B[/b], or Build on the bar): pick furniture from the catalog and click to place it. [b]R[/b] rotates, right-click cancels. Click placed furniture to move it or sell it back.
 [b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.

@@ -1,0 +1,14 @@
+{
+  "view": "ref",
+  "silhouette_iou": 0.9209,
+  "width_diff_pct_top_to_bottom": [
+    1.5,
+    -6.8,
+    3.8,
+    2.8,
+    -0.3
+  ],
+  "model_px_wide": 372,
+  "reference_px_wide": 369,
+  "px_tall": 721
+}

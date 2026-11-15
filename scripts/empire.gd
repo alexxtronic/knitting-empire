@@ -7,7 +7,8 @@ extends Node
 ## knits can be (`floor`, 1 Common .. 5 Legendary on the knitting game's scale). Her pair is
 ## Game.flags["needles"]; she starts with Gran's bamboo ones.
 ##
-## The lantern (sold by Steve): once she has one it lights her way whenever it's dark out.
+## The lantern (sold by Steve): once she has one she carries it in her left hand whenever it's dark
+## out, and it lights her way.
 ##
 ## Requests (data/requests.json): one local at a time wants a sweater knitted from a wild animal's
 ## fibre. Asked, they say what they want and a goal sends her to find the animal; the sweater she
@@ -19,11 +20,17 @@ const Data = preload("res://scripts/data.gd")
 const KnitGame = preload("res://scripts/knit_game.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
 const Hud = preload("res://scripts/hud.gd")
+const Catalog = preload("res://scripts/catalog.gd")
+const LANTERN_MODEL := "res://assets/props/lantern.glb" # art/world_assets/lantern/build.py; its origin is the ring's top
+const GLOBE_DROP := 0.175 # metres from the ring's top down to the flame
+const LIGHT_OUT := 0.14 # how far out from her side the light sits, so it doesn't burn a patch on her sweater
 
 var main: Node # main.gd
 var _gear := {}
 var _req := {}
 var _lamp: OmniLight3D
+var _lantern: Node3D # the lantern model, hung from her left fist after dark
+var _swing := Vector3.ZERO # where her hand was a moment ago: the lantern lags behind it
 
 
 func _ready() -> void:
@@ -127,25 +134,59 @@ func lantern_lit() -> bool:
 	return _lamp != null and _lamp.visible
 
 
-## Every frame from main._process: the lantern's warm light at her hip, fading in at dusk.
-func update(_delta: float) -> void:
+## True while the lantern hangs from her left hand (for the autotest).
+func lantern_in_hand() -> bool:
+	return _lantern != null and _lantern.visible
+
+
+## Every frame from main._process: after dark the lantern hangs from her left fist, upright
+## whatever her arm does, swinging a little as she walks, and its warm light goes with it. Put
+## away by day, in a story scene, and while she sits or lies down.
+func update(delta: float) -> void:
 	var level := lantern_level()
-	if level <= 0.01:
+	var pl = main.player
+	var out: bool = level > 0.01 and int(main.mode) == 0 and not main.story.is_playing() and not pl.is_sitting() and not pl.is_lying()
+	if pl.body:
+		pl.body.hold_left = out
+	if not out:
 		if _lamp:
 			_lamp.visible = false
+		if _lantern:
+			_lantern.visible = false
 		return
 	if _lamp == null:
 		_lamp = OmniLight3D.new()
-		_lamp.name = "Lantern"
+		_lamp.name = "LanternLight"
 		_lamp.light_color = Color(1.0, 0.78, 0.48)
 		_lamp.omni_range = 16.0
 		_lamp.omni_attenuation = 0.9
 		_lamp.shadow_enabled = false
 		main.add_child(_lamp)
-	var who: Node3D = main.dog if main.dog and main.dog.controlled else main.player
+	if _lantern == null and ResourceLoader.exists(LANTERN_MODEL):
+		_lantern = Node3D.new()
+		_lantern.name = "Lantern"
+		main.add_child(_lantern)
+		Catalog.model(LANTERN_MODEL, _lantern)
+	var at: Vector3 = pl.position + Vector3(0.0, 1.1, 0.0)
+	var sk: Skeleton3D = pl.body.skeleton if pl.body else null
+	if _lantern and sk and sk.find_bone("LeftHand") >= 0:
+		# her left fist: as far beyond the wrist as the right one is (main.FIST_C, mirrored)
+		var bone := sk.find_bone("LeftHand")
+		var fist: Vector3 = sk.get_bone_global_rest(bone).affine_inverse() * Vector3(-main.FIST_C.x, main.FIST_C.y, main.FIST_C.z)
+		var hand: Vector3 = sk.global_transform * (sk.get_bone_global_pose(bone) * fist)
+		# it hangs straight down from the ring and lags a little behind her hand: a gentle swing
+		_swing = _swing.lerp(hand, 1.0 - exp(-delta * 14.0)) if _lantern.visible else hand
+		var lag := _swing - hand
+		_lantern.visible = true
+		_lantern.global_position = hand
+		_lantern.global_rotation = Vector3(clampf(lag.z * 2.5, -0.35, 0.35), pl.rotation.y, clampf(-lag.x * 2.5, -0.35, 0.35))
+		# the light sits at the flame, nudged out away from her side: right beside the sweater it
+		# burned a white patch on the knit (60_lantern_hand.png, 2026-11-15)
+		var out_dir := Vector3(hand.x - pl.position.x, 0.0, hand.z - pl.position.z)
+		at = hand + Vector3(0.0, -GLOBE_DROP, 0.0) + (out_dir.normalized() * LIGHT_OUT if out_dir.length() > 0.01 else Vector3.ZERO)
 	_lamp.visible = true
-	_lamp.light_energy = 4.5 * level
-	_lamp.position = who.position + Vector3(0.0, 1.3, 0.0)
+	_lamp.light_energy = 3.2 * level
+	_lamp.position = at
 
 
 # --- requests ----------------------------------------------------------------------------------

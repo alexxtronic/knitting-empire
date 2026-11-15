@@ -1,0 +1,32 @@
+{
+  "name": "lantern",
+  "triangles": 11164,
+  "materials": [
+    "lantern_mat",
+    "lantern_glass"
+  ],
+  "size_m": [
+    0.163,
+    0.131,
+    0.3
+  ],
+  "min_m": [
+    -0.0815,
+    -0.0655,
+    -0.285
+  ],
+  "max_m": [
+    0.0815,
+    0.0655,
+    0.015
+  ],
+  "origin": "inside top of the ring handle (0, 0, 0); base at z = -0.285",
+  "texture_px": 1024,
+  "images": [
+    "lantern_colour",
+    "lantern_emit",
+    "lantern_n",
+    "lantern_orm"
+  ],
+  "glb_bytes": 2831716
+}

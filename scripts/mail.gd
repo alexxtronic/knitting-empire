@@ -299,6 +299,8 @@ func actions() -> Array:
 		acts.append({"id": "letters", "label": "Read your letters", "enabled": true})
 	if acts.is_empty():
 		acts.append({"id": "noop", "label": "Empty. Barbara comes at nine.", "enabled": false})
+	if main and main.has_method("ship_rows"): # the mailbox is the shipping bin too
+		acts.append_array(main.ship_rows())
 	return acts
 
 
@@ -311,6 +313,8 @@ func do_action(id: String) -> void:
 			main.hud.letters.open(str(taken[0]["id"]))
 	elif id == "letters":
 		main.hud.letters.open()
+	elif id.begins_with("ship_"):
+		main._ship(id)
 	elif id.begins_with("post:"):
 		var oid := id.substr(5)
 		if post_sweater(oid):

@@ -53,7 +53,6 @@ const DOOR_Z1 := 3.7
 const LOT := Rect2(-5, -19, 32, 31) # walkable / buildable yard: x -5..27, z -19..12
 const PEN := Rect2(17, -4, 6, 6)
 const PEN_GATE := Vector2(-1.6, -0.4)
-const BIN_POS := Vector3(10.2, 0, 4.6)
 const CAM_PITCH := 48.0
 const CAM_PITCH_LOW := 20.0 # story close-ups ("@camera ... low")
 const CAM_BOUNDS := Regions.BOUNDS # the farm, the town and the lands round them
@@ -101,7 +100,6 @@ var flock_bedtime := true
 var town_rounds := true # the cast's routines (_update_rounds); off in the autotest but for its own check
 var _flock_t := 0.0
 var _flock_seen := false
-var bin: Node3D
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var mail: Mail # the post (mail.gd): the mailbox by the porch, letters and sweater orders
@@ -236,8 +234,6 @@ func _ready() -> void:
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
 	grid_blockers.append_array(World.build_pen(self, PEN, PEN_GATE))
-	bin = World.build_bin(self, BIN_POS)
-	grid_blockers.append(Rect2(BIN_POS.x - 0.5, BIN_POS.z - 0.35, 1.0, 0.7))
 	mail = Mail.new()
 	mail.main = self
 	add_child(mail)
@@ -2121,8 +2117,6 @@ func _click_marker(p: Vector3) -> void:
 # --- actions --------------------------------------------------------------------------
 
 func _name_of(t) -> String:
-	if t == bin:
-		return "Shipping Bin"
 	return t.display_name()
 
 
@@ -2142,15 +2136,6 @@ func _act(id: String, label: String, enabled := true) -> Dictionary:
 func _actions_for(t) -> Array:
 	if t is Node and t.has_method("ke_actions"): # small things that list their own (Gran's tin)
 		return t.ke_actions()
-	if t == bin:
-		var sw := Game.count("sweater")
-		var crops: int = Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
-		var wool := Game.count("wool")
-		return [
-			_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0),
-			_act("ship_crops", "Ship crops (%dc)" % crops, crops > 0),
-			_act("ship_wool", "Ship raw wool (%d × %dc)" % [wool, Game.SELL_PRICES["wool"]], wool > 0),
-		] + ([_act("ship_fibre", "Ship wild fibre (%d, %dc)" % [wildlife.fibre_count(), wildlife.fibre_worth()])] if wildlife.fibre_count() > 0 else [])
 	if t is Furniture:
 		match t.item_id:
 			"rocking_chair", "armchair":
@@ -2342,8 +2327,6 @@ func _perform(t, id: String) -> void:
 				player.start_activity("Shearing", 2.5, _finish_shear.bind(t))
 		"pet":
 			player.start_activity("Petting", 1.2, _finish_pet.bind(t))
-		"ship_sweater", "ship_crops", "ship_wool", "ship_fibre":
-			_ship(id)
 
 
 ## Sits her in the chair and opens the knitting game. The day waits while she plays.
@@ -2478,6 +2461,19 @@ func _finish_pet(s) -> void:
 	Game.add_need("happiness", 6.0)
 	Game.add_need("love", 2.0)
 	hud.show_toast("Baa! Your sheep looks happy.")
+
+
+## The mailbox's shipping rows (it took over from the shipping bin, Alex 2026-11-15): what she can
+## send off for the plain price, paid at once. scripts/mail.gd adds them to the mailbox's menu.
+func ship_rows() -> Array:
+	var sw := Game.count("sweater")
+	var crops: int = Game.count("turnip") * Game.SELL_PRICES["turnip"] + Game.count("pumpkin") * Game.SELL_PRICES["pumpkin"]
+	var wool := Game.count("wool")
+	return [
+		_act("ship_sweater", "Ship sweaters (%d, %dc)" % [sw, Game.sweater_worth(Game.SELL_PRICES["sweater"])], sw > 0),
+		_act("ship_crops", "Ship crops (%dc)" % crops, crops > 0),
+		_act("ship_wool", "Ship raw wool (%d × %dc)" % [wool, Game.SELL_PRICES["wool"]], wool > 0),
+	] + ([_act("ship_fibre", "Ship wild fibre (%d, %dc)" % [wildlife.fibre_count(), wildlife.fibre_worth()])] if wildlife.fibre_count() > 0 else [])
 
 
 func _ship(kind: String) -> void:
@@ -2740,9 +2736,17 @@ func furniture_entry(f: Furniture) -> Dictionary:
 	return e
 
 
+## Pieces taken out of the game that a saved layout or an old save may still list: the flower pot
+## by the porch went with the shipping bin when the mailbox took over (Alex, 2026-11-15).
+const RETIRED := [["flower_pot", Vector2(9.0, 5.0)]]
+
+
 func _spawn_entry(e: Dictionary) -> void:
 	if not Catalog.ITEMS.has(str(e.get("id", ""))):
 		return
+	for r in RETIRED:
+		if str(e["id"]) == r[0] and Vector2(float(e["x"]), float(e["z"])).distance_to(r[1]) < 0.05:
+			return
 	var f := _spawn_furniture(str(e["id"]), Vector3(float(e["x"]), 0, float(e["z"])), int(e.get("rot", 0)))
 	if e.has("yaw"):
 		f.rotation.y = deg_to_rad(float(e["yaw"]))
@@ -2772,7 +2776,6 @@ func _new_world() -> void:
 	_spawn_furniture("plant", Vector3(7.6, 0, 5.6), 0)
 	_spawn_furniture("sunflowers", Vector3(9.0, 0, 0.5), 0)
 	_spawn_furniture("scarecrow", Vector3(13.0, 0, -2.6), 0)
-	_spawn_furniture("flower_pot", Vector3(9.0, 0, 5.0), 0)
 	_spawn_furniture("hay_bale", Vector3(15.5, 0, -3.0), 0)
 	_spawn_furniture("lantern", Vector3(9.4, 0, 1.6), 0)
 	_new_world_crops()
@@ -2841,7 +2844,7 @@ func _tips() -> Array:
 		["click", after_act1, "Click anything (sheep, the rocking chair, soil, people) to see what you can do with it."],
 		["shear", after_act1 and Game.count("wool") < 3, "Sheep grow wool every day. Click a woolly one to shear it: three wool knit one sweater."],
 		["knit", after_act1 and Game.has_item("wool", 3), "Enough wool for a sweater. Click the rocking chair and choose Knit Sweater."],
-		["sell", after_act1 and Game.count("sweater") > 0, "Sell sweaters to Rosa at the Maple Grove market (her price changes daily), ship them in the bin, or give one as a gift."],
+		["sell", after_act1 and Game.count("sweater") > 0, "Sell sweaters to Rosa at the Maple Grove market (her price changes daily), ship them from the mailbox, or give one as a gift."],
 		["night", after_act1 and Game.hour >= 21.0, "It's getting late. Click the bed to sleep: crops grow, prices change, and the game saves."],
 		["rowan", after_act1 and Game.hearts("rowan") >= 1, "Rowan has more to say than he lets on. Talk to him once a day and a little more comes out."],
 		["build", mode == Mode.BUILD, "Pick a piece from the catalog and click to place it. R rotates, right-click cancels. Click a placed piece to move or sell it."],
@@ -3571,14 +3574,15 @@ func _act1_checks() -> void:
 	await _shot("33_act1_journal.png")
 	_check("the journal lists all three, newest first (%d rows)" % hud.journal_list.get_child_count(), hud.journal_panel.visible and hud.journal_list.get_child_count() == journal0 + 3)
 	hud.journal_panel.visible = false
-	# rent: 20c every seven days, into Gran's tin
+	# rent (data/economy.json "story" rent) every seven days, into Gran's tin
 	var due := int(Game.flag("rent_due", 0))
 	homestead._on_day(due)
 	var owed := homestead.rent_owed()
+	Game.coins = maxi(Game.coins, owed) # this quick run of the week didn't stop to earn it
 	var coins2 := Game.coins
 	var paid := homestead.pay_rent()
 	_check("rent comes due a week in (%dc owed on day %d) and goes in Gran's tin (coins %d→%d, next due day %d)" % [owed, due, coins2, Game.coins, int(Game.flag("rent_due", 0))],
-		owed == 20 and paid and Game.coins == coins2 - 20 and homestead.rent_owed() == 0 and int(Game.flag("rent_due", 0)) == due + 7)
+		owed == homestead.econ("rent", 20) and owed > 0 and paid and Game.coins == coins2 - owed and homestead.rent_owed() == 0 and int(Game.flag("rent_due", 0)) == due + 7)
 	# how long it takes a person: reading time for every line shown, choices, walks and the knit
 	var read := 0.0
 	var choices := 0
@@ -4566,8 +4570,11 @@ func _mail_checks() -> void:
 	hud.letters.show_letter(1)
 	_check("Max's letter asks her to come home", hud.letters._from.text == "From Max" and hud.letters._body.text.contains("Come home"))
 	hud.letters.show_letter(2)
+	var order_def: Dictionary = Data.load_json("mail").get("orders", {})
+	var order_pay := int(order_def["customers"][0]["pay"])
+	var order_tip := int(order_def.get("tip_per_star", 0))
 	_check("the order letter says what it wants and pays ('%s')" % hud.letters._note.text,
-		hud.letters._note.text.contains("Common or better") and hud.letters._body.text.contains("170 coins") and mail.unread() == 0)
+		hud.letters._note.text.contains("Common or better") and hud.letters._body.text.contains("%d coins" % order_pay) and mail.unread() == 0)
 	await _shot("53_mail_order.png")
 	hud.letters.close()
 	# she knits two sweaters; the order takes the plainest that will do
@@ -4592,8 +4599,8 @@ func _mail_checks() -> void:
 	var coins2 := Game.coins
 	mail.do_action("take")
 	var paid: Dictionary = mail.letters()[hud.letters.current] if hud.letters.current >= 0 else {}
-	_check("the day after, Marjorie's payment comes: 170c and a 30c tip for the extra star (coins %d→%d, '%s', order %s)" % [coins2, Game.coins, paid.get("from", ""), mail.orders()["order_1"]["state"]],
-		came and str(paid.get("id", "")) == "paid_order_1" and Game.coins == coins2 + 200 and str(mail.orders()["order_1"]["state"]) == "paid")
+	_check("the day after, Marjorie's payment comes: %dc and a %dc tip for the extra star (coins %d→%d, '%s', order %s)" % [order_pay, order_tip, coins2, Game.coins, paid.get("from", ""), mail.orders()["order_1"]["state"]],
+		came and str(paid.get("id", "")) == "paid_order_1" and Game.coins == coins2 + order_pay + order_tip and str(mail.orders()["order_1"]["state"]) == "paid")
 	hud.letters.close()
 	# a week after Gran's first letter, her second, with wool; and the next customer writes
 	Game.day = 11
@@ -5156,7 +5163,17 @@ func _autotest() -> void:
 	var table = furniture.filter(func(f): return f.item_id == "coffee_table")
 	_check("the coffee table in her living room is the Woolcore model (%d meshes)" % (table[0].find_children("*", "MeshInstance3D", true, false).size() if table.size() > 0 else 0),
 		table.size() == 1 and table[0].find_children("model", "MeshInstance3D", true, false).size() == 1)
-	_live_click(cam.unproject_position(sheep_list[0].global_position + Vector3(0, 0.5, 0)))
+	# click the shorn sheep herself: another may stand in front of her from the camera, so try a few
+	# points on her and take the first the click's ray finds her at (it had opened a woolly one's menu)
+	for sh in sheep_list:
+		sh.hold_time = 2.0
+	var shorn_at: Vector2 = cam.unproject_position(sheep_list[0].global_position + Vector3(0, 0.5, 0))
+	for off in [Vector3(0, 0.5, 0), Vector3(0, 0.75, 0), Vector3(0.3, 0.5, 0), Vector3(-0.3, 0.5, 0), Vector3(0, 0.5, 0.3), Vector3(0, 0.5, -0.3)]:
+		var sp: Vector2 = cam.unproject_position(sheep_list[0].global_position + off)
+		if _ray_target(sp) == sheep_list[0]:
+			shorn_at = sp
+			break
+	_live_click(shorn_at)
 	await _wait(0.5)
 	var shear_pill: Dictionary = hud.pie._items[0] if hud.is_menu_open() else {}
 	var loops: Array = sheep_list.map(func(sh): return sh.current_loop())
@@ -5198,9 +5215,9 @@ func _autotest() -> void:
 	await _shot("03_farm.png")
 
 	var coins1 := Game.coins
-	_do_action(bin, "ship_sweater")
+	_do_action(mail.box, "ship_sweater")
 	await _wait(5.0)
-	_check("shipped sweater (+%d)" % (Game.coins - coins1), Game.coins == coins1 + 140)
+	_check("shipped sweater (+%d)" % (Game.coins - coins1), Game.coins == coins1 + int(Game.SELL_PRICES["sweater"]))
 
 	set_mode(Mode.BUILD)
 	cam_target = Vector3(4, 0, 3)
@@ -6689,7 +6706,7 @@ func _wildlife_checks() -> void:
 	var worth := wildlife.fibre_worth()
 	var c0 := Game.coins
 	_ship("ship_fibre")
-	_check("the bin ships wild fibre (+%dc)" % (Game.coins - c0), worth > 0 and Game.coins - c0 == worth and wildlife.fibre_count() == 0)
+	_check("the mailbox ships wild fibre (+%dc)" % (Game.coins - c0), worth > 0 and Game.coins - c0 == worth and wildlife.fibre_count() == 0)
 	Game.worn_quality = keep["q"]
 	Game.worn_design = keep["d"]
 	Game.wardrobe = keep["w"]
@@ -6710,9 +6727,9 @@ func _wildlife_checks() -> void:
 	wildlife.clear()
 
 
-## The knitting empire's loop (Alex, 2026-11-15; docs/DIRECTION.md): a day is 20 real minutes, 12 of
-## day and 8 of night; the darkest night still has light to see by; Steve's lantern lights itself
 ## after dark; Rosa's better needles lift every knit; played as the dog, Space barks, a bark fills
+## The knitting empire's loop (Alex, 2026-11-15; docs/DIRECTION.md): a day is 20 real minutes, 14 of
+## day and 6 of night; the darkest night still has light to see by; Steve's lantern lights itself
 ## a wild animal's fright meter and it bolts, at full fright it follows him, three at most, and he
 ## leads them home to a pen that holds four; she combs them there, a second pen makes room, the dog
 ## can be sent from Nora's side, and another animal turns up in the wild later; a local asks for a
@@ -6729,7 +6746,7 @@ func _empire_checks() -> void:
 	var friends0: Dictionary = Game.friends.duplicate(true)
 	player.walk([])
 	autotest_jog = false
-	# the clock: 12 minutes of day and 8 of night (the rest of the autotest runs on the old fast one)
+	# the clock: 14 minutes of day and 6 of night (the rest of the autotest runs on the old fast one)
 	Game.fast_clock = false
 	var day_s := 0.0
 	var night_s := 0.0
@@ -6745,7 +6762,7 @@ func _empire_checks() -> void:
 	var moved := (Game.hour - h0) * Game.hour_seconds(12.0)
 	Game.fast_clock = true
 	_check("a day is 20 real minutes: %.0f s of daytime (6:00 to 20:00) and %.0f s of night; two seconds move the clock two seconds on (%.1f)" % [day_s, night_s, moved],
-		absf(day_s - 720.0) < 1.0 and absf(night_s - 480.0) < 1.0 and absf(moved - 2.0) < 0.4)
+		absf(day_s - 840.0) < 1.0 and absf(night_s - 360.0) < 1.0 and absf(moved - 2.0) < 0.4)
 	# the darkest night: no moon, 1 a.m.
 	SB.phase_override = 0.0
 	SB.clouds_override = 0.1
@@ -6780,6 +6797,22 @@ func _empire_checks() -> void:
 	var lit_night: bool = empire.lantern_lit()
 	await _shot("60_night_lantern.png")
 	var lum_lantern := _screen_brightness()
+	# in her left hand, hanging from its ring
+	var lantern_node := get_node_or_null("Lantern") as Node3D
+	var in_hand: bool = empire.lantern_in_hand() and lantern_node != null
+	var hand_gap := 9.0
+	var hangs := 0.0
+	if in_hand:
+		var lsk: Skeleton3D = player.body.skeleton
+		var wrist: Vector3 = lsk.global_transform * lsk.get_bone_global_pose(lsk.find_bone("LeftHand")).origin
+		hand_gap = lantern_node.global_position.distance_to(wrist)
+		hangs = lantern_node.global_transform.basis.y.dot(Vector3.UP)
+	var cd_l := cam_dist
+	cam_dist = 4.2
+	await _wait(0.6)
+	await _shot("60_lantern_hand.png")
+	cam_dist = cd_l
+	_check("after dark the lantern hangs from her left hand (in hand %s, %.2f m from her wrist, upright %.2f)" % [in_hand, hand_gap, hangs], in_hand and hand_gap < 0.2 and hangs > 0.9)
 	Game.hour = 12.0
 	await _wait(0.4)
 	_check("Steve sells a lantern (%s, %d left): it lights itself in the dark (%s, the picture %.2f against %.2f without) and is out by day (%s)" % [str(lrow[0]["label"]) if not lrow.is_empty() else "no row", Game.coins, lit_night, lum_lantern, lum_woods, empire.lantern_lit()],
@@ -7009,6 +7042,19 @@ func _empire_checks() -> void:
 	var next: Dictionary = empire.due()
 	_check("the next local asks a couple of days later (none the same day: %s; then %s wants %s)" % [soon.is_empty(), str(next.get("who", "")), str(next.get("fibre", ""))],
 		soon.is_empty() and str(next.get("who", "")) == "barbara")
+	# Rosa has only so much wool a day
+	Game.flags.erase("wool_bought")
+	Game.coins = 1000
+	var w0 := Game.count("wool")
+	var packs: int = int(_store().get("wool_packs_a_day", 2))
+	for i in packs + 1:
+		_villager_action(rosa, "buy_wool")
+		hud.hide_dialogue()
+	var sold_out: Array = _villager_actions(rosa).filter(func(a): return str(a["label"]).begins_with("Buy 3 wool"))
+	var got_wool := Game.count("wool") - w0
+	Game.day += 1
+	_check("Rosa sells %d packs of wool a day and no more (+%d wool from %d tries, then '%s'); there's more tomorrow (%d left)" % [packs, got_wool, packs + 1, str(sold_out[0]["label"]) if not sold_out.is_empty() else "?", _wool_packs_left()],
+		got_wool == packs * 3 and not sold_out.is_empty() and not sold_out[0]["enabled"] and _wool_packs_left() == packs)
 	# back as it was
 	Game.flags = keep["flags"]
 	Game.friends = friends0
@@ -9150,6 +9196,17 @@ func _crop_value() -> int:
 
 
 ## Rosa's Yarn Barn prices (wool, sheep), a little less for every heart.
+## Rosa only has so much wool a day (data/economy.json "store" wool_packs_a_day), so buying it in
+## can't replace her own animals. Game.flags["wool_bought"] is [day, packs bought that day].
+func _wool_packs_bought() -> int:
+	var b: Variant = Game.flag("wool_bought", [])
+	return int(b[1]) if b is Array and b.size() == 2 and int(b[0]) == Game.day else 0
+
+
+func _wool_packs_left() -> int:
+	return maxi(0, int(_store().get("wool_packs_a_day", 2)) - _wool_packs_bought())
+
+
 func _yarn_price(base: int) -> int:
 	return int(round(base * (1.0 - 0.05 * Game.hearts("rosa"))))
 
@@ -9215,7 +9272,10 @@ func _villager_actions(v) -> Array:
 			var crops := _crop_value()
 			acts.append(_act("sell_crops", "Sell crops  (%dc)" % crops, crops > 0))
 			var wp := _yarn_price(Game.WOOL_PACK_PRICE)
-			acts.append(_act("buy_wool", "Buy 3 wool  (%dc)" % wp, Game.coins >= wp))
+			if _wool_packs_left() > 0:
+				acts.append(_act("buy_wool", "Buy 3 wool  (%dc · %d left today)" % [wp, _wool_packs_left()], Game.coins >= wp))
+			else:
+				acts.append(_act("noop", "Buy 3 wool  (sold out till tomorrow)", false))
 			acts.append_array(empire.needle_rows()) # better needles, a step at a time
 			if homestead.story_farm() and not homestead.has_pen():
 				acts.append(_act("noop", "Buy a sheep  (build a pen first)", false))
@@ -9356,7 +9416,8 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Fresh from Birchfield! %dc it is." % value)
 				hud.show_toast("Sold your crops for %dc!" % value)
 		"buy_wool":
-			if Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
+			if _wool_packs_left() > 0 and Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
+				Game.set_flag("wool_bought", [Game.day, _wool_packs_bought() + 1])
 				Game.add_item("wool", 3)
 				_say(v, "Three bundles, love, my best oatmeal. Enough for one sweater, if you don't drop stitches.")
 				_story_event_soon("yarn_bought")

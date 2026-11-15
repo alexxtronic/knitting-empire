@@ -13,7 +13,7 @@ extends Node3D
 ## and stands in her stall facing the aisle until she is given the route back to the pen.
 
 const Catalog = preload("res://scripts/catalog.gd")
-const REGROW_HOURS := 10.0
+const REGROW_HOURS := 20.0 # a fleece a day: shorn in the morning, it is back by the next (Alex, 2026-11-15: wool is worth something)
 const WOOLLY_MODEL := "res://assets/props/sheep_woolly.glb"
 const SHEARED_MODEL := "res://assets/props/sheep_sheared.glb"
 const COAT_BACK := 0.5 # wool level at which the woolly model shows again
