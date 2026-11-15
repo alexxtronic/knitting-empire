@@ -2,6 +2,7 @@ extends Node3D
 ## A placed (or ghost) piece of furniture built from the catalog.
 
 const Catalog = preload("res://scripts/catalog.gd")
+const Data = preload("res://scripts/data.gd")
 
 var item_id := ""
 var rot := 0
@@ -9,6 +10,7 @@ var body: StaticBody3D
 var lights: Array[OmniLight3D] = []
 var flames: Array[MeshInstance3D] = []
 var is_ghost := false
+var color := "" # a colour she bought for it (furniture.json "colors" and "palettes"), "" for its own
 ## 0..1, how gloomy the weather is (main.gd sets it from the rain). Lamps come on in a daytime
 ## downpour as they would at dusk.
 static var gloom := 0.0
@@ -73,6 +75,84 @@ func footprint() -> Rect2:
 
 func front() -> Vector3:
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
+
+
+## The colours this piece comes in (furniture.json: its "colors" names the parts to recolour and a
+## palette from "palettes"): [{"id", "name", "color"}]. Empty for a piece that comes in one colour.
+func colors() -> Array:
+	return colors_of(item_id)
+
+
+static func colors_of(id: String) -> Array:
+	var spec: Dictionary = Catalog.ITEMS.get(id, {}).get("colors", {})
+	if spec.is_empty():
+		return []
+	return (Data.load_json("furniture").get("palettes", {}) as Dictionary).get(str(spec.get("palette", "")), [])
+
+
+## Recolours the parts the data names ("" puts its own colours back). The model isn't changed: each
+## part's material is copied with its texture turned grey and tinted, so a plaid or a knit keeps its
+## pattern in the new colour.
+func set_color(cid: String) -> void:
+	var tint: Variant = null
+	for o in colors():
+		if str(o["id"]) == cid:
+			tint = Color.html(str(o["color"]))
+	color = cid if tint != null else ""
+	var parts: Array = info().get("colors", {}).get("parts", [])
+	for m in find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var base := mi.mesh.surface_get_material(i)
+			if base == null or not parts.has(base.resource_name):
+				continue
+			mi.set_surface_override_material(i, null if tint == null else recolored(base, tint))
+
+
+static var _recolored := {}
+static var _greys := {}
+
+
+static func recolored(base: Material, tint: Color) -> Material:
+	var k := "%d|%s" % [base.get_instance_id(), tint.to_html()]
+	if _recolored.has(k):
+		return _recolored[k]
+	if not base is BaseMaterial3D:
+		return base
+	var m := base.duplicate() as BaseMaterial3D
+	if m.albedo_texture != null:
+		m.albedo_texture = _grey(m.albedo_texture)
+	m.albedo_color = tint
+	_recolored[k] = m
+	return m
+
+
+## A texture in greys, brightened so its average is a light grey (the tint then sets the colour).
+static func _grey(t: Texture2D) -> Texture2D:
+	var id := t.get_instance_id()
+	if _greys.has(id):
+		return _greys[id]
+	var img := t.get_image()
+	if img == null:
+		return t
+	if img.is_compressed():
+		img.decompress()
+	img.clear_mipmaps()
+	img.convert(Image.FORMAT_RGBA8)
+	img.adjust_bcs(1.0, 1.0, 0.0)
+	var small := img.duplicate() as Image
+	small.resize(4, 4, Image.INTERPOLATE_BILINEAR)
+	var avg := 0.0
+	for x in 4:
+		for y in 4:
+			avg += small.get_pixel(x, y).r / 16.0
+	img.adjust_bcs(clampf(0.8 / maxf(avg, 0.05), 0.6, 3.0), 1.0, 0.0)
+	img.generate_mipmaps()
+	var out := ImageTexture.create_from_image(img)
+	_greys[id] = out
+	return out
 
 
 func set_ghost(on: bool) -> void:

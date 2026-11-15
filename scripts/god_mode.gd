@@ -99,6 +99,7 @@ class El:
 	var cut := false # felled or trimmed by her in the game (scripts/forage.gd): hidden, but never saved as deleted
 	var added := false # decor copied in the editor
 	var home := false # Nora's furniture (main.furniture): saved as the "house" list, not as a node
+	var built := false # a wall she built (main.builder, house_builder.gd): saved with her game, not in the layout
 	var tint := Color.WHITE
 	var bounds := AABB() # in its own space
 	var radius := 1.0
@@ -224,6 +225,43 @@ func collect() -> void:
 		_pond = _collect_node(World.pond, "pond", "Pond", [main.pond_rect])
 	_home.clear()
 	sync_home()
+	sync_built()
+
+
+## The walls she built come and go as she builds (and are drawn afresh with the house), so their
+## list is brought up to date whenever the house is rebuilt and when the editor opens. Moved or
+## deleted here, they go back on the grid when the editor closes (house_builder.from_editor).
+func sync_built() -> void:
+	for i in range(els.size() - 1, -1, -1):
+		var el: El = els[i]
+		if el.built and not is_instance_valid(el.node):
+			by_key.erase(el.key)
+			els.remove_at(i)
+	if main.builder == null:
+		return
+	var have := {}
+	for el in els:
+		if el.built:
+			have[el.node] = true
+	for n in main.builder.wall_nodes:
+		if is_instance_valid(n) and not have.has(n):
+			var el := _collect_node(n, "built_wall", "Wall (Nora's)" if str(n.get_meta("kind")) == "wall" else "Doorway (Nora's)", [])
+			el.built = true
+
+
+## Hands her walls' new places back to the builder as the editor closes.
+func _return_built() -> void:
+	if main.builder == null:
+		return
+	var out: Array = []
+	var any := false
+	for el in els:
+		if el.built and is_instance_valid(el.node):
+			any = true
+			out.append({"edge": str(el.node.get_meta("edge")), "kind": str(el.node.get_meta("kind")), "pos": el.xf.origin, "yaw": _yaw(el.xf), "deleted": el.deleted})
+	if any:
+		main.builder.from_editor(out)
+		sync_built()
 
 
 ## Nora's furniture comes and goes as she buys, moves and sells things (and only exists once a
@@ -754,7 +792,7 @@ func layout() -> Dictionary:
 	var nodes := orphans.duplicate()
 	var added: Array = []
 	for el in els:
-		if el.scenery or el.home:
+		if el.scenery or el.home or el.built:
 			continue
 		var o := el.xf.origin
 		if el.added:
@@ -838,6 +876,7 @@ func set_active(on: bool) -> void:
 	active = on
 	if on:
 		sync_home()
+		sync_built()
 		if _ui == null:
 			_build_ui()
 		main.set_mode(main.Mode.LIVE)
@@ -874,6 +913,7 @@ func set_active(on: bool) -> void:
 		_hidden.clear()
 		Game.time_running = _time_was
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+		_return_built()
 		if unsaved and save_layout():
 			main.hud.show_toast("World layout saved.")
 	_show_status()
