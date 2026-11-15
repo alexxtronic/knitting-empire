@@ -4081,7 +4081,7 @@ func _act1_shot(sub: String, fname: String) -> void:
 
 
 ## The town's cast (Alex's, 2026-11-12, and Lars next door, 2026-11-13) and their routines: the nine
-## villagers and nobody else, the eight new faces in their own models with real eyes (Rosa's and Lars's since 2026-11-13),
+## villagers and nobody else, the nine new faces in their own models with real eyes (Rosa's and Lars's since 2026-11-13, Rebecca's since 2026-11-15),
 ## Sabrina starting cool by the Coffee Shop, Rosa's mornings at the market stall and afternoons in the
 ## Yarn Barn, Barbara's nine o'clock post round (every door in town and Nora's porch), Gary's land and
 ## his visit on her second day, and Lars by his barn, renting her its stalls by the month.
@@ -4101,11 +4101,11 @@ func _cast_checks() -> void:
 	_check("Rebecca the police officer is on her beat in the square, on open ground (%.1f m from her post, walkable %s), with nothing to report (%s)" % [officer.position.distance_to(beat) if officer != null else -1.0, str(_walkable(_cell(beat))), str(officer != null and not _villager_actions(officer).any(func(a): return str(a.get("id", "")) == "report_max"))],
 		officer != null and officer.position.distance_to(beat) < 2.5 and _walkable(_cell(beat)) and not _villager_actions(officer).any(func(a): return str(a.get("id", "")) == "report_max"))
 	var bodies: Array = []
-	for id in ["barbara", "gary", "giorgio", "lars", "rosa", "sabrina", "steve", "wren"]:
+	for id in ["barbara", "gary", "giorgio", "lars", "rebecca", "rosa", "sabrina", "steve", "wren"]:
 		var v := _villager(id)
 		if v != null and v.body != null and v.body.face != null:
 			bodies.append(id)
-	_check("the eight new faces wear their own models, with real eyes (%s)" % ", ".join(bodies), bodies.size() == 8)
+	_check("the nine new faces wear their own models, with real eyes (%s)" % ", ".join(bodies), bodies.size() == 9)
 	var no_portrait: Array = [] # tools/render_portraits.py makes them; a story line shows them beside the text
 	for c in Data.load_json("characters").get("characters", []):
 		for mood in ["neutral", "happy", "warm", "sad", "wry", "surprised", "worried", "angry"]:
