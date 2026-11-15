@@ -26,6 +26,7 @@ const Lighting = preload("res://scripts/lighting.gd")
 const Regions = preload("res://scripts/regions.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
+const HouseSkin = preload("res://scripts/house_skin.gd")
 const Homestead = preload("res://scripts/homestead.gd")
 const Dog = preload("res://scripts/dog.gd")
 const Cinematic = preload("res://scripts/cinematic.gd")
@@ -774,7 +775,7 @@ func _rebuild_house() -> void:
 	var W := HOUSE_W
 	var D := HOUSE_FRONT
 	var depth := D - z0
-	Catalog.box(house_root, Vector3(W + 0.7, 0.1, depth + 0.7), Vector3(W * 0.5, -0.04, z0 + depth * 0.5), Catalog.STONE)
+	HouseSkin.on(Catalog.box(house_root, Vector3(W + 0.7, 0.1, depth + 0.7), Vector3(W * 0.5, -0.04, z0 + depth * 0.5), Catalog.STONE), "stone")
 	_plank_floor(Rect2(0, z0, W, depth), 11, "house")
 	var lvl := Game.house_level
 	var left_windows := [4.8]
@@ -816,13 +817,24 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	node.add_child(tall)
 	var short := Node3D.new()
 	node.add_child(short)
-	Catalog.box(tall, _sz(horizontal, length, height, WALL_T), _at(horizontal, 0, height * 0.5), PLASTER)
-	Catalog.box(tall, _sz(horizontal, length + 0.02, 0.16, WALL_T + 0.06), _at(horizontal, 0, height - 0.08), Catalog.WOOD_DARK)
-	Catalog.box(tall, _sz(horizontal, length, 0.14, WALL_T + 0.04), _at(horizontal, 0, 0.07), Catalog.WOOD_DARK)
+	# the plaster, in pieces round the windows, so the glass has the room behind it
+	var pieces: Array = [Rect2(0, 0, length, height)]
+	for wpos in windows:
+		pieces = Planks._cut(pieces, Rect2(float(wpos) - (mid.x if horizontal else mid.y) - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
+	for pr in pieces:
+		var q := pr as Rect2
+		HouseSkin.on(Catalog.box(tall, _sz(horizontal, q.size.x, q.size.y, WALL_T), _at(horizontal, q.get_center().x - length * 0.5, q.get_center().y), PLASTER), "plaster")
+	HouseSkin.oak(Catalog.box(tall, _sz(horizontal, length + 0.02, 0.16, WALL_T + 0.06), _at(horizontal, 0, height - 0.08), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(tall, _sz(horizontal, length, 0.14, WALL_T + 0.04), _at(horizontal, 0, 0.07), Catalog.WOOD_DARK))
 	var posts := maxi(1, int(round(length / 2.0)))
 	for i in posts + 1:
 		var o := -length * 0.5 + length * i / posts
-		Catalog.box(tall, _sz(horizontal, 0.16, height, WALL_T + 0.05), _at(horizontal, o, height * 0.5), Catalog.WOOD_DARK)
+		if windows.any(func(wp): return absf(float(wp) - (mid.x if horizontal else mid.y) - o) < 0.66):
+			continue # no post across a window: the glass shows the room now
+		HouseSkin.oak(Catalog.box(tall, _sz(horizontal, 0.16, height, WALL_T + 0.05), _at(horizontal, o, height * 0.5), Catalog.WOOD_DARK))
+	if not divider: # a fieldstone footing along the outside, under the sill rail
+		var fo := (normal.z if horizontal else normal.x) * (WALL_T * 0.5 + 0.03)
+		HouseSkin.on(Catalog.box(tall, _sz(horizontal, length + 0.08, 0.3, 0.1), _at(horizontal, 0, 0.13, fo), Catalog.STONE), "stone")
 	var holes: Array = []
 	for wpos in windows:
 		var o := float(wpos) - (mid.x if horizontal else mid.y)
@@ -830,8 +842,8 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 		holes.append(Rect2(o - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
 	for side in ([-1.0, 1.0] if divider else [-1.0]): # a room divider is indoors on both sides
 		_wall_boards(tall, horizontal, length, height, normal * side, holes)
-	Catalog.box(short, _sz(horizontal, length, 0.32, WALL_T), _at(horizontal, 0, 0.16), PLASTER)
-	Catalog.box(short, _sz(horizontal, length + 0.02, 0.06, WALL_T + 0.06), _at(horizontal, 0, 0.33), Catalog.WOOD_DARK)
+	HouseSkin.on(Catalog.box(short, _sz(horizontal, length, 0.32, WALL_T), _at(horizontal, 0, 0.16), PLASTER), "plaster")
+	HouseSkin.oak(Catalog.box(short, _sz(horizontal, length + 0.02, 0.06, WALL_T + 0.06), _at(horizontal, 0, 0.33), Catalog.WOOD_DARK))
 	short.visible = false
 	var w := {"tall": tall, "short": short, "normal": normal, "cut": cut}
 	walls.append(w)
@@ -872,15 +884,16 @@ func _at(horizontal: bool, along: float, y: float, out := 0.0) -> Vector3:
 
 func _window(parent: Node3D, o: float, horizontal: bool) -> void:
 	var glass := Catalog.box(parent, _sz(horizontal, 1.0, 1.0, WALL_T + 0.02), _at(horizontal, o, 1.55), Color(0.7, 0.85, 0.95))
-	glass.material_override = Catalog.mat(Color(0.7, 0.85, 0.95), 0.1)
+	glass.material_override = Catalog.window_glass()
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # sunlight comes in through it
 	var t := WALL_T + 0.08
 	for y in [1.03, 2.07]:
-		Catalog.box(parent, _sz(horizontal, 1.16, 0.08, t), _at(horizontal, o, y), Catalog.WOOD_DARK)
+		HouseSkin.oak(Catalog.box(parent, _sz(horizontal, 1.16, 0.08, t), _at(horizontal, o, y), Catalog.WOOD_DARK))
 	for d in [-0.54, 0.54]:
-		Catalog.box(parent, _sz(horizontal, 0.08, 1.12, t), _at(horizontal, o + d, 1.55), Catalog.WOOD_DARK)
-	Catalog.box(parent, _sz(horizontal, 0.04, 1.0, t - 0.02), _at(horizontal, o, 1.55), Catalog.WOOD_DARK)
-	Catalog.box(parent, _sz(horizontal, 1.0, 0.04, t - 0.02), _at(horizontal, o, 1.55), Catalog.WOOD_DARK)
-	Catalog.box(parent, _sz(horizontal, 1.25, 0.06, WALL_T + 0.24), _at(horizontal, o, 0.98), Catalog.WOOD)
+		HouseSkin.oak(Catalog.box(parent, _sz(horizontal, 0.08, 1.12, t), _at(horizontal, o + d, 1.55), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(parent, _sz(horizontal, 0.04, 1.0, t - 0.02), _at(horizontal, o, 1.55), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(parent, _sz(horizontal, 1.0, 0.04, t - 0.02), _at(horizontal, o, 1.55), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(parent, _sz(horizontal, 1.25, 0.06, WALL_T + 0.24), _at(horizontal, o, 0.98), Catalog.WOOD), HouseSkin.LIGHT_OAK)
 
 
 func _door_lintel() -> void:
@@ -893,11 +906,11 @@ func _door_lintel() -> void:
 	node.add_child(short)
 	var gap := DOOR_Z1 - DOOR_Z0
 	var h := WALL_H - 2.15
-	Catalog.box(tall, Vector3(WALL_T, h, gap), Vector3(0, 2.15 + h * 0.5, 0), PLASTER)
-	Catalog.box(tall, Vector3(WALL_T + 0.06, 0.16, gap + 0.02), Vector3(0, WALL_H - 0.08, 0), Catalog.WOOD_DARK)
-	Catalog.box(tall, Vector3(WALL_T + 0.08, 0.1, gap + 0.1), Vector3(0, 2.15, 0), Catalog.WOOD_DARK)
+	HouseSkin.on(Catalog.box(tall, Vector3(WALL_T, h, gap), Vector3(0, 2.15 + h * 0.5, 0), PLASTER), "plaster")
+	HouseSkin.oak(Catalog.box(tall, Vector3(WALL_T + 0.06, 0.16, gap + 0.02), Vector3(0, WALL_H - 0.08, 0), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(tall, Vector3(WALL_T + 0.08, 0.1, gap + 0.1), Vector3(0, 2.15, 0), Catalog.WOOD_DARK))
 	# open door leaf, swung outward
-	Catalog.box(tall, Vector3(1.2, 2.05, 0.06), Vector3(0.62, 1.03, -gap * 0.5 + 0.05), Catalog.WOOD)
+	HouseSkin.oak(Catalog.box(tall, Vector3(1.2, 2.05, 0.06), Vector3(0.62, 1.03, -gap * 0.5 + 0.05), Catalog.WOOD), HouseSkin.LIGHT_OAK)
 	Catalog.ball(tall, 0.035, Vector3(1.1, 1.0, -gap * 0.5 + 0.1), Catalog.BRASS)
 	walls.append({"tall": tall, "short": short, "normal": Vector3(1, 0, 0), "cut": true})
 
@@ -927,7 +940,7 @@ func _house_roof(r: Rect2, ridge_z: bool) -> Node3D:
 	var g := MeshInstance3D.new()
 	g.name = "Gable"
 	g.mesh = gable
-	g.material_override = Catalog.mat(PLASTER)
+	g.material_override = HouseSkin.material("plaster")
 	g.position = Vector3(0, rise * 0.5, 0)
 	root.add_child(g)
 	var out := half + ROOF_EAVES
@@ -5111,6 +5124,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=exterior" in OS.get_cmdline_user_args(): # just the house's outside and its window glass
+		await _wait(1.5)
+		await _exterior_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=seethrough" in OS.get_cmdline_user_args(): # just scenery fading out of the camera's way
 		await _wait(1.5)
 		await _see_through_checks()
@@ -8200,6 +8219,62 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 ## never the player's), the album lists, shows and deletes it, and Esc brings the camera back to Nora.
 ## Scenery fading out of the camera's way (see_through.gd): she stands just behind a tall tree as
 ## the camera sees it, the tree fades to see-through, and when she walks off it comes back solid.
+## The outside of Nora's house (scripts/house_skin.gd, art/world_assets/house_exterior): plaster,
+## oak and fieldstone maps on the walls, frame, footing and the flags round it, the porch step's
+## boards, and the window glass (shaders/window_glass.gdshader) with the room behind it, by day,
+## at dusk and at night.
+func _exterior_checks() -> void:
+	var skinned := {}
+	for mi in get_tree().get_nodes_in_group("house_skin"):
+		var m := (mi as MeshInstance3D).material_override as StandardMaterial3D
+		if m and m.albedo_texture:
+			skinned[m.albedo_texture.resource_path.get_file().get_basename()] = true
+	var panes := 0
+	var holed := 0
+	for w in walls:
+		for c in (w["tall"] as Node3D).get_children():
+			if c is MeshInstance3D and (c as MeshInstance3D).material_override == Catalog.window_glass():
+				panes += 1
+		var plaster := (w["tall"] as Node3D).get_children().filter(func(c): return c is MeshInstance3D and (c as MeshInstance3D).material_override == HouseSkin.material("plaster"))
+		if plaster.size() > 1:
+			holed += 1
+	var porch := get_tree().get_nodes_in_group("planks_floor").filter(func(f): return str(f.get_meta("shade", "")) == "porch")
+	_check("the house's outside is textured: %s; %d window panes of glass in walls cut round them (%d walls), a porch step of boards (%d)" % [", ".join(skinned.keys()), panes, holed, porch.size()],
+		skinned.has("plaster") and skinned.has("timber") and skinned.has("timber_h") and skinned.has("stone") and panes >= 4 and holed >= 3 and porch.size() == 1)
+	var shops_glazed := 0
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for i in m.mesh.get_surface_count():
+			var sm := m.mesh.surface_get_material(i)
+			if sm and sm.resource_name.begins_with("glass_") and m.get_surface_override_material(i) == Catalog.window_glass():
+				shops_glazed += 1
+	_check("the walk-in shops' windows are the same glass (%d panes)" % shops_glazed, shops_glazed >= 4)
+	_set_cam_lock(false)
+	player.position = Vector3(14.0, 0, 9.0) # out in the yard, so the roof stays on
+	var yaw0 := cam_yaw
+	for shot in [[10.0, "62_house_day.png"], [18.6, "62_house_dusk.png"], [22.5, "62_house_night.png"]]:
+		Game.hour = shot[0]
+		cam_target = Vector3(8.5, 1.2, 3.2)
+		cam_dist = 8.0
+		cam_yaw = deg_to_rad(85.0)
+		cam_yaw_goal = cam_yaw
+		await _wait(2.0)
+		await _shot(shot[1])
+	# a window from outside, close: the room through the glass
+	Game.hour = 11.0
+	cam_target = Vector3(6.0, 1.4, 6.0)
+	cam_dist = 8.0
+	cam_yaw = deg_to_rad(10.0)
+	cam_yaw_goal = cam_yaw
+	await _wait(2.0)
+	await _shot("62_window.png")
+	cam_yaw = yaw0
+	cam_yaw_goal = yaw0
+	_set_cam_lock(true)
+
+
 func _see_through_checks() -> void:
 	mode = Mode.LIVE
 	cam_follow = true
@@ -9765,7 +9840,7 @@ func _build_cottage() -> void:
 	var z0 := c.position.y
 	var z1 := c.end.y
 	var dz := Town.COTTAGE_DOOR
-	Catalog.box(house_root, Vector3(c.size.x + 0.7, 0.1, c.size.y + 0.7), Vector3(c.get_center().x, -0.04, c.get_center().y), Catalog.STONE)
+	HouseSkin.on(Catalog.box(house_root, Vector3(c.size.x + 0.7, 0.1, c.size.y + 0.7), Vector3(c.get_center().x, -0.04, c.get_center().y), Catalog.STONE), "stone")
 	_plank_floor(c, 23, "cottage")
 	_wall(Vector2(x0, z0), Vector2(dz.x, z0), Vector3(0, 0, -1), [59.4])
 	_wall(Vector2(dz.y, z0), Vector2(x1, z0), Vector3(0, 0, -1), [63.6])
@@ -9782,13 +9857,13 @@ func _build_cottage() -> void:
 	node.add_child(short)
 	var gap := dz.y - dz.x
 	var h := WALL_H - 2.15
-	Catalog.box(tall, Vector3(gap, h, WALL_T), Vector3(0, 2.15 + h * 0.5, 0), PLASTER)
-	Catalog.box(tall, Vector3(gap + 0.02, 0.16, WALL_T + 0.06), Vector3(0, WALL_H - 0.08, 0), Catalog.WOOD_DARK)
-	Catalog.box(tall, Vector3(gap + 0.1, 0.1, WALL_T + 0.08), Vector3(0, 2.15, 0), Catalog.WOOD_DARK)
+	HouseSkin.on(Catalog.box(tall, Vector3(gap, h, WALL_T), Vector3(0, 2.15 + h * 0.5, 0), PLASTER), "plaster")
+	HouseSkin.oak(Catalog.box(tall, Vector3(gap + 0.02, 0.16, WALL_T + 0.06), Vector3(0, WALL_H - 0.08, 0), Catalog.WOOD_DARK))
+	HouseSkin.oak(Catalog.box(tall, Vector3(gap + 0.1, 0.1, WALL_T + 0.08), Vector3(0, 2.15, 0), Catalog.WOOD_DARK))
 	if Game.owns_cottage:
-		Catalog.box(tall, Vector3(0.06, 2.05, 1.2), Vector3(-gap * 0.5 + 0.06, 1.03, 0.64), Catalog.WOOD)
+		HouseSkin.oak(Catalog.box(tall, Vector3(0.06, 2.05, 1.2), Vector3(-gap * 0.5 + 0.06, 1.03, 0.64), Catalog.WOOD), HouseSkin.LIGHT_OAK)
 	else:
-		Catalog.box(tall, Vector3(gap, 2.05, 0.08), Vector3(0, 1.03, 0), Catalog.WOOD)
+		HouseSkin.oak(Catalog.box(tall, Vector3(gap, 2.05, 0.08), Vector3(0, 1.03, 0), Catalog.WOOD), HouseSkin.LIGHT_OAK)
 		Catalog.ball(tall, 0.04, Vector3(gap * 0.32, 1.0, -0.06), Catalog.BRASS)
 		wall_rects.append(Rect2(dz.x, z0 - WALL_T * 0.5, gap, WALL_T))
 	walls.append({"tall": tall, "short": short, "normal": Vector3(0, 0, -1), "cut": true})

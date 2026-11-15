@@ -19,6 +19,7 @@ const SHADES := {
 	"office": Color(0.66, 0.66, 0.7), # grey driftwood
 	"homegoods": Color(0.76, 0.7, 0.52), # smoked ash
 	"barn": Color(0.68, 0.6, 0.55), # weathered brown
+	"porch": Color(0.74, 0.68, 0.62), # Nora's porch step, out in the weather
 }
 
 static var _mats := {}

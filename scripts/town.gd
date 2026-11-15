@@ -357,7 +357,7 @@ static func building(root: Node3D, r: Rect2, wall: Color, roof: Color, sign_text
 		if absf(wx - dx) < 1.2:
 			continue
 		var glass := Catalog.box(b, Vector3(1.0, 0.95, 0.06), Vector3(wx, 1.5, front + 0.02), Color(0.7, 0.85, 0.95))
-		glass.material_override = Catalog.mat(Color(0.75, 0.85, 0.9), 0.1, 0.0)
+		glass.material_override = Catalog.window_glass()
 		Catalog.box(b, Vector3(1.16, 0.08, 0.1), Vector3(wx, 1.0, front + 0.04), Catalog.WOOD_DARK)
 		Catalog.box(b, Vector3(1.16, 0.08, 0.1), Vector3(wx, 2.0, front + 0.04), Catalog.WOOD_DARK)
 		Catalog.box(b, Vector3(0.06, 0.95, 0.09), Vector3(wx, 1.5, front + 0.04), Catalog.WOOD_DARK)
