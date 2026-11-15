@@ -12,7 +12,10 @@ loops named in --map it:
      A-pose, theirs stand out in a T-pose), and takes that as the reference pose;
   2. samples the clip at our frame rate and gives each of our bones the same world-space turn away
      from the reference pose as the library bone has, so the motion survives different rest poses,
-     bone rolls and proportions;
+     bone rolls and proportions. The collar bones are the exception: each keeps its own rest and
+     takes only the library collar bone's swing against the chest, away from the library's own rest.
+     Aimed like the other bones, a Mixamo collar bone (it rests 17 to 26 degrees below level, the
+     library's lies level) was lifted level in every loop, and the shoulders rode up 8 to 19 cm;
   3. moves the hips by the library's hip motion scaled to our leg length, removes any drift so the
      loop closes, and sets standing loops' soles on the ground (the body's lowest point, not the foot
      bones: a Mixamo rig can end those at the top of a boot); seated loops keep the old loop's
@@ -188,6 +191,9 @@ for b in order:
 ref = {b.name: src.pose.bones[BONES[b.name]].matrix.to_3x3().normalized() for b in order}
 ref_inv = {k: v.inverted() for k, v in ref.items()}
 rest_rot = {b.name: b.matrix_local.to_3x3().normalized() for b in order}
+# collar bone -> the bone it hangs from, and the library's own rest for both (see the docstring, 2)
+COLLAR = {b.name: b.parent.name for b in order if b.name.endswith("Shoulder") and b.parent and b.parent.name in BONES}
+src_rest = {n: src.data.bones[BONES[n]].matrix_local.to_3x3().normalized() for n in set(COLLAR) | set(COLLAR.values())}
 src_pelvis0 = src.pose.bones[BONES["Hips"]].head.copy()
 # the hips move as far as the library's, scaled to our legs; the same body on another rig moves them as far
 k_leg = 1.0 if SAME else T["LeftUpperLeg"].head_local.z / src.data.bones[BONES["LeftUpperLeg"]].head_local.z
@@ -227,6 +233,12 @@ def sample(t):
     scene.frame_set(int(t), subframe=t - int(t))
     want = {b.name: (src.pose.bones[BONES[b.name]].matrix.to_3x3().normalized() @ ref_inv[b.name]
                      @ rest_rot[b.name]).to_quaternion() for b in order}
+    for c, p in COLLAR.items():
+        # the library collar bone's turn since its rest, with its chest's turn taken out, on top of ours
+        sp = src.pose.bones[BONES[p]].matrix.to_3x3().normalized()
+        sc = src.pose.bones[BONES[c]].matrix.to_3x3().normalized()
+        swing = src_rest[p] @ sp.inverted() @ sc @ src_rest[c].inverted()
+        want[c] = (want[p].to_matrix() @ rest_rot[p].inverted() @ swing @ rest_rot[c]).to_quaternion()
     head = T["Hips"].head_local + (src.pose.bones[BONES["Hips"]].head - src_pelvis0) * k_leg
     return want, head
 
