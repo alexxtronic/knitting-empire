@@ -2882,7 +2882,7 @@ func _hints() -> Array:
 	var met: bool = Game.flags.keys().any(func(k): return str(k).begins_with("met_") and str(k) != "met_rowan")
 	return [
 		["walk", true, _hint_walked > 8.0, ["Click"], "Walk there. Hold the button down to keep going"],
-		["talk", _new_talker_near(9.0), met, ["Click"], "Someone glowing has something to say. Click them"],
+		["talk", _new_talker_near(9.0), met, ["Click"], "A gold star marks someone with something to say. Click them"],
 		["camera", true, _hint_cam >= 0.0 and absf(cam_dist - _hint_cam) > 2.0, [_key("turn_left"), _key("turn_right")], "Turn the camera. The mouse wheel zooms"],
 		["run", _hint_walked > 20.0, player.running and not player.path.is_empty(), [_key("run")], "Hold to hurry"],
 		["fps", true, fps.active, [_key("first_person")], "See the world through her eyes"],
@@ -2930,7 +2930,7 @@ func _update_hints(delta: float) -> void:
 			return
 
 
-## A soft glow over anyone with a story scene waiting when she talks to them (a first hello, a
+## A gold star over anyone with a story scene waiting when she talks to them (a first hello, a
 ## topic, a gift of seeds), so the town shows you who to visit without a word of text.
 var _new_talk_t := 0.0
 var _glow_tex: Texture2D
@@ -2952,40 +2952,70 @@ func _update_new_talk(delta: float) -> void:
 				g.visible = want
 		if g and g.visible:
 			var k := 0.5 + 0.5 * sin(t * 3.0 + v.position.x)
-			g.modulate.a = 0.55 + 0.45 * k
-			g.scale = Vector3.ONE * (0.85 + 0.2 * k)
-			g.position.y = float(g.get_meta("y")) + 0.06 * sin(t * 2.0)
+			g.modulate.a = 0.88 + 0.12 * k
+			g.scale = Vector3.ONE * (0.92 + 0.14 * k)
+			# just over their head, and up clear of the name tag while that shows
+			var clear: float = 0.55 * v.tag.modulate.a if v.tag and v.tag.visible else 0.0
+			g.position.y = float(g.get_meta("y")) + clear + 0.06 * sin(t * 2.0)
 
 
 func _new_talk_glow(v) -> Sprite3D:
 	if _glow_tex == null:
-		var gr := Gradient.new()
-		gr.set_color(0, Color(1.0, 0.95, 0.7, 1.0))
-		gr.add_point(0.18, Color(1.0, 0.82, 0.4, 0.85))
-		gr.set_color(1, Color(1.0, 0.7, 0.3, 0.0))
-		var tex := GradientTexture2D.new()
-		tex.gradient = gr
-		tex.fill = GradientTexture2D.FILL_RADIAL
-		tex.fill_from = Vector2(0.5, 0.5)
-		tex.fill_to = Vector2(0.5, 0.0)
-		tex.width = 64
-		tex.height = 64
-		_glow_tex = tex
+		_glow_tex = ImageTexture.create_from_image(star_image())
 	var g := Sprite3D.new()
 	g.name = "NewTalk"
 	g.texture = _glow_tex
-	g.pixel_size = 0.009
+	g.pixel_size = 0.5 / STAR_PX # half a metre across with its halo; the star itself about 36 cm
 	g.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	g.shaded = false
 	g.no_depth_test = true
 	g.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	g.transparent = true
 	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var y: float = (v.tag.position.y if v.tag else 2.0) + 0.5
+	var y: float = (v.tag.position.y if v.tag else 2.0) + 0.15
 	g.set_meta("y", y)
 	g.position.y = y
 	v.add_child(g)
 	return g
+
+
+const STAR_PX := 96
+
+
+## The marker's picture, drawn once: a gold five-pointed star with rounded points, lighter at the
+## top, a darker gold rim, a small shine, and a soft warm halo that is clear by the picture's edge.
+static func star_image() -> Image:
+	var n := float(STAR_PX)
+	var mid := Vector2(n, n) * 0.5 + Vector2(0.0, 0.02 * n)
+	var pts := PackedVector2Array()
+	for i in 10:
+		var a := -PI / 2.0 + i * PI / 5.0
+		pts.append(mid + Vector2(cos(a), sin(a)) * n * (0.32 if i % 2 == 0 else 0.15))
+	var round_px := 0.04 * n # the points and the notches between them are rounded by this much
+	var rim_px := 0.028 * n
+	var top := mid.y - 0.36 * n
+	var shine := mid + Vector2(-0.07, -0.1) * n
+	var img := Image.create(STAR_PX, STAR_PX, true, Image.FORMAT_RGBA8)
+	for y in STAR_PX:
+		for x in STAR_PX:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var d := 1e9
+			for i in 10:
+				d = minf(d, p.distance_to(Geometry2D.get_closest_point_to_segment(p, pts[i], pts[(i + 1) % 10])))
+			if Geometry2D.is_point_in_polygon(p, pts):
+				d = -d
+			d -= round_px # under 0: inside the star
+			var body := clampf(0.5 - d, 0.0, 1.0)
+			var col := Color(1.0, 0.9, 0.42).lerp(Color(0.97, 0.64, 0.1), clampf((p.y - top) / (0.7 * n), 0.0, 1.0))
+			col = col.lerp(Color(1.0, 0.98, 0.86), 0.75 * exp(-p.distance_squared_to(shine) / (0.006 * n * n)))
+			col = col.lerp(Color(0.72, 0.42, 0.04), clampf(1.0 + (d + 0.5) / rim_px, 0.0, 1.0))
+			var halo := 0.55 * exp(-maxf(d, 0.0) / (0.07 * n)) * clampf((0.5 * n - p.distance_to(Vector2(n, n) * 0.5)) / (0.14 * n), 0.0, 1.0)
+			var a_out := body + halo * (1.0 - body)
+			if a_out > 0.001:
+				col = (col * body + Color(1.0, 0.84, 0.4) * halo * (1.0 - body)) / a_out
+			img.set_pixel(x, y, Color(col.r, col.g, col.b, a_out))
+	img.generate_mipmaps()
+	return img
 
 
 ## The nearest villager with something new to say within `r` metres of her, or null.
