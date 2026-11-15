@@ -3478,25 +3478,31 @@ func _act1_checks() -> void:
 	await _wait(0.8)
 	await _shot("26_act1_pen.png")
 	_check("with the pen built, the dog herds too (%s)" % homestead.herders.has(dog), homestead.herders.has(dog))
-	# herding: the strays move off from her
-	var s0 = homestead.strays[0]
-	s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
-	player.walk([])
-	player.position = s0.position + Vector3(-1.4, 0, 0)
-	var d0: float = s0.position.distance_to(player.position)
-	await _wait(1.2)
-	var d1: float = s0.position.distance_to(player.position)
-	_check("a stray shies away from her (%.1f → %.1f m)" % [d0, d1], d1 > d0 + 0.4)
+	# herding: the strays move off from her. The dog herds from the moment the pen closes, so now
+	# and then he has driven them both in on his own during the waits above: then there's no stray
+	# left to try, and that's the game working (it had crashed here on strays[0])
+	var herded_early: bool = homestead.strays.is_empty()
+	if not herded_early:
+		var s0 = homestead.strays[0]
+		s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
+		player.walk([])
+		player.position = s0.position + Vector3(-1.4, 0, 0)
+		var d0: float = s0.position.distance_to(player.position)
+		await _wait(1.2)
+		var d1: float = s0.position.distance_to(player.position)
+		_check("a stray shies away from her (%.1f → %.1f m)" % [d0, d1], d1 > d0 + 0.4)
+	else:
+		print("      the dog herded both strays in by himself before the shy check")
 	_check("a fence turns her aside (%s)" % str(homestead._crosses_fence(Vector3(o.x + 1.5, 0, o.y - 0.3), Vector3(o.x + 1.5, 0, o.y + 0.3))), homestead._crosses_fence(Vector3(o.x + 1.5, 0, o.y - 0.3), Vector3(o.x + 1.5, 0, o.y + 0.3)))
 	player.position = Vector3(o.x - 4.0, 0, o.y + 1.5)
 	for s in homestead.strays.duplicate(): # herded through the gate
 		s.position = Vector3(o.x + 1.5, 0, o.y + 1.5)
 	t = 0.0
-	while story.playing != "act1_flock" and t < 5.0:
+	while story.playing != "act1_flock" and t < 5.0 and not herded_early:
 		await _wait(0.1)
 		t += 0.1
-	_check("both strays in the pen: 'sheep_penned' (%s), two sheep in her flock (%d)" % [story.playing, Game.sheep_count],
-		story.playing == "act1_flock" and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
+	_check("both strays in the pen: 'sheep_penned' (%s), two sheep in her flock (%d)" % [story.playing if not herded_early else "played already: the dog herded them", Game.sheep_count],
+		(story.playing == "act1_flock" or herded_early) and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
 	await _act1_until_done(30.0)
 	cam_target = cam0
 	_check("off to market ('%s')" % hud.goal_label.text, Game.flag("act1_fence_done") == true and hud.goal_label.text.contains("market"))
