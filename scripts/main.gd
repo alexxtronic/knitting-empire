@@ -4115,8 +4115,12 @@ func _cast_checks() -> void:
 	var auto0: bool = story.auto
 	var ids: Array = villagers.map(func(v): return str(v.vid))
 	ids.sort()
-	_check("the cast is Barbara, Gary, Giorgio, Lars, Rosa, Rowan, Sabrina, Steve and Wren (%s)" % ", ".join(ids),
-		ids == ["barbara", "gary", "giorgio", "lars", "rosa", "rowan", "sabrina", "steve", "wren"])
+	_check("the cast is Barbara, Gary, Giorgio, Lars, Rebecca, Rosa, Rowan, Sabrina, Steve and Wren (%s)" % ", ".join(ids),
+		ids == ["barbara", "gary", "giorgio", "lars", "rebecca", "rosa", "rowan", "sabrina", "steve", "wren"])
+	var officer := _villager("rebecca") # the police officer (Alex, 2026-11-15), on her beat in the square
+	var beat := _villager_post("rebecca")
+	_check("Rebecca the police officer is on her beat in the square, on open ground (%.1f m from her post, walkable %s), with nothing to report (%s)" % [officer.position.distance_to(beat) if officer != null else -1.0, str(_walkable(_cell(beat))), str(officer != null and not _villager_actions(officer).any(func(a): return str(a.get("id", "")) == "report_max"))],
+		officer != null and officer.position.distance_to(beat) < 2.5 and _walkable(_cell(beat)) and not _villager_actions(officer).any(func(a): return str(a.get("id", "")) == "report_max"))
 	var bodies: Array = []
 	for id in ["barbara", "gary", "giorgio", "lars", "rosa", "sabrina", "steve", "wren"]:
 		var v := _villager(id)
@@ -4170,6 +4174,11 @@ func _cast_checks() -> void:
 		player.face_point(lars.position)
 		await _cast_frame(by_barn["pos"], float(by_barn["yaw"]), 8.0)
 		await _shot("51_cast_lars.png")
+	if officer != null:
+		player.position = officer.position + Vector3(0.6, 0, 1.7)
+		player.face_point(officer.position)
+		await _cast_frame(officer.position, 0.0, 8.0)
+		await _shot("51_cast_rebecca.png")
 	var rent0 := {}
 	for k in ["barn_rent_due", "barn_rent_owed"]:
 		rent0[k] = Game.flags.get(k)
@@ -4679,7 +4688,8 @@ func _max_checks() -> void:
 	mode = Mode.LIVE
 	var hour0 := Game.hour
 	var auto0: bool = story.auto
-	var keys := ["play_secs", "act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done", "journal", "gary_visit_day"]
+	var keys := ["play_secs", "act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done", "journal", "gary_visit_day",
+		"max_visit_day", "seen_max_return", "max_report_open", "max_reported", "seen_rebecca_max", "seen_max_arrest", "max_arrested"]
 	var saved := {}
 	for k in keys:
 		saved[k] = Game.flags.get(k, null)
@@ -4688,8 +4698,12 @@ func _max_checks() -> void:
 	var p1 := float(Game.flags.get("play_secs", 0.0))
 	_check("play time counts up while she plays (%.2f → %.2f s)" % [p0, p1], p1 > p0 + 0.3)
 	var hours: float = float(Data.economy().get("story", {}).get("max_visit_hours", 4.0))
-	for k in ["act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done"]:
+	for k in ["act1_done", "seen_max_visit", "max_accepted", "max_refused", "max_visit_done",
+			"max_visit_day", "seen_max_return", "max_report_open", "max_reported", "seen_rebecca_max", "seen_max_arrest", "max_arrested"]:
 		Game.flags.erase(k)
+	var officer := _villager("rebecca")
+	var report_row := func() -> bool: return officer != null and _villager_actions(officer).any(func(a): return str(a.get("id", "")) == "report_max")
+	var quiet: bool = Story.find_trigger("talk", "rebecca") == "" and not report_row.call() and not max_return_due()
 	Game.flags["play_secs"] = hours * 3600.0 + 10.0
 	var before_act1 := max_visit_due()
 	Game.set_flag("act1_done")
@@ -4741,6 +4755,60 @@ func _max_checks() -> void:
 	_check("say no and his temper comes out; she sends him away (refused %s, accepted %s)" % [str(Game.flag("max_refused")), str(Game.flag("max_accepted"))],
 		Game.flag("max_refused") == true and Game.flag("max_accepted") != true and Game.flag("max_visit_done") == true
 		and story.shown.any(func(l): return str(l).contains("six hours for this")) and _villager("max") == null)
+	# Rebecca (Alex, 2026-11-15): reporting him is Nora's to choose. Left alone, he comes back once
+	var back_days: int = int(Data.economy().get("story", {}).get("max_return_days", 3))
+	var offer: String = Story.find_trigger("talk", "rebecca")
+	Game.flags["max_visit_day"] = Game.day - back_days + 1
+	var early := max_return_due()
+	Game.flags["max_visit_day"] = Game.day - back_days
+	_check("before his visit Rebecca had nothing to raise (%s); after it she has (%s), with no report row yet (%s), and he is due back after %d days, not a day sooner (%s, then %s)" % [str(quiet), offer, str(report_row.call()), back_days, str(early), str(max_return_due())],
+		quiet and offer == "rebecca_max" and not report_row.call() and not early and max_return_due())
+	story.shown.clear()
+	player.position = Vector3(9.6, 0, 4.2)
+	Game.hour = 11.0
+	_rounds_t = 0.0
+	t = 0.0
+	while story.playing != "max_return" and t < 5.0:
+		await _wait(0.1)
+		t += 0.1
+	var came_back: bool = story.playing == "max_return" and _villager("max") != null
+	await _act1_until_done(60.0)
+	await _wait(0.3)
+	_check("unreported, he comes back once (%s) and she sends him off again; the offer is open on Rebecca's menu (%s) and he isn't due a third time (%s)" % [str(came_back), str(report_row.call()), str(max_return_due())],
+		came_back and Game.flag("max_report_open") == true and report_row.call() and not max_return_due() and _villager("max") == null)
+	# she can still say not today: nothing is forced
+	story.auto_choices = [1]
+	story.shown.clear()
+	player.walk([])
+	player.position = officer.position + Vector3(0.3, 0, 1.5)
+	_do_action(officer, "talk")
+	t = 0.0
+	while story.playing != "rebecca_max" and t < 8.0:
+		await _wait(0.1)
+		t += 0.1
+	var raised: bool = story.playing == "rebecca_max"
+	await _act1_until_done(40.0)
+	await _wait(1.0)
+	_check("talking to Rebecca, she raises it (%s); Nora says not today and nothing happens (reported %s, arrested %s, the row still there %s)" % [str(raised), str(Game.flag("max_reported")), str(Game.flag("max_arrested")), str(report_row.call())],
+		raised and Game.flag("max_reported") != true and Game.flag("max_arrested") != true and not story.is_playing() and report_row.call())
+	# then she reports him from Rebecca's menu: Rebecca is waiting when he turns up, and that is the last of him
+	story.shown.clear()
+	_villager_action(officer, "report_max")
+	t = 0.0
+	while story.playing != "max_arrest" and t < 20.0:
+		await _wait(0.1)
+		t += 0.1
+	var waiting: bool = story.playing == "max_arrest" and _villager("max") != null
+	await _act1_shot("Officer Rebecca, Maple Grove", "54_max_arrest.png")
+	await _act1_until_done(60.0)
+	await _wait(0.3)
+	j = Game.journal()
+	_check("reported from her menu (%s), Rebecca is waiting for him at the lane (%s): he is arrested and gone for good (arrested %s, still here %s, due again %s or %s, journal '%s', the row gone %s)" % [str(Game.flag("max_reported")), str(waiting), str(Game.flag("max_arrested")), str(_villager("max") != null), str(max_visit_due()), str(max_return_due()), j[-1]["title"] if not j.is_empty() else "", str(not report_row.call())],
+		Game.flag("max_reported") == true and waiting and Game.flag("max_arrested") == true and _villager("max") == null and visitors.is_empty()
+		and not max_visit_due() and not max_return_due() and not j.is_empty() and str(j[-1]["title"]) == "Max is gone" and not report_row.call()
+		and Story.find_trigger("event", "max_arrest") == "" and Story.find_trigger("talk", "rebecca") != "rebecca_max")
+	var kept: Dictionary = Game.migrate(JSON.parse_string(JSON.stringify({"version": Game.SAVE_VERSION, "flags": Game.flags})))["flags"]
+	_check("a save keeps it: arrested %s, reported %s" % [str(kept.get("max_arrested")), str(kept.get("max_reported"))], kept.get("max_arrested") == true and kept.get("max_reported") == true)
 	# a save from before he was renamed (he was Daniel) keeps its place in his story
 	var old_save := {"version": 6, "flags": {"seen_daniel_visit": true, "daniel_refused": true, "declined_daniel": true,
 		"mail": {"box": [], "got": [{"id": "daniel_1", "from": "Daniel", "body": "Call me.\n\nD.", "read": true}], "sent": {"daniel_1": 4}},
@@ -9009,14 +9077,37 @@ func max_visit_due() -> bool:
 	return float(Game.flags.get("play_secs", 0.0)) >= hours * 3600.0
 
 
+## Sent away, he comes back once, "max_return_days" days later (data/economy.json "story"), unless
+## she has reported him to Rebecca by then (data/scenes/max.scene; Alex, 2026-11-15).
+func max_return_due() -> bool:
+	if Game.flag("max_visit_done") != true or Game.flag("seen_max_return") == true or Game.flag("max_reported") == true or Game.flag("max_arrested") == true:
+		return false
+	if not Game.flags.has("max_visit_day"):
+		Game.set_flag("max_visit_day", Game.day) # a save from before he could come back: count from today
+	var days: int = int(Data.economy().get("story", {}).get("max_return_days", 3))
+	return Game.day >= int(Game.flags["max_visit_day"]) + days
+
+
 func _update_max_visit() -> void:
-	if not max_visit_due() or story.is_playing() or Game.hour < 10.0 or Game.hour > 17.0 or mode != Mode.LIVE or sleeping:
+	if story.is_playing() or mode != Mode.LIVE or sleeping or player.busy or knit.active:
 		return
-	if not LOT.has_point(Vector2(player.position.x, player.position.z)) or player.busy or knit.active:
+	if Game.flag("max_reported") == true and Game.flag("max_arrested") != true:
+		# reported to Rebecca: she is waiting the next time he turns up at the lane, wherever Nora is now
+		var arrest := Story.find_trigger("event", "max_arrest")
+		if arrest != "":
+			visitor("max")
+			story.play(arrest)
 		return
-	var id := Story.find_trigger("event", "max_visit")
+	if Game.hour < 10.0 or Game.hour > 17.0 or not LOT.has_point(Vector2(player.position.x, player.position.z)):
+		return
+	var first := max_visit_due()
+	if not first and not max_return_due():
+		return
+	var id := Story.find_trigger("event", "max_visit" if first else "max_return")
 	if id == "":
 		return
+	if first:
+		Game.set_flag("max_visit_day", Game.day)
 	visitor("max")
 	story.play(id)
 
@@ -9297,6 +9388,9 @@ func _villager_actions(v) -> Array:
 				acts.append(_act("buy_sheep", "Buy a sheep  (%dc · you have %d)" % [sp, Game.sheep_count], Game.coins >= sp))
 			else:
 				acts.append(_act("noop", "Your pen is full (%d sheep)" % Game.MAX_SHEEP, false))
+		"rebecca": # the police officer: once she has left the offer open, Max can be reported any day (data/scenes/max.scene)
+			if Game.flag("max_report_open") == true and Game.flag("max_reported") != true and Game.flag("max_arrested") != true:
+				acts.append(_act("report_max", "Report Max"))
 		"steve": # Builder's Delight: wood, tools and seeds, anything for the house that isn't wool, food or coffee
 			var n := homestead.econ("wood_pack", 5)
 			var wp := homestead.econ("wood_pack_price", 15)
@@ -9369,6 +9463,11 @@ func _talk_line(v) -> String:
 
 func _villager_action(v, id: String) -> void:
 	var f := Game.friend(v.vid)
+	if id == "report_max": # Rebecca's row: she takes it from here (rebecca_report, then max_arrest)
+		var rid := Story.find_trigger("event", "report_max")
+		if rid != "":
+			story.play(rid)
+		return
 	if id.begins_with("job_"):
 		jobs.action(v, id)
 		return

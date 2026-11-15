@@ -1,5 +1,5 @@
 {
-  "_about": "Maple Grove residents (the cast Alex set on 2026-11-12, and Lars, the farmer next door, on 2026-11-13). 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office / homegoods) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'at' puts them by a building that isn't walk-in (its 'building' is a Town.built kind such as building_cafe or market_stall, or 'barn' for the farm's barn; 'pos' and 'talk' are [x, z] in that building's own space, its front toward +z), so they follow it when the world editor moves it; 'stall' sends them to a stall ('at' format) during its 'hours' [from, to] and back to work after; 'post_round' is the hour the postwoman sets out on her round, door to door and past Nora's farm (main.gd _update_rounds); 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'start' is where their relationship stats begin (trust runs -50..100); 'route' is a round of [x, z] stops walked all day; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
+  "_about": "Maple Grove residents (the cast Alex set on 2026-11-12, Lars, the farmer next door, on 2026-11-13, and Rebecca, the police officer, on 2026-11-15). 'pos' and 'talk_spot' are world positions (x, y, z); 'works_in' (shop / bakery / office / homegoods) puts them behind their counter inside that building instead (data/interiors.json), wherever it stands, and 'pos' is only used if the building is missing; 'at' puts them by a building that isn't walk-in (its 'building' is a Town.built kind such as building_cafe or market_stall, or 'barn' for the farm's barn; 'pos' and 'talk' are [x, z] in that building's own space, its front toward +z), so they follow it when the world editor moves it; 'stall' sends them to a stall ('at' format) during its 'hours' [from, to] and back to work after; 'post_round' is the hour the postwoman sets out on her round, door to door and past Nora's farm (main.gd _update_rounds); 'roam' is how far they wander (x, z); 'loves' is an item id and 'likes' a list of them (gifts: loved > liked > anything else); 'romance': true means gifts and scenes can grow romance with them; 'start' is where their relationship stats begin (trust runs -50..100); 'route' is a round of [x, z] stops walked all day; 'look.extra' is apron / glasses / hat. 'look.model' (a character id from characters.json) gives them a full rigged body instead of the simple one.",
   "villagers": [
     {
       "id": "rosa",
@@ -127,6 +127,22 @@
         "hair": "#8b5a2b",
         "top": "#8c2e2a",
         "bottom": "#34507a"
+      }
+    },
+    {
+      "id": "rebecca",
+      "name": "Rebecca",
+      "role": "Police officer",
+      "loves": "pumpkin",
+      "likes": ["turnip", "sweater"],
+      "pos": [48.6, 0.0, 4.4],
+      "roam": [1.0, 0.5],
+      "look": {
+        "model": "rebecca",
+        "skin": "#e0a583",
+        "hair": "#8a4a2b",
+        "top": "#23283a",
+        "bottom": "#23283a"
       }
     }
   ]

@@ -8,7 +8,10 @@ colours baked across from the full-detail model.
 
 Upload the zip to mixamo.com's auto-rigger, download the rigged T-pose as FBX and bring it in with
 tools/import_mixamo.py. Faces default to 30000; if the light copy shows a dark line across the face (a thin
-sliver of a triangle that picked up a nostril's shadow in the bake, as Lars's did), try 40000."""
+sliver of a triangle that picked up a nostril's shadow in the bake, as Lars's did), try 40000.
+
+A model that already has no more faces than that (Tripo's low-poly export: Rebecca's 9.7k) is only welded:
+it keeps its own UVs and base colour, so nothing is smoothed away or re-baked."""
 import bpy, bmesh, sys, os, shutil, tempfile, mathutils
 a = sys.argv[sys.argv.index("--") + 1:]
 src, out, height = a[0], a[1], float(a[2])
@@ -40,36 +43,57 @@ bpy.context.view_layer.objects.active = lo
 for nm_ in ("custom_normal", "sharp_edge", "sharp_face"):      # the import's split normals and sharp marks
     if nm_ in lo.data.attributes: lo.data.attributes.remove(lo.data.attributes[nm_])
 for p in lo.data.polygons: p.use_smooth = True
-# Tripo meshes carry tiny folds along their texture seams; cut down as they are, a fold grows into a crease
-# down the face (the male model's cheek). A light smoothing first irons them out; the bake below still
-# takes its colours from the full model
-m = lo.modifiers.new("s", "SMOOTH"); m.factor = 0.5; m.iterations = 3
-bpy.ops.object.modifier_apply(modifier="s")
-m = lo.modifiers.new("d", "DECIMATE"); m.ratio = min(1.0, FACES / len(lo.data.polygons))
-bpy.ops.object.modifier_apply(modifier="d")
-while lo.data.uv_layers: lo.data.uv_layers.remove(lo.data.uv_layers[0])
-lo.data.uv_layers.new(name="UVMap")
-bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
-bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.004, area_weight=0.0, scale_to_bounds=False)
-bpy.ops.object.mode_set(mode="OBJECT")
-print("FACES after", len(lo.data.polygons))
+KEEP = len(lo.data.polygons) <= FACES      # light already: keep its UVs and base colour
+own = None
+if KEEP:
+    for m_ in hi.data.materials:
+        b_ = m_.node_tree.nodes.get("Principled BSDF") if m_ and m_.use_nodes else None
+        if b_ and b_.inputs["Base Color"].links:
+            own = b_.inputs["Base Color"].links[0].from_node.image
+    KEEP = own is not None and len(lo.data.uv_layers) > 0
+    print("LIGHT ALREADY", len(lo.data.polygons), "faces: keeping its UVs and", own.name if own else "(no base colour found: baking)")
+if not KEEP:
+    # Tripo meshes carry tiny folds along their texture seams; cut down as they are, a fold grows into a crease
+    # down the face (the male model's cheek). A light smoothing first irons them out; the bake below still
+    # takes its colours from the full model
+    m = lo.modifiers.new("s", "SMOOTH"); m.factor = 0.5; m.iterations = 3
+    bpy.ops.object.modifier_apply(modifier="s")
+    m = lo.modifiers.new("d", "DECIMATE"); m.ratio = min(1.0, FACES / len(lo.data.polygons))
+    bpy.ops.object.modifier_apply(modifier="d")
+    while lo.data.uv_layers: lo.data.uv_layers.remove(lo.data.uv_layers[0])
+    lo.data.uv_layers.new(name="UVMap")
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.004, area_weight=0.0, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    print("FACES after", len(lo.data.polygons))
 
-# ---- bake the full model's base colour onto it
-img = bpy.data.images.new("basecolor", TEX, TEX, alpha=False)
-mat = bpy.data.materials.new("skin"); mat.use_nodes = True
-nt = mat.node_tree; bsdf = nt.nodes["Principled BSDF"]; bsdf.inputs["Roughness"].default_value = 0.85
-tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = img
-nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-lo.data.materials.clear(); lo.data.materials.append(mat)
-nt.nodes.active = tex
-sc.render.engine = "CYCLES"; sc.cycles.samples = 4; sc.cycles.device = "CPU"
-bk = sc.render.bake
-bk.use_selected_to_active = True; bk.use_cage = False
-bk.cage_extrusion = 0.0025 * H; bk.max_ray_distance = 0.012 * H; bk.margin = 12   # short rays: a curl over the forehead mustn't shade it
-for o in sc.objects: o.select_set(o in (hi, lo))
-bpy.context.view_layer.objects.active = lo
-bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"})
-print("BAKED", img.name, tuple(img.size))
+    # ---- bake the full model's base colour onto it
+    img = bpy.data.images.new("basecolor", TEX, TEX, alpha=False)
+    mat = bpy.data.materials.new("skin"); mat.use_nodes = True
+    nt = mat.node_tree; bsdf = nt.nodes["Principled BSDF"]; bsdf.inputs["Roughness"].default_value = 0.85
+    tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = img
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    lo.data.materials.clear(); lo.data.materials.append(mat)
+    nt.nodes.active = tex
+    sc.render.engine = "CYCLES"; sc.cycles.samples = 4; sc.cycles.device = "CPU"
+    bk = sc.render.bake
+    bk.use_selected_to_active = True; bk.use_cage = False
+    bk.cage_extrusion = 0.0025 * H; bk.max_ray_distance = 0.012 * H; bk.margin = 12   # short rays: a curl over the forehead mustn't shade it
+    for o in sc.objects: o.select_set(o in (hi, lo))
+    bpy.context.view_layer.objects.active = lo
+    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"})
+    print("BAKED", img.name, tuple(img.size))
+
+else:
+    img = bpy.data.images.new("basecolor", own.size[0], own.size[1], alpha=False)   # a copy that saves as a real PNG
+    px_ = [0.0] * (own.size[0] * own.size[1] * 4)
+    own.pixels.foreach_get(px_)
+    img.pixels.foreach_set(px_)
+    mat = bpy.data.materials.new("skin"); mat.use_nodes = True
+    nt = mat.node_tree; nt.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.85
+    tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = img
+    nt.links.new(tex.outputs["Color"], nt.nodes["Principled BSDF"].inputs["Base Color"])
+    lo.data.materials.clear(); lo.data.materials.append(mat)
 
 # ---- keep only the light model, scaled to height, standing on the ground, centred
 bpy.data.objects.remove(hi)

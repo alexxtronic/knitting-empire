@@ -9,7 +9,8 @@
     "rowan": "Rowan. I keep the flock on the hill past your place. If you hear bleating at dawn, that's mine. Probably.",
     "wren": "Wren. Mayor. Sorry, I've got four minutes. If something's broken, tell me. If it's on fire, tell me faster.",
     "barbara": "Hello, sweetheart. Barbara, with the post. Nine o'clock, every door, rain or shine. Yours too, now. That's how you know you live somewhere.",
-    "lars": "Hey, neighbour! I'm Lars, from next door. That's my barn, and the loft up top is home. Ellie's sheep always slept in my stalls, and yours can too, for a little rent each month. No rush on anything."
+    "lars": "Hey, neighbour! I'm Lars, from next door. That's my barn, and the loft up top is home. Ellie's sheep always slept in my stalls, and yours can too, for a little rent each month. No rush on anything.",
+    "rebecca": "Officer Rebecca. I walk the square, mostly. If anything worries you out at Birchfield, come and find me. That's what I'm for."
   },
   "lines": {
     "rosa": [
@@ -164,6 +165,23 @@
         "Sit on the hay bales with me sometime and watch the sun go down. It's free, and it never gets old.",
         "Ellie always said the farm would have someone good in it again. She was right."
       ]
+    ],
+    "rebecca": [
+      [
+        "Quiet day. I like a quiet day.",
+        "Shut your gate at night. Not for people. For your sheep. They wander.",
+        "Maple Grove's last crime was a missing pie. It was a dog."
+      ],
+      [
+        "You're settling in. I can tell by the mud on your boots.",
+        "Barbara knows everything before I do. I've stopped fighting it.",
+        "If something feels wrong, it's worth saying out loud. Even if it turns out to be nothing."
+      ],
+      [
+        "Ellie used to bring me tea on the cold mornings. You notice people the way she does.",
+        "I sleep better knowing you're out at the farm. Is that an odd thing to say? It's true.",
+        "Come and sit on the bench with me when my shift's done. I'll even take the hat off."
+      ]
     ]
   },
   "gift_lines": {
@@ -198,6 +216,10 @@
     "lars": {
       "pumpkin": "A pumpkin! I'll carve it for the barn door. The sheep won't care, but I will.",
       "turnip": "Turnips! Roasted with a bit of butter. You're a good neighbour, you know that?"
+    },
+    "rebecca": {
+      "turnip": "A turnip. That's my supper sorted. Thank you.",
+      "sweater": "For me? There's no rule against it that I know of. Thank you, Nora."
     }
   },
   "gift_loved": {
@@ -209,7 +231,8 @@
     "rowan": "You made this. For me. ... I don't really know what to say. Thank you. I'll wear it up on the hill.",
     "wren": "For me? Oh. Oh, this is beautiful. I haven't got time to cry. I'm going to anyway.",
     "barbara": "A turnip! You remembered. Nobody remembers. That's going in tonight's stew, sweetheart.",
-    "lars": "You knitted this? For me? I'm wearing it to do the chores. I'm wearing it to everything."
+    "lars": "You knitted this? For me? I'm wearing it to do the chores. I'm wearing it to everything.",
+    "rebecca": "A pumpkin! It's going on the station step where everyone can see it."
   },
   "new_sheep_names": [
     "Clover",

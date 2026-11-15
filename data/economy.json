@@ -36,6 +36,7 @@
     "wood_pack_price": 15,
     "fence_wood": 1,
     "max_visit_hours": 4,
+    "max_return_days": 3,
     "barn_rent": 120,
     "barn_rent_days": 28
   },

@@ -62,3 +62,118 @@ Nora (neutral): Then you'd better start back before it's dark.
 Nora (sad): ...Okay.
 @set max_visit_done
 @camera player
+
+# Rebecca, the police officer (Alex, 2026-11-15; every line is a DRAFT for Alex): once Max has come
+# and been sent away, Nora can report him to her. Rebecca raises it the first time they talk after
+# his visit (rebecca_max). Nora can report him there and then, or leave it: the offer stays open as
+# "Report Max" on Rebecca's menu (rebecca_report), and if she hasn't reported him "max_return_days"
+# days after his visit (data/economy.json "story"; main.gd max_return_due) he comes back once
+# (max_return). Reported (the flag max_reported), Rebecca is waiting the next time he turns up at
+# the lane (max_arrest; main.gd _update_max_visit plays it as soon as she is free). After that the
+# flag max_arrested is set and he never comes again. It is an option: the game goes on if she
+# never reports him.
+
+== rebecca_max
+@trigger talk rebecca
+@requires max_visit_done
+@requires !max_reported
+@once
+@face rebecca nora
+@face nora rebecca
+@camera between rebecca nora 6
+Rebecca (neutral): Nora. Have you got a minute?
+Rebecca (worried): Barbara saw a grey car out at Birchfield. A man who took his time leaving.
+Nora (neutral): My ex. Max. He drove six hours to tell me he'd changed.
+Rebecca (neutral): Had he?
+Nora (sad): No.
+Rebecca (warm): You don't owe me the rest of it. But a man who's been told to go and comes back is my job, not yours.
+? She waits. There's no hurry in it.
+- I want to report him. -> report | set max_reported
+- Not today. -> later | set max_report_open
+@label report
+Nora (neutral): He knows where I live now. I don't want to spend my evenings watching the lane.
+Rebecca (neutral): Then you won't. Leave it with me.
+@goto done
+@label later
+Rebecca (warm): That's all right. The offer doesn't run out. Any day, any hour.
+@label done
+@camera player
+
+== rebecca_report
+@trigger event report_max
+@requires max_report_open
+@requires !max_reported
+@face rebecca nora
+@face nora rebecca
+@camera between rebecca nora 6
+Nora (neutral): Rebecca. About Max. I'd like to report him.
+Rebecca (neutral): Good. Leave it with me.
+@set max_reported
+@camera player
+
+== max_return
+@trigger event max_return
+@requires max_visit_done
+@requires !max_reported
+@once
+@fade out 0.8
+@place nora 9.8 3.0 90
+@place max 18.0 4.3 270
+@camera 12.4 3.2 9
+@fade in 1.0
+> The grey car is at the end of the lane again.
+@walk max 11.6 2.7
+@face max nora
+@face nora max
+@camera between max nora 6
+Max (warm): I was passing.
+Nora (neutral): Nobody passes here, Max. The road ends at the farm.
+Max (sad): Five minutes. That's all I'm asking.
+Nora (neutral): No.
+Max (angry): You can't just keep saying no.
+Nora (neutral): Watch me.
+@walk max 18.0 4.3 nowait
+> He goes. He'll be back. She knows that walk.
+@wait 2.0
+Nora (worried): ...I should talk to Rebecca.
+@journal note Max came back | He said he was passing. Nobody passes here. I think it's time I told Rebecca.
+@set max_report_open
+@camera player
+
+== max_arrest
+@trigger event max_arrest
+@requires max_reported
+@once
+@fade out 0.8
+@place nora 9.8 3.0 90
+@place max 18.0 4.3 270
+@place rebecca 25.0 4.4 270
+@camera 12.4 3.2 9
+@fade in 1.0
+> The grey car is at the end of the lane again. He gets out as if he had never left.
+@walk max 11.6 2.7
+@face max nora
+@face nora max
+@camera between max nora 6
+Max (warm): Nor. I've had time to think. Let's just talk.
+Nora (neutral): I said no, Max.
+@walk rebecca 10.8 4.7
+@face max rebecca
+@face rebecca max
+@camera between max rebecca 7
+Rebecca (neutral): She did. More than once.
+Max (surprised): Who are you?
+Rebecca (neutral): Officer Rebecca, Maple Grove. You were told to leave this farm, and you came back.
+Max (angry): This is ridiculous. Nora. Tell her.
+Nora (neutral): I already told you.
+Rebecca (neutral): You're coming with me, sir. There's a court order to arrange, and after that a long drive home.
+> For once he has nothing to say.
+@walk max 25.0 4.4 nowait
+@walk rebecca 24.0 4.0
+> She walks him down the lane to her car. The grey one sits there until a tow truck comes for it.
+@wait 1.5
+Nora (warm): ...Okay.
+@set max_arrested
+@home rebecca off
+@journal note Max is gone | Rebecca was waiting for him at the end of the lane. She took him away, and I didn't have to say another word. I don't think I'll see him again.
+@camera player
