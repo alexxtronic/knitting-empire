@@ -138,7 +138,6 @@
       "pos": [48.6, 0.0, 4.4],
       "roam": [1.0, 0.5],
       "look": {
-        "model": "rebecca",
         "skin": "#e0a583",
         "hair": "#8a4a2b",
         "top": "#23283a",
