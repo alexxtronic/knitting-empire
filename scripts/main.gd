@@ -818,7 +818,7 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	var short := Node3D.new()
 	node.add_child(short)
 	# the plaster, in pieces round the windows, so the glass has the room behind it
-	var pieces: Array = [Rect2(0, 0, length, height)]
+	var pieces: Array = [Rect2(0, 0.07, length, height - 0.15)] # its ends tucked inside the oak rails, never flush with them
 	for wpos in windows:
 		pieces = Planks._cut(pieces, Rect2(float(wpos) - (mid.x if horizontal else mid.y) - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
 	for pr in pieces:
