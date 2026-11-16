@@ -6,6 +6,7 @@ extends Control
 ## the screen looks. Click it and she walks there (main.minimap_walk); the mouse wheel or the + and -
 ## buttons zoom it.
 
+const FogOfWar = preload("res://scripts/fog_of_war.gd")
 const SIZE := 200.0 # on screen, px
 const RES := 256 # the render, px
 const SPANS := [40.0, 70.0, 110.0, 160.0] # metres across, nearest to farthest
@@ -29,6 +30,7 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
 	size = Vector2(SIZE, SIZE)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	clip_contents = true # the fog of war is drawn past its edges (fog_of_war.gd draw_on_map)
 	tooltip_text = "Click to walk there. Mouse wheel zooms."
 	_sv = SubViewport.new()
 	_sv.size = Vector2i(RES, RES)
@@ -41,6 +43,7 @@ func _ready() -> void:
 	_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	_cam.near = 1.0
 	_cam.far = HEIGHT + 60.0
+	_cam.cull_mask &= ~FogOfWar.LAYER # the game camera's fog quad; the map draws the fog flat instead
 	# its own plain light: no mist, no GI, no sky glow, so the map reads the same at any hour
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -162,6 +165,8 @@ func _draw() -> void:
 	draw_rect(r, Color(0.22, 0.3, 0.2))
 	if _rendered:
 		draw_texture_rect(_sv.get_texture(), r, false)
+		if main.fog != null: # unexplored land, fogged as in the world (fog_of_war.gd)
+			main.fog.draw_on_map(self, _centre, _yaw, _span, SIZE)
 	# villagers
 	for v in main.villagers:
 		var n := v as Node3D

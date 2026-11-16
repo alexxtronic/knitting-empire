@@ -60,6 +60,9 @@ func run(m: Node) -> void:
 	if main.wildlife.get_child_count() == 0:
 		main.wildlife.build()
 	main.town_rounds = true
+	if main.fog != null: # the fog over unexplored land, as a new game has it (fog_of_war.gd)
+		main.fog.enabled = true
+		main.fog.reset()
 	Game.fast_clock = false
 	Game.time_running = false
 	main.hud.visible = true
@@ -205,6 +208,7 @@ func _probe(spot: Array) -> void:
 				if is_instance_valid(l):
 					(l as Light3D).visible = on,
 		"grass": func(on: bool) -> void: main.grass.visible = on,
+		"fog_of_war": func(on: bool) -> void: main.fog.enabled = on,
 		"nature": func(on: bool) -> void: main.nature.visible = on,
 		"wildlife": func(on: bool) -> void: main.wildlife.visible = on,
 		"villagers": func(on: bool) -> void:

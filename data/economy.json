@@ -176,6 +176,27 @@
     ]
   },
   "_about_forage": "Her axe and shears out in the world (scripts/forage.gd): a felled tree gives 'tree_wood' and grows back after 'tree_regrow_days'; a trimmed plant gives 'leaves' by kind (the start of its model name) and grows back after 'plant_regrow_days'. 'mulch_leaves' leaves mulch a growing bed, bringing it on by 'mulch_growth' of its whole growing time. Trees in Maple Grove itself aren't hers to fell.",
+  "bonfire": {
+    "_about": "Bonfires (scripts/bonfire.gd, Alex 2026-11-17): she lights one on open ground from dusk (from_hour) to dawn for half a tree's wood (forage tree_wood 8 / 2). It burns until the next dawn. While one burns, midnight doesn't put her to sleep: the night goes on until morning. Within warm_radius metres her warmth heads for at least `warmth`; light_range is how far its light reaches; warm_up is what 'Warm up by the fire' gives. Numbers are drafts.",
+    "wood": 4,
+    "from_hour": 18.0,
+    "warm_radius": 7.0,
+    "warmth": 78.0,
+    "light_range": 15.0,
+    "light_energy": 3.4,
+    "warm_up": {"warmth": 25.0, "energy": 6.0, "secs": 3.0}
+  },
+  "fog": {
+    "_about": "The fog over unexplored land (scripts/fog_of_war.gd, Alex 2026-11-17): everything outside a circle round the farm and Maple Grove (centre [x, z], radius, then fade metres to full fog) is under a light fog until she, or the dog she plays, has been within reveal metres of it. cell is the explored grid's cell in metres; top is the fog layer's height; density and max_alpha set how thick it looks (max_alpha < 1: you always see through it).",
+    "centre": [32.5, -2.5],
+    "radius": 48.0,
+    "fade": 10.0,
+    "cell": 2.0,
+    "reveal": 16.0,
+    "top": 6.0,
+    "density": 0.05,
+    "max_alpha": 0.62
+  },
   "forage": {
     "tree_wood": 8,
     "mulch_leaves": 3,

@@ -259,12 +259,26 @@ func daylight() -> float:
 
 
 func sleep() -> void:
-	day += 1
+	# up past midnight by a bonfire (stay_up()), the day has turned already: no second new day
+	var turned: bool = int(flags.get("stayed_up", 0)) == day and hour < DAY_START
+	flags.erase("stayed_up")
+	if not turned:
+		day += 1
 	hour = 6.0
 	energy = 100.0
 	fullness = maxf(15.0, fullness - 25.0)
 	happiness = clampf(happiness + 10.0, 0.0, 100.0) # a fresh morning
 	warmth = maxf(warmth, 70.0) # under the quilt all night
+	if not turned:
+		day_started.emit(day)
+
+
+## Midnight with a bonfire burning (bonfire.gd): the night goes on and the day turns over without
+## sleep, so none of sleep's rest. Game.flags["stayed_up"] marks the day she began awake.
+func stay_up() -> void:
+	day += 1
+	hour = maxf(0.0, hour - 24.0)
+	flags["stayed_up"] = day
 	day_started.emit(day)
 
 
