@@ -11171,7 +11171,7 @@ func _wolf_checks() -> void:
 	var d_start: float = wolves.pack[0].position.distance_to(home) if n0 > 0 else 0.0
 	_set_cam_lock(false) # the camera on the pack, not on her
 	cam_dist = 16.0
-	for i in 15:
+	for i in 30: # long enough for the warning to settle
 		cam_target = wolves.pack[0].position if n0 > 0 else home
 		await _wait(0.1)
 	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
@@ -11198,7 +11198,10 @@ func _wolf_checks() -> void:
 	for w in [medium, large]: # the other two along the fence, out of her rush at the small one
 		w.goal += side * 12.0
 		w.position = w.goal
-	player.position = small.position + out_dir * 11.0
+	var start: Vector3 = small.position + out_dir * 11.0
+	var sc = _nearest_walkable(_cell(start), start)
+	player.position = _cell_center(sc) if sc != null else start
+	player.walk([])
 	if dog:
 		dog.position = player.position + Vector3(1.2, 0, 0.8)
 		dog.path = []
@@ -11209,15 +11212,21 @@ func _wolf_checks() -> void:
 	await _shot("63_wolves_at_pen.png")
 	autotest_jog = true
 	var tw := 0.0
+	var closest := INF
+	var top_speed := 0.0
 	while is_instance_valid(small) and not small.fleeing and tw < 12.0:
-		player.walk(_find_path(player.position, small.position))
-		await _wait(0.3)
-		tw += 0.3
+		if player.path.is_empty():
+			player.walk(_find_path(player.position, small.position))
+		closest = minf(closest, Vector2(player.position.x - small.position.x, player.position.z - small.position.z).length())
+		top_speed = maxf(top_speed, player.speed)
+		await _wait(0.1)
+		tw += 0.1
 	autotest_jog = false
 	player.walk([])
 	var small_ran: bool = not is_instance_valid(small) or small.fleeing
 	var others_stay: bool = not medium.fleeing and not large.fleeing
-	_check("the wolves have more nerve the bigger they are (%s), and Nora running at the small one sends it off (%s after %.1f s) while the others hold (%s)" % [str(nerves), small_ran, tw, others_stay],
+	_check("the wolves have more nerve the bigger they are (%s), and Nora running at the small one sends it off (%s after %.1f s; she came within %.1f m at up to %.1f m/s, walking pace %.1f) while the others hold (%s)" % [
+		str(nerves), small_ran, tw, closest, top_speed, player.walk_speed, others_stay],
 		nerves == [1, 2, 3] and small_ran and others_stay and wolves.active())
 	toggle_dog(true)
 	hud.hide_dialogue()
@@ -11331,7 +11340,7 @@ func _wolf_checks() -> void:
 	var saved := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
 	wolves.clear()
 	Game.flags.erase("wolves")
-	Game.from_dict(saved)
+	Game.flags = (saved["flags"] as Dictionary).duplicate(true) # as Game.from_dict() reads them, without reloading the rest of the game (the checks after this one count on it)
 	wolves._resumed = false
 	await _wait(0.3)
 	var st2: Dictionary = wolves.state()
