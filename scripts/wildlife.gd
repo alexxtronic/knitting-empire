@@ -317,7 +317,7 @@ func barked(at: Vector3) -> int:
 			var near := lerpf(1.0, BARK_FAR_GAIN, smoothstep(BARK_NEAR, BARK_RANGE, d))
 			if a.frighten(near / barks_for(a)):
 				frightened(a)
-	if blocked != "" and _said_t <= 0.0:
+	if blocked != "" and _said_t <= 0.0 and not (main.wolves and main.wolves.active()): # not over the wolves' warning
 		_said_t = 6.0
 		main.hud.show_toast(blocked)
 	return reached

@@ -11130,7 +11130,7 @@ func _wolf_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
 	var keep := {"flags": Game.flags.duplicate(true), "day": Game.day, "hour": Game.hour, "sheep": Game.sheep_count, "clock": Game.time_running,
-		"jog": autotest_jog, "cd": cam_dist, "bed": flock_bedtime, "pos": player.position}
+		"jog": autotest_jog, "cd": cam_dist, "bed": flock_bedtime, "pos": player.position, "follow": cam_follow}
 	player.walk([])
 	autotest_jog = false
 	Game.time_running = false
@@ -11169,10 +11169,11 @@ func _wolf_checks() -> void:
 	var toast0: String = hud.toast_label.text
 	var models_ok: bool = wolves.pack.all(func(w): return w._model != null and w._anim != null and w._anim.has_animation("Walk"))
 	var d_start: float = wolves.pack[0].position.distance_to(home) if n0 > 0 else 0.0
-	cam_target = wolves.pack[0].position if n0 > 0 else home
+	_set_cam_lock(false) # the camera on the pack, not on her
 	cam_dist = 16.0
-	_set_cam_lock(true)
-	await _wait(1.5)
+	for i in 15:
+		cam_target = wolves.pack[0].position if n0 > 0 else home
+		await _wait(0.1)
 	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
 	await _shot("63_wolves_coming.png")
 	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s'), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
@@ -11201,8 +11202,9 @@ func _wolf_checks() -> void:
 	if dog:
 		dog.position = player.position + Vector3(1.2, 0, 0.8)
 		dog.path = []
-	cam_target = small.position
-	cam_dist = 15.0
+	_set_cam_lock(false)
+	cam_target = small.position + side * 6.0 + out_dir * 3.0
+	cam_dist = 19.0
 	await _wait(0.6)
 	await _shot("63_wolves_at_pen.png")
 	autotest_jog = true
@@ -11261,14 +11263,20 @@ func _wolf_checks() -> void:
 	Game.set_flag("wolves", st)
 	var penned0: int = wildlife.penned_list().size()
 	var sheep0 := Game.sheep_count
-	wolves.start_raid(1, 2.0)
+	wolves.start_raid(1, 2.5)
 	await _wait(0.1)
-	cam_target = wolves.pack[0].position
-	await _wait(2.6)
+	var w_in = wolves.pack[0] # a few steps out from the pen, coming in
+	w_in.position = w_in.goal + (w_in.den - w_in.goal).normalized() * 3.0
+	w_in.go_to(w_in.goal)
+	_set_cam_lock(false)
+	cam_target = w_in.goal
+	cam_dist = 15.0
+	await _wait(1.6)
+	await _shot("63_wolves_missed.png")
+	await _wait(1.2)
 	var note_now: String = str(Game.flag("wolf_note", ""))
 	var taken := penned0 + sheep0 - wildlife.penned_list().size() - Game.sheep_count
 	var morning: String = wolves.morning_note(Game.day + 1)
-	await _shot("63_wolves_missed.png")
 	_check("missing the window loses one animal (%d gone: %d penned, %d sheep left, %d sheep nodes) and the morning says which ('%s')" % [taken, wildlife.penned_list().size(), Game.sheep_count, sheep_list.size(), morning.strip_edges()],
 		taken == 1 and not wolves.active() and sheep_list.size() == Game.sheep_count and note_now != "" and morning.contains(note_now)
 		and (morning.contains("rabbit") or morning.contains("fox") or morning.contains("sheep")) and Game.flag("wolf_note", "") == "" and int(wolves.state().get("lost", 0)) == 1)
@@ -11354,5 +11362,5 @@ func _wolf_checks() -> void:
 		dog.position = player.position + Vector3(1.2, 0, 0.8)
 		dog.path = []
 	cam_target = player.position
-	_set_cam_lock(false)
+	_set_cam_lock(keep["follow"])
 	hud.hide_dialogue()
