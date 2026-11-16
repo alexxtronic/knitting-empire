@@ -31,6 +31,7 @@ const Catalog = preload("res://scripts/catalog.gd")
 
 const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const STAND := 0.28 # how far in front of the desk she stands
+const STEP_BACK := 0.8 # where she stands when she leaves it: clear of the desk on the walking grid
 const FOV := 50.0 # narrower than first person's own, so the screen fills most of the view
 const SHOP_NAME := "Nora's Knits" # draft
 
@@ -244,6 +245,11 @@ func update() -> void:
 			place_order(now)
 		s["next_at"] = now + interval()
 	_expire(now)
+	# catch up a night at most: a computer sold and bought back days later mustn't come back to a
+	# pile of orders dated days ago that all expire at once
+	var earliest := now - float(data.get("catch_up_hours", 12.0))
+	if float(s["next_at"]) < earliest:
+		s["next_at"] = earliest
 	var guard := 0
 	while float(s["next_at"]) <= now and guard < 64:
 		guard += 1
@@ -418,6 +424,10 @@ func close() -> void:
 	_layer.visible = false
 	if _flat:
 		return
+	if is_instance_valid(piece): # a step back from the desk, where she can walk again
+		var size: Vector2 = Catalog.ITEMS.get("computer", {}).get("size", Vector2(1.3, 0.7))
+		var out: Vector3 = piece.to_global(Vector3(0, 0, size.y * 0.5 + STEP_BACK))
+		main.player.position = Vector3(out.x, main.player.position.y, out.z)
 	main.fps.locked = false
 	main.cam.fov = FirstPerson.FOV
 	if not _was_fps:

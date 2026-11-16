@@ -11235,6 +11235,15 @@ func _store_checks() -> void:
 	store.update()
 	_check("orders keep coming: %d after a long night (at most %d), one more when the timer's up (%d)" % [after, many, store.orders().size()],
 		after > 1 and after <= many and store.orders().size() == 1)
+	store.state()["orders"] = []
+	store.state()["next_at"] = OnlineStore.now_h() - 200.0 # the computer gone for days, then back
+	var exp_a := int(store.state().get("expired", 0))
+	store.update()
+	var oldest := 0.0
+	for o in store.orders():
+		oldest = maxf(oldest, store.age(o))
+	_check("back after days away, she finds no pile of old orders: none older than a night, none expired at once (%d orders, oldest %.1f h)" % [store.orders().size(), oldest],
+		store.orders().size() >= 1 and oldest <= float(store.data.get("catch_up_hours", 12.0)) + 0.01 and int(store.state().get("expired", 0)) == exp_a)
 	store.state()["scores"] = sc0
 	# the state keeps through a save: numbers come back from JSON as floats
 	var st: Dictionary = JSON.parse_string(JSON.stringify(store.state()))
@@ -11252,7 +11261,8 @@ func _store_checks() -> void:
 		Game.coins - coins0 == due and store.coming() == 0 and int(store.state().get("earned", 0)) == due)
 	store.handle_key(KEY_ESCAPE)
 	await _wait(0.5)
-	_check("Esc steps her back from the computer with the overhead camera back", not store.active and not fps.active and not fps.locked)
+	_check("Esc steps her back from the computer, where she can walk, with the overhead camera back (walkable %s)" % _walkable(_cell(player.position)),
+		not store.active and not fps.active and not fps.locked and _walkable(_cell(player.position)))
 	cam_target = player.position + Vector3(0, 0.9, 0)
 	await _wait(0.8)
 	await _shot("63_store_after.png")
