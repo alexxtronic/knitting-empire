@@ -345,6 +345,14 @@ static func build(id: String, r: Node3D) -> void:
 			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
 		elif id == "lamp": # the model's shade glows; this is the light it throws
 			omni(r, Vector3(0, 1.3, 0), Color(1.0, 0.78, 0.5), 5.0, 0.3, 1.6)
+		elif id == "candle":
+			_candle_flame(r, Vector3.ZERO, inst)
+		elif id == "pendant_lamp": # the café's dome lamps (art/world_assets/cafe_props): the bulb hangs at 2.4 m
+			var pl := omni(r, Vector3(0, PENDANT_BULB - 0.08, 0), Color(1.0, 0.74, 0.44), 4.8, 0.25, 1.3)
+			pl.shadow_enabled = false
+			pl.set_meta("no_shadow", true) # main.gd's graphics setting leaves it off
+		for at in ITEMS.get(id, {}).get("candles", []):
+			lit_candle(r, Data.vec3(at))
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)
@@ -539,16 +547,133 @@ static func _fireplace(r: Node3D) -> void:
 		glow(ball(r, 0.025, Vector3(x, 1.4 + h, 0.2), Color(1.0, 0.8, 0.4)), Color(1.0, 0.8, 0.4), 4.0)
 
 
-## The fire itself, at `at` in the fireplace's own space: three glowing flames that flicker
-## (furniture.gd) and the firelight thrown into the room. Used by the model and by the box fallback.
+## The fire itself, at `at` in the fireplace's own space (the old fire's middle; the logs lie about
+## 0.28 m below it): three sheets of flame drawn by shaders/fire.gdshader, each burning in its own
+## time and turning to the camera, the bed of coals glowing and crackling under them, sparks rising
+## into the chimney, and the firelight thrown into the room. Used by the model and by the box fallback.
 static func _fireplace_fire(r: Node3D, at: Vector3) -> void:
-	var f1 := glow(ball(r, 0.18, at, FIRE, Vector3(1, 1.5, 0.6)), FIRE, 4.0)
-	var f2 := glow(ball(r, 0.1, at + Vector3(0.1, 0.04, 0.03), Color(1.0, 0.8, 0.3)), Color(1.0, 0.8, 0.3), 5.0)
-	var f3 := glow(ball(r, 0.12, at + Vector3(-0.12, -0.04, 0.02), Color(1.0, 0.35, 0.1)), Color(1.0, 0.35, 0.1), 4.0)
-	for f in [f1, f2, f3]:
-		f.set_meta("flame", true)
+	var root := at + Vector3(0, -0.29, -0.1)
+	var sheets := [ # size (width, height), offset from the root, how wide its root, how fast
+		[Vector2(0.78, 0.92), Vector3(0.0, 0.0, -0.02), 1.0, 1.0],
+		[Vector2(0.58, 0.7), Vector3(-0.17, 0.02, 0.05), 0.95, 1.2],
+		[Vector2(0.56, 0.74), Vector3(0.18, 0.0, -0.05), 0.9, 0.85],
+	]
+	for sh in sheets:
+		var m := fire_material(float(sh[2]), float(sh[3]))
+		var q := flame_quad(r, sh[0], root + (sh[1] as Vector3), m)
+		q.set_meta("flame", true)
+		q.set_meta("self_lit", true) # its shader animates it; furniture.gd leaves it be
+	var coals := flame_quad(r, Vector2(0.6, 0.3), root + Vector3(0, 0.005, 0), fire_material(1.0, 1.0, true))
+	coals.mesh.set("center_offset", Vector3.ZERO)
+	coals.rotation_degrees = Vector3(-90, 0, 0) # lying flat on the grate
+	_sparks(r, root + Vector3(0, 0.12, 0))
 	var l := omni(r, at + Vector3(0, 0.22, 0.65), Color(1.0, 0.55, 0.25), 7.0, 1.2, 2.6)
 	l.set_meta("fire", true)
+
+
+const FIRE_SHADER := preload("res://shaders/fire.gdshader")
+const CANDLE_FLAME_SHADER := preload("res://shaders/candle_flame.gdshader")
+static var _fire_mats := {}
+
+
+## A fire material (shaders/fire.gdshader): `width` of the flame's root, `speed` of its licks;
+## `embers` for the bed of coals. Shared by every fire; each quad has its own `seed`.
+static func fire_material(width := 1.0, speed := 1.0, embers := false) -> ShaderMaterial:
+	var key := "%.2f/%.2f/%s" % [width, speed, embers]
+	if not _fire_mats.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = FIRE_SHADER
+		m.set_shader_parameter("width", width)
+		m.set_shader_parameter("speed", speed)
+		m.set_shader_parameter("embers", 1.0 if embers else 0.0)
+		_fire_mats[key] = m
+	return _fire_mats[key]
+
+
+## An upright quad of flame of `size` whose root sits at `pos` in r's space, drawn with `m`; its
+## shader turns it to the camera and animates it (`seed`, its own time).
+static func flame_quad(r: Node3D, size: Vector2, pos: Vector3, m: Material) -> MeshInstance3D:
+	var q := QuadMesh.new()
+	q.size = size
+	q.center_offset = Vector3(0, size.y * 0.5, 0)
+	var mi := MeshInstance3D.new()
+	mi.mesh = q
+	mi.material_override = m
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.extra_cull_margin = maxf(size.x, size.y) # it turns in the shader, out of its flat bounds
+	mi.set_instance_shader_parameter("seed", randf() * 10.0)
+	r.add_child(mi)
+	return mi
+
+
+## Sparks rising from the coals into the chimney: tiny bright specks that drift and wink out.
+static func _sparks(r: Node3D, pos: Vector3) -> void:
+	var p := GPUParticles3D.new()
+	p.name = "Sparks"
+	p.amount = 14
+	p.lifetime = 1.1
+	p.preprocess = 1.0
+	p.randomness = 0.6
+	p.position = pos
+	p.visibility_aabb = AABB(Vector3(-0.5, -0.2, -0.5), Vector3(1.0, 1.4, 1.0))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(0.2, 0.03, 0.06)
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 14.0
+	pm.initial_velocity_min = 0.3
+	pm.initial_velocity_max = 0.75
+	pm.gravity = Vector3(0, 0.12, 0)
+	pm.damping_min = 0.1
+	pm.damping_max = 0.3
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.5
+	pm.turbulence_noise_scale = 1.2
+	pm.turbulence_influence_min = 0.03
+	pm.turbulence_influence_max = 0.12
+	pm.scale_min = 0.5
+	pm.scale_max = 1.2
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	g.colors = PackedColorArray([Color(1.0, 0.9, 0.6, 1.0), Color(1.0, 0.5, 0.15, 0.9), Color(0.7, 0.15, 0.02, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	p.process_material = pm
+	var dot := QuadMesh.new()
+	dot.size = Vector2(0.014, 0.014)
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dm.vertex_color_use_as_albedo = true
+	dm.albedo_color = Color(3.0, 2.2, 1.4)
+	dm.albedo_texture = _halo()
+	dot.material = dm
+	p.draw_pass_1 = dot
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	r.add_child(p)
+
+
+## A candle's flame (shaders/candle_flame.gdshader) whose root sits just above the wick at `pos`.
+static func candle_flame_quad(r: Node3D, pos: Vector3, scale := 1.0) -> MeshInstance3D:
+	var mi := flame_quad(r, Vector2(0.05, 0.075) * scale, pos, _candle_flame_mat())
+	mi.set_meta("flame", true)
+	mi.set_meta("candle", true)
+	mi.set_meta("self_lit", true) # its shader sways and flickers it; furniture.gd leaves it be
+	return mi
+
+
+static var _candle_mat: ShaderMaterial
+
+
+static func _candle_flame_mat() -> ShaderMaterial:
+	if _candle_mat == null:
+		_candle_mat = ShaderMaterial.new()
+		_candle_mat.shader = CANDLE_FLAME_SHADER
+	return _candle_mat
 
 
 static func _spinning_wheel(r: Node3D) -> void:
@@ -714,12 +839,7 @@ static func _lantern_candle(r: Node3D, inst: Node3D) -> void:
 	var wick := cyl(r, 0.0025, 0.0025, 0.012, c + Vector3(0, 1.375, 0), Color(0.1, 0.08, 0.06), Vector3.ZERO, 4)
 	for m in [wax, wick]:
 		(m as MeshInstance3D).layers = CANDLE_LAYER
-	var flame := glow(ball(r, 0.014, c + Vector3(0, 1.398, 0), Color(1.0, 0.68, 0.26), Vector3(0.7, 1.8, 0.7)), Color(1.0, 0.66, 0.24), 6.0)
-	flame.set_meta("flame", true)
-	flame.set_meta("candle", true)
-	var core := glow(ball(r, 0.006, c + Vector3(0, 1.39, 0), Color(1.0, 0.95, 0.8)), Color(1.0, 0.95, 0.8), 9.0)
-	core.set_meta("flame", true)
-	core.set_meta("candle", true)
+	candle_flame_quad(r, c + Vector3(0, 1.377, 0), 0.9)
 	var l := omni(r, c + Vector3(0, 1.41, 0), Color(1.0, 0.66, 0.34), 5.5, 0.15, 1.6)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
 	l.set_meta("candle", true)
@@ -729,3 +849,94 @@ static func _hay_bale(r: Node3D) -> void:
 	box(r, Vector3(0.95, 0.45, 0.5), Vector3(0, 0.225, 0), Color(0.88, 0.74, 0.38))
 	for x in [-0.25, 0.25]:
 		box(r, Vector3(0.04, 0.47, 0.52), Vector3(x, 0.225, 0), Color(0.6, 0.45, 0.2))
+
+
+# --- candles (art/world_assets/cafe_props: a cream pillar in a brass chamberstick) ------------------
+
+const CANDLE_MODEL := "res://assets/props/candle.glb"
+const CANDLE_FLAME_Y := 0.218 # the wick's tip above the candle's foot (cafe_props/build.py FLAME_Z)
+const PENDANT_BULB := 2.4 # the pendant lamp's bulb above the floor (cafe_props/build.py)
+static var _halo_tex: Texture2D
+
+
+## A lit candle standing at `at` in r's space: the model, its flame, its glow and a small warm light
+## that flickers (furniture.gd and interiors.gd animate everything with the "candle" meta). Any piece
+## with "candles" in data/furniture.json gets one at each of those spots.
+static func lit_candle(r: Node3D, at: Vector3) -> void:
+	var inst := model(CANDLE_MODEL, r)
+	if inst == null:
+		return
+	inst.name = "candle"
+	for n in inst.find_children("model", "", true, false): # "model" is the piece's own model (the checks)
+		n.name = "candle_wax"
+	inst.position = at
+	_candle_flame(r, at, inst)
+
+
+## The live part of a candle whose model `inst` stands at `at`: the wax on CANDLE_LAYER (its own light
+## would blow it out to white) with a faint glow from within, a flame and its bright core, a soft halo
+## round them, and the light. Everything goes straight under r, where furniture.gd looks for it.
+static func _candle_flame(r: Node3D, at: Vector3, inst: Node3D) -> void:
+	if inst != null:
+		for mi in inst.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			m.layers = CANDLE_LAYER
+			for i in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(i)
+				if sm is BaseMaterial3D and sm.resource_name == "candle_wax":
+					m.set_surface_override_material(i, _warm_wax(sm as BaseMaterial3D))
+	# each candle flickers in its own time (not from its spot on the piece: the café's six tables and
+	# three bookshelves carry theirs in the same spot, and would flicker in step)
+	var phase := randf() * 10.0
+	var tip := at + Vector3(0, CANDLE_FLAME_Y, 0)
+	var flame := candle_flame_quad(r, tip + Vector3(0, 0.002, 0))
+	flame.set_meta("phase", phase)
+	var halo := Sprite3D.new()
+	halo.texture = _halo()
+	halo.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	halo.shaded = false
+	halo.transparent = true
+	halo.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	halo.modulate = Color(1.0, 0.72, 0.38, 0.55)
+	halo.pixel_size = 0.3 / 64.0 # 30 cm across
+	halo.position = tip + Vector3(0, 0.03, 0)
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.set_meta("halo", true)
+	halo.set_meta("phase", phase)
+	r.add_child(halo)
+	var l := omni(r, tip + Vector3(0, 0.05, 0), Color(1.0, 0.66, 0.34), 2.6, 0.12, 0.7)
+	l.shadow_enabled = false # a few dozen of them in the café: their glow, not their shadows
+	l.set_meta("no_shadow", true) # and the graphics setting leaves them off (main.gd)
+	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	l.set_meta("candle", true)
+	l.set_meta("phase", phase)
+
+
+static var _wax := {}
+
+
+static func _warm_wax(base: BaseMaterial3D) -> BaseMaterial3D:
+	if not _wax.has(base):
+		var w := base.duplicate() as BaseMaterial3D
+		w.emission_enabled = true
+		w.emission = Color(1.0, 0.78, 0.5)
+		w.emission_energy_multiplier = 0.22
+		_wax[base] = w
+	return _wax[base]
+
+
+## A soft round glow, bright in the middle and gone by the edge, drawn over the flame (Sprite3D).
+static func _halo() -> Texture2D:
+	if _halo_tex == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.35), Color(1, 1, 1, 0.0)])
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 64
+		t.height = 64
+		_halo_tex = t
+	return _halo_tex

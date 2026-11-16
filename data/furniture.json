@@ -1,5 +1,5 @@
 {
-  "_about": "Furniture you can buy in Build mode (Builder's Delight's catalogue). 'size' is width x depth in metres; 'where' is in / out / any; 'shop' (indoors / yard) puts it in the catalogue, and 'cat' picks its tab (Living, Kitchen, Bed & Study, Crafts, Garden, Farm: scripts/catalog.gd CATS); 'wood' is what a wooden piece takes to build from her own wood instead of its price in coins. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py.",
+  "_about": "Furniture you can buy in Build mode (Builder's Delight's catalogue). 'size' is width x depth in metres; 'where' is in / out / any; 'shop' (indoors / yard) puts it in the catalogue, and 'cat' picks its tab (Living, Kitchen, Bed & Study, Crafts, Garden, Farm: scripts/catalog.gd CATS); 'wood' is what a wooden piece takes to build from her own wood instead of its price in coins. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py. 'candles' (optional): [x, y, z] spots in the piece's own space where a lit candle stands (assets/props/candle.glb, Catalog.lit_candle).",
   "items": [
     {
       "name": "Rocking Chair",
@@ -56,7 +56,8 @@
       "shop": "indoors",
       "model": "res://assets/props/kitchen.glb",
       "cat": "Kitchen",
-      "wood": 88
+      "wood": 88,
+      "candles": [[0.75, 0.9, 0.1]]
     },
     {
       "name": "Round Coffee Table",
@@ -68,7 +69,8 @@
       "shop": "indoors",
       "model": "res://assets/props/coffee_table.glb",
       "cat": "Living",
-      "wood": 22
+      "wood": 22,
+      "candles": [[0.0, 0.57, 0.0]]
     },
     {
       "name": "Farmhouse Table",
@@ -92,7 +94,8 @@
       "shop": "indoors",
       "model": "res://assets/props/bookshelf.glb",
       "cat": "Living",
-      "wood": 65
+      "wood": 65,
+      "candles": [[0.5, 1.89, 0.0]]
     },
     {
       "name": "Oak Wardrobe",
@@ -115,7 +118,8 @@
       "id": "fireplace",
       "shop": "indoors",
       "model": "res://assets/props/fireplace.glb",
-      "cat": "Living"
+      "cat": "Living",
+      "candles": [[-0.62, 1.45, 0.18], [0.62, 1.45, 0.18]]
     },
     {
       "name": "Spinning Wheel",
@@ -638,6 +642,157 @@
       "cat": "Farm",
       "model": "res://assets/props/market_stall.glb",
       "wood": 75
+    },
+    {
+      "name": "Candle",
+      "price": 15,
+      "size": [0.3, 0.3],
+      "where": "any",
+      "height": 0.25,
+      "id": "candle",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/candle.glb"
+    },
+    {
+      "name": "Plum Book",
+      "price": 20,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "flat": true,
+      "height": 0.08,
+      "id": "book_plum",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_plum.glb"
+    },
+    {
+      "name": "Forest Book",
+      "price": 20,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "flat": true,
+      "height": 0.08,
+      "id": "book_forest",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_forest.glb"
+    },
+    {
+      "name": "Wine Book",
+      "price": 20,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "flat": true,
+      "height": 0.08,
+      "id": "book_wine",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_wine.glb"
+    },
+    {
+      "name": "Navy Book",
+      "price": 20,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "flat": true,
+      "height": 0.08,
+      "id": "book_navy",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_navy.glb"
+    },
+    {
+      "name": "Mustard Book",
+      "price": 20,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "flat": true,
+      "height": 0.08,
+      "id": "book_mustard",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_mustard.glb"
+    },
+    {
+      "name": "Stack of Books",
+      "price": 50,
+      "size": [0.3, 0.3],
+      "where": "in",
+      "height": 0.22,
+      "id": "book_stack",
+      "shop": "indoors",
+      "cat": "Living",
+      "model": "res://assets/props/book_stack.glb"
+    },
+    {
+      "name": "Café Counter",
+      "price": 0,
+      "size": [1.9, 0.7],
+      "where": "in",
+      "height": 1.0,
+      "id": "cafe_counter",
+      "model": "res://assets/props/cafe_counter.glb",
+      "candles": [[-0.84, 1.0, 0.15]]
+    },
+    {
+      "name": "Espresso Bar",
+      "price": 0,
+      "size": [1.6, 0.5],
+      "where": "in",
+      "height": 2.6,
+      "id": "espresso_bar",
+      "model": "res://assets/props/espresso_bar.glb",
+      "candles": [[0.15, 1.818, -0.12], [0.45, 1.438, -0.12]]
+    },
+    {
+      "name": "Café Bookshelf",
+      "price": 0,
+      "size": [1.6, 0.45],
+      "where": "in",
+      "height": 2.2,
+      "id": "cafe_bookshelf",
+      "model": "res://assets/props/cafe_bookshelf.glb",
+      "candles": [[0.45, 2.27, 0.0]]
+    },
+    {
+      "name": "Café Table",
+      "price": 0,
+      "size": [1.7, 0.75],
+      "where": "in",
+      "height": 0.95,
+      "id": "cafe_table",
+      "model": "res://assets/props/cafe_table.glb",
+      "candles": [[0.12, 0.76, 0.06]]
+    },
+    {
+      "name": "Café Coffee Table",
+      "price": 0,
+      "size": [1.1, 0.6],
+      "where": "in",
+      "height": 0.42,
+      "id": "cafe_coffee_table",
+      "model": "res://assets/props/cafe_coffee_table.glb",
+      "candles": [[0.0, 0.42, 0.04]]
+    },
+    {
+      "name": "Tartan Pouf",
+      "price": 0,
+      "size": [0.6, 0.6],
+      "where": "in",
+      "height": 0.41,
+      "id": "pouf",
+      "model": "res://assets/props/pouf.glb"
+    },
+    {
+      "name": "Pendant Lamp",
+      "price": 0,
+      "size": [0.4, 0.4],
+      "where": "in",
+      "flat": true,
+      "height": 0.1,
+      "id": "pendant_lamp",
+      "model": "res://assets/props/pendant_lamp.glb"
     }
   ]
 }
