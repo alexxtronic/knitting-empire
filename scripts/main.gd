@@ -43,6 +43,7 @@ const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
+const Barista = preload("res://scripts/barista.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -104,6 +105,7 @@ var town_rounds := true # the cast's routines (_update_rounds); off in the autot
 var _flock_t := 0.0
 var _flock_seen := false
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
+var barista: Barista # working the Coffee Shop's counter in first person (barista.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
 var books_ui: BookPanel # the books she reads (book_panel.gd, data/books.json)
@@ -332,6 +334,10 @@ func _ready() -> void:
 	wview = WardrobeView.new() # after first person, so it moves the hangers once her eyes are placed
 	wview.main = self
 	add_child(wview)
+	barista = Barista.new() # after first person too: it turns her view every frame
+	barista.main = self
+	add_child(barista)
+	Interiors.WorkSpot.main = self
 	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
@@ -1194,7 +1200,7 @@ func _process(delta: float) -> void:
 	_update_flock(delta)
 	World.update_barn(player.position, cam_yaw, walls_up, delta,
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
-	Interiors.update(player.position, cam_yaw, walls_up, delta, villagers.map(func(v): return v.position))
+	Interiors.update(player.position, cam_yaw, walls_up, delta, villagers.map(func(v): return v.position), fps.active)
 	_update_lighting()
 	_update_story_staging(delta)
 	_update_needs(delta)
@@ -1376,6 +1382,9 @@ func _unhandled_input(e: InputEvent) -> void:
 	if wview.active:
 		wview.handle_mouse(e)
 		return
+	if barista.active:
+		barista.handle_mouse(e)
+		return
 	if fps.active:
 		fps.handle_mouse(e)
 		return
@@ -1475,6 +1484,9 @@ func _input(e: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if wview.active and wview.handle_key(kc):
+		get_viewport().set_input_as_handled()
+		return
+	if barista.active and barista.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
 	if fps.active and fps.handle_key(kc):
@@ -5144,6 +5156,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=barista" in OS.get_cmdline_user_args(): # just working the café's counter (about a minute)
+		await _wait(1.5)
+		await _barista_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=fire" in OS.get_cmdline_user_args(): # just the fire and the candle flames, close up at night
 		await _wait(1.5)
 		await _fire_checks()
@@ -5471,6 +5489,7 @@ func _autotest() -> void:
 	await _barn_checks()
 	await _shop_checks()
 	await _cafe_checks()
+	await _barista_checks()
 	await _cast_checks()
 	await _mail_checks()
 	await _max_checks()
@@ -6013,6 +6032,130 @@ func _cafe_checks() -> void:
 ## The fire in her fireplace and the candles on its mantel at night (shaders/fire.gdshader,
 ## candle_flame.gdshader): three sheets of flame, the coals and the sparks; a camera of its own looks
 ## at them close up a few moments apart, then from the game's own camera. Saves 61_fire_*.png.
+## Working behind the café's counter (barista.gd): the counter's row, first person behind it, a
+## customer asking, grind, filter, the button, ten seconds, pour, hand over, 5 coins; a pot pours 4.
+func _barista_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var s = Interiors.shops.get("cafe")
+	var found: Array = s.node.find_children("WorkSpot", "Node3D", true, false) if s != null else []
+	if found.is_empty():
+		_check("the café's counter has a place to work behind it", false)
+		return
+	var spot = found[0]
+	var xf: Transform3D = s.node.global_transform
+	var acts: Array = _actions_for(spot)
+	_check("the café counter's menu says 'Work behind the counter' at any hour (%s at 11:00)" % str(acts.map(func(a): return a["label"])),
+		acts.size() == 1 and str(acts[0]["label"]) == "Work behind the counter" and bool(acts[0]["enabled"]))
+	Game.hour = 22.5
+	acts = _actions_for(spot)
+	_check("and late at night too (%s at 22:30)" % str(acts.map(func(a): return a["label"])), acts.size() == 1 and bool(acts[0]["enabled"]))
+	Game.hour = 11.0
+	# from out in the square, in through the door to the counter
+	player.walk([])
+	player.position = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.0)
+	player.position.y = 0.0
+	await _wait(0.5)
+	_do_action(spot, "work_counter")
+	var t := 0.0
+	while not barista.active and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	barista.next_customer_t = 999.0 # the test calls its own customers
+	await _wait(1.0)
+	var local: Vector3 = xf.affine_inverse() * player.position
+	_check("she walks in to the counter and steps behind it in first person, the café's ceiling over her (%.1f s, first person %s, locked %s, at %s in the café, roof %s)" % [t, fps.active, fps.locked, str(snapped(local, Vector3(0.01, 0.01, 0.01))), (s.parts["roof"] as Node3D).visible],
+		barista.active and fps.active and fps.locked and local.z < -5.2 and local.z > -6.0 and absf(local.x - 2.2) < 0.9 and (s.parts["roof"] as Node3D).visible)
+	await _shot("62_barista_counter.png")
+	# Rowan comes in and asks for a coffee
+	var rowan = _villager("rowan")
+	rowan.settle_at(xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y - 1.0))
+	var called: bool = barista.call_customer("rowan")
+	t = 0.0
+	while (barista.customer.is_empty() or str(barista.customer["state"]) != "waiting") and t < 25.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.6)
+	_check("Rowan walks up to the counter and asks for a coffee (%s, %.1f s, '%s', next: %s)" % [called, t, barista.line, barista.next_step()["label"]],
+		called and not barista.customer.is_empty() and str(barista.customer["state"]) == "waiting" and barista.line.contains("coffee") and str(barista.next_step()["id"]) == "grind")
+	await _shot("62_barista_customer.png")
+	# grind, filter, the button
+	var order := []
+	for want in ["grind", "filter", "brew"]:
+		order.append(str(barista.next_step()["id"]))
+		await _key_tap(KEY_E)
+		t = 0.0
+		while (barista.busy != "" or barista.steps_done.size() < order.size()) and t < 5.0:
+			await _wait(0.1)
+			t += 0.1
+		if want == "grind":
+			await _shot("62_barista_grind.png")
+	var started := Time.get_ticks_msec()
+	_check("E grinds the beans, puts them in the filter and presses the button, in that order (%s, done %s, brewing %s)" % [str(order), str(barista.steps_done), barista.brewing],
+		order == ["grind", "filter", "brew"] and barista.steps_done == ["grind", "filter", "brew"] and barista.brewing)
+	await _key_tap(KEY_E) # nothing to do while it brews
+	await _wait(2.0)
+	await _shot("62_barista_brewing.png")
+	var early: bool = barista.pot == 0 and barista.brewing and str(barista.next_step()["id"]) == ""
+	while barista.brewing and Time.get_ticks_msec() - started < 20000:
+		await _wait(0.1)
+	var secs := (Time.get_ticks_msec() - started) / 1000.0
+	_check("the pot brews for ten seconds and holds four cups (nothing to do meanwhile %s, %.1f s, %d cups)" % [early, secs, barista.pot],
+		early and secs > 9.0 and secs < 11.5 and barista.pot == Barista.CUPS)
+	# pour and hand it over
+	var coins0: int = Game.coins
+	await _key_tap(KEY_E)
+	while barista.busy != "":
+		await _wait(0.1)
+	await _shot("62_barista_pour.png")
+	var poured: bool = barista.poured and barista._cup.visible
+	await _key_tap(KEY_E)
+	while barista.busy != "":
+		await _wait(0.1)
+	await _wait(0.3)
+	var vis: Dictionary = cafe_visits.visits.get("rowan", {})
+	_check("she pours Rowan a cup and hands it over: 5 coins, all hers, three cups left, and Rowan takes it to a seat (poured %s, +%d coins, %d cups, Rowan %s with a cup %s)" % [poured, Game.coins - coins0, barista.pot, str(vis.get("state", "gone")), vis.get("cup") != null],
+		poured and Game.coins - coins0 == Barista.PAY and barista.pot == Barista.CUPS - 1 and str(vis.get("state", "")) == "to_seat" and vis.get("cup") != null)
+	var paused: bool = barista.customer.is_empty() and barista._last == "rowan" and barista.next_customer_t >= Barista.PAUSE - 0.5
+	await _wait(3.0)
+	_check("one customer at a time: nobody else comes up while Rowan carries his coffee off, then a %.0f s pause (waiting on him %s, next in %.1f s, customer %s)" % [Barista.PAUSE, paused, barista.next_customer_t, not barista.customer.is_empty()],
+		paused and barista.customer.is_empty())
+	# the next customer gets a cup from the same pot, no grinding
+	var wren = _villager("wren")
+	wren.settle_at(xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y - 1.0))
+	barista.call_customer("wren")
+	t = 0.0
+	while (barista.customer.is_empty() or str(barista.customer["state"]) != "waiting") and t < 25.0:
+		await _wait(0.25)
+		t += 0.25
+	var nxt := str(barista.next_step()["id"])
+	await _key_tap(KEY_E)
+	while barista.busy != "":
+		await _wait(0.1)
+	await _key_tap(KEY_E)
+	while barista.busy != "":
+		await _wait(0.1)
+	_check("Wren's coffee comes from the same pot, no grinding (next was '%s', +%d coins in all, %d cups left, %d served)" % [nxt, Game.coins - coins0, barista.pot, barista.served],
+		nxt == "pour" and Game.coins - coins0 == Barista.PAY * 2 and barista.pot == Barista.CUPS - 2 and barista.served == 2)
+	# Rowan sits down with the coffee
+	t = 0.0
+	while str(cafe_visits.visits.get("rowan", {}).get("state", "")) != "reading" and t < 20.0:
+		await _wait(0.5)
+		t += 0.5
+	_check("Rowan sits down with the coffee and a book (%s after %.1f s)" % [str(cafe_visits.visits.get("rowan", {}).get("state", "gone")), t],
+		str(cafe_visits.visits.get("rowan", {}).get("state", "")) == "reading")
+	await _shot("62_barista_regular.png")
+	# Esc: out from behind the counter, the overhead camera back
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.6)
+	local = xf.affine_inverse() * player.position
+	_check("Esc steps her out from behind the counter with the overhead camera back (active %s, first person %s, at z %.2f in the café)" % [barista.active, fps.active, local.z],
+		not barista.active and not fps.active and not fps.locked and local.z > -4.5)
+	await _shot("62_barista_after.png")
+	cafe_visits.end_all()
+
+
 func _fire_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
