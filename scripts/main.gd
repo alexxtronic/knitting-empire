@@ -3573,7 +3573,7 @@ func _act1_checks() -> void:
 	await _act1_shot("Heart Bakery. Giorgio", "22_act1_overview_bakery.png")
 	await _act1_shot("Builder's Delight. Steve", "22_act1_overview_homegoods.png")
 	await _act1_shot("Willow Homes. That's Gary", "22_act1_overview_office.png")
-	await _act1_shot("Sabrina's Coffee Shop", "22_act1_overview_cafe.png")
+	await _act1_shot("Sabrina's Cappuccino Cafe", "22_act1_overview_cafe.png")
 	await _act1_shot("Front door sticks", "23_act1_wren_leaves.png")
 	await _act1_until_done(120.0)
 	_check("the clock stands still during a scene (%.2f → %.2f)" % [hour0, hour_end[0]], absf(hour_end[0] - hour0) < 0.001 and Game.time_running)

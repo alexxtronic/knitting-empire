@@ -118,7 +118,7 @@
       }
     },
     "cafe": {
-      "name": "the Coffee Shop",
+      "name": "Cappuccino Cafe",
       "boss": "sabrina",
       "building": "building_cafe",
       "trust": 10,
