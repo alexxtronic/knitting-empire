@@ -1,0 +1,66 @@
+{
+  "name": "book_stack",
+  "triangles": 5484,
+  "materials": [
+    "book_cover_navy",
+    "book_pages",
+    "book_spine_navy",
+    "book_gold",
+    "book_cover_forest",
+    "book_spine_forest",
+    "book_cover_plum",
+    "book_spine_plum"
+  ],
+  "size_m": [
+    0.209,
+    0.258,
+    0.21
+  ],
+  "min_m": [
+    -0.101,
+    -0.13,
+    -0.006
+  ],
+  "max_m": [
+    0.109,
+    0.129,
+    0.205
+  ],
+  "images": [
+    "book_cover_forest",
+    "book_cover_forest_n",
+    "book_cover_navy",
+    "book_cover_navy_n",
+    "book_cover_plum",
+    "book_cover_plum_n",
+    "book_gold",
+    "book_gold_n",
+    "book_pages",
+    "book_pages_n",
+    "book_ribbon",
+    "book_spine_forest",
+    "book_spine_forest_n",
+    "book_spine_mustard",
+    "book_spine_mustard_n",
+    "book_spine_navy",
+    "book_spine_navy_n",
+    "book_spine_plum",
+    "book_spine_plum_n",
+    "book_spine_wine",
+    "book_spine_wine_n",
+    "cafe_chalkboard",
+    "cafe_green",
+    "cafe_green_n",
+    "cafe_oak",
+    "cafe_oak_n",
+    "cafe_tartan",
+    "cafe_tartan_n",
+    "cafe_walnut",
+    "cafe_walnut_n",
+    "candle_brass",
+    "candle_brass_n",
+    "candle_wax",
+    "candle_wax_n"
+  ],
+  "glb_bytes": 1509288
+}

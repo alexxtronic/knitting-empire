@@ -1,0 +1,66 @@
+{
+  "name": "cafe_bookshelf",
+  "triangles": 11944,
+  "materials": [
+    "cafe_walnut",
+    "book_spine_tan",
+    "book_pages",
+    "book_gold",
+    "book_spine_wine",
+    "book_spine_plum",
+    "book_spine_olive",
+    "book_spine_brown",
+    "book_spine_navy",
+    "book_spine_forest",
+    "book_spine_mustard",
+    "cafe_clay",
+    "cafe_leaf",
+    "cafe_leaf_dark"
+  ],
+  "size_m": [
+    1.6,
+    0.46,
+    2.582
+  ],
+  "min_m": [
+    -0.8,
+    -0.24,
+    0.0
+  ],
+  "max_m": [
+    0.8,
+    0.22,
+    2.582
+  ],
+  "images": [
+    "book_gold",
+    "book_gold_n",
+    "book_pages",
+    "book_pages_n",
+    "book_ribbon",
+    "book_spine_forest",
+    "book_spine_forest_n",
+    "book_spine_mustard",
+    "book_spine_mustard_n",
+    "book_spine_navy",
+    "book_spine_navy_n",
+    "book_spine_plum",
+    "book_spine_plum_n",
+    "book_spine_wine",
+    "book_spine_wine_n",
+    "cafe_chalkboard",
+    "cafe_green",
+    "cafe_green_n",
+    "cafe_oak",
+    "cafe_oak_n",
+    "cafe_tartan",
+    "cafe_tartan_n",
+    "cafe_walnut",
+    "cafe_walnut_n",
+    "candle_brass",
+    "candle_brass_n",
+    "candle_wax",
+    "candle_wax_n"
+  ],
+  "glb_bytes": 1155832
+}

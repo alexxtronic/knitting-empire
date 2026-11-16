@@ -1,6 +1,7 @@
 extends Node
-## Music, ambience and sound effects. Every sound comes from tools/make_audio.py (no samples or
-## licences); swap in real recordings later under the same names in res://assets/audio/.
+## Music, ambience and sound effects. The theme song, Sunset Lullaby (assets/audio/sunset_lullaby.mp3),
+## is Alex's own track and loops in the background all game; every other sound comes from
+## tools/make_audio.py (no samples or licences).
 ##
 ## Three buses under Master: Music, Ambience and SFX. The Settings panel sets Music and Sound
 ## (Ambience + SFX), kept in user://settings.cfg with the graphics level. The autotest mutes it all.
@@ -9,7 +10,8 @@ const DIR := "res://assets/audio/"
 const SETTINGS_PATH := "user://settings.cfg"
 const MUSIC_DB := -9.0
 const AMB_DB := -7.0
-const MUSIC_ON := false # the tune is off for now; ambience and sound effects still play
+const THEME := "sunset_lullaby.mp3" # Alex's own track (2026-11-15), looped under everything
+const MUSIC_ON := true # the theme plays; the Settings panel's Music slider sets its loudness
 
 var main: Node
 var music: AudioStreamPlayer
@@ -32,7 +34,7 @@ func setup(m: Node, mute := false) -> void:
 	muted = mute
 	_make_buses()
 	_load_settings()
-	music = _player("Music", _loop("music_cast_on.ogg"))
+	music = _player("Music", _loop(THEME))
 	music.volume_db = MUSIC_DB
 	tune = AudioStreamPlayer.new()
 	tune.bus = "Music"
@@ -82,6 +84,8 @@ func _loop(file: String) -> AudioStream:
 	var s = load(DIR + file)
 	if s is AudioStreamOggVorbis:
 		(s as AudioStreamOggVorbis).loop = true
+	elif s is AudioStreamMP3:
+		(s as AudioStreamMP3).loop = true
 	return s
 
 
@@ -173,12 +177,14 @@ func _process(delta: float) -> void:
 	# a memory flashback: the music sounds far away, as if through a wall
 	var memory: bool = main.hud != null and main.hud.memory_on()
 	AudioServer.set_bus_effect_enabled(AudioServer.get_bus_index("Music"), _memory_fx, memory)
-	_gain["music"] = lerpf(_gain["music"], 0.55 if memory else 1.0, k)
+	# a story's own music cue plays over the theme, which steps back for it
+	var cue: bool = tune != null and tune.playing
+	_gain["music"] = lerpf(_gain["music"], 0.15 if cue else (0.55 if memory else 1.0), k)
 	music.volume_db = MUSIC_DB + linear_to_db(_gain["music"])
 
 
 ## A story music cue (assets/audio/music_<name>.ogg), faded in over a second or two; "off" fades
-## whatever is playing out. Plays once (the score's loop, music_cast_on, is a separate player).
+## whatever is playing out. Plays once over the theme (a separate player), which steps back while it plays.
 func play_tune(cue: String, secs := 1.5) -> void:
 	if cue == "off" or cue == "":
 		tune_name = ""

@@ -7,6 +7,7 @@ const Story = preload("res://scripts/story.gd")
 const Data = preload("res://scripts/data.gd")
 
 signal scene_finished(id: String)
+signal scene_started(id: String) # before its first line: main.gd sends the café's visitors home
 
 var main: Node
 var playing := ""
@@ -46,6 +47,7 @@ func trigger(kind: String, target := "") -> String:
 
 func _run(id: String) -> void:
 	playing = id
+	scene_started.emit(id)
 	var sc: Dictionary = Story.scenes()[id]
 	var hud = main.hud
 	_cam0 = {"follow": main.cam_follow, "dist": main.cam_dist, "yaw": main.cam_yaw_goal}
