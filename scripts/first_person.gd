@@ -383,8 +383,13 @@ func _update(delta: float) -> void:
 		(copy as MeshInstance3D).visible = mi.visible
 		for k in (copy as MeshInstance3D).get_blend_shape_count():
 			(copy as MeshInstance3D).set_blend_shape_value(k, mi.get_blend_shape_value(k))
-	# the action ring wants the mouse; it comes back once the ring is gone
-	if _menu_freed and not main.hud.is_menu_open():
+	# the action ring, or a panel it opened (a book, a letter, the bag), wants the mouse; it comes
+	# back once they're gone
+	if main.panel_open():
+		if not _menu_freed and main._autotest_dir == "":
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_menu_freed = true
+	elif _menu_freed and not main.hud.is_menu_open():
 		_menu_freed = false
 		if main._autotest_dir == "":
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -479,6 +484,8 @@ func handle_key(kc: Key) -> bool:
 		KEY_ESCAPE:
 			if main.hud.is_menu_open():
 				main.hud.hide_menu()
+			elif main.panel_open():
+				return false # main.gd closes the panel (the book, the bag...), and she stays at her eyes
 			else:
 				leave()
 		KEY_E:
@@ -497,8 +504,8 @@ func handle_key(kc: Key) -> bool:
 
 ## The mouse while it's on (main.gd's _unhandled_input hands it here).
 func handle_mouse(e: InputEvent) -> void:
-	if locked:
-		return
+	if locked or main.panel_open():
+		return # a panel has the mouse: a click past it does nothing here
 	if e is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 			look((e as InputEventMouseMotion).relative)

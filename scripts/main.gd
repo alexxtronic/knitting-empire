@@ -44,6 +44,7 @@ const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
+const ReadingPose = preload("res://scripts/reading_pose.gd")
 const Barista = preload("res://scripts/barista.gd")
 const HouseBuilder = preload("res://scripts/house_builder.gd")
 
@@ -1419,6 +1420,9 @@ func _update_gaze() -> void:
 
 func _gaze_for(a, people: Array) -> Variant:
 	var me: Vector3 = a.global_position
+	var book = ReadingPose.holding(a)
+	if book != null:
+		return book.look_point() # down into the pages
 	if a == player and fps.active and not player.busy:
 		return fps.look_point() # her head turns the way the view looks
 	if a == player:
@@ -1736,6 +1740,14 @@ func _input(e: InputEvent) -> void:
 			handled = false
 	if handled:
 		get_viewport().set_input_as_handled()
+
+
+## A panel that wants the mouse is open (a book, the bag, a letter...): first person lets the mouse
+## go while it is, and gives Esc to it (first_person.gd).
+func panel_open() -> bool:
+	return books_ui.visible or wardrobe_ui.visible or sale.visible or hud.letters.visible or hud.bag_panel.visible \
+		or hud.album.visible or hud.journal_panel.visible or hud.settings_panel.visible or hud.help_panel.visible \
+		or hud.keys_open() or hud.game_menu.visible or homestead.ui.is_open()
 
 
 func _ray_target(mpos: Vector2) -> Variant:
@@ -2540,6 +2552,7 @@ func _sit_and_read(seat: Vector3, yaw: float, book_id: String, spot = null) -> v
 	_take_read_spot(spot)
 	player.start_activity("Reading", 100000.0, Callable(), seat, yaw)
 	_reading = true
+	ReadingPose.attach(player) # the open book in both hands (reading_pose.gd)
 	books_ui.open(book_id)
 
 
@@ -2596,6 +2609,7 @@ func _on_book_closed() -> void:
 		return
 	_reading = false
 	_take_read_spot(null)
+	ReadingPose.detach(player)
 	player.cancel_activity()
 	var pages := books_ui.pages_read
 	var joy := minf(12.0, 2.0 + pages * 0.6)
@@ -6158,6 +6172,8 @@ func _cafe_checks() -> void:
 	cam_dist = 4.5
 	await _wait(1.2)
 	await _shot("56_cafe_reading.png")
+	var nbook = ReadingPose.holding(player)
+	_check("Nora reads with the open book held up in both hands (%s)" % str(nbook != null and nbook.reach.size() == 2), nbook != null and nbook.reach.size() == 2)
 	books_ui.visible = true
 	await _key_tap(KEY_RIGHT)
 	await _key_tap(KEY_RIGHT)
@@ -6223,12 +6239,22 @@ func _cafe_checks() -> void:
 			t += 0.5
 	var vis: Dictionary = cafe_visits.visits.get("rowan", {})
 	var rseat = vis.get("seat")
-	var book_on: bool = reg != null and reg.find_child("CafeBook", false, false) != null
+	var book_on: bool = reg != null and reg.find_child("ReadingBook", false, false) != null
 	var seat_off: float = 99.0 if rseat == null else Vector2(reg.position.x, reg.position.z).distance_to(Vector2(rseat.seat_point().x, rseat.seat_point().z))
 	cam_target = reg.position + Vector3(0, 1.0, 0) if reg != null else cam_target
 	cam_dist = 5.0
 	await _wait(1.2)
 	await _shot("56_cafe_regular.png")
+	# he holds the open book up in both hands and looks down into it (reading_pose.gd)
+	var rbook = ReadingPose.holding(reg) if reg != null else null
+	var gaps: Array = []
+	if rbook != null:
+		for ik in rbook.reach:
+			gaps.append(snappedf((ik as WardrobeView.ReachIK).hand_gap, 0.01))
+	var eyes_on: bool = rbook != null and reg.body != null and reg.body.look_target != null and (reg.body.look_target as Vector3).distance_to(rbook.look_point()) < 0.05
+	var in_front: bool = rbook != null and (reg.global_transform.affine_inverse() * rbook.global_position).z > 0.15
+	_check("reading, Rowan holds the open book up in front of him in both hands and looks into it (hands %s m from the pages, looking %s, in front %s)" % [str(gaps), eyes_on, in_front],
+		rbook != null and gaps.size() == 2 and gaps.all(func(g): return float(g) < 0.12) and eyes_on and in_front)
 	var blocked: bool = rseat != null and rseat.taken() and not rseat.ke_actions()[0]["enabled"] and reading_seat_near(rseat.global_position) != rseat
 	_check("Rowan drops into the café for a coffee: up to the counter, then sits reading in a free seat with a book (%s, %.1f s, %.2f m from the seat, book %s), and Nora isn't offered his seat" % [" > ".join(steps), t, seat_off, book_on],
 		visited and str(vis.get("state", "")) == "reading" and steps.has("ordering") and reg.anim_override == "SitIdle" and seat_off < 0.1 and book_on and blocked)
@@ -6236,7 +6262,7 @@ func _cafe_checks() -> void:
 		cafe_visits.visits["rowan"]["until"] = 0.0
 		cafe_visits.update()
 		await _wait(0.6)
-		var left_ok: bool = str(cafe_visits.visits.get("rowan", {}).get("state", "")) == "leaving" and reg.anim_override == "" and reg.find_child("CafeBook", false, false) == null and (rseat == null or rseat.occupant == null)
+		var left_ok: bool = str(cafe_visits.visits.get("rowan", {}).get("state", "")) == "leaving" and reg.anim_override == "" and reg.find_child("ReadingBook", false, false) == null and (rseat == null or rseat.occupant == null)
 		story.scene_started.emit("test") # a scene starting sends everyone home at once
 		_check("when his time's up he gets up, leaves the book and heads back; a story scene sends him home at once (seat free %s)" % str(rseat == null or rseat.occupant == null),
 			left_ok and cafe_visits.visits.is_empty() and Vector2(reg.position.x, reg.position.z).distance_to(Vector2(home0.x, home0.z)) < 0.1)
@@ -9544,6 +9570,17 @@ func _fps_checks() -> void:
 	_check("E on what's under the dot opens its ring of actions (%s; %d of %d pieces with actions tried)" % [used if used != "" else "nothing opened", tried, with_acts], used != "" and fps.active)
 	hud.hide_menu()
 	await _wait(0.2)
+	# a book opened from her eyes has the mouse: clicks past it do nothing, and Esc puts the book
+	# down while she stays at her eyes
+	books_ui.open("", true)
+	await _wait(0.2)
+	var book_has_it := panel_open()
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.2)
+	_check("a book opened in first person keeps the mouse, and Esc closes it without leaving her eyes (panel %s, book open %s, first person %s)" % [book_has_it, books_ui.visible, fps.active],
+		book_has_it and not books_ui.visible and fps.active)
+	if books_ui.visible:
+		books_ui.close()
 	# the roofs: on over her from her eyes indoors, lifted from above while she's inside or furnishing,
 	# on again from above once she's outside
 	var house_roof: Node3D = roofs[0]["node"] if not roofs.is_empty() else null

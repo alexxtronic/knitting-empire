@@ -1,5 +1,6 @@
 """Cuts the six hotbar icons (assets/icons/<tool>.png) out of reference_sheet.png: white paper
-and soft shadows become transparent, and only the tool itself (the largest piece) is kept.
+and soft shadows become transparent (paper showing through a gap in the tool too), and only the
+tool itself (the largest piece) is kept.
 Stand-ins until each tool's own model is rendered.
   uv run --no-project --with numpy --with scipy --with pillow python art/world_assets/tools/make_icons.py
 """
@@ -21,6 +22,13 @@ for name, (cx, cy) in cells.items():
     lab, n = ndimage.label(fg)
     big = 1 + int(np.argmax(ndimage.sum(fg, lab, range(1, n + 1))))
     keep = ndimage.binary_fill_holes(lab == big)
+    # paper walled in by the tool (inside the shears' handle loop, between the blades): fill_holes
+    # took it back, so knock out every enclosed patch of it big enough to be a gap, not a highlight
+    gaps, gn = ndimage.label(paper & keep)
+    for i in range(1, gn + 1):
+        g = gaps == i
+        if g.sum() > 120 and c[g].min(axis=1).mean() > 185:
+            keep &= ~ndimage.binary_dilation(g, iterations=1)
     alpha = ndimage.gaussian_filter(keep.astype(float), 0.8)
     alpha = np.clip((alpha - 0.35) * 3.0, 0, 1)
     out = np.dstack([c, (alpha * 255)]).astype(np.uint8)

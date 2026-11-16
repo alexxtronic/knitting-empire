@@ -10,6 +10,7 @@ extends RefCounted
 const Interiors = preload("res://scripts/interiors.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
+const ReadingPose = preload("res://scripts/reading_pose.gd")
 
 const BOOKS := ["plum", "forest", "wine", "navy", "mustard"]
 const ARRIVED := 0.2 # how close counts as there
@@ -192,20 +193,14 @@ func _step(vid: String) -> void:
 				visits.erase(vid)
 
 
-## Down in the seat with a book on their lap.
+## Down in the seat, an open book held up in both hands (reading_pose.gd).
 func sit(vis: Dictionary) -> void:
 	var v = vis["v"]
 	var seat = vis["seat"]
 	v.settle_at(seat.seat_point())
 	v.rotation.y = seat.seat_yaw()
 	v.anim_override = "SitIdle"
-	var book := Node3D.new()
-	book.name = "CafeBook"
-	v.add_child(book)
-	Catalog.model("res://assets/props/book_%s.glb" % BOOKS[randi() % BOOKS.size()], book)
-	book.position = Vector3(0.0, 0.2, 0.3)
-	book.rotation = Vector3(deg_to_rad(-35.0), 0.0, 0.0)
-	vis["book"] = book
+	vis["book"] = ReadingPose.attach(v, BOOKS[randi() % BOOKS.size()])
 	vis["state"] = "reading"
 	vis["until"] = _now() + float(vis["stay"])
 
@@ -225,7 +220,7 @@ func _free(vis: Dictionary) -> void:
 	if vis["seat"] != null and is_instance_valid(vis["seat"]) and vis["seat"].occupant == vis["v"]:
 		vis["seat"].occupant = null
 	if vis["book"] != null and is_instance_valid(vis["book"]):
-		(vis["book"] as Node).queue_free()
+		ReadingPose.detach(vis["v"])
 	vis["book"] = null
 	if vis.get("cup") != null and is_instance_valid(vis["cup"]):
 		(vis["cup"] as Node).queue_free()
