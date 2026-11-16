@@ -3762,8 +3762,9 @@ func _act1_checks() -> void:
 	cam_dist = 9.0
 	await _wait(0.8)
 	await _shot("26_act1_pen.png")
-	_check("with the pen built the dog can herd, but only while she plays him: following her he leaves the strays be (can %s, herding now %s, strays %d)" % [dog_herds(), homestead.herders.has(dog), homestead.strays.size()],
-		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() == 2)
+	# a stray may have wandered through the open gate by itself while the scene played: count those as well
+	_check("with the pen built the dog can herd, but only while she plays him: following her he leaves the strays be (can %s, herding now %s, strays %d, %d already in)" % [dog_herds(), homestead.herders.has(dog), homestead.strays.size(), sheep_list.size()],
+		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() >= 1 and homestead.strays.size() + sheep_list.size() == 2)
 	# herding: the strays move off from her
 	var s0 = homestead.strays[0]
 	s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
