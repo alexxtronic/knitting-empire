@@ -605,6 +605,7 @@ var gfx := 2
 var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.gd)
 ## Per graphics level: how many of the nearest lit lamps cast real shadows.
 const LAMP_SHADOWS := [0, 2, 4]
+const GRASS_THIN := [0.4, 0.4, 0.45] # grass.gd: the share of blades left at the end of the range
 const RECOMMENDED_APPLE := 2 # default_graphics() on an Apple M-series chip
 
 
@@ -687,7 +688,7 @@ func apply_graphics() -> void:
 	Catalog.lamp_shadows = med
 	light_budget.max_shadows = LAMP_SHADOWS[gfx] # only the nearest lit lamps cast shadows (candles never)
 	light_budget.update(get_tree(), cam_target, 0.0, true)
-	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
+	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx], GRASS_THIN[gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
@@ -1395,6 +1396,7 @@ var hide_activity_bar := false # the style frames keep the screen clean
 func _update_needs(delta: float) -> void:
 	Game.warmth_target = warmth_target()
 	grass.set_pusher(player.global_position)
+	grass.follow(cam.global_position)
 	if player.walked > 0.0:
 		if Game.time_running:
 			Game.add_need("fitness", player.walked * 0.06)

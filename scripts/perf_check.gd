@@ -216,6 +216,12 @@ func _probe(spot: Array) -> void:
 		"sun_blend_splits": func(on: bool) -> void: main.sun.directional_shadow_blend_splits = on,
 		"sun_4_splits": func(on: bool) -> void:
 			main.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if on else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS,
+		"ground_plane": func(on: bool) -> void: main.grass._ground.visible = on,
+		"grass_blades": func(on: bool) -> void:
+			for c in main.grass._chunks:
+				(c as Node3D).visible = on,
+		"grass_thinning": func(on: bool) -> void:
+			main.grass.set_quality([0.45, 0.75, 1.0][main.gfx], [30.0, 40.0, 46.0][main.gfx], main.GRASS_THIN[main.gfx] if on else 1.0),
 		"lamp_shadows_4v2": func(on: bool) -> void:
 			main.light_budget.max_shadows = 4 if on else 2
 			main.light_budget.update(main.get_tree(), main.cam_target, 0.0, true),

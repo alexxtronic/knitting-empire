@@ -23,6 +23,10 @@ uniform vec3 dry : source_color = vec3(0.44, 0.47, 0.21);
 // blades sink into the turf over the last few metres before the chunks stop drawing (grass.gd's range),
 // so the edge of the grass doesn't pop
 uniform float fade_end = 46.0;
+// far grass is thinned (grass.gd _keep_at): out from thin_near fewer blades are drawn, down to
+// thin_keep of them at fade_end, each widened so the turf looks as full
+uniform float thin_near = 16.0;
+uniform float thin_keep = 1.0;
 
 #include "res://shaders/grass_patches.gdshaderinc"
 
@@ -42,6 +46,8 @@ void vertex() {
 	vec3 v = VERTEX;
 	v.y *= height;
 	v.xz *= 0.9 + height * 0.6;
+	float keep = mix(1.0, thin_keep, smoothstep(thin_near, fade_end, far));
+	v.x *= inversesqrt(keep); // fewer blades, each a little wider
 	// wind: a per-blade flutter plus broad gusts travelling along wind_dir
 	float t = TIME;
 	float gust = sin(dot(root.xz, wind_dir) * 0.28 - t * 1.25);
