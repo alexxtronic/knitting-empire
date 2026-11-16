@@ -249,9 +249,6 @@ func ke_actions() -> Array:
 	var rows := [a]
 	if penned:
 		rows.append(main._act("free", "Let it go"))
-	else:
-		var why: String = wl.round_up_problem(self)
-		rows.append(main._act("round_up", "Send the dog to round it up" + ("" if why == "" else "  (%s)" % why), why == ""))
 	rows.append(main._act("watch", "Watch it a while"))
 	return rows
 
@@ -265,8 +262,6 @@ func ke_action(id: String) -> void:
 			if Game.use_energy(3.0):
 				hold(4.0)
 				main.player.start_activity("Shearing" if species == "sheep" else "Combing", 2.0, Callable(wl, "combed").bind(self))
-		"round_up":
-			wl.round_up(self)
 		"free":
 			wl.set_free(self)
 		"watch":

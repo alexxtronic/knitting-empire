@@ -10,9 +10,10 @@ extends Node3D
 ## speed each covers at speed 1 (rig_dog.py prints it); the loop playing is chosen by his speed and
 ## sped up or slowed to match it, so his paws never slide.
 ##
-## He herds: he is in homestead.herders, and strays shy from him further off than from Nora.
-## For now he's with her from the start of every game (main.DOG_FROM_START); in Act 1 he only
-## herds once the pen is built (the "pen_done" flag, main.dog_herds()).
+## He herds only while you play him (Alex, 2026-11-16): then he is in homestead.herders, and
+## strays shy from him further off than from Nora; following her he moves nothing. For now he's
+## with her from the start of every game (main.DOG_FROM_START); in Act 1 he can only herd once the
+## pen is built (the "pen_done" flag, main.dog_herds()).
 
 const Catalog = preload("res://scripts/catalog.gd")
 const MODEL := "res://assets/props/dog.glb"
@@ -36,7 +37,6 @@ const SCARE_RADIUS := 3.4 # sheep move off when he is this close (Nora: homestea
 
 var main: Node # main.gd
 var controlled := false # the player's clicks move him (Tab)
-var chase: Node3D = null # a wild animal he's been sent to round up (wildlife.gd): he runs it down
 var barks := 0 # how many times he has barked (for the autotest)
 var _bark_t := 0.0 # seconds until he can bark again
 var _woof: Label3D
@@ -143,14 +143,7 @@ func _process(delta: float) -> void:
 		_woof.position.y = 1.15 + 0.5 * (1.0 - k)
 		_woof.modulate.a = k
 		_woof.visible = k > 0.02
-	if chase != null and not is_instance_valid(chase):
-		chase = null
-	if chase != null and not controlled:
-		_repath -= delta
-		if _repath <= 0.0:
-			_repath = 0.25
-			path = main._find_path(position, chase.position)
-	elif not controlled:
+	if not controlled:
 		_follow_nora(delta)
 	var walking := not path.is_empty()
 	if walking:
@@ -181,8 +174,6 @@ func _process(delta: float) -> void:
 func _top_speed() -> float:
 	if controlled:
 		return run_speed if running else walk_speed
-	if chase != null:
-		return run_speed
 	# keeping up with Nora: a walk beside her, a trot when she's drawn ahead, a gallop to catch up
 	var d := _to_nora().length()
 	if d > 7.0:

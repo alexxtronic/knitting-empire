@@ -17,8 +17,8 @@ extends Node3D
 ## frightens every wild animal within BARK_RANGE: each has a fright meter, and the rarer it is the
 ## more barks fill it (`barks` in the data); it bolts, so he has to keep after it, and it calms
 ## down if he lets up. At full fright it gives in and follows the dog, up to `max_herd` (three) at
-## a time. He brings them to a pen and they move in for good (Game.flags["penned"]). From Nora, "Send
-## the dog to round it up" on an animal's menu has him chase and bark by himself, more slowly.
+## a time. He brings them to a pen and they move in for good (Game.flags["penned"]). Only the player
+## herds (Alex, 2026-11-16): the dog never rounds anything up by himself.
 ## A pen holds `pen_size` (four) animals, her sheep included, and she can build as many pens as
 ## she likes (homestead.gd's fences; every closed patch with a gate is one); Lars's barn adds
 ## `barn_stalls` while its rent is paid. A caught animal's place in the wild is empty for its
@@ -37,18 +37,12 @@ const SEED := 20261114
 const BARK_RANGE := 8.0 # a bark frightens the wild animals this close
 const BARK_NEAR := 3.5 # full effect inside this; it falls to BARK_FAR_GAIN of that at BARK_RANGE
 const BARK_FAR_GAIN := 0.45
-const AUTO_BARK := 1.3 # seconds between barks when he's sent to round one up by himself
-const LOSE_DIST := 30.0 # the dog this far behind has lost it
-const CHASE_TIME := 60.0 # seconds before he gives up
 
 var main: Node # main.gd
 var data: Dictionary = {}
 var animals: Array = [] # wild_animal.gd nodes
 var flocks: Array = [] # bird.gd nodes
 var built := false
-var chasing: Node3D = null # the animal the dog has been sent after
-var _chase_t := 0.0
-var _auto_bark := 0.0
 var _said_t := 0.0 # seconds before "he can only herd three" may be said again
 var _cull_t := 0.0
 var _spots := {} # wild animal key -> [species, n, where it was placed], to put another there later
@@ -153,7 +147,6 @@ func clear() -> void:
 	animals = []
 	flocks = []
 	_spots = {}
-	chasing = null
 	built = false
 
 
@@ -169,7 +162,6 @@ func _open_spot(rng: RandomNumberGenerator, r: Rect2, fallback := Vector3.INF) -
 func _process(delta: float) -> void:
 	if not built:
 		return
-	_update_chase(delta)
 	_said_t = maxf(0.0, _said_t - delta)
 	_cull_t -= delta
 	if _cull_t <= 0.0:
@@ -287,8 +279,6 @@ func round_up_problem(a: Node3D) -> String:
 		return "the pens are full"
 	if following().size() >= max_herd():
 		return "he can only herd %d at a time" % max_herd()
-	if chasing != null and is_instance_valid(chasing) and chasing != a:
-		return "the dog is busy"
 	return ""
 
 
@@ -323,54 +313,12 @@ func barked(at: Vector3) -> int:
 	return reached
 
 
-## Sends the dog after it from Nora's side: he runs it down, barking as he goes; _update_chase
-## calls it off if he loses it.
-func round_up(a: Node3D) -> void:
-	if round_up_problem(a) != "":
-		return
-	if main.dog.controlled:
-		main.toggle_dog(false)
-	chasing = a
-	_chase_t = 0.0
-	_auto_bark = 0.3
-	main.dog.chase = a
-	main.hud.show_toast("Go on, boy! Round up the %s." % str(a.info.get("name", a.species)).to_lower())
-
-
-func _update_chase(delta: float) -> void:
-	if chasing == null:
-		return
-	if not is_instance_valid(chasing) or chasing.caught or chasing.penned:
-		_end_chase()
-		return
-	_chase_t += delta
-	_auto_bark -= delta
-	var d = main.dog
-	if d and d.visible and _auto_bark <= 0.0 and _flat(d.global_position, chasing.global_position) < BARK_NEAR + 1.0:
-		_auto_bark = AUTO_BARK
-		main.dog_bark()
-		if chasing == null:
-			return
-	if d == null or not d.visible or _chase_t > CHASE_TIME or _flat(d.global_position, chasing.global_position) > LOSE_DIST:
-		main.hud.show_toast("The %s got away." % str(chasing.info.get("name", chasing.species)).to_lower())
-		_end_chase()
-
-
-func _end_chase() -> void:
-	chasing = null
-	if main.dog:
-		main.dog.chase = null
-		main.dog.path = []
-
-
 ## Its fright meter is full: it gives in and follows the dog home.
 func frightened(a: Node3D) -> void:
 	a.caught = true
 	a.fleeing = 0.0
 	a.fright = 0.0
 	a._show_meter()
-	if chasing == a or (main.dog and main.dog.chase == a):
-		_end_chase()
 	Game.add_need("happiness", 6.0)
 	var n := following().size()
 	main.hud.show_toast("The %s gives in and falls in behind the dog. Lead it home to a pen.  (%d of %d)" % [str(a.info.get("name", a.species)).to_lower(), n, max_herd()])
