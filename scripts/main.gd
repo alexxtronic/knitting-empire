@@ -5,6 +5,8 @@ extends Node3D
 const Catalog = preload("res://scripts/catalog.gd")
 const World = preload("res://scripts/world.gd")
 const Furniture = preload("res://scripts/furniture.gd")
+const PerfCheck = preload("res://scripts/perf_check.gd")
+const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
 const Player = preload("res://scripts/player.gd")
@@ -447,6 +449,7 @@ func _connect_hud() -> void:
 	hud.expand_pressed.connect(_expand_house)
 	hud.walls_pressed.connect(func(): walls_up = not walls_up)
 	hud.graphics_pressed.connect(_cycle_graphics)
+	hud.render_scale_changed.connect(set_render_scale)
 	hud.save_pressed.connect(func():
 		_save_game()
 		hud.show_toast("Game saved."))
@@ -599,25 +602,73 @@ const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 const GFX_NAMES := ["Low", "Medium", "High"]
 const SETTINGS_PATH := "user://settings.cfg"
 var gfx := 2
+var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.gd)
+## Per graphics level: how many of the nearest lit lamps cast real shadows.
+const LAMP_SHADOWS := [0, 2, 4]
+const RECOMMENDED_APPLE := 2 # default_graphics() on an Apple M-series chip
+
+
+## The Settings slider "3D detail": how many 3D pixels to draw, as a share of the level's own
+## (TARGET_3D_PIXELS), from RENDER_SCALE_MIN to RENDER_SCALE_MAX. Kept in user://settings.cfg.
+var render_scale := 1.0
+const RENDER_SCALE_MIN := 0.5
+const RENDER_SCALE_MAX := 1.5
+## Settings saved before the graphics pass of 2026-11-16 (version 1) start once on the computer's
+## recommended level, since High then cost three times what it does now.
+const GFX_SETTINGS_VERSION := 2
+
+
+## The level a computer starts on before the player picks one: what --only=perf shows holds
+## 30 fps or more everywhere on that kind of graphics chip.
+func default_graphics() -> int:
+	return recommended_graphics(RenderingServer.get_video_adapter_name(), OS.get_processor_count())
+
+
+static func recommended_graphics(gpu: String, cores: int) -> int:
+	var g := gpu.to_lower()
+	if g.contains("apple"): # M-series: one chip for CPU and GPU, a MacBook Air has no fan
+		return RECOMMENDED_APPLE
+	if g.contains("intel") or g.contains("llvmpipe") or g.contains("swiftshader"):
+		return 0
+	if cores <= 4:
+		return 1
+	return 2
 
 
 func _load_graphics() -> void:
+	gfx = default_graphics() if _autotest_dir == "" else 2 # the autotest always runs on High
 	if _autotest_dir == "":
 		var cfg := ConfigFile.new()
 		if cfg.load(SETTINGS_PATH) == OK:
-			gfx = clampi(int(cfg.get_value("graphics", "quality", 2)), 0, 2)
+			if int(cfg.get_value("graphics", "version", 1)) >= GFX_SETTINGS_VERSION:
+				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, 2)
+			render_scale = clampf(float(cfg.get_value("graphics", "render_scale", 1.0)), RENDER_SCALE_MIN, RENDER_SCALE_MAX)
+	hud.set_render_scale(render_scale)
 	apply_graphics()
+
+
+func _save_graphics() -> void:
+	if _autotest_dir != "":
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("graphics", "quality", gfx)
+	cfg.set_value("graphics", "render_scale", render_scale)
+	cfg.set_value("graphics", "version", GFX_SETTINGS_VERSION)
+	cfg.save(SETTINGS_PATH)
 
 
 func _cycle_graphics() -> void:
 	gfx = (gfx + 2) % 3 # High → Medium → Low → High
 	apply_graphics()
-	if _autotest_dir == "":
-		var cfg := ConfigFile.new()
-		cfg.load(SETTINGS_PATH)
-		cfg.set_value("graphics", "quality", gfx)
-		cfg.save(SETTINGS_PATH)
+	_save_graphics()
 	hud.show_toast("Graphics: %s" % GFX_NAMES[gfx])
+
+
+func set_render_scale(v: float) -> void:
+	render_scale = clampf(v, RENDER_SCALE_MIN, RENDER_SCALE_MAX)
+	_fit_3d_resolution()
+	_save_graphics()
 
 
 func apply_graphics() -> void:
@@ -630,11 +681,12 @@ func apply_graphics() -> void:
 	# samples each frame for the upscaler to average out, and with fewer samples the soft edges
 	# (the long end of a shadow most of all) visibly vibrate. Rendering at a third of the screen
 	# keeps the extra samples cheap.
-	RenderingServer.directional_soft_shadow_filter_set_quality([4, 4, 5][gfx])
+	# (High had the ultra filter, 5: 4-5 ms a frame on a MacBook Air for edges you can't tell apart)
+	RenderingServer.directional_soft_shadow_filter_set_quality(4)
 	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
 	Catalog.lamp_shadows = med
-	for l in find_children("*", "OmniLight3D", true, false):
-		(l as OmniLight3D).shadow_enabled = med and not l.has_meta("no_shadow") # candles: dozens of them, glow only
+	light_budget.max_shadows = LAMP_SHADOWS[gfx] # only the nearest lit lamps cast shadows (candles never)
+	light_budget.update(get_tree(), cam_target, 0.0, true)
 	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
@@ -648,7 +700,7 @@ func _fit_3d_resolution() -> void:
 	# 1440p monitor would otherwise hand the game a 5120x2880 frame that macOS then shrinks back to
 	# 2560x1440: four times the upscaling, post-processing and HUD work for nothing on screen.
 	# Below about a third of the width, fine detail and thin edges break up when upscaled.
-	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
+	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) * render_scale / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
 	if scale > 0.95:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		vp.scaling_3d_scale = 1.0
@@ -1314,6 +1366,7 @@ func _process(delta: float) -> void:
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
 	Interiors.update(player.position, cam_yaw, walls_up, delta, villagers.map(func(v): return v.position), fps.active)
 	_update_lighting()
+	light_budget.update(get_tree(), cam.global_position if fps.active or cinema.active else cam_target, delta)
 	_update_story_staging(delta)
 	_update_needs(delta)
 	_update_gaze()
@@ -3404,8 +3457,10 @@ func _graphics_checks() -> void:
 	for f in flush:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
-	_check("back on High: every effect and all the grass return; settings file untouched",
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return not is_instance_valid(l) or l.shadow_enabled or l.has_meta("no_shadow"))
+	var casting: int = light_budget.casting(get_tree())
+	_check("back on High: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[2]],
+		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[2]
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.has_meta("no_shadow") or not l.shadow_enabled)
 		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
 
 
@@ -5306,6 +5361,12 @@ func _check(label: String, ok: bool) -> void:
 
 
 func _autotest() -> void:
+	if "--only=perf" in OS.get_cmdline_user_args(): # just the frame rate at fixed spots, each graphics level (perf_check.gd)
+		await _wait(1.5)
+		await PerfCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=knit" in OS.get_cmdline_user_args(): # just the knitting game's checks and its pictures
 		await _wait(1.5)
 		await _knit_checks()

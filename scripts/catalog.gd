@@ -201,6 +201,7 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	# real shadows from the fire and lamps (furniture, people), cheap two-sided maps that fade
 	# out with distance so a whole street of lamps doesn't cost much
 	l.shadow_enabled = lamp_shadows
+	l.add_to_group("lamp_shadow", true) # light_budget.gd: only the nearest few keep their shadows (persistent: the world editor's copies too)
 	l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	l.shadow_blur = 1.5
 	l.light_size = 0.12
@@ -342,6 +343,7 @@ static func build(id: String, r: Node3D) -> void:
 		elif id == "bakery_stall": # its lantern hangs off the right front post (art/world_assets/bakery_stall)
 			var l := omni(r, Vector3(1.1, 1.52, 0.38), Color(1.0, 0.7, 0.38), 4.5, 0.1, 1.4)
 			l.shadow_enabled = false # it sits inside the lantern's glass
+			l.set_meta("no_shadow", true)
 			l.set_meta("candle", true)
 		elif id == "fireplace": # the model has the hearth, grate and logs; the flames and firelight are live
 			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
