@@ -17,6 +17,10 @@ const YES := ["Actually, I could use one. What have you got?", "Ooh, go on then.
 const DEAR := ["Oh, that's far too dear for me.", "For that much? No, I don't think so.", "That's more than I'd ever spend on a sweater."]
 const COUNTER := ["Hm. That's a bit steep. Would you take %dc?", "I like it, but not at that. %dc?", "Tell you what: %dc and it's mine."]
 const SOLD := ["Done! I'm putting it on right now.", "Lovely. Worth every coin.", "You made this? It's beautiful. Here you go."]
+## Act 1's first sale (Alex, 2026-11-16): Wren names her range, as a share of Rosa's price, takes
+## any price inside it and counters above it at her top. She never walks away, so it can't stick.
+const GUIDED_LOW := 0.9
+const GUIDED_HIGH := 1.25
 const WALK := ["I think I'll leave it, thanks. Maybe another day.", "No, I've talked myself out of it. Sorry, love."]
 
 var hud: Node # hud.gd, for its labels, buttons and sounds
@@ -25,6 +29,7 @@ var v: Node = null # who she's selling to
 var choice := -1 # the sweater on the table: its index in Game.sweaters
 var price := 0
 var counter := 0 # their counter-offer (0: none on the table)
+var guided := "" # the villager whose sale is Act 1's guided first sale ("" for an ordinary one)
 var force_roll := -1.0 # tests: the roll an offer is judged by (0..1); below 0, a random one
 var rng := RandomNumberGenerator.new()
 
@@ -89,14 +94,41 @@ func fair(rarity: int) -> int:
 
 ## The most they'd happily pay today for a sweater of `rarity`: at it the chance is even.
 func reserve(vid: String, rarity: int) -> int:
+	if guided != "" and vid == guided:
+		return guided_range(rarity).y
 	var m := lerpf(cfg("res_min", 0.95), cfg("res_max", 1.35), _day_roll(vid, "reserve")) + cfg("res_per_heart", 0.04) * Game.hearts(vid)
 	return int(round(fair(rarity) * m))
 
 
 ## How likely they are to say yes to `p` coins for a sweater of `rarity` (what the meter shows).
 func chance(vid: String, rarity: int, p: int) -> float:
+	if guided != "" and vid == guided: # inside her range she's all but certain; above it, less and less
+		var r := guided_range(rarity)
+		if p <= r.y:
+			return lerpf(0.99, 0.9, clampf(inverse_lerp(float(r.x), float(r.y), float(p)), 0.0, 1.0))
+		return 1.8 / (1.0 + exp((float(p) - float(r.y)) / maxf(1.0, 0.05 * fair(rarity))))
 	var spread := maxf(1.0, cfg("spread", 0.12) * fair(rarity))
 	return 1.0 / (1.0 + exp((float(p) - float(reserve(vid, rarity))) / spread))
+
+
+## Wren's range for Act 1's first sale: [low, high] coins, in steps of 5.
+func guided_range(rarity: int) -> Vector2i:
+	var step := maxi(1, int(cfg("step", 5)))
+	return Vector2i(int(round(fair(rarity) * GUIDED_LOW / step)) * step, int(round(fair(rarity) * GUIDED_HIGH / step)) * step)
+
+
+## Whether Act 1 is waiting on her first sale to `vid` (Wren, after the knock at the door).
+static func guided_due(vid: String) -> bool:
+	return vid == "wren" and Game.flag("act1_wren_asked") == true and Game.flag("act1_sold") != true and Game.count("sweater") > 0
+
+
+## Opens the panel for Act 1's guided first sale: Wren says her range out loud.
+func open_guided(villager) -> void:
+	guided = str(villager.vid)
+	open(villager)
+	if visible and choice >= 0:
+		var r := guided_range(int(Game.sweaters[choice]))
+		_say("Anywhere from %dc to %dc and it's a deal. Go on, name your price." % [r.x, r.y])
 
 
 ## The villager's menu rows: ask, haggle again, or why not today.
@@ -106,7 +138,9 @@ func rows_for(villager) -> Array:
 	var vid: String = villager.vid
 	var row: Dictionary
 	var a := asked(vid)
-	if bought_today(vid):
+	if guided_due(vid):
+		row = {"id": "sale_guided", "label": "Name your price for your sweater", "enabled": true}
+	elif bought_today(vid):
 		row = {"id": "noop", "label": "Bought a sweater from you today", "enabled": false}
 	elif a.is_empty():
 		row = {"id": "sale_ask", "label": "Ask if they're looking for a sweater", "enabled": true}
@@ -156,6 +190,15 @@ func offer() -> String:
 		return "no"
 	var vid: String = v.vid
 	var rarity := int(Game.sweaters[choice])
+	if guided != "" and vid == guided: # Act 1: inside her range she buys; above it she offers her top
+		var top := guided_range(rarity).y
+		if price <= top:
+			_sell(price)
+			return "sold"
+		counter = top
+		_say("That's steep for a first sweater! %dc, and not a coin more." % top)
+		_refresh()
+		return "counter"
 	var roll := force_roll if force_roll >= 0.0 else rng.randf()
 	if roll < chance(vid, rarity, price):
 		_sell(price)
@@ -195,9 +238,14 @@ func _sell(p: int) -> void:
 	var who = v
 	var i := choice
 	counter = 0
+	var first := guided != "" and str(who.vid) == guided
+	guided = ""
 	close()
 	if main.sell_sweater_to(who, i, p):
-		main._say(who, str(SOLD[(Game.day + i) % SOLD.size()]))
+		if first: # Act 1 carries on with Wren's scene
+			main._story_event_soon("first_sale")
+		else:
+			main._say(who, str(SOLD[(Game.day + i) % SOLD.size()]))
 
 
 func _say(text: String) -> void:
@@ -277,6 +325,8 @@ func _step_button(d: int) -> Button:
 
 
 func open(villager) -> void:
+	if guided != "" and str(villager.vid) != guided:
+		guided = ""
 	v = villager
 	counter = 0
 	var cs := choices()

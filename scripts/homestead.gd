@@ -829,10 +829,11 @@ func _place_note_and_tin() -> void:
 	_place_seed_tin()
 
 
-## Gran's seed tin on the kitchen counter, on the story farm until she opens it.
+## Gran's seed tin on the kitchen counter, on the story farm until she opens it. It waits for the
+## end of Act 1 (Alex, 2026-11-16): the opening teaches buying seed from Steve with her first coins.
 func _place_seed_tin() -> void:
 	var opened: bool = Game.flag("seed_tin_opened") == true
-	if opened or not story_farm():
+	if opened or not story_farm() or Game.flag("act1_done") != true:
 		if seed_tin and is_instance_valid(seed_tin):
 			seed_tin.queue_free()
 		seed_tin = null

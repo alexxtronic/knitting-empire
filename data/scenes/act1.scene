@@ -10,11 +10,15 @@
 #   Giorgio Heart Bakery, Steve Builder's Delight, Sabrina the Coffee Shop, Barbara the post.
 # act1_note (inside): Gran's note on the coffee table (she's gone to Florida and Nora minds the farm;
 #   Alex, 2026-11-13: Gran is alive), kept in her bag; 100 coins; rent to Gran's tin.
-# act1_yarn (her first yarn from Rosa) → knit in the rocking chair → act1_knit (memory thread #1,
-#   then bleating: two strays) → act1_strays (find them by the pond; meet Rowan; "you'll want a pen")
-#   → act1_wood (her first wood from Steve: the pen builder, F, and gate crafting, G) → act1_pen (a
-#   closed pen with a gate: "pen_built", the dog's cue) → herd them in → act1_flock ("sheep_penned")
-#   → act1_market (Rosa buys the sweater) → act1_porch (the voicemail, Rowan's lantern) → end card.
+# The guided opening (Alex, 2026-11-16, docs/DIRECTION.md): Gran leaves her yarn and needles, not
+#   coins → knit in the rocking chair → act1_knit (memory thread #1, then a knock: Wren, who wants
+#   to buy it; the haggle panel opens in its guided form, scripts/sweater_sale.gd open_guided) →
+#   act1_sold ("first_sale": Wren sends her to Steve for seed and Rosa for yarn) → act1_seeds
+#   ("seeds_bought") → act1_planted ("planted") → act1_yarn ("yarn_bought") → knit again →
+#   act1_knit2 → act1_market (Rosa buys the second; bleating from the farm) → act1_strays (meet
+#   Rowan; "you'll want a pen") → act1_wood (the pen builder, F, and gate crafting, G) → act1_pen
+#   ("pen_built") → herd them in, on foot or playing the dog → act1_flock ("sheep_penned") →
+#   act1_porch (the voicemail, Rowan's lantern) → end card. After that she isn't guided any more.
 
 == act1_arrival
 @trigger start
@@ -190,28 +194,20 @@ Nora (surprised): "For my Nora."
 @farm note
 > "My darling Nora. By the time you read this I'll be in Florida at your great-aunt Dot's, feet up, complaining about the heat. The doctor says my chest can't take another winter in this valley."
 > "So the house is yours to look after while I'm gone. Keep it warm for me. Put a little in the tin each week. Not because the house needs the money. Because a home you pay into is a home you stay in."
-> "There's a hundred coins under the lid to start you off. Go and see Rosa for some good yarn, and make something with your hands. It always helped me. It will help you."
+> "My needles are in the basket by the rocking chair, with the last three skeins off our own sheep. Make something with your hands. It always helped me. It will help you."
 > "Whatever happened out there, love, it stays out there. In here it's just you and the kettle. I'll write: Barbara brings the post at nine. All my love, always. Gran."
 Nora (sad): ...Okay. Okay, Gran.
-> She folds the note into her pocket. Under the lid of the tin: a hundred coins, in neat little paper rolls.
-@toast Gran's note is in your bag. Rent: 20c a week, into her tin on the table.
+> She folds the note into her pocket. In the basket by the rocking chair: Gran's old needles, worn pale where her fingers held them, and three skeins of cream wool.
+@give wool 3
+@toast Gran's note is in your bag, with her needles and 3 wool. Rent: 90c a week, into her tin on the table.
 @set act1_note
-@goal Buy yarn from Rosa at the Yarn Barn | 53.27 -9.6
-@camera player
-
-== act1_yarn
-@trigger event yarn_bought
-@requires act1_note
-@once
-@goal
-Nora (warm): Good yarn. Gran would approve. She'd also say I paid too much.
-@set act1_yarn
 @goal Knit your first sweater in Gran's rocking chair | 2.4 3.6
 @toast Click the rocking chair and choose Knit.
+@camera player
 
 == act1_knit
 @trigger event knit_done
-@requires act1_yarn
+@requires act1_note
 @once
 @goal
 # memory thread #1: the first thing she knits in years brings back the last thing she knit
@@ -227,16 +223,84 @@ Max: Don't make that face. It's sweet. It's just not... me.
 @memory off 1.6
 @journal memory The navy sweater | Four months of evenings. A thin cream band, because cream made him look soft. It ended up in the bin under the coffee grounds and I didn't knit again for six years. Today I did.
 Nora (sad): ...Okay. That one still stings.
-@farm strays
-> Somewhere outside, not far off, something says "baa". Then something else says it louder.
-Nora (surprised): Sheep? Gran's flock went years ago.
 @set act1_knit
-@goal Find where that bleating is coming from | 13.5 -14
+> Three quick raps at the door, like someone with somewhere else to be.
+@place wren 5.4 3.0 270
+@walk wren 3.7 3.3
+@face wren nora
+@face nora wren
+@camera between wren nora 4.5
+Wren (neutral): Sorry, the door was open. Ellie left her spare keys at the office and I— oh.
+Wren (surprised): Wow. That's beautiful. Did you just make that?
+Nora (worried): It's nothing. It's my first one in years, the tension's—
+Wren (happy): Nora. I'd wear that to the council meeting. How much is it?
+Nora (surprised): How much? I hadn't... thought about it.
+Wren (wry): Then think about it now. Name your price, and I'll tell you if you're robbing me.
+@set act1_wren_asked
+@goal Name your price for Wren
+@farm sale wren
 @camera player
+
+== act1_sold
+@trigger event first_sale
+@requires act1_wren_asked
+@once
+@goal
+@face wren nora
+@face nora wren
+@camera between wren nora 4.5
+Wren (happy): Sold. My sister's going to be so jealous.
+Wren (neutral): Now, advice from someone who runs a town on no money: don't sit on it. Steve at Builder's Delight sells seed, and Ellie's beds out front are still dug. Grow your own food and every coin goes further.
+Wren (wry): And Rosa at the Yarn Barn sells wool. You'll want more of it. A lot more, I think.
+Nora (warm): Seeds, then yarn. Thank you, Wren. Really.
+@walk wren 7.6 3.0 nowait
+@wait 1.2
+@home wren off
+@set act1_sold
+@camera player
+@goal Buy turnip seeds from Steve at Builder's Delight | 47.7 -9.4
+
+== act1_seeds
+@trigger event seeds_bought
+@requires act1_sold
+@once
+@goal
+Nora (warm): Turnips. Gran said they were the one thing nobody could kill.
+@set act1_seeds
+@goal Plant your turnips in Gran's beds by the house | 12.8 0.2
+@toast Click one of Gran's beds and choose Plant turnips.
+
+== act1_planted
+@trigger event planted
+@requires act1_seeds
+@once
+@goal
+Nora (happy): There. Supper, in a few hours. Now: yarn.
+@set act1_planted
+@goal Buy more yarn from Rosa at the Yarn Barn | 53.27 -9.6
+
+== act1_yarn
+@trigger event yarn_bought
+@requires act1_planted
+@once
+@goal
+Nora (warm): Good yarn. Gran would approve. She'd also say I paid too much.
+@set act1_yarn
+@goal Knit another sweater in Gran's rocking chair | 2.4 3.6
+
+== act1_knit2
+@trigger event knit_done
+@requires act1_yarn
+@once
+@goal
+Nora (happy): Two. Two sweaters in one day. Wren's wearing the first one around town.
+Nora (neutral): Rosa runs a stall at the market. Maybe she'd take this one.
+@set act1_knit2
+@goal Take your sweater to Rosa at the Maple Grove market | 48.5 -5.6
 
 == act1_strays
 @trigger area strays
-@requires act1_knit
+@requires act1_market
 @once
 @goal
 @home rowan 16.4 -12.2
@@ -315,7 +379,7 @@ Nora (neutral): Right. A pen. Panels, posts and a gate. How hard can it be.
 @goal
 Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing this?
 > Now the hard part. The strays are still out by the pond, and they don't look like they're in any hurry.
-@toast Walk up behind the sheep and they'll move away from you. Steer them in through the gate.
+@toast Walk up behind the sheep and they'll move away from you. Or press Tab and play the dog: they shy from him further off. Steer them in through the gate.
 @goal Herd the two strays into your pen
 
 == act1_flock
@@ -327,14 +391,16 @@ Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing th
 Nora (happy): Both of them. In!
 > They're already eating the grass inside the pen as if they'd never been anywhere else.
 Nora (warm): Welcome home, you two. That makes three of us.
+> Their own wool. No more buying it by the skein.
+@time 18.5
 @set act1_fence_done
-@goal Take your sweater to Rosa at the Maple Grove market | 48.5 -5.6
 @camera player
+@goal Head home. It's getting dark | 9.8 3.0
 
 == act1_market
 # scene 5: market day. Someone values her work, out loud, in public.
 @trigger area market
-@requires act1_fence_done
+@requires act1_knit2
 @once
 @goal
 @place rosa by market_stall 0 -0.95 45
@@ -380,16 +446,18 @@ Rosa (warm): Pay me when the sweaters sell. They will, love.
 > Five skeins. More than anyone's handed her in a long time, and it isn't even charity. It's a bet on her.
 Nora (warm): Thank you. Really.
 @journal note Market day | Rosa shouted across the whole plaza. She gave me wool on credit, like I'm someone worth betting on. Sixty coins for something I made with my own hands.
-@time 18.5
+> Somewhere past the stalls, faint on the wind from the farm road, something says "baa". Then something else says it louder.
+Rosa (wry): Hear that? Strays off the ridge, this time of year. Catch yourself a couple and you'll never have to pay me for wool again.
+@farm strays
 @set act1_market
 @camera player
-@goal Head home. It's getting dark | 9.8 3.0
+@goal Find where that bleating is coming from | 13.5 -14
 
 == act1_porch
 # scene 6: the porch at night. She can open up a little or deflect; both are valid, and it sets
 # the tone of her and Rowan's arc.
 @trigger area porch
-@requires act1_market
+@requires act1_fence_done
 @once
 @goal
 @fade out 0.8

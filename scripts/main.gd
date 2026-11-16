@@ -2714,6 +2714,7 @@ func _finish_plant(p, crop: String) -> void:
 	p.plant(crop)
 	Game.add_need("fitness", 1.5)
 	hud.show_toast("Planted %s. Don't forget to water them!" % Plot.CROPS[crop]["name"].to_lower())
+	_story_event_soon("planted") # Act 1: her first turnips
 
 
 func _finish_water(p) -> void:
@@ -3593,7 +3594,7 @@ func _act1_checks() -> void:
 	story.shown.clear()
 	story.auto = true
 	story.auto_line = 0.3
-	story.auto_choices = [0, 1, 0, 1, 0]
+	story.auto_choices = [0, 1, 1, 0, 0] # the phone, Rosa at the market, Rowan by the pond (twice), the porch
 	homestead.start_story() # Act 1's farm: no pen, no sheep, no money
 	hints_enabled = true
 	_hint_t = 1.5
@@ -3687,9 +3688,9 @@ func _act1_checks() -> void:
 	_check("stepping inside starts Gran's note (%s)" % story.playing, story.playing == "act1_note")
 	await _act1_shot("For my Nora", "24_act1_note.png")
 	await _act1_until_done(60.0)
-	_check("Gran's note: kept in her bag, 100 coins, rent to the tin (coins %d, note %s, rent due day %s)" % [Game.coins, str(Game.has_item("gran_note")), str(Game.flag("rent_due"))],
-		Game.coins == 100 and Game.has_item("gran_note") and Game.flag("rent_on") == true and int(Game.flag("rent_due", 0)) == Game.day + 7
-		and hud.goal_label.text.begins_with("Buy yarn") and homestead.note_prop == null)
+	_check("Gran's note: kept in her bag, no coins but her needles and 3 wool, rent to the tin, a goal to knit (coins %d, wool %d, note %s, rent due day %s, '%s')" % [Game.coins, Game.count("wool"), str(Game.has_item("gran_note")), str(Game.flag("rent_due")), hud.goal_label.text],
+		Game.coins == 0 and Game.count("wool") == 3 and Game.has_item("gran_note") and Game.flag("rent_on") == true and int(Game.flag("rent_due", 0)) == Game.day + 7
+		and hud.goal_label.text.begins_with("Knit your first") and homestead.note_prop == null and homestead.seed_tin == null)
 	var tin_acts: Array = _actions_for(homestead.tin)
 	_check("Gran's tin: nothing owed yet, and the note to read again (%s)" % str(tin_acts.map(func(x): return x["label"])),
 		tin_acts.size() == 2 and not tin_acts[0]["enabled"] and tin_acts[1]["id"] == "read_note")
@@ -3698,21 +3699,9 @@ func _act1_checks() -> void:
 	await _shot("24_act1_note_paper.png")
 	_check("the note opens on paper", homestead.ui.is_open())
 	homestead.ui.close_all()
-	# her first yarn, from Rosa at the Yarn Barn
 	var rosa := _villager("rosa")
+	var steve := _villager("steve")
 	var wool_price := _yarn_price(Game.WOOL_PACK_PRICE)
-	t0 = Time.get_ticks_msec()
-	_do_action(rosa, "buy_wool")
-	t = 0.0
-	while story.playing != "act1_yarn" and t < 60.0:
-		await _wait(0.1)
-		t += 0.1
-	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
-	_check("buying her first yarn from Rosa starts the next beat (%s after %.1fs)" % [story.playing, t], story.playing == "act1_yarn")
-	await _act1_until_done(30.0)
-	Game.hour = 9.0 # the test walks fast, but not that fast: keep the act on one day, as a player would sleep between
-	_check("she has the yarn (coins %d, wool %d) and a goal to knit ('%s')" % [Game.coins, Game.count("wool"), hud.goal_label.text],
-		Game.coins == 100 - wool_price and Game.count("wool") >= 3 and hud.goal_label.text.begins_with("Knit"))
 	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")[0]
 	t0 = Time.get_ticks_msec()
 	_do_action(chair, "knit")
@@ -3727,9 +3716,111 @@ func _act1_checks() -> void:
 	await _act1_shot("Babe.", "27_act1_memory.png")
 	_check("the first knit opens memory thread #1 in the faded memory look", hud.memory_on())
 	_check("no toast talks over the memory (%s)" % hud.toast_panel.visible, not hud.toast_panel.visible or hud.toast_panel.modulate.a < 0.05)
+	await _act1_shot("How much is it?", "27_act1_wren.png")
 	await _act1_until_done(40.0)
-	_check("the memory is in her journal, and two strays are bleating out by the pond (%d strays, goal '%s')" % [homestead.strays.size(), hud.goal_label.text],
-		Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory" and homestead.strays.size() == 2 and hud.goal_label.text.begins_with("Find"))
+	await _wait(0.5)
+	_check("the memory is in her journal; then Wren knocks, wants the sweater, and the price panel opens in its guided form (journal %s, panel %s, guided '%s', goal '%s')" % [Game.journal().size() == journal0 + 1, sale.visible, sale.guided, hud.goal_label.text],
+		Game.journal().size() == journal0 + 1 and Game.journal()[-1]["kind"] == "memory" and homestead.strays.is_empty()
+		and sale.visible and sale.guided == "wren" and hud.goal_label.text.begins_with("Name your price"))
+	# the first sale: Wren says her range; inside it she's all but sure to buy; above it she offers her top
+	var rar0 := int(Game.sweaters[sale.choice]) if sale.choice >= 0 else 0
+	var wr: Vector2i = sale.guided_range(rar0)
+	var said_range: bool = sale._said.text.contains("%dc to %dc" % [wr.x, wr.y])
+	sale.set_price(wr.x)
+	var c_low: float = sale.chance("wren", rar0, wr.x)
+	sale.set_price(wr.y + 30)
+	var c_dear: float = sale.chance("wren", rar0, wr.y + 30)
+	await _wait(0.3)
+	await _shot("27_act1_wren_sale.png")
+	var dear_said: String = sale.offer()
+	_check("Wren names her range out loud (%s: %dc to %dc), the meter is all but sure inside it (%.0f%%) and falls above it (%.0f%%); too dear, she offers her top (%s, %dc)" % [said_range, wr.x, wr.y, c_low * 100.0, c_dear * 100.0, dear_said, sale.counter],
+		said_range and c_low > 0.95 and c_dear < 0.5 and dear_said == "counter" and sale.counter == wr.y and sale.visible)
+	var first_price: int = wr.x + int((wr.y - wr.x) / 10) * 5
+	sale.set_price(first_price)
+	var sold_said: String = sale.offer()
+	t = 0.0
+	while story.playing != "act1_sold" and t < 5.0:
+		await _wait(0.1)
+		t += 0.1
+	_check("a price inside her range sells it (%s for %dc, coins %d) and Wren's scene carries on (%s)" % [sold_said, first_price, Game.coins, story.playing],
+		sold_said == "sold" and Game.coins == first_price and story.playing == "act1_sold" and not sale.visible)
+	await _act1_until_done(40.0)
+	_check("Wren sends her for seed and yarn ('%s'), and the villagers' free seeds wait for the end of Act 1 (%s)" % [hud.goal_label.text, Story.find_trigger("talk", "barbara")],
+		Game.flag("act1_sold") == true and hud.goal_label.text.begins_with("Buy turnip seeds") and Story.find_trigger("talk", "barbara") != "seeds_barbara")
+	# seed from Steve
+	var coins_s := Game.coins
+	t0 = Time.get_ticks_msec()
+	_do_action(steve, "buy_seeds_turnip")
+	t = 0.0
+	while story.playing != "act1_seeds" and t < 60.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	await _act1_until_done(30.0)
+	hud.hide_dialogue()
+	var seed_pack: Array = _store().get("seeds", {}).get("turnip", [5, 25])
+	_check("she buys turnip seed from Steve with Wren's coins (coins %d→%d, seeds %d) and goes to plant it ('%s')" % [coins_s, Game.coins, Game.count("turnip_seeds"), hud.goal_label.text],
+		Game.coins == coins_s - int(seed_pack[1]) and Game.count("turnip_seeds") == int(seed_pack[0]) and hud.goal_label.text.begins_with("Plant"))
+	# her first turnips, in one of Gran's beds
+	var bed0 = null
+	for p in plots:
+		if p.crop == "":
+			bed0 = p
+			break
+	t0 = Time.get_ticks_msec()
+	_do_action(bed0, "plant_turnip")
+	t = 0.0
+	while story.playing != "act1_planted" and t < 60.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	await _act1_until_done(30.0)
+	_check("planting the turnips (%s) sends her to Rosa for more yarn ('%s')" % [bed0.crop if bed0 else "no bed", hud.goal_label.text],
+		bed0 != null and bed0.crop == "turnip" and hud.goal_label.text.begins_with("Buy more yarn"))
+	# more yarn from Rosa at the Yarn Barn
+	var coins_y := Game.coins
+	t0 = Time.get_ticks_msec()
+	_do_action(rosa, "buy_wool")
+	t = 0.0
+	while story.playing != "act1_yarn" and t < 60.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("buying yarn from Rosa starts the next beat (%s after %.1fs)" % [story.playing, t], story.playing == "act1_yarn")
+	await _act1_until_done(30.0)
+	Game.hour = 9.0 # the test walks fast, but not that fast: keep the act on one day, as a player would sleep between
+	_check("she has the yarn (coins %d→%d, wool %d) and a goal to knit again ('%s')" % [coins_y, Game.coins, Game.count("wool"), hud.goal_label.text],
+		Game.coins == coins_y - wool_price and Game.count("wool") >= 3 and hud.goal_label.text.begins_with("Knit another"))
+	t0 = Time.get_ticks_msec()
+	_do_action(chair, "knit")
+	t = 0.0
+	while story.playing != "act1_knit2" and t < 60.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	await _act1_until_done(30.0)
+	_check("the second sweater sends her to Rosa's stall (%s, sweaters %d, '%s')" % [Game.flag("act1_knit2"), Game.count("sweater"), hud.goal_label.text],
+		Game.flag("act1_knit2") == true and Game.count("sweater") >= 1 and hud.goal_label.text.contains("market"))
+	# market day: walk into Maple Grove to Rosa's stall
+	var coins0 := Game.coins
+	var sweaters0 := Game.count("sweater")
+	var wool1 := Game.count("wool")
+	var rosa0 := Game.stat("rosa", "trust")
+	t0 = Time.get_ticks_msec()
+	story.pause_on = "Hold ON" # armed before she gets there: the scene's first line comes quickly
+	player.walk(_find_path(player.position, Vector3(48.5, 0, -5.6)))
+	t = 0.0
+	while story.playing != "act1_market" and t < 45.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("walking to Rosa's stall starts market day (%s after %.1fs)" % [story.playing, t], story.playing == "act1_market")
+	await _act1_shot("Hold ON", "28_act1_market_rosa.png")
+	await _act1_shot("standing ovation", "29_act1_market_steve.png")
+	await _act1_until_done(60.0)
+	_check("Rosa bought the second sweater (coins %d→%d, sweaters %d→%d) and gave wool on credit (wool %d→%d, trust %d→%d), and the strays are bleating out by the pond (%d, '%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), rosa0, Game.stat("rosa", "trust"), homestead.strays.size(), hud.goal_label.text],
+		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("rosa_credit") == true
+		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and homestead.strays.size() == 2 and hud.goal_label.text.begins_with("Find"))
 	_check("the dog is with her from the start (for now), but the strays don't shy from him before there's a pen (here %s, herding %s)" % [dog != null and dog.visible, homestead.herders.has(dog)],
 		dog != null and dog.visible and not homestead.herders.has(dog))
 	# the hunt: walk out to the strays
@@ -3748,7 +3839,6 @@ func _act1_checks() -> void:
 	_check("the strays: met Rowan, opened up (trust %d→%d), off to Steve for wood ('%s')" % [trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
 		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Get wood"))
 	# wood from Steve at Builder's Delight
-	var steve := _villager("steve")
 	var acts: Array = _villager_actions(steve).map(func(x): return x["id"])
 	_check("Steve sells wood (%s)" % str(acts), "buy_wood" in acts)
 	var coins1 := Game.coins
@@ -3849,29 +3939,9 @@ func _act1_checks() -> void:
 		story.playing == "act1_flock" and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
 	await _act1_until_done(30.0)
 	cam_target = cam0
-	_check("off to market ('%s')" % hud.goal_label.text, Game.flag("act1_fence_done") == true and hud.goal_label.text.contains("market"))
+	_check("their own wool now, and home by dusk ('%s', %.1fh)" % [hud.goal_label.text, Game.hour], Game.flag("act1_fence_done") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
 	var buy_ok: bool = _villager_actions(rosa).filter(func(x): return x["id"] == "buy_sheep").size() == 1
 	_check("Rosa sells sheep now there's a pen", buy_ok)
-	# market day: walk into Maple Grove to Rosa's stall
-	var coins0 := Game.coins
-	var sweaters0 := Game.count("sweater")
-	var wool1 := Game.count("wool")
-	var rosa0 := Game.stat("rosa", "trust")
-	t0 = Time.get_ticks_msec()
-	story.pause_on = "Hold ON" # armed before she gets there: the scene's first line comes quickly
-	player.walk(_find_path(player.position, Vector3(48.5, 0, -5.6)))
-	t = 0.0
-	while story.playing != "act1_market" and t < 45.0:
-		await _wait(0.1)
-		t += 0.1
-	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
-	_check("walking to Rosa's stall starts market day (%s after %.1fs)" % [story.playing, t], story.playing == "act1_market")
-	await _act1_shot("Hold ON", "28_act1_market_rosa.png")
-	await _act1_shot("standing ovation", "29_act1_market_steve.png")
-	await _act1_until_done(60.0)
-	_check("Rosa bought the sweater (coins %d→%d, sweaters %d→%d) and gave wool on credit (wool %d→%d, trust %d→%d), home by dusk ('%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), rosa0, Game.stat("rosa", "trust"), hud.goal_label.text],
-		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("rosa_credit") == true
-		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
 	# the porch at night
 	day0 = Game.day
 	t0 = Time.get_ticks_msec()
@@ -8831,6 +8901,8 @@ func _early_checks() -> void:
 	Game.inv.erase("wood")
 	# Gran's seed tin on the kitchen counter, on the story farm
 	var was_story: bool = Game.flag("story_farm") == true
+	var was_done: bool = Game.flag("act1_done") == true # the tin and the villagers' seeds wait for the end of Act 1
+	Game.set_flag("act1_done")
 	Game.flags.erase("seed_tin_opened")
 	Game.set_flag("story_farm")
 	homestead._place_seed_tin()
@@ -8877,6 +8949,8 @@ func _early_checks() -> void:
 		playing == "seeds_lars" and bs1 == bs0 + 4 and again != "seeds_lars" and Game.count("turnip_seeds") == bs1)
 	if not toured:
 		Game.flags.erase("act1_toured")
+	if not was_done:
+		Game.flags.erase("act1_done")
 	# planting takes a seed
 	var bed = null
 	for p in plots:
@@ -10554,6 +10628,7 @@ func _buy_from_store(v, id: String) -> void:
 		Game.add_item(crop + "_seeds", int(pack[0]))
 		_say(v, "%d %s seeds. Plant them in a dug bed." % [int(pack[0]), crop.capitalize()])
 		hud.show_toast("+%d %s seeds" % [int(pack[0]), crop])
+		_story_event_soon("seeds_bought") # Act 1: Wren sent her for seed
 
 
 func _villager_actions(v) -> Array:
@@ -10672,6 +10747,9 @@ func _villager_action(v, id: String) -> void:
 		return
 	if id == "sale_ask" or id == "sale_haggle":
 		sale.ask(v)
+		return
+	if id == "sale_guided": # Act 1: Wren's first sale, if she shut the panel before it was done
+		sale.open_guided(v)
 		return
 	if id.begins_with("buy_tool_") or id.begins_with("buy_seeds_"):
 		_buy_from_store(v, id)

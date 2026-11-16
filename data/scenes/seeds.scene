@@ -4,7 +4,7 @@
 
 == seeds_giorgio
 @trigger talk giorgio
-@requires act1_toured
+@requires act1_done
 @once
 @camera giorgio 6
 Giorgio (happy): Ah, Ellie's girl! Wait, wait. I keep these for her every autumn.
@@ -16,7 +16,7 @@ Nora (happy): Deal.
 
 == seeds_barbara
 @trigger talk barbara
-@requires act1_toured
+@requires act1_done
 @once
 @camera barbara 6
 Barbara (neutral): Your gran's turnips were the best on my round. I've some seed spare. Don't tell the post office.
@@ -27,7 +27,7 @@ Barbara (wry): Plant them in the morning, they're ready by supper. Quicker than 
 
 == seeds_lars
 @trigger talk lars
-@requires act1_toured
+@requires act1_done
 @once
 @camera lars 6
 Lars (neutral): You're growing things up at Ellie's? Good. Ground's been idle too long.

@@ -405,8 +405,10 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 			if main.audio:
 				main.audio.play_tune(str(a[0]) if not a.is_empty() else "off", 0.1 if auto and not cinematic else 2.5)
 		"farm":
-			# Act 1's farm (scripts/homestead.gd): @farm note (Gran's note, her 100 coins, rent starts),
-			# @farm strays (two stray sheep graze past the pond)
+			# Act 1's farm (scripts/homestead.gd): @farm note (Gran's note, rent starts; "gran_coins" is 0
+			# since 2026-11-16: she leaves yarn and needles instead), @farm strays (two stray sheep graze
+			# past the pond), @farm sale wren (the guided first sale: scripts/sweater_sale.gd open_guided,
+			# opened once the scene has ended)
 			var home = main.homestead
 			match str(a[0]) if not a.is_empty() else "":
 				"note":
@@ -417,6 +419,10 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 					home.take_note()
 				"strays":
 					home.spawn_strays()
+				"sale":
+					var who = main._villager(str(a[1]) if a.size() > 1 else "wren")
+					if who != null:
+						scene_finished.connect(func(_id): main.sale.open_guided(who), CONNECT_ONE_SHOT)
 		"home":
 			if a.size() >= 2:
 				if str(a[1]) == "off":
