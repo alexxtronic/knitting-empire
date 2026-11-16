@@ -43,6 +43,7 @@ The game opens on a title screen (Continue, New Game, Settings, Quit) over the f
     - **Rowan**: the shepherd (below)
     - **Lars**: the farmer next door, very chill and easygoing, and a possible romance. He lives in the loft of the big barn by Nora's farm and rents her its stalls for her sheep: 60c a month from the day her first sheep are penned, paid to him in person (`data/economy.json` "story" `barn_rent`, `scripts/homestead.gd`). He wears his own model, rigged on Mixamo
     - **Rebecca**: the police officer, steady and kind. She walks the square. After Nora's ex Max has turned up at the farm and been sent away, Nora can report him to her: Rebecca is waiting the next time he comes, and he is never seen again. It's a choice; left alone, he comes back once (`data/scenes/max.scene`). Her own model isn't in yet, so for now she is plain shapes in uniform colours
+  - Over each head, and at the top of their menu, a tag reads what they do and then their name: Farmer Lars, Mayor Wren, Officer Bekka (`title` and `nick` in `data/villagers.json`; the titles are drafts)
   - The nine new faces (Rosa's and Lars's since 2026-11-13, Rebecca's since 2026-11-15) wear their Tripo models (`data/characters.json`), with real eyes that blink, look about and take the story's moods (Alex approved them on 2026-11-13)
   - daily market prices
   - a wool shop where you can also buy sheep

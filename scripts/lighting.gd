@@ -27,7 +27,8 @@ const BAKED := [
 	"dining_table", "fence_post", "fence_rails", "fence_section", "filing_cabinet", "fireplace",
 	"flour_sacks", "gran_bed", "hay_bale", "kitchen", "lamp", "lamp_post", "mailbox", "market_stall",
 	"milk_churn", "office_desk", "plaza_fountain", "rocking_chair", "rug_red", "scarecrow",
-	"shop_counter", "sofa", "spinning_wheel", "sweater_rack", "trash_can", "wardrobe", "yarn_shelf"
+	"shop_counter", "sofa", "spinning_wheel", "sweater_rack", "trash_can", "wardrobe", "yarn_shelf",
+	"sunflowers", "rose_bush", "mallow", "hollyhocks", "hydrangea"
 ]
 
 ## The autotest's picture of the light (48_light_*.png): the north edge of the woods behind the farm.

@@ -16,6 +16,13 @@ uniform vec3 pusher = vec3(0.0, -100.0, 0.0);
 uniform float push_radius = 0.75;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
 uniform float patch_strength : hint_range(0.0, 1.0) = 1.0; // the light and dark patches (grass_patches.gdshaderinc)
+// the ground's own grass colours (ground.gdshader): a blade's root takes the turf's colour under it, so
+// the blades read as the turf growing up rather than dark sticks laid on it
+uniform vec3 lush : source_color = vec3(0.24, 0.38, 0.13);
+uniform vec3 dry : source_color = vec3(0.44, 0.47, 0.21);
+// blades sink into the turf over the last few metres before the chunks stop drawing (grass.gd's range),
+// so the edge of the grass doesn't pop
+uniform float fade_end = 46.0;
 
 #include "res://shaders/grass_patches.gdshaderinc"
 
@@ -30,6 +37,8 @@ void vertex() {
 	rnd = INSTANCE_CUSTOM.g;
 	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	gpatch = grass_patches(root.xz);
+	float far = length(root - INV_VIEW_MATRIX[3].xyz);
+	height *= 1.0 - smoothstep(fade_end - 14.0, fade_end - 2.0, far);
 	vec3 v = VERTEX;
 	v.y *= height;
 	v.xz *= 0.9 + height * 0.6;
@@ -54,19 +63,28 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 tip = mix(tip_lush, tip_dry, clamp(season_dry + (rnd - 0.5) * 0.5, 0.0, 1.0));
-	vec3 col = mix(root_col, tip, smoothstep(0.0, 1.0, h));
-	col *= 0.88 + rnd * 0.22;
+	float dryness = clamp(season_dry + (rnd - 0.5) * 0.5, 0.0, 1.0);
+	vec3 tip = mix(tip_lush, tip_dry, dryness);
+	// the root: the turf's colour where it stands, a shade deeper (the ground's own mix of lush and dry)
+	vec3 turf = mix(lush, dry, clamp(season_dry * 0.55 + 0.1, 0.0, 1.0)) * 0.82;
+	vec3 base = mix(root_col, turf, 0.7);
+	vec3 col = mix(base, tip, smoothstep(0.0, 0.85, h));
+	// each blade its own hue: some warmer and yellower, some cooler and bluer
+	float hue = fract(rnd * 7.31) - 0.5;
+	col *= vec3(1.0 + hue * 0.16, 1.0 + hue * 0.04, 1.0 - hue * 0.2);
+	col *= 0.9 + rnd * 0.2;
 	col = grass_patch_tint(col, gpatch, patch_strength);
 	col *= 1.0 + tint * 0.08; // gusts flash the blades a touch lighter
 	col *= 1.0 - wet * 0.2;
 	ALBEDO = col;
 	ROUGHNESS = 0.55 - wet * 0.2;
 	SPECULAR = 0.3;
-	BACKLIGHT = vec3(0.14, 0.2, 0.05) * h;
-	AO = mix(0.35, 1.0, h);
+	// sunlight through a thin blade: warm yellow-green glow toward the tip when the sun is behind it
+	BACKLIGHT = vec3(0.3, 0.38, 0.1) * h * h;
+	AO = mix(0.55, 1.0, h);
 	AO_LIGHT_AFFECT = 0.4;
-	// soften the flat-card look: lean the normal toward the sky
+	// soften the flat-card look: lean the normal toward the sky, so a blade is lit like the turf it
+	// grows from and doesn't go dark when it's seen edge-on or from behind
 	vec3 up = (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
-	NORMAL = normalize(mix(FRONT_FACING ? NORMAL : -NORMAL, up, 0.55));
+	NORMAL = normalize(mix(FRONT_FACING ? NORMAL : -NORMAL, up, 0.72));
 }

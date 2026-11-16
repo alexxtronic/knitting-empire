@@ -89,6 +89,15 @@ void fragment() {
 	g *= 0.88 + 0.22 * speck;
 	g = mix(g, g * vec3(1.1, 1.05, 0.7), smoothstep(0.82, 0.95, fine) * 0.4); // the odd yellow clover
 	g = grass_patch_tint(g, grass_patches(p), patch_strength); // the blades' light and dark patches
+	float px_m0 = fwidth(p.x) + fwidth(p.y); // metres of ground one screen pixel covers
+	// close up, a fine thatch of blade streaks in the turf between the blades (two directions, so it
+	// doesn't read as stripes); it fades out before it could shimmer in the distance
+	float thatch_k = 1.0 - smoothstep(0.012, 0.04, px_m0);
+	if (thatch_k > 0.0) {
+		vec2 q1 = vec2(p.x * 0.8 + p.y * 0.6, -p.x * 0.6 + p.y * 0.8);
+		float th = vnoise(q1 * vec2(42.0, 9.0)) * 0.55 + vnoise(vec2(q1.y, -q1.x) * vec2(37.0, 8.0) + 3.7) * 0.45;
+		g *= 1.0 + (th - 0.5) * 0.34 * thatch_k;
+	}
 	// earth: packed soil with pebbles and darker damp spots
 	vec3 e = earth * (0.82 + 0.3 * mid) * (0.9 + 0.2 * speck);
 	e = mix(e, vec3(0.55, 0.5, 0.44), smoothstep(0.9, 0.96, vnoise(p * 14.0)) * 0.3);
@@ -120,9 +129,13 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = mix(0.92, 0.82, m) * (1.0 - wet * 0.55);
 	SPECULAR = 0.3 + wet * 0.25;
-	// a little surface relief so light catches the clumps
-	float hx = fbm((p + vec2(0.05, 0.0)) * 0.9) - fbm((p - vec2(0.05, 0.0)) * 0.9);
-	float hz = fbm((p + vec2(0.0, 0.05)) * 0.9) - fbm((p - vec2(0.0, 0.05)) * 0.9);
+	// a little surface relief so light catches the clumps: two octaves are all that shows at this
+	// scale (it was four five-octave fbm calls a pixel; this is a fifth of the work)
+	vec2 rp = p * 0.9;
+	float hx = (vnoise(rp + vec2(0.045, 0.0)) - vnoise(rp - vec2(0.045, 0.0))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.193, 7.7)) - vnoise(rp * 2.07 + vec2(13.007, 7.7)));
+	float hz = (vnoise(rp + vec2(0.0, 0.045)) - vnoise(rp - vec2(0.0, 0.045))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.1, 7.793)) - vnoise(rp * 2.07 + vec2(13.1, 7.607)));
+	hx *= 0.5;
+	hz *= 0.5;
 	vec3 n_world = normalize(vec3(-hx * 1.6, 1.0, -hz * 1.6));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 	AO = mix(0.85, 1.0, mid);

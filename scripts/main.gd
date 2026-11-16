@@ -35,10 +35,10 @@ const Mail = preload("res://scripts/mail.gd")
 const Jobs = preload("res://scripts/jobs.gd")
 const Forage = preload("res://scripts/forage.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
-const Keys = preload("res://scripts/keybinds.gd")
 const WardrobePanel = preload("res://scripts/wardrobe_panel.gd")
 const WardrobeView = preload("res://scripts/wardrobe_view.gd")
 const SweaterSale = preload("res://scripts/sweater_sale.gd")
+const Keys = preload("res://scripts/keybinds.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
@@ -266,6 +266,8 @@ func _ready() -> void:
 		_add_sheep()
 	for v in _villager_defs():
 		var vg = Villager.new()
+		vg.job = str(v.get("title", "")) # "Farmer Lars" over his head: set before setup() makes the tag
+		vg.nick = str(v.get("nick", ""))
 		vg.setup(v["id"], v["name"], v["role"], v["loves"], v["pos"], v["look"])
 		vg.roam = v["roam"]
 		vg.likes = v.get("likes", [])
@@ -1747,8 +1749,9 @@ func dog_here() -> bool:
 	return DOG_FROM_START or dog_herds()
 
 
-## Whether the strays shy from him too. On the story farm only once the pen is built, so he
-## doesn't scatter them before there's a pen to drive them into.
+## Whether he can herd yet. On the story farm only once the pen is built, so he doesn't scatter
+## the strays before there's a pen to drive them into. Even then only while the player plays him
+## (_update_dog): following Nora he moves nothing (Alex, 2026-11-16).
 func dog_herds() -> bool:
 	return Game.flag("story_farm") != true or Game.flag("pen_done") == true
 
@@ -1798,7 +1801,7 @@ func _update_dog() -> void:
 		dog.controlled = false
 		return
 	if homestead:
-		var herds := dog_herds()
+		var herds := dog_herds() and dog.controlled
 		if herds and not homestead.herders.has(dog):
 			homestead.herders.append(dog)
 		elif not herds:
@@ -3212,8 +3215,8 @@ func _update_new_talk(delta: float) -> void:
 			var k := 0.5 + 0.5 * sin(t * 3.0 + v.position.x)
 			g.modulate.a = 0.88 + 0.12 * k
 			g.scale = Vector3.ONE * (0.92 + 0.14 * k)
-			# just over their head, and up clear of the name tag while that shows
-			var clear: float = 0.55 * v.tag.modulate.a if v.tag and v.tag.visible else 0.0
+			# just over their head, and up clear of the name tag (one line: "Farmer Lars") while that shows
+			var clear: float = 0.38 * v.tag.modulate.a if v.tag and v.tag.visible else 0.0
 			g.position.y = float(g.get_meta("y")) + clear + 0.06 * sin(t * 2.0)
 
 
@@ -3759,32 +3762,27 @@ func _act1_checks() -> void:
 	cam_dist = 9.0
 	await _wait(0.8)
 	await _shot("26_act1_pen.png")
-	_check("with the pen built, the dog herds too (%s)" % homestead.herders.has(dog), homestead.herders.has(dog))
-	# herding: the strays move off from her. The dog herds from the moment the pen closes, so now
-	# and then he has driven them both in on his own during the waits above: then there's no stray
-	# left to try, and that's the game working (it had crashed here on strays[0])
-	var herded_early: bool = homestead.strays.is_empty()
-	if not herded_early:
-		var s0 = homestead.strays[0]
-		s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
-		player.walk([])
-		player.position = s0.position + Vector3(-1.4, 0, 0)
-		var d0: float = s0.position.distance_to(player.position)
-		await _wait(1.2)
-		var d1: float = s0.position.distance_to(player.position)
-		_check("a stray shies away from her (%.1f → %.1f m)" % [d0, d1], d1 > d0 + 0.4)
-	else:
-		print("      the dog herded both strays in by himself before the shy check")
+	_check("with the pen built the dog can herd, but only while she plays him: following her he leaves the strays be (can %s, herding now %s, strays %d)" % [dog_herds(), homestead.herders.has(dog), homestead.strays.size()],
+		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() == 2)
+	# herding: the strays move off from her
+	var s0 = homestead.strays[0]
+	s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
+	player.walk([])
+	player.position = s0.position + Vector3(-1.4, 0, 0)
+	var d0: float = s0.position.distance_to(player.position)
+	await _wait(1.2)
+	var d1: float = s0.position.distance_to(player.position)
+	_check("a stray shies away from her (%.1f → %.1f m)" % [d0, d1], d1 > d0 + 0.4)
 	_check("a fence turns her aside (%s)" % str(homestead._crosses_fence(Vector3(o.x + 1.5, 0, o.y - 0.3), Vector3(o.x + 1.5, 0, o.y + 0.3))), homestead._crosses_fence(Vector3(o.x + 1.5, 0, o.y - 0.3), Vector3(o.x + 1.5, 0, o.y + 0.3)))
 	player.position = Vector3(o.x - 4.0, 0, o.y + 1.5)
 	for s in homestead.strays.duplicate(): # herded through the gate
 		s.position = Vector3(o.x + 1.5, 0, o.y + 1.5)
 	t = 0.0
-	while story.playing != "act1_flock" and t < 5.0 and not herded_early:
+	while story.playing != "act1_flock" and t < 5.0:
 		await _wait(0.1)
 		t += 0.1
-	_check("both strays in the pen: 'sheep_penned' (%s), two sheep in her flock (%d)" % [story.playing if not herded_early else "played already: the dog herded them", Game.sheep_count],
-		(story.playing == "act1_flock" or herded_early) and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
+	_check("both strays in the pen: 'sheep_penned' (%s), two sheep in her flock (%d)" % [story.playing, Game.sheep_count],
+		story.playing == "act1_flock" and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
 	await _act1_until_done(30.0)
 	cam_target = cam0
 	_check("off to market ('%s')" % hud.goal_label.text, Game.flag("act1_fence_done") == true and hud.goal_label.text.contains("market"))
@@ -4388,6 +4386,12 @@ func _cast_checks() -> void:
 		if v != null and v.body != null and v.body.face != null:
 			bodies.append(id)
 	_check("the nine new faces wear their own models, with real eyes (%s)" % ", ".join(bodies), bodies.size() == 9)
+	var tags := {} # what they do, then their name (Alex, 2026-11-15: "Farmer Lars", not "Lars, Farmer")
+	for v in villagers:
+		tags[str(v.vid)] = str(v.tag.text) if v.tag != null else ""
+	_check("every name tag reads what they do, then their name, on one line (%s)" % ", ".join(tags.values()),
+		str(tags.get("lars", "")) == "Farmer Lars" and str(tags.get("rebecca", "")) == "Officer Bekka" and str(tags.get("wren", "")) == "Mayor Wren"
+		and villagers.all(func(v): return v.job != "" and v.tag != null and v.tag.text == v.display_name() and not v.tag.text.contains("\n") and v.tag.text.begins_with(v.job + " ")))
 	var no_portrait: Array = [] # tools/render_portraits.py makes them; a story line shows them beside the text
 	for c in Data.load_json("characters").get("characters", []):
 		for mood in ["neutral", "happy", "warm", "sad", "wry", "surprised", "worried", "angry"]:
@@ -4440,6 +4444,19 @@ func _cast_checks() -> void:
 		player.face_point(officer.position)
 		await _cast_frame(officer.position, 0.0, 8.0)
 		await _shot("51_cast_rebecca.png")
+		var visit0 = Game.flags.get("max_visit_done") # as if Max had come and gone: she has something to say
+		Game.set_flag("max_visit_done", true)
+		await _wait(1.2)
+		var star := officer.get_node_or_null("NewTalk") as Sprite3D
+		var over: float = star.position.y - officer.tag.position.y if star != null and officer.tag != null else -1.0
+		await _shot("51_cast_rebecca_star.png")
+		_check("with something to say she wears the gold star, just above her name tag (star %s, tag shown %.1f, %.2f m over it)" % [str(star != null and star.visible), officer.tag.modulate.a if officer.tag != null else 0.0, over],
+			star != null and star.visible and officer.tag != null and officer.tag.modulate.a > 0.9 and over > 0.4 and over < 0.7)
+		if visit0 == null:
+			Game.flags.erase("max_visit_done")
+		else:
+			Game.flags["max_visit_done"] = visit0
+		await _wait(0.6)
 	var rent0 := {}
 	for k in ["barn_rent_due", "barn_rent_owed"]:
 		rent0[k] = Game.flags.get(k)
@@ -5297,6 +5314,12 @@ func _autotest() -> void:
 	if "--only=bench" in OS.get_cmdline_user_args(): # just the bench checks and their two pictures, in seconds
 		await _wait(1.5)
 		await _bench_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=flowers" in OS.get_cmdline_user_args(): # just the garden's Tripo flowers and the grass round them
+		await _wait(1.5)
+		await _flower_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -6574,6 +6597,53 @@ func _bench_checks() -> void:
 	_set_cam_lock(true)
 
 
+const FLOWER_IDS := ["sunflowers", "rose_bush", "mallow", "hollyhocks", "hydrangea"]
+
+
+## The garden's big flowers (art/world_assets/flowers: one Tripo lineup cut into five models), set out
+## in a row on the grass east of the house, and the grass blades round them close up.
+func _flower_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 10.5
+	var at := Vector3(14.0, 0, 6.0)
+	var set_out: Array = []
+	for i in FLOWER_IDS.size():
+		var id: String = FLOWER_IDS[i]
+		var f := Furniture.new()
+		add_child(f)
+		f.setup(id, 0)
+		f.position = at + Vector3(i * 1.3 - 2.6, 0, 0)
+		set_out.append(f)
+		var meshes: Array = f.find_children("*", "MeshInstance3D", true, false)
+		var tall := 0.0
+		for m in meshes:
+			var mi: MeshInstance3D = m
+			tall = maxf(tall, (mi.global_transform * mi.get_aabb()).end.y)
+		var want: float = float(Catalog.ITEMS[id].get("height", 1.0))
+		_check("flowers: %s is its Tripo model (%d meshes, %.2f m tall, catalogue says %.2f)" % [id, meshes.size(), tall, want],
+			Catalog.ITEMS[id].has("model") and meshes.size() >= 1 and absf(tall - want) < 0.15)
+	_set_cam_lock(false)
+	player.position = at + Vector3(0, 0, 2.6)
+	cam_target = at + Vector3(0, 0.6, 0)
+	cam_dist = 8.0
+	await _wait(2.0)
+	await _shot("62_flowers.png")
+	cam_target = at + Vector3(-2.6, 0.9, 0)
+	cam_dist = 3.2
+	await _wait(1.6)
+	await _shot("62_flowers_sunflowers.png")
+	cam_target = at + Vector3(0, 0.0, 3.5)
+	cam_dist = 8.0
+	await _wait(1.6)
+	await _shot("62_grass.png")
+	var blades: int = grass.drawn_blades()
+	_check("flowers: the grass still draws the same blades (%d)" % blades, blades > 10000)
+	for f in set_out:
+		f.queue_free()
+	_set_cam_lock(true)
+
+
 const GOD_TEST_LAYOUT := "user://autotest_layout.json"
 
 
@@ -7249,12 +7319,14 @@ func _dog_checks() -> void:
 	dog.position = player.position + Vector3(1.2, 0, 0.8)
 	cam_target = dog.position
 	autotest_jog = false
+	var herding_played: bool = homestead.herders.has(dog)
 	await _key_tap(KEY_TAB)
 	_check("Tab again gives the clicks back to Nora", not dog.controlled)
 	await _wait(5.0)
 	_check("off the lead he comes back to her side (%.1f m away)" % dog.position.distance_to(player.position),
 		dog.position.distance_to(player.position) < 2.6)
-	_check("he herds: the strays shy from him too", homestead.herders.has(dog) and dog.scare_radius() > Homestead.HERD_RADIUS)
+	_check("he herds only while you play him: the strays shy from him then, further off than from her, and not once he's back at her side (played %s, now %s)" % [herding_played, homestead.herders.has(dog)],
+		herding_played and not homestead.herders.has(dog) and dog.scare_radius() > Homestead.HERD_RADIUS)
 	cam_dist = cd0
 
 
@@ -7888,7 +7960,7 @@ func _empire_checks() -> void:
 	homestead.pens = pens0
 	Game.sheep_count = 1
 	wildlife._assign_pens()
-	# sent from Nora's side, he chases and barks by himself
+	# only the player herds: from Nora's side there's no sending him, and beside her he frightens nothing
 	var wild_one = null
 	for a in rabbits:
 		if is_instance_valid(a) and not a.caught and not a.penned:
@@ -7896,24 +7968,19 @@ func _empire_checks() -> void:
 			break
 	wildlife.set_free(wildlife.penned()[0])
 	hud.hide_dialogue()
-	player.position = field + Vector3(0, 0, 4.0)
-	dog.position = player.position + Vector3(1.0, 0, 0.5)
+	if dog.controlled:
+		toggle_dog(false)
+	player.position = field + Vector3(0, 0, 2.0)
+	dog.position = field + Vector3(1.0, 0, 1.0)
 	dog.path = []
 	wild_one.position = field
 	wild_one.fright = 0.0
 	wild_one.hold(5.0)
 	cam_target = field
-	await _wait(0.3)
-	var arow: Array = wild_one.ke_actions().filter(func(a): return a["id"] == "round_up")
-	var why: String = wildlife.round_up_problem(wild_one)
-	wildlife.round_up(wild_one)
-	tw = 0.0
-	while not wild_one.caught and wildlife.chasing != null and tw < 45.0:
-		await _wait(0.2)
-		tw += 0.2
-		cam_target = wild_one.position
-	_check("from Nora, its menu sends the dog after it (%s, problem '%s'): he runs it down barking and it gives in (caught %s after %.1f s)" % [str(arow[0]["label"]) if not arow.is_empty() else "no row", why, wild_one.caught, tw],
-		why == "" and not arow.is_empty() and arow[0]["enabled"] and wild_one.caught and dog.chase == null)
+	await _wait(2.0)
+	var rows_wild: Array = wild_one.ke_actions().map(func(a): return a["id"])
+	_check("only the player herds: a wild one's menu has no 'send the dog' (%s), and with him beside her it isn't frightened or caught (fright %.2f, caught %s)" % [str(rows_wild), wild_one.fright, wild_one.caught],
+		not rows_wild.has("round_up") and wild_one.fright <= 0.0 and not wild_one.caught)
 	# its place in the wild stays empty for a while, then another turns up; the pens survive a rebuild
 	var wild_now: Array = wildlife.animals.filter(func(a): return a.key == key0)
 	Game.day += 5
@@ -8018,7 +8085,6 @@ func _empire_checks() -> void:
 	cam_dist = keep["cd"]
 	player.position = Vector3(9.0, 0, 8.0)
 	if dog:
-		dog.chase = null
 		dog.position = player.position + Vector3(1.2, 0, 0.8)
 	cam_target = player.position
 	_set_cam_lock(true)

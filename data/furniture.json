@@ -245,9 +245,54 @@
       "price": 50,
       "size": [1.0, 0.5],
       "where": "out",
-      "height": 1.6,
+      "height": 1.65,
       "id": "sunflowers",
       "shop": "yard",
+      "model": "res://assets/props/sunflowers.glb",
+      "cat": "Garden"
+    },
+    {
+      "name": "Rose Bush",
+      "price": 45,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.85,
+      "id": "rose_bush",
+      "shop": "yard",
+      "model": "res://assets/props/rose_bush.glb",
+      "cat": "Garden"
+    },
+    {
+      "name": "Pink Mallow",
+      "price": 35,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 1.15,
+      "id": "mallow",
+      "shop": "yard",
+      "model": "res://assets/props/mallow.glb",
+      "cat": "Garden"
+    },
+    {
+      "name": "Hollyhocks",
+      "price": 45,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 1.8,
+      "id": "hollyhocks",
+      "shop": "yard",
+      "model": "res://assets/props/hollyhocks.glb",
+      "cat": "Garden"
+    },
+    {
+      "name": "Hydrangea",
+      "price": 50,
+      "size": [1.0, 1.0],
+      "where": "out",
+      "height": 0.95,
+      "id": "hydrangea",
+      "shop": "yard",
+      "model": "res://assets/props/hydrangea.glb",
       "cat": "Garden"
     },
     {

@@ -11,6 +11,8 @@ const WALK_SPEED := 1.0
 var vid := ""
 var title := ""
 var role := ""
+var job := "" # what they do, said before their name: Farmer, Mayor, Officer (villagers.json "title")
+var nick := "" # the name said after it, when it isn't their full one (villagers.json "nick": Bekka)
 var loves := "" # item id they love as a gift
 var likes: Array = [] # item ids they like (a smaller boost)
 var romance := false # gifts can grow romance with them
@@ -89,15 +91,16 @@ func talk(seconds := 2.5) -> void:
 	hold_time = maxf(hold_time, seconds)
 
 
-## Where they're working right now changes the line under their name (Rosa at her stall).
+## Where they're working right now (Rosa at her stall). Kept for whoever asks; the name tag doesn't show it.
 func set_role(text: String) -> void:
 	role = text
-	if tag:
-		tag.text = "%s\n%s" % [title, role]
 
 
+## What they do, then their name: "Farmer Lars", "Officer Bekka" (Alex, 2026-11-15: not "Lars, Farmer"). The
+## name tag over their head and their menu's heading both read it; without a title it is the name alone.
 func display_name() -> String:
-	return "%s · %s" % [title, role]
+	var who := nick if nick != "" else title
+	return who if job == "" else "%s %s" % [job, who]
 
 
 func hold(seconds: float) -> void:
@@ -162,7 +165,7 @@ func _build_shapes(look: Dictionary) -> void:
 
 func _add_tag_and_collider(tag_y: float) -> void:
 	tag = Label3D.new()
-	tag.text = "%s\n%s" % [title, role]
+	tag.text = display_name()
 	tag.font_size = 56
 	tag.pixel_size = 0.0055
 	tag.outline_size = 14

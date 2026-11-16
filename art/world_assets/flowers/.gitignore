@@ -1,0 +1,2 @@
+# the baked maps are inside the exported GLBs; build.py makes these again
+out/

@@ -1,0 +1,14 @@
+{
+  "id": "sunflowers",
+  "atlas": 256,
+  "reach": 0.4,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.736,
+  "light_p05": 0.309,
+  "seconds": 6.4,
+  "glb_bytes": 813976,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

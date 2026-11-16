@@ -1,0 +1,14 @@
+{
+  "id": "mallow",
+  "atlas": 256,
+  "reach": 0.4,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.663,
+  "light_p05": 0.236,
+  "seconds": 7.8,
+  "glb_bytes": 806824,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

@@ -48,7 +48,7 @@ BOUNCE_ALBEDO = 0.5  # how much light the prop's own surfaces send on (grey: the
 GROUND_ALBEDO = 0.32  # grass and dirt
 
 # id: (reach in metres, stands on the ground). Static world pieces only: the trees, bushes, grass,
-# flowers and crops have their own foliage shaders, and the characters, the sheep and the tools move.
+# small flowers and crops have their own foliage shaders, and the characters, the sheep and the tools move.
 PROPS = {
     "armchair": (0.8, True),
     "bakery_counter": (0.8, True),
@@ -96,6 +96,13 @@ PROPS = {
     "wardrobe": (0.7, True),
     "welcome_sign": (0.8, True),
     "yarn_shelf": (0.7, True),
+    # the garden's Tripo flowers (art/world_assets/flowers): an ordinary material, not a foliage shader,
+    # so the bake shades the leaves deep inside each plant
+    "sunflowers": (0.4, True),
+    "rose_bush": (0.4, True),
+    "mallow": (0.4, True),
+    "hollyhocks": (0.4, True),
+    "hydrangea": (0.4, True),
 }
 
 OPAQUE_NODE = "light_bake_opaque"
