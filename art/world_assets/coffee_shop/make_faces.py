@@ -1,14 +1,17 @@
 """Lift the coffee shop's two painted faces out of Alex's reference, like the shop signs
-(shop_signs/make_faces.py): the plaque over the awning (the coffee cup between two sprigs) and
+(shop_signs/make_faces.py): the plaque over the awning (the coffee cup between two sprigs, with
+"Cappuccino Cafe" carved under them by name_plaque.py) and
 the chalkboard's face. Both are square-on in the concept. build.py maps them onto flat panels.
 
-Run: uv run --no-project --with pillow python art/world_assets/coffee_shop/make_faces.py
+Run: uv run --no-project --with numpy --with pillow python art/world_assets/coffee_shop/make_faces.py
 """
 import json
 import os
 
 import numpy as np
 from PIL import Image
+
+import name_plaque  # noqa: E402 (beside this script)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FACES = {  # name: (x0, y0, x1, y1) in the reference
@@ -23,6 +26,8 @@ def main():
     for name, box in FACES.items():
         face = ref.crop(box)
         face = face.resize((face.width * 2, face.height * 2), Image.LANCZOS)
+        if name == "plaque":  # Cappuccino Cafe carved under the cup (name_plaque.py, Alex 2026-11-16)
+            face = name_plaque.letter(face)
         face.save(os.path.join(HERE, "tex", "face_%s.png" % name))
         print(name, face.size)
     # the plaque's outline: its top edge (notched corners, a hump in the middle) traced off the
