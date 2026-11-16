@@ -1,0 +1,8 @@
+THINNED sable_shorn: 49858 -> 29998 triangles
+MEASURE sable_shorn: height 0.340, paws fore y -0.094 x +-0.046, hind y 0.072 x +-0.060
+HEAD nose at y -0.231 z 0.246; head 0.123 m long; tail 4 points
+BAKED sable_shorn colour and normal at 2048 px
+SKIN 15001 vertices on 19 bones, 3737 rigid on the head
+RETRY Run (Run: a paw misses its spot by 0.0059 m (RF at frame 9, reach 19%; crouch 0.053 m)): step now 0.120 m
+STRIDE {'Walk': 0.4, 'Run': 1.911}
+EXPORTED sable_shorn: 29998 triangles, 19 bones -> assets/wildlife/sable_shorn.glb

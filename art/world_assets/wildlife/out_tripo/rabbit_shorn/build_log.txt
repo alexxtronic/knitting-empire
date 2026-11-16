@@ -1,0 +1,7 @@
+THINNED rabbit_shorn: 46900 -> 30000 triangles
+MEASURE rabbit_shorn: height 0.420, paws fore y -0.080 x +-0.044, hind y 0.045 x +-0.058
+HEAD nose at y -0.201 z 0.218; head 0.143 m long; tail 2 points
+BAKED rabbit_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 17 bones, 6405 rigid on the head
+STRIDE {'Walk': 0.352, 'Run': 1.024}
+EXPORTED rabbit_shorn: 30000 triangles, 17 bones -> assets/wildlife/rabbit_shorn.glb

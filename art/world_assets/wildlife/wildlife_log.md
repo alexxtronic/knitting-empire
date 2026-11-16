@@ -112,3 +112,23 @@ Rounds:
   the beak tip. Robin in flight: the first recolour caught 2% of the map → 16%.
 - In the game (`--only=wildlife`, 16 checks pass): the lynx's short tufts still read a little twiggy
   close up; the fox's inner ear is dark where the bake reached into the fold.
+
+## Shorn forms (2026-11-16)
+Alex asked for every shearable animal "in naked form as well for after she sheers them for wool",
+made in one large sheet to save Tripo credits. Wild sheep reuse `sheep_sheared.glb`.
+
+- Picture: a 3 x 3 grid of the furry animals' own renders went to ChatGPT, which drew each one shorn
+  in the same pose and facing (`tripo/ref/shorn_1.png`: coyote, lynx, fox; raccoon, beaver, rabbit;
+  sable, mink, chinchilla). One Tripo generation, 55 credits, same settings as the lineups.
+- `tripo_split.py --rows 3`: the parts are grouped into rows by whichever axis (z or y) leaves the
+  widest gaps, then read left to right. `level()` stands each animal on its four paws (a plane fitted
+  through the lowest point in each quarter of its footprint): Tripo had tipped the fox 1 to 2 cm onto
+  its forepaws, which pushed its right hind paw out of the ground band, both hind legs onto one side
+  and the Idle's leg past its full length. Each shorn animal is scaled to its furry self's height to
+  the ear tips (`SHORN_HEIGHT` for a factor where that doesn't fit; none needed).
+- `tripo_build.py`: a `<id>_shorn` takes its species' settings from the furry id; its joints are its
+  own `HAND` entry, read off its own grid views (the bodies are slimmer). All nine built first time
+  after the fox's tilt was fixed: legs at most 95% straight, paws within 0.75 mm.
+- In the game: `wild_animal.gd` loads both models, shows one and stops the other's loops, and swaps
+  on a comb, on being penned, on coming into view and every couple of seconds (the day turning over
+  grows the coat back). The shorn model plays its own strides (`shorn_stride`).

@@ -7419,6 +7419,8 @@ func _wildlife_checks() -> void:
 		if not by[id][0].ok():
 			bad.append(id)
 	_check("every wild animal has its model and loops (%d species; without: %s)" % [by.size(), str(bad)], by.size() == 10 and bad.is_empty())
+	var bare := by.keys().filter(func(id): return not by[id][0].shorn_ok())
+	_check("every wild animal has its shorn model with its loops too (without: %s)" % str(bare), by.size() == 10 and bare.is_empty())
 	var farm := Vector3(10.0, 0, -3.0)
 	var n := [0, 0, 0, 0, 0]
 	var far := [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -7460,11 +7462,16 @@ func _wildlife_checks() -> void:
 	await _wait(0.3)
 	await _shot("59_wild_comb.png")
 	acts = _actions_for(rab)
-	_check("its coat needs time to grow back (%s)" % str(acts[0].get("hint", "")), not rab.has_fur() and not acts[0]["enabled"])
+	_check("its coat needs time to grow back (%s), and it shows its shorn model (%s)" % [str(acts[0].get("hint", "")), rab.coat()],
+		not rab.has_fur() and not acts[0]["enabled"] and rab.coat() == "shorn")
 	var wild: Dictionary = (Game.flag("wild", {}) as Dictionary).duplicate()
 	wild[rab.key] = Game.day - 1
 	Game.set_flag("wild", wild)
-	_check("a day later its coat has grown back", rab.has_fur())
+	tw = 0.0
+	while rab.coat() != "furry" and tw < 4.0: # it looks at its coat every couple of seconds
+		await _wait(0.25)
+		tw += 0.25
+	_check("a day later its coat has grown back and its furry model shows again (%s)" % rab.coat(), rab.has_fur() and rab.coat() == "furry")
 	# running at a fox
 	var fox = by["fox"][0]
 	player.position = _open_near(fox.position, 9.0)
@@ -7507,6 +7514,16 @@ func _wildlife_checks() -> void:
 		a.rotation.y = atan2(to.x, to.z) + 0.7 # three-quarters on to the camera
 		await _wait(0.4)
 		await _shot("59_wild_%s.png" % id)
+		var coats: Dictionary = (Game.flag("wild", {}) as Dictionary).duplicate() # and shorn, as it is after a comb
+		coats[a.key] = Game.day
+		Game.set_flag("wild", coats)
+		a._show_coat()
+		a.hold(4.0)
+		await _wait(0.3)
+		await _shot("59_shorn_%s.png" % id)
+		coats.erase(a.key)
+		Game.set_flag("wild", coats)
+		a._show_coat()
 	cam_dist = cd0
 	# walking up to sparrows
 	var fl = null
@@ -7948,6 +7965,7 @@ func _empire_checks() -> void:
 	dog_bark()
 	_check("in the pen she combs one (+%d angora), a bark doesn't trouble it (fleeing %.1f, fright %.2f), and its menu lets it go (%s)" % [Game.count("angora") - a0, rabbit.fleeing, rabbit.fright, str(rows_pen.map(func(a): return a["id"]))],
 		Game.count("angora") == a0 + 1 and rabbit.fleeing <= 0.0 and rabbit.fright <= 0.0 and rows_pen.any(func(a): return a["id"] == "free") and not rows_pen.any(func(a): return a["id"] == "round_up"))
+	_check("combed in the pen, it shows its shorn model (%s)" % rabbit.coat(), rabbit.coat() == "shorn")
 	# a second pen makes room for four more; the caught ones spread over the pens
 	var pens0: Array = homestead.pens.duplicate()
 	var second := Rect2(pen.position + Vector2(pen.size.x + 4.0, 0.0), Vector2(3.0, 3.0))

@@ -155,7 +155,9 @@ class Gaits:
             gait["crouch"] += 0.002 * S
         slip = max(s[1] for p in poses for s in p.stats.values())
         worst = max(((k, f, s) for f, p in enumerate(poses) for k, s in p.stats.items()), key=lambda x: x[2][1])
-        assert ext <= MAX_EXTENSION + 1e-3, "%s: a leg reaches %.0f%% of its length" % (name, ext * 100)
+        longest = max(((k, f, s[0]) for f, p in enumerate(poses) for k, s in p.stats.items()), key=lambda x: x[2])
+        assert ext <= MAX_EXTENSION + 1e-3, "%s: a leg reaches %.0f%% of its length (%s at frame %d; crouch %.3f m)" % (
+            name, ext * 100, longest[0], longest[1], gait["crouch"] if gait else 0.0)
         assert slip < 0.001, "%s: a paw misses its spot by %.4f m (%s at frame %d, reach %.0f%%; crouch %.3f m)" % (
             name, slip, worst[0], worst[1], worst[2][0] * 100, gait["crouch"] if gait else 0.0)
         rig = self.rig

@@ -83,6 +83,27 @@ HAND = {
                    "ear_reach": 2.4, "bend": 2.2},
     "mink": {"chest": (-0.18, 0.135), "hips": (0.03, 0.135), "neck": (-0.20, 0.18), "head": (-0.24, 0.215),
              "tail": [(0.08, 0.15), (0.14, 0.11), (0.19, 0.065), (0.22, 0.02)], "ground_y": 0.06},
+    # the shorn ones (Alex, 2026-11-16: every shearable animal has a naked form, shown from a comb until
+    # its coat is back), from tripo/ref/shorn_1.png: slimmer, so read off their own side views
+    "fox_shorn": {"chest": (-0.12, 0.23), "hips": (0.15, 0.22), "neck": (-0.12, 0.30), "head": (-0.13, 0.38),
+                  "tail": [(0.22, 0.26), (0.31, 0.28), (0.39, 0.32), (0.45, 0.40)]},
+    "coyote_shorn": {"chest": (-0.13, 0.40), "hips": (0.15, 0.40), "neck": (-0.17, 0.46), "head": (-0.21, 0.54),
+                     "tail": [(0.22, 0.44), (0.30, 0.34), (0.37, 0.22), (0.41, 0.10)], "elbow": 0.64, "ground_y": 0.3},
+    "lynx_shorn": {"chest": (-0.22, 0.44), "hips": (0.24, 0.44), "neck": (-0.25, 0.53), "head": (-0.29, 0.62),
+                   "tail": [(0.33, 0.52), (0.41, 0.53), (0.48, 0.55)], "elbow": 0.62},
+    "raccoon_shorn": {"chest": (-0.10, 0.18), "hips": (0.10, 0.17), "neck": (-0.12, 0.21), "head": (-0.12, 0.27),
+                      "tail": [(0.17, 0.21), (0.22, 0.16), (0.27, 0.09), (0.30, 0.03)], "ground_y": 0.2},
+    "beaver_shorn": {"chest": (-0.13, 0.18), "hips": (0.06, 0.16), "neck": (-0.15, 0.22), "head": (-0.16, 0.27),
+                     "tail": [(0.15, 0.14), (0.22, 0.11), (0.30, 0.08), (0.38, 0.06)], "ground_y": 0.17},
+    "rabbit_shorn": {"chest": (-0.06, 0.10), "hips": (0.07, 0.09), "neck": (-0.05, 0.15), "head": (-0.06, 0.19),
+                     "tail": [(0.12, 0.13), (0.17, 0.15)], "ear_reach": 2.8, "bend": 2.2},
+    "sable_shorn": {"chest": (-0.08, 0.15), "hips": (0.08, 0.14), "neck": (-0.10, 0.18), "head": (-0.11, 0.23),
+                    "tail": [(0.13, 0.15), (0.18, 0.11), (0.23, 0.07), (0.27, 0.04)], "ground_y": 0.15},
+    "mink_shorn": {"chest": (-0.09, 0.13), "hips": (0.09, 0.12), "neck": (-0.10, 0.17), "head": (-0.13, 0.22),
+                   "tail": [(0.15, 0.14), (0.20, 0.10), (0.26, 0.06), (0.31, 0.03)], "ground_y": 0.18},
+    "chinchilla_shorn": {"chest": (-0.06, 0.09), "hips": (0.06, 0.08), "neck": (-0.06, 0.13), "head": (-0.07, 0.17),
+                         "tail": [(0.12, 0.08), (0.17, 0.07), (0.21, 0.09), (0.24, 0.13)], "ground_y": 0.12,
+                         "ear_reach": 2.4, "bend": 2.2},
 }
 # joint -> (dx, dy, dz) metres added to what measure() found, for both sides of a leg pair when the
 # name has no side ("Arm" moves LeftArm and RightArm, mirrored)
@@ -103,7 +124,7 @@ def activate(*obs):
 class Build:
     def __init__(self, sid):
         self.sid = sid
-        self.sp = SPECIES[sid]
+        self.sp = SPECIES[sid[:-len("_shorn")] if sid.endswith("_shorn") else sid]  # a shorn one moves like its furry self
         self.log = []
 
     def say(self, *a):

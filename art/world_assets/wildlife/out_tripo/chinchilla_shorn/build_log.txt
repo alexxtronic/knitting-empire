@@ -1,0 +1,7 @@
+THINNED chinchilla_shorn: 52690 -> 30000 triangles
+MEASURE chinchilla_shorn: height 0.320, paws fore y -0.072 x +-0.047, hind y 0.048 x +-0.050
+HEAD nose at y -0.197 z 0.189; head 0.129 m long; tail 4 points
+BAKED chinchilla_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 6043 rigid on the head
+STRIDE {'Walk': 0.332, 'Run': 0.965}
+EXPORTED chinchilla_shorn: 30000 triangles, 19 bones -> assets/wildlife/chinchilla_shorn.glb

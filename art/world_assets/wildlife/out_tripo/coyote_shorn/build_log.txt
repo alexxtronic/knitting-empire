@@ -1,0 +1,7 @@
+THINNED coyote_shorn: 46590 -> 30000 triangles
+MEASURE coyote_shorn: height 0.760, paws fore y -0.181 x +-0.097, hind y 0.137 x +-0.130
+HEAD nose at y -0.426 z 0.526; head 0.217 m long; tail 4 points
+BAKED coyote_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 3064 rigid on the head
+STRIDE {'Walk': 0.677, 'Run': 2.243}
+EXPORTED coyote_shorn: 30000 triangles, 19 bones -> assets/wildlife/coyote_shorn.glb

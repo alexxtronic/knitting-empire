@@ -1,0 +1,7 @@
+THINNED beaver_shorn: 73068 -> 30000 triangles
+MEASURE beaver_shorn: height 0.380, paws fore y -0.123 x +-0.078, hind y 0.080 x +-0.085
+HEAD nose at y -0.292 z 0.306; head 0.137 m long; tail 4 points
+BAKED beaver_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 3411 rigid on the head
+STRIDE {'Walk': 0.274, 'Run': 0.78}
+EXPORTED beaver_shorn: 30000 triangles, 19 bones -> assets/wildlife/beaver_shorn.glb

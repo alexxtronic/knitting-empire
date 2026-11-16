@@ -1,0 +1,7 @@
+THINNED raccoon_shorn: 58448 -> 30000 triangles
+MEASURE raccoon_shorn: height 0.420, paws fore y -0.193 x +-0.058, hind y 0.002 x +-0.079
+HEAD nose at y -0.334 z 0.281; head 0.214 m long; tail 4 points
+BAKED raccoon_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 4088 rigid on the head
+STRIDE {'Walk': 0.441, 'Run': 1.462}
+EXPORTED raccoon_shorn: 30000 triangles, 19 bones -> assets/wildlife/raccoon_shorn.glb

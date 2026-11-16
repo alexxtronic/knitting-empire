@@ -8,7 +8,9 @@ extends Node3D
 ## STRIDE in the data is the ground each covers per second at speed 1.
 ##
 ## Its coat is in Game.flags["wild"][key]: the day it was last combed. It grows back in the
-## species' regrow_days.
+## species' regrow_days. While it does, the animal shows its shorn model (`shorn_model` in the data,
+## with its own `shorn_stride`; Alex, 2026-11-16: every shearable animal has a naked form), the
+## furry one again once the coat is back.
 ##
 ## Catching (Alex, 2026-11-15: hunt for animals with the dog and round them up in the pen): the
 ## dog's bark frightens it (`fright`, 0..1, shown as a "Fright" meter over its head; the rarer the animal the
@@ -55,8 +57,12 @@ var _going := false
 var _wait := 0.0
 var _hold := 0.0
 var _graze := false
-var _model: Node3D
-var _anim: AnimationPlayer
+var _model: Node3D # the furry model
+var _shorn: Node3D # the model it shows while its coat grows back, or null
+var _anim: AnimationPlayer # the loops of whichever model shows
+var _anim_fur: AnimationPlayer
+var _anim_shorn: AnimationPlayer
+var _coat_t := 0.0 # seconds before the coat is looked at again
 var _loops := {"idle": "Idle", "walk": "Walk", "run": "Run"}
 
 
@@ -74,16 +80,12 @@ func setup(m: Node, manager: Node, id: String, n: int, data: Dictionary, rects: 
 
 func _ready() -> void:
 	_model = Catalog.model(str(info.get("model", "")), self)
-	if _model:
-		var aps := _model.find_children("*", "AnimationPlayer", true, false)
-		_anim = aps[0] if not aps.is_empty() else null
-	if _anim:
-		for n in ["Idle", "Walk", "Run", "Graze"]:
-			if _anim.has_animation(n):
-				_anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
-		_anim.play(_loops["idle"])
-		_anim.seek(randf() * 3.0, true) # they don't breathe in step
-	else: # no model: a soft ball in its colour, so it is still there to find
+	_anim_fur = _loops_of(_model)
+	if info.has("shorn_model"):
+		_shorn = Catalog.model(str(info["shorn_model"]), self)
+		_anim_shorn = _loops_of(_shorn)
+	_anim = _anim_fur
+	if _anim == null: # no model: a soft ball in its colour, so it is still there to find
 		_model = Node3D.new()
 		add_child(_model)
 		Catalog.ball(_model, 0.18, Vector3(0, 0.2, 0), Color.html(str(wl.fibre_info(fibre()).get("color", "#a08060"))), Vector3(1, 0.9, 1.4))
@@ -101,6 +103,25 @@ func _ready() -> void:
 	add_child(body)
 	rotation.y = randf() * TAU
 	_wait = randf_range(0.5, 4.0)
+	_show_coat()
+	visibility_changed.connect(_show_coat) # coming back into view after the cull: the coat as it is now
+
+
+## A model's AnimationPlayer with its loops set to loop and the idle playing, or null.
+func _loops_of(m: Node3D) -> AnimationPlayer:
+	if m == null:
+		return null
+	var aps := m.find_children("*", "AnimationPlayer", true, false)
+	if aps.is_empty():
+		return null
+	var ap := aps[0] as AnimationPlayer
+	for n in ["Idle", "Walk", "Run", "Graze"]:
+		if ap.has_animation(n):
+			ap.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	if ap.has_animation(_loops["idle"]):
+		ap.play(_loops["idle"])
+		ap.seek(randf() * 3.0, true) # they don't breathe in step
+	return ap
 
 
 func display_name() -> String:
@@ -117,12 +138,26 @@ func fibre() -> String:
 
 ## Whether the model loaded with its loops (for the autotest).
 func ok() -> bool:
-	if _anim == null:
+	return _has_loops(_anim_fur)
+
+
+## Whether its shorn model loaded with its loops (for the autotest).
+func shorn_ok() -> bool:
+	return _shorn != null and _has_loops(_anim_shorn)
+
+
+func _has_loops(ap: AnimationPlayer) -> bool:
+	if ap == null:
 		return false
 	for k in ["idle", "walk"]:
-		if not _anim.has_animation(_loops[k]):
+		if not ap.has_animation(_loops[k]):
 			return false
 	return true
+
+
+## Which model shows right now: "furry" or "shorn" (for the autotest).
+func coat() -> String:
+	return "shorn" if _shorn != null and _shorn.visible else "furry"
 
 
 func current_loop() -> String:
@@ -171,6 +206,32 @@ func comb() -> void:
 	var wild: Dictionary = (Game.flag("wild", {}) as Dictionary).duplicate()
 	wild[key] = Game.day
 	Game.set_flag("wild", wild)
+	_show_coat()
+
+
+## The shorn model while its coat grows back, the furry one once it's back. It follows the coat's
+## state (looked at every couple of seconds, on coming into view and when it's combed or penned),
+## so a loaded save, a restock and a new morning all come out right. The hidden model's loops stop.
+func _show_coat() -> void:
+	if _shorn == null or _model == null:
+		return
+	var bare := not has_fur()
+	_model.visible = not bare
+	_shorn.visible = bare
+	_model.process_mode = Node.PROCESS_MODE_DISABLED if bare else Node.PROCESS_MODE_INHERIT
+	_shorn.process_mode = Node.PROCESS_MODE_INHERIT if bare else Node.PROCESS_MODE_DISABLED
+	var was := _anim
+	_anim = _anim_shorn if bare else _anim_fur
+	if _anim and was and was != _anim and _anim.has_animation(was.current_animation):
+		_anim.play(was.current_animation) # it carries on with what it was doing
+		_anim.speed_scale = was.speed_scale
+
+
+## The ground each loop of the model showing covers a second at speed 1.
+func stride() -> Dictionary:
+	if _anim != null and _anim == _anim_shorn:
+		return info.get("shorn_stride", info.get("stride", {}))
+	return info.get("stride", {})
 
 
 ## Its menu: comb it (or wait for its coat), or just watch it. Opening the menu holds it still.
@@ -219,6 +280,10 @@ func ke_action(id: String) -> void:
 func _process(delta: float) -> void:
 	if main == null:
 		return
+	_coat_t -= delta
+	if _coat_t <= 0.0 and _shorn != null:
+		_coat_t = randf_range(1.5, 2.5)
+		_show_coat()
 	var threat = null if (caught or penned) else wl.threat_to(self)
 	if threat != null and fleeing < FLEE_TIME * 0.6:
 		scare(threat)
@@ -373,6 +438,7 @@ func _follow_speed() -> float:
 func make_penned(pen_key: String, pen: Rect2) -> void:
 	key = pen_key
 	name = "Penned_" + pen_key
+	_show_coat() # a new key: its coat in the pen
 	caught = false
 	penned = true
 	fleeing = 0.0
@@ -455,8 +521,8 @@ func _play_gait() -> void:
 		want = _loops["graze"]
 	if _anim.current_animation != want and _anim.has_animation(want):
 		_anim.play(want, BLEND)
-	var stride: Dictionary = info.get("stride", {})
-	if k != "idle" and stride.has(want):
-		_anim.speed_scale = maxf(speed / float(stride[want]), MIN_RATE)
+	var strides := stride()
+	if k != "idle" and strides.has(want):
+		_anim.speed_scale = maxf(speed / float(strides[want]), MIN_RATE)
 	else:
 		_anim.speed_scale = 1.0

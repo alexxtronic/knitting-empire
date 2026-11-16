@@ -1,0 +1,7 @@
+THINNED fox_shorn: 50490 -> 30000 triangles
+MEASURE fox_shorn: height 0.680, paws fore y -0.184 x +-0.074, hind y 0.142 x +-0.097
+HEAD nose at y -0.372 z 0.441; head 0.250 m long; tail 4 points
+BAKED fox_shorn colour and normal at 2048 px
+SKIN 15002 vertices on 19 bones, 5242 rigid on the head
+STRIDE {'Walk': 0.502, 'Run': 1.663}
+EXPORTED fox_shorn: 30000 triangles, 19 bones -> assets/wildlife/fox_shorn.glb

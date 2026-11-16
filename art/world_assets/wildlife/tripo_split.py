@@ -1,12 +1,13 @@
 """Split a Tripo lineup (several animals in one export) into one source model per animal.
 
-    Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/wildlife/tripo_split.py -- <lineup.glb> <id> [<id> ...]
+    Blender --background --factory-startup --python-exit-code 1 --python art/world_assets/wildlife/tripo_split.py -- <lineup.glb> <id> [<id> ...] [--rows N]
 
 To save Tripo credits (Alex, 2026-11-14) each Tripo run makes five animals standing in a row, all
 facing the picture's left (tripo/ref/lineup_N.png). The export is one mesh. This script:
   1. imports it and welds it (Tripo splits it along its UV seams);
-  2. cuts it into animals at the widest empty gaps along the row, left to right, named by the ids
-     given in that order;
+  2. cuts it into animals (its largest connected pieces), left to right, named by the ids given in
+     that order; with --rows N the picture was N rows of animals (the shorn sheet, Alex 2026-11-16:
+     all nine in one picture, 3 x 3) and the ids go row by row from the top, each row left to right;
   3. turns each to face -Y (+Z in Godot), stands it on the ground with its origin under the middle of
      its body, and scales it to its height in the game (HEIGHTS, metres to the top of the ears);
   4. saves out_tripo/<id>/<id>_src.blend: the full-detail mesh with Tripo's own 4K textures, which
@@ -26,7 +27,8 @@ from mathutils import Matrix, Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
 argv = sys.argv[sys.argv.index("--") + 1:]
 SRC = os.path.abspath(argv[0])
-IDS = [a for a in argv[1:] if not a.startswith("--")]
+ROWS = int(argv[argv.index("--rows") + 1]) if "--rows" in argv else 1
+IDS = [a for i, a in enumerate(argv[1:], 1) if not a.startswith("--") and argv[i - 1] != "--rows"]
 OUT = os.path.join(HERE, "out_tripo")
 
 # metres to the top of the ears (the old species.py units; the birds as birds.py made them)
@@ -34,6 +36,16 @@ HEIGHTS = {"rabbit": 0.42, "fox": 0.68, "raccoon": 0.42, "beaver": 0.38, "coyote
            "sable": 0.34, "lynx": 0.90, "chinchilla": 0.32, "sparrow": 0.20, "robin": 0.20, "gull": 0.42,
            # the birds in flight, for their wings: tripo_birds.py scales each to its standing bird
            "sparrow_fly": 0.26, "gull_fly": 0.52}
+# a shorn animal (<id>_shorn, the naked form shown after a comb) stands as tall as its furry self to
+# the top of its ears, so its head and legs match at the swap; a factor here where they don't
+SHORN_HEIGHT = {}
+
+
+def height(sid):
+    if sid in HEIGHTS:
+        return HEIGHTS[sid]
+    base = sid[:-len("_shorn")] if sid.endswith("_shorn") else sid
+    return HEIGHTS[base] * SHORN_HEIGHT.get(base, 1.0)
 BIRDS = ("sparrow", "robin", "gull")
 YAW = {"raccoon": 15.0, "chinchilla": 90.0}  # degrees added to the measured turn, where the feet don't line up with the body
 FLYING = ("sparrow_fly", "gull_fly")  # no feet to line up: only the quarter turn to face -Y
@@ -115,6 +127,25 @@ def pieces(ob, n):
             c += me.polygons[i].center
         return c / len(faces)
     big.sort(key=lambda kv: centre(kv[1]).x)
+    if ROWS > 1:  # rows of animals: Tripo puts the picture's rows one above another (z) or one behind another (y)
+        cs = [centre(f) for _r, f in big]
+        per = n // ROWS
+
+        def rows_by(axis, top_first):
+            order = sorted(range(n), key=lambda i: cs[i][axis], reverse=top_first)
+            groups = [order[r * per:(r + 1) * per] for r in range(ROWS)]
+            spread = max(max(cs[i][axis] for i in g) - min(cs[i][axis] for i in g) for g in groups)
+            gap = min(abs(min(cs[i][axis] for i in groups[r]) - max(cs[i][axis] for i in groups[r + 1])) if top_first else
+                      abs(min(cs[i][axis] for i in groups[r + 1]) - max(cs[i][axis] for i in groups[r])) for r in range(ROWS - 1))
+            return gap / max(spread, 1e-6), groups
+        qz, gz = rows_by(2, True)  # the top row highest
+        qy, gy = rows_by(1, True)  # the top row furthest back
+        groups = gz if qz >= qy else gy
+        print("ROWS along %s (gap/spread: z %.2f, y %.2f)" % ("z" if qz >= qy else "y", qz, qy))
+        big = [big[i] for g in groups for i in sorted(g, key=lambda i: cs[i].x)]
+        for k, (_r, f) in enumerate(big):
+            c = centre(f)
+            print("  piece %d: %d faces at (%.3f, %.3f, %.3f)" % (k, len(f), c.x, c.y, c.z))
     from mathutils.kdtree import KDTree
     owner = {}
     trees = []
@@ -158,6 +189,34 @@ def split(ob, n):
     return parts
 
 
+def level(me, sid):
+    """Tripo builds a three-quarter picture a little tilted (the shorn sheet's hind paws stood 1 to 2.5
+    cm off the ground): turn it so the lowest points of its four paws lie level."""
+    co = [v.co for v in me.vertices]
+    z0, z1 = min(c.z for c in co), max(c.z for c in co)
+    h = z1 - z0
+    band = [c for c in co if c.z < z0 + 0.05 * h]
+    mid = (min(c.y for c in band) + max(c.y for c in band)) / 2.0
+    cx = (min(c.x for c in band) + max(c.x for c in band)) / 2.0  # it still stands where it was in the lineup
+    pts = []
+    for fx in (1, -1):
+        for fy in (1, -1):
+            q = [c for c in co if (c.x - cx) * fx > 0 and (c.y - mid) * fy > 0 and c.z < z0 + 0.12 * h]
+            if q:
+                pts.append(min(q, key=lambda c: c.z))
+    if len(pts) < 4:
+        return
+    # the plane z = a x + b y + c through them, by least squares
+    import numpy as np
+    A = np.array([[c.x, c.y, 1.0] for c in pts])
+    a, b, _c = np.linalg.lstsq(A, np.array([c.z for c in pts]), rcond=None)[0]
+    n = Vector((-a, -b, 1.0)).normalized()
+    tilt = math.degrees(n.angle(Vector((0, 0, 1))))
+    print("LEVEL %s: its paws lay %.1f deg off level (%s)" % (sid, tilt, ", ".join("%.3f" % (c.z - z0) for c in pts)))
+    if tilt > 0.3:
+        me.transform(n.rotation_difference(Vector((0, 0, 1))).to_matrix().to_4x4())
+
+
 def stand(ob, sid):
     """Face -Y, feet on z=0, origin under the middle of the body, scaled to its height."""
     me = ob.data
@@ -182,7 +241,11 @@ def stand(ob, sid):
         yaw = 0.0
     me.transform(Matrix.Rotation(-yaw, 4, "Z"))
     print("TURN %s: its body ran %.0f deg off the Y axis" % (sid, math.degrees(yaw)))
-    s = HEIGHTS[sid] / (z1 - z0)
+    if sid not in BIRDS and sid not in FLYING:
+        level(me, sid)
+        zs = [v.co.z for v in me.vertices]
+        z0, z1 = min(zs), max(zs)
+    s = height(sid) / (z1 - z0)
     ground = [v.co for v in me.vertices if v.co.z < z0 + 0.04 * (z1 - z0)]
     cx = (min(c.x for c in ground) + max(c.x for c in ground)) / 2.0
     cy = (min(c.y for c in ground) + max(c.y for c in ground)) / 2.0
