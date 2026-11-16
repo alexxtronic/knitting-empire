@@ -1,0 +1,13 @@
+{
+  "_about": "Knitted scarves for the dog (scripts/scarves.gd; docs/DIRECTION.md: 'Knitting rare scarves for the dog so he can run faster and stay more warm in cold areas and catch rarer animals'). Knitted at the rocking chair once Act 1 is done: `wool` balls of plain wool, or `fibre_wool` balls and one wild fibre, whose knit_floor (data/wildlife.json) lifts the scarf like a sweater. Its quality is the knitting game's rarity (1 Common .. 5 Legendary), lifted to her needles' floor (empire.needle_floor()) and the fibre's floor, as a sweater is. `tiers` is by that quality: `color` the scarf's wool on him (it replaces his red one; dog.gd tints the scarf's red in the texture, the snowflake stripes stay cream), `trot` and `run` multiply his trot and gallop speeds, `bark` multiplies the fright each bark adds (a fox takes 3 barks plain, ceil(3 / bark) with a scarf), `warmth` is kept for cold lands to come (dog.warmth()). `max_rate` caps how fast a loop may play over its keyed speed (dog.gd STRIDE): his gallop plays at 1.23 plain, and a boost that would push it past this is cut back, so he never looks frantic. A boosted trot must stay under dog.gd's RUN_ABOVE (2.5 m/s) or it turns into a gallop. Every name and line is a draft until Alex approves it.",
+  "wool": 2,
+  "fibre_wool": 1,
+  "max_rate": 1.5,
+  "tiers": [
+    {"rarity": 1, "color": "#b8ab94", "trot": 1.04, "run": 1.04, "bark": 1.1, "warmth": 5},
+    {"rarity": 2, "color": "#4e8f45", "trot": 1.08, "run": 1.08, "bark": 1.25, "warmth": 10},
+    {"rarity": 3, "color": "#2f62b0", "trot": 1.12, "run": 1.12, "bark": 1.55, "warmth": 18},
+    {"rarity": 4, "color": "#7b3fae", "trot": 1.16, "run": 1.16, "bark": 1.8, "warmth": 28},
+    {"rarity": 5, "color": "#e0aa1e", "trot": 1.2, "run": 1.2, "bark": 2.1, "warmth": 40}
+  ]
+}
