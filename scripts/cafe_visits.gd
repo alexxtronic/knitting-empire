@@ -18,6 +18,7 @@ var main: Node
 var visits := {} # vid -> {"v", "state", "seat", "home", "roam", "rest", "until", "book", "t"}
 var next_at := -1.0 # the game hour (counted from day 1) the next regular may come in
 var seen := {} # vid -> the day they last came in (once a day each)
+var _tick := 0.0
 
 
 func _cfg() -> Dictionary:
@@ -33,7 +34,7 @@ func update() -> void:
 	for vid in visits.keys():
 		_step(vid)
 	var cfg := _cfg()
-	if cfg.is_empty():
+	if cfg.is_empty() or main.barista.active: # Nora's serving: her customers come one at a time instead
 		return
 	var hours: Array = cfg.get("hours", [8, 20])
 	if Game.hour < float(hours[0]) or Game.hour >= float(hours[1]) or visits.size() >= int(cfg.get("max", 3)):
@@ -50,6 +51,51 @@ func update() -> void:
 			who.append(str(vid))
 	if not who.is_empty():
 		start(who[randi() % who.size()])
+
+
+## While Nora works the counter (scripts/barista.gd) with the town's routines off (the autotest's
+## still town), her customers still need walking to a seat: steps the visits on twice a second.
+func step_all(delta: float) -> void:
+	if main.town_rounds:
+		return # update() does it
+	_tick -= delta
+	if _tick > 0.0:
+		return
+	_tick = 0.5
+	for vid in visits.keys():
+		_step(vid)
+
+
+## Nora has stepped behind the counter: whoever is still walking up to order or ordering gives up
+## and goes back to their spot, so her own customers come one at a time.
+func hold_orders() -> void:
+	for vid in visits.keys():
+		if str(visits[vid]["state"]) in ["counter", "ordering"]:
+			var vis: Dictionary = visits[vid]
+			_free(vis)
+			vis["v"].walk_to(vis["home"], main._find_path(vis["v"].position, vis["home"]))
+			vis["state"] = "leaving"
+
+
+## A customer Nora served at the counter takes their coffee to a free reading seat for a while, or
+## goes straight back to their spot if every seat is taken. `cup` (on them) goes when they leave.
+func adopt(vid: String, v, home: Vector3, roam, rest, cup: Node3D) -> void:
+	var seats := free_seats()
+	if seats.is_empty() or visits.has(vid):
+		v.roam = roam
+		v.rest_yaw = rest
+		v.walk_to(home, main._find_path(v.position, home))
+		if is_instance_valid(cup):
+			cup.get_tree().create_timer(6.0).timeout.connect(cup.queue_free)
+		return
+	var seat = seats[randi() % seats.size()]
+	seat.occupant = v
+	var stay: Array = _cfg().get("stay", [1.5, 3.0])
+	visits[vid] = {"v": v, "state": "to_seat", "seat": seat, "home": home, "roam": roam, "rest": rest,
+		"until": 0.0, "stay": randf_range(float(stay[0]), float(stay[1])), "book": null, "cup": cup, "t": 0.0}
+	seen[vid] = Game.day
+	var at: Vector3 = seat.stand_point()
+	v.walk_to(at, main._find_path(v.position, at))
 
 
 ## Whether `vid` is free to drop in now: about, not busy with Nora, a scene, or their own round.
@@ -181,6 +227,9 @@ func _free(vis: Dictionary) -> void:
 	if vis["book"] != null and is_instance_valid(vis["book"]):
 		(vis["book"] as Node).queue_free()
 	vis["book"] = null
+	if vis.get("cup") != null and is_instance_valid(vis["cup"]):
+		(vis["cup"] as Node).queue_free()
+	vis["cup"] = null
 
 
 ## A story scene is starting (or the game is loading): everyone in for a coffee is back at their

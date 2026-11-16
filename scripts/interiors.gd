@@ -100,6 +100,8 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 				ReadSpot.make(n, f, item, sd)
 		elif f.has("read"):
 			ReadSpot.make(n, f, item)
+		if f.has("work"):
+			WorkSpot.make(n, f, item)
 		if bool(item.get("flat", false)) or float(f.get("y", 0.0)) > 0.3:
 			continue
 		var fs: Vector2 = Data.vec2(item.get("size", [1.0, 1.0]))
@@ -166,7 +168,7 @@ static func floors() -> Array:
 ## Every frame: each door swings in for her or a villager coming up to it (`movers`: positions),
 ## and shuts behind them; the shop she is in loses its roof and the walls toward the camera
 ## (unless Walls Up is on); the lamps come up as the daylight goes.
-static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, movers: Array = []) -> void:
+static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, movers: Array = [], roof_on := false) -> void:
 	var cdir := Vector3(sin(cam_yaw), 0, cos(cam_yaw))
 	var night := clampf(1.0 - Game.daylight(), 0.0, 1.0)
 	for s in shops.values():
@@ -182,7 +184,7 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 				at_door = true
 		s.open = move_toward(s.open, 1.0 if (s.inside or at_door) and s.node.visible else 0.0, delta * 2.5)
 		(s.parts["door"] as Node3D).rotation.y = deg_to_rad(100.0) * smoothstep(0.0, 1.0, s.open)
-		(s.parts["roof"] as Node3D).visible = not s.inside
+		(s.parts["roof"] as Node3D).visible = not s.inside or roof_on # first person keeps it on
 		for side in WALLS:
 			if not s.parts.has("wall_" + side) or not s.parts.has("wall_%s_low" % side):
 				continue
@@ -207,6 +209,47 @@ static func read_spots(id: String) -> Array:
 		if n is ReadSpot:
 			out.append(n)
 	return out
+
+
+## A counter she can work behind ("work": "barista" on the Coffee Shop's front counter): its hitbox
+## has "Work behind the counter" at any hour, and main.barista takes it from there.
+class WorkSpot extends Node3D:
+	static var main: Node
+	var job := "barista"
+	var stand := Vector3(-0.45, 0, 0.85)
+
+	static func make(piece: Node3D, f: Dictionary, item: Dictionary) -> WorkSpot:
+		var w := WorkSpot.new()
+		w.name = "WorkSpot"
+		w.job = str(f["work"])
+		piece.add_child(w)
+		var sz: Vector2 = Data.vec2(item.get("size", [1.9, 0.7]))
+		var body := StaticBody3D.new()
+		body.collision_layer = 2
+		body.collision_mask = 0
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(sz.x, 1.0, sz.y)
+		cs.shape = bs
+		cs.position.y = 0.5
+		body.add_child(cs)
+		body.set_meta("target", w)
+		w.add_child(body)
+		return w
+
+	func display_name() -> String:
+		return "Coffee counter"
+
+	func ke_actions() -> Array:
+		return [{"id": "work_counter", "label": "Work behind the counter", "enabled": true}]
+
+	func ke_action(_id: String) -> void:
+		if main != null:
+			main.barista.open(self)
+
+	func stand_point() -> Vector3:
+		var p := to_global(stand)
+		return Vector3(p.x, 0, p.z)
 
 
 ## A piece in a shop you can read at: a seat ("read": "seat") she sits in with a book, or a bookshelf

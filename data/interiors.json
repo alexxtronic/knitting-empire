@@ -67,7 +67,7 @@
       {"id": "cafe_bookshelf", "at": [0.45, -6.25], "turn": 0, "read": "shelf", "stand": [0.0, 0.7]},
       {"id": "espresso_bar", "at": [2.2, -6.25], "turn": 0},
       {"id": "espresso_bar", "at": [4.0, -6.25], "turn": 0},
-      {"id": "cafe_counter", "at": [2.2, -4.9], "turn": 0},
+      {"id": "cafe_counter", "at": [2.2, -4.9], "turn": 0, "work": "barista"},
       {"id": "cafe_counter", "at": [4.15, -4.9], "turn": 0},
       {"id": "cafe_bookshelf", "at": [-5.17, -5.05], "turn": 90, "read": "shelf", "stand": [0.0, 0.7]},
       {"id": "fireplace", "at": [-4.9, -3.1], "turn": 90},
