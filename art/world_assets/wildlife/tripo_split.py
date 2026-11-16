@@ -34,6 +34,8 @@ OUT = os.path.join(HERE, "out_tripo")
 # metres to the top of the ears (the old species.py units; the birds as birds.py made them)
 HEIGHTS = {"rabbit": 0.42, "fox": 0.68, "raccoon": 0.42, "beaver": 0.38, "coyote": 0.76, "mink": 0.30,
            "sable": 0.34, "lynx": 0.90, "chinchilla": 0.32, "sparrow": 0.20, "robin": 0.20, "gull": 0.42,
+           # the wolves (Alex, 2026-11-16: one small, one medium, one large and scary; tripo/ref/lineup_4.png)
+           "wolf_small": 0.55, "wolf_medium": 0.92, "wolf_large": 1.25,
            # the birds in flight, for their wings: tripo_birds.py scales each to its standing bird
            "sparrow_fly": 0.26, "gull_fly": 0.52}
 # a shorn animal (<id>_shorn, the naked form shown after a comb) stands as tall as its furry self to

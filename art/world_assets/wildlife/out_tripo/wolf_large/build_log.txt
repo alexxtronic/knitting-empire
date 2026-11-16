@@ -1,0 +1,7 @@
+THINNED wolf_large: 1104488 -> 30000 triangles
+MEASURE wolf_large: height 1.250, paws fore y -0.667 x +-0.274, hind y 0.184 x +-0.273
+HEAD nose at y -1.325 z 0.699; head 0.408 m long; tail 4 points
+BAKED wolf_large colour and normal at 2048 px
+SKIN 14990 vertices on 19 bones, 1972 rigid on the head
+STRIDE {'Walk': 0.843, 'Run': 2.792}
+EXPORTED wolf_large: 30000 triangles, 19 bones -> assets/wildlife/wolf_large.glb
