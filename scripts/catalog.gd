@@ -73,7 +73,7 @@ static func affordable(id: String, coins: int, wood: int) -> bool:
 ## Ids that have a builder in build(). A furniture.json entry without one shows a magenta box.
 const BUILDERS := ["rocking_chair", "armchair", "sofa", "bed", "kitchen", "coffee_table", "dining_table",
 	"bookshelf", "wardrobe", "fireplace", "spinning_wheel", "lamp", "yarn_basket", "rug_red", "rug_round",
-	"plant", "flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale"]
+	"plant", "flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale", "computer"]
 
 static var _mats := {}
 
@@ -385,7 +385,29 @@ static func build(id: String, r: Node3D) -> void:
 		"scarecrow": _scarecrow(r)
 		"lantern": _lantern(r)
 		"hay_bale": _hay_bale(r)
+		"computer": _computer(r)
 		_: box(r, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), Color.MAGENTA)
+
+
+## A stand-in for the computer (scripts/online_store.gd) until its Tripo model lands as
+## assets/props/computer.glb: a desk, a monitor whose glass is the node "screen" (facing +Z, the front,
+## like every model), a keyboard and a tower. The store reads the view from "screen", so the real model
+## only needs a part of that name.
+static func _computer(r: Node3D) -> void:
+	for x in [-0.55, 0.55]:
+		for z in [-0.25, 0.25]:
+			box(r, Vector3(0.05, 0.72, 0.05), Vector3(x, 0.36, z), WOOD_DARK)
+	box(r, Vector3(1.24, 0.05, 0.62), Vector3(0, 0.745, 0), WOOD)
+	var shell := Color(0.86, 0.84, 0.78)
+	box(r, Vector3(0.24, 0.02, 0.18), Vector3(0, 0.78, -0.12), shell)
+	box(r, Vector3(0.06, 0.16, 0.05), Vector3(0, 0.87, -0.14), shell)
+	box(r, Vector3(0.62, 0.42, 0.06), Vector3(0, 1.15, -0.13), shell)
+	var scr := box(r, Vector3(0.56, 0.35, 0.01), Vector3(0, 1.155, -0.098), Color(0.35, 0.55, 0.62))
+	scr.name = "screen"
+	glow(scr, Color(0.55, 0.78, 0.86), 0.9)
+	box(r, Vector3(0.44, 0.025, 0.15), Vector3(-0.02, 0.785, 0.12), shell)
+	box(r, Vector3(0.07, 0.025, 0.1), Vector3(0.3, 0.783, 0.13), shell)
+	box(r, Vector3(0.2, 0.44, 0.45), Vector3(0.42, 0.22, -0.02), shell.darkened(0.08))
 
 
 static func _rocking_chair(r: Node3D) -> void:

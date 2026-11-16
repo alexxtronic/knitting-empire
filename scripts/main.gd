@@ -48,6 +48,7 @@ const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const ReadingPose = preload("res://scripts/reading_pose.gd")
 const Barista = preload("res://scripts/barista.gd")
+const OnlineStore = preload("res://scripts/online_store.gd")
 const HouseBuilder = preload("res://scripts/house_builder.gd")
 
 const CELL := 0.5
@@ -113,6 +114,7 @@ var _flock_t := 0.0
 var _flock_seen := false
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var barista: Barista # working the Coffee Shop's counter in first person (barista.gd)
+var store: OnlineStore # the online sweater store on her computer (online_store.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
 var books_ui: BookPanel # the books she reads (book_panel.gd, data/books.json)
@@ -347,6 +349,9 @@ func _ready() -> void:
 	barista = Barista.new() # after first person too: it turns her view every frame
 	barista.main = self
 	add_child(barista)
+	store = OnlineStore.new() # after first person too: it steers her view to the screen
+	store.main = self
+	add_child(store)
 	Interiors.WorkSpot.main = self
 	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
 	audio = GameAudio.new()
@@ -1605,6 +1610,9 @@ func _unhandled_input(e: InputEvent) -> void:
 	if barista.active:
 		barista.handle_mouse(e)
 		return
+	if store.active:
+		store.handle_mouse(e)
+		return
 	if fps.active:
 		fps.handle_mouse(e)
 		return
@@ -1713,6 +1721,9 @@ func _input(e: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if barista.active and barista.handle_key(kc):
+		get_viewport().set_input_as_handled()
+		return
+	if store.active and store.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
 	if fps.active and fps.handle_key(kc):
@@ -2414,6 +2425,8 @@ func _actions_for(t) -> Array:
 				return [_act("read", "Read a knitting book"), _act("read_pick", "Choose a book…")]
 			"wardrobe":
 				return [_act("wardrobe", "Choose a sweater…")]
+			"computer":
+				return [_act("computer", "Use the computer…  (%d orders)" % store.orders().size() if store.started() else "Use the computer…")]
 		return []
 	if t is Plot:
 		if t.crop == "":
@@ -2558,6 +2571,8 @@ func _perform(t, id: String) -> void:
 				hud.show_toast("The wheel hums. Your wool is nice and even now."))
 		"wardrobe":
 			wview.open(t) # the list (wardrobe_ui) if first person can't start
+		"computer":
+			store.open(t) # the online store's page on its screen (online_store.gd)
 		"read_book", "read_pick":
 			begin_read(t, id)
 		"read":
@@ -2722,6 +2737,8 @@ func _finish_knit(rarity := 0) -> void:
 	if paid:
 		var worn0 := Game.worn_quality
 		var q := Game.knit_sweater(rarity)
+		if fibre != "": # what it was knitted with: the online store's orders ask for a fibre
+			Game.sweater_fibres[Game.sweater_fibres.size() - 1] = fibre
 		Game.add_need("happiness", 14.0)
 		if fibre != "" and empire.knitted(fibre, q): # the one a local asked for: put by for them
 			var who = _villager(str(empire.request().get("who", "")))
@@ -5532,6 +5549,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=store" in OS.get_cmdline_user_args(): # just the computer and the online store (about thirty seconds)
+		await _wait(1.5)
+		await _store_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=barista" in OS.get_cmdline_user_args(): # just working the café's counter (about a minute)
 		await _wait(1.5)
 		await _barista_checks()
@@ -5884,6 +5907,7 @@ func _autotest() -> void:
 	await _shop_checks()
 	await _cafe_checks()
 	await _barista_checks()
+	await _store_checks()
 	await _cast_checks()
 	await _mail_checks()
 	await _max_checks()
@@ -11412,3 +11436,175 @@ func _recolor_checks() -> void:
 	furniture.erase(spawned)
 	spawned.queue_free()
 	_check("colours: its own colour back costs nothing (%dc), and a sofa takes the fabrics too (%s)" % [c1 - Game.coins, str(e2.get("c", ""))], c1 == Game.coins and str(e2.get("c", "")) == "denim")
+
+
+## The online store (online_store.gd, data/store_orders.json): the computer in the catalogue, no orders
+## until she owns one, then orders for wild-fibre sweaters; "Use the computer…" puts her at its screen in
+## first person; a knitted fox sweater remembers its fibre and fills a fox order, scoring five stars
+## sent at once and fewer sent late; an expired order costs her rating; a better rating brings orders
+## sooner and more at once; the coins come the next morning; the state keeps through a save. Saves
+## 63_store_screen.png, 63_store_sent.png and 63_store_after.png.
+func _store_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var keep := {"coins": Game.coins, "s": Game.sweaters.duplicate(), "d": Game.sweater_designs.duplicate(),
+		"f": Game.sweater_fibres.duplicate(), "inv": Game.inv.duplicate(), "store": Game.flags.get("store", null),
+		"request": Game.flags.get("request", null), "day": Game.day, "hour": Game.hour,
+		"wq": Game.worn_quality, "wd": Game.worn_design, "w": Game.wardrobe.duplicate(), "xp": Game.knit_xp}
+	Game.flags.erase("store")
+	Game.flags.erase("request") # a local's fibre request would claim the fox sweater first
+	var info: Dictionary = Catalog.ITEMS.get("computer", {})
+	_check("the computer is a catalogue piece and a big purchase (%s, %dc, needles top out at 1500c)" % [str(info.get("cat", "?")), int(info.get("price", 0))],
+		str(info.get("shop", "")) == "indoors" and int(info.get("price", 0)) >= 2000 and Catalog.has_builder("computer"))
+	for f in furniture.filter(func(x): return is_instance_valid(x) and x.item_id == "computer"):
+		furniture.erase(f)
+		f.queue_free()
+	await _wait(0.2)
+	store.update()
+	_check("no computer, no orders (%s)" % str(Game.flags.get("store", {})), not store.started() and store.orders().is_empty())
+	var comp := _spawn_furniture("computer", Vector3(5.6, 0, 5.3), 2)
+	_rebuild_grid()
+	_check("the computer has a screen to look at", comp.find_child("screen", true, false) != null)
+	store.update()
+	var first: Array = store.orders()
+	var sane := true
+	for o in first:
+		sane = sane and wildlife.is_fibre(str(o["fibre"])) and int(o["pay"]) > 0 \
+			and int(o["stars"]) >= Sweaters.stars_for(wildlife.knit_floor(str(o["fibre"])))
+	_check("once it stands in her house, orders come in, each for a wild fibre's sweater (%s, rating %.1f)" % [str(first.map(func(o): return "%s %d★ %dc" % [o["fibre"], o["stars"], o["pay"]])), store.rating()],
+		store.started() and first.size() == int(store.data.get("seed_orders", 2)) and sane and is_equal_approx(store.rating(), float(store.data.get("start_rating", 3.0))))
+	var acts := _actions_for(comp)
+	_check("its menu says 'Use the computer…' with the orders waiting (%s)" % str(acts.map(func(a): return a["label"])),
+		acts.size() == 1 and str(acts[0]["id"]) == "computer" and str(acts[0]["label"]).begins_with("Use the computer…"))
+	# a fox sweater knitted with its fibre remembers it; a plain one doesn't
+	Game.add_sweater(3, "")
+	Game.add_item("wool", 2)
+	Game.add_item("fox_fibre", 1)
+	_knit_fibre = "fox_fibre"
+	_finish_knit(3)
+	await _wait(1.0) # its knit_done event plays nothing outside Act 1
+	hud.hide_dialogue()
+	var fox_i: int = Game.sweater_fibres.find("fox_fibre")
+	_check("a sweater knitted with fox fluff is kept as a fox sweater in her bag (%s)" % str(Game.sweater_fibres),
+		fox_i >= 0 and Game.sweater_fibres.size() == Game.sweaters.size() and Game.sweater_fibres.count("fox_fibre") == 1)
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	_check("the save keeps which sweater was knitted with what", (saved.get("sweater_fibres", []) as Array).has("fox_fibre"))
+	var fox := store.place_order(-1.0, "fox_fibre", 2)
+	var lynx := store.place_order(-1.0, "lynx_fibre", 4)
+	_check("an order can ask for a fibre and stars (%s %d★, %s %d★)" % [fox["fibre"], fox["stars"], lynx["fibre"], lynx["stars"]],
+		str(fox["fibre"]) == "fox_fibre" and int(fox["stars"]) == 2 and store.sweater_for(fox) == fox_i and store.sweater_for(lynx) < 0)
+	# at the screen
+	player.walk([])
+	player.position = _stand_point(comp)
+	await _wait(0.3)
+	_perform(comp, "computer")
+	await _wait(1.2)
+	var r: Rect2 = store.screen_rect()
+	_check("'Use the computer…' puts her at its screen in first person, the page on it (active %s, first person %s, locked %s, page %s)" % [store.active, fps.active, fps.locked, str(r)],
+		store.active and fps.active and fps.locked and r.size.x >= 480.0 and absf(cam.fov - OnlineStore.FOV) < 0.5)
+	var k: int = store.orders().find(fox)
+	store.select(k)
+	await _wait(0.4)
+	await _shot("63_store_screen.png")
+	var coins0 := Game.coins
+	var n0: int = store.orders().size()
+	var nsw := Game.sweaters.size()
+	var want: int = store.pay_for(fox, int(Game.sweaters[fox_i]))
+	var rate0: float = store.rating()
+	store.handle_key(KEY_ENTER)
+	await _wait(0.4)
+	await _shot("63_store_sent.png")
+	_check("Enter sends the fox sweater for the fox order: gone from her bag and the list, five stars sent at once, %dc to come in the morning, none yet (rating %.2f -> %.2f)" % [store.coming(), rate0, store.rating()],
+		store.orders().size() == n0 - 1 and Game.sweaters.size() == nsw - 1 and Game.sweater_fibres.find("fox_fibre") < 0
+		and is_equal_approx(float(store.state().get("last_score", 0.0)), 5.0) and store.coming() == want and Game.coins == coins0 and store.rating() > rate0)
+	store.select(store.orders().find(lynx))
+	_check("she can't send the lynx order without a lynx sweater", not store.send_selected() and store.orders().find(lynx) >= 0)
+	# a late one scores less
+	Game.add_sweater(3, "")
+	Game.sweater_fibres[Game.sweater_fibres.size() - 1] = "fox_fibre"
+	var late := store.place_order(-1.0, "fox_fibre", 2)
+	late["placed"] = float(late["placed"]) - store.expire_hours(late) * 0.8
+	var late_score: float = store.score_for(late)
+	store.fill(store.orders().find(late))
+	_check("an order sent late scores fewer stars (%.1f after %.0f of %.0f h)" % [late_score, store.age(late), store.expire_hours(late)],
+		late_score < 3.0 and late_score > 1.0 and is_equal_approx(float(store.state().get("last_score", 0.0)), late_score))
+	# one left to expire costs her
+	var rate1: float = store.rating()
+	var exp0 := int(store.state().get("expired", 0))
+	var old := store.place_order(-1.0, "angora", 0)
+	old["placed"] = float(old["placed"]) - store.expire_hours(old) - 0.5
+	store.update()
+	_check("an order left past its time expires and lowers her rating (%.2f -> %.2f)" % [rate1, store.rating()],
+		store.orders().find(old) < 0 and int(store.state().get("expired", 0)) == exp0 + 1 and store.rating() < rate1)
+	# a better rating brings orders sooner and more of them at once
+	var sc0: Array = store.scores().duplicate()
+	store.state()["scores"] = [1.0]
+	var slow: float = store.interval()
+	var few: int = store.max_open()
+	store.state()["scores"] = [5.0]
+	var fast: float = store.interval()
+	var many: int = store.max_open()
+	_check("a five-star shop gets orders every %.0f h, up to %d open; a one-star shop every %.0f h, up to %d" % [fast, many, slow, few],
+		fast < slow and many > few)
+	store.state()["orders"] = []
+	store.state()["next_at"] = OnlineStore.now_h() - 30.0 # a long night: what came in is waiting, up to the cap
+	store.update()
+	var after: int = store.orders().size()
+	store.state()["next_at"] = OnlineStore.now_h() - 0.01
+	store.state()["orders"] = []
+	store.update()
+	_check("orders keep coming: %d after a long night (at most %d), one more when the timer's up (%d)" % [after, many, store.orders().size()],
+		after > 1 and after <= many and store.orders().size() == 1)
+	store.state()["orders"] = []
+	store.state()["next_at"] = OnlineStore.now_h() - 200.0 # the computer gone for days, then back
+	var exp_a := int(store.state().get("expired", 0))
+	store.update()
+	var oldest := 0.0
+	for o in store.orders():
+		oldest = maxf(oldest, store.age(o))
+	_check("back after days away, she finds no pile of old orders: none older than a night, none expired at once (%d orders, oldest %.1f h)" % [store.orders().size(), oldest],
+		store.orders().size() >= 1 and oldest <= float(store.data.get("catch_up_hours", 12.0)) + 0.01 and int(store.state().get("expired", 0)) == exp_a)
+	store.state()["scores"] = sc0
+	# the state keeps through a save: numbers come back from JSON as floats
+	var st: Dictionary = JSON.parse_string(JSON.stringify(store.state()))
+	var rate2: float = store.rating()
+	var due0: int = store.coming()
+	var n2: int = store.orders().size()
+	Game.flags["store"] = st
+	_check("the store keeps through a save (rating %.2f, %d orders, %dc coming)" % [store.rating(), store.orders().size(), store.coming()],
+		is_equal_approx(store.rating(), rate2) and store.coming() == due0 and due0 > want and store.orders().size() == n2)
+	# the morning post
+	var due: int = store.coming()
+	coins0 = Game.coins
+	store._on_day_started(Game.day)
+	_check("the next morning's post brings the coins (+%d)" % (Game.coins - coins0),
+		Game.coins - coins0 == due and store.coming() == 0 and int(store.state().get("earned", 0)) == due)
+	store.handle_key(KEY_ESCAPE)
+	await _wait(0.5)
+	_check("Esc steps her back from the computer, where she can walk, with the overhead camera back (walkable %s)" % _walkable(_cell(player.position)),
+		not store.active and not fps.active and not fps.locked and _walkable(_cell(player.position)))
+	cam_target = player.position + Vector3(0, 0.9, 0)
+	await _wait(0.8)
+	await _shot("63_store_after.png")
+	# put it all back
+	furniture.erase(comp)
+	comp.queue_free()
+	_rebuild_grid()
+	Game.coins = keep["coins"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["d"]
+	Game.sweater_fibres = keep["f"]
+	Game.inv = keep["inv"]
+	Game.worn_quality = keep["wq"]
+	Game.worn_design = keep["wd"]
+	Game.wardrobe = keep["w"]
+	Game.knit_xp = keep["xp"]
+	for key in ["store", "request"]:
+		if keep[key] == null:
+			Game.flags.erase(key)
+		else:
+			Game.flags[key] = keep[key]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	await _wait(0.2)

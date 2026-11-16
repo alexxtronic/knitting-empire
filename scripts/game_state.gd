@@ -75,6 +75,9 @@ var knit_xp: int = 0
 var sweaters: Array = []
 ## The design of each of those sweaters (data/sweaters.json), in the same order.
 var sweater_designs: Array = []
+## The wild fibre each of those sweaters was knitted with (a data/wildlife.json "fibres" id, "" for
+## plain wool), in the same order. The online store's orders want a fibre (scripts/online_store.gd).
+var sweater_fibres: Array = []
 ## Her wardrobe: every design she has knit, kept to wear (design id -> the best rarity she knit it in).
 ## She knits one like it for herself; the sweaters in her bag are for selling.
 var wardrobe: Dictionary = {}
@@ -137,6 +140,7 @@ func reset() -> void:
 	worn_design = ""
 	sweaters = []
 	sweater_designs = []
+	sweater_fibres = []
 	wardrobe = {}
 	sync_sweaters()
 	day = 1
@@ -285,6 +289,7 @@ func add_sweater(rarity: int, design := "") -> void:
 	_sync_designs()
 	sweaters.append(clampi(rarity, 1, 5))
 	sweater_designs.append(design if design != "" else Sweaters.design_for(rarity, randi()))
+	sweater_fibres.append("")
 	inv["sweater"] = sweaters.size()
 
 
@@ -293,9 +298,10 @@ func remove_sweater(i: int) -> Dictionary:
 	_sync_designs()
 	if i < 0 or i >= sweaters.size():
 		return {}
-	var out := {"rarity": int(sweaters[i]), "design": str(sweater_designs[i])}
+	var out := {"rarity": int(sweaters[i]), "design": str(sweater_designs[i]), "fibre": str(sweater_fibres[i])}
 	sweaters.remove_at(i)
 	sweater_designs.remove_at(i)
+	sweater_fibres.remove_at(i)
 	inv["sweater"] = sweaters.size()
 	return out
 
@@ -306,6 +312,10 @@ func _sync_designs() -> void:
 		sweater_designs.append(Sweaters.design_for(int(sweaters[sweater_designs.size()]), knit_xp + sweater_designs.size()))
 	if sweater_designs.size() > sweaters.size():
 		sweater_designs = sweater_designs.slice(0, sweaters.size())
+	while sweater_fibres.size() < sweaters.size():
+		sweater_fibres.append("")
+	if sweater_fibres.size() > sweaters.size():
+		sweater_fibres = sweater_fibres.slice(0, sweaters.size())
 
 
 ## Keeps the list of sweater rarities as long as the sweater count: any the list doesn't know about
@@ -322,6 +332,7 @@ func sync_sweaters() -> void:
 		order = order.slice(order.size() - n)
 		sweaters = order.map(func(i): return sweaters[i])
 		sweater_designs = order.map(func(i): return sweater_designs[i])
+		sweater_fibres = order.map(func(i): return sweater_fibres[i])
 
 
 ## What all her sweaters would sell for, if a Rare one sells for `unit`.
@@ -469,7 +480,7 @@ func to_dict() -> Dictionary:
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
 		"knit_xp": knit_xp, "worn_quality": worn_quality, "worn_design": worn_design, "sweaters": sweaters,
-		"sweater_designs": sweater_designs, "wardrobe": wardrobe,
+		"sweater_designs": sweater_designs, "sweater_fibres": sweater_fibres, "wardrobe": wardrobe,
 		"day": day, "hour": hour, "house_level": house_level,
 		"friends": friends, "owns_cottage": owns_cottage, "sheep_count": sheep_count,
 	}
@@ -589,6 +600,9 @@ func from_dict(d: Dictionary) -> void:
 	sweater_designs = []
 	for x in d.get("sweater_designs", []):
 		sweater_designs.append(str(x))
+	sweater_fibres = []
+	for x in d.get("sweater_fibres", []):
+		sweater_fibres.append(str(x))
 	wardrobe = {}
 	var wd = d.get("wardrobe", {})
 	if wd is Dictionary:
