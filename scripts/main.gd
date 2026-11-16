@@ -42,6 +42,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
+const Wolves = preload("res://scripts/wolves.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const Barista = preload("res://scripts/barista.gd")
@@ -125,6 +126,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
+var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -402,6 +404,9 @@ func _ready() -> void:
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
+	wolves = Wolves.new()
+	wolves.main = self
+	add_child(wolves)
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -410,6 +415,7 @@ func _ready() -> void:
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
+	Wolves.on = _autotest_dir == "" # and no wolves come but in their own check (_wolf_checks)
 	Jobs.on = _autotest_dir == "" # and no boss offers a job but in the jobs check, which turns them on
 	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
@@ -1785,6 +1791,8 @@ func dog_bark() -> bool:
 	audio.play("bark", -3.0, 0.12)
 	if wildlife:
 		wildlife.barked(dog.global_position)
+	if wolves:
+		wolves.barked(dog.global_position)
 	return true
 
 
@@ -2745,6 +2753,8 @@ func _on_day_started(_day: int) -> void:
 		forage.apply() # what she cut a while ago grows back
 	if wildlife:
 		wildlife.restock() # another animal turns up where one was caught, once its time is up
+	if wolves:
+		_morning_note += wolves.morning_note(_day) # a night she slept through, and any animal the wolves took
 	for p in plots:
 		p.on_new_day()
 	for s in sheep_list:
@@ -5427,6 +5437,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=wolves" in OS.get_cmdline_user_args(): # just the wolves at night: the roll, the alert, scaring them off, a loss, the barn, a save
+		await _wait(1.5)
+		await _wolf_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=wildlife" in OS.get_cmdline_user_args(): # just the wild animals and birds: placing, combing, fleeing, flushing
 		await _wait(1.5)
 		await _wildlife_checks()
@@ -5691,6 +5707,7 @@ func _autotest() -> void:
 	await _dog_checks()
 	await _wildlife_checks()
 	await _empire_checks()
+	await _wolf_checks()
 	await _sale_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
@@ -11091,3 +11108,251 @@ func _recolor_checks() -> void:
 	furniture.erase(spawned)
 	spawned.queue_free()
 	_check("colours: its own colour back costs nothing (%dc), and a sofa takes the fabrics too (%s)" % [c1 - Game.coins, str(e2.get("c", ""))], c1 == Game.coins and str(e2.get("c", "")) == "denim")
+
+
+# --- wolves at night (wolves.gd, data/wolves.json) -------------------------------------------
+
+## Her flock at `n` sheep, in the pen (the wolves check takes them and puts them back).
+func _set_flock(n: int) -> void:
+	while sheep_list.size() > n:
+		var s = sheep_list.pop_back()
+		s.queue_free()
+	Game.sheep_count = n
+	while sheep_list.size() < n:
+		_add_sheep()
+
+
+## Wolves: nothing comes while nothing is at risk; a forced night brings the howl, the toast and the
+## pack walking in; Nora's rush and the dog's barks see them off, the bigger taking more; a missed
+## window costs one animal and the morning says which; a night slept through can cost one too; the
+## barn (housed sheep, rented stalls) keeps them safe; a raid and the tally survive a save.
+func _wolf_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var keep := {"flags": Game.flags.duplicate(true), "day": Game.day, "hour": Game.hour, "sheep": Game.sheep_count, "clock": Game.time_running,
+		"jog": autotest_jog, "cd": cam_dist, "bed": flock_bedtime, "pos": player.position}
+	player.walk([])
+	autotest_jog = false
+	Game.time_running = false
+	flock_bedtime = false
+	Wolves.on = true
+	wolves.clear()
+	wildlife.clear()
+	for k in ["wolves", "wolf_note", "penned", "wild_gone", "wild", "barn_rent_due", "barn_rent_owed", "wolves_tamed"]:
+		Game.flags.erase(k)
+	Game.flags["act1_done"] = true
+	Game.hour = 20.0
+	var home: Vector3 = wolves.pen_centre()
+	# nothing at risk: the night passes quietly
+	_set_flock(0)
+	wildlife.build()
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	_check("with nothing in the pens the wolves don't come (raid %s, night rolled %s)" % [wolves.active(), int(wolves.state().get("night", -1)) == Game.day],
+		not wolves.active() and int(wolves.state().get("night", -1)) == Game.day)
+	# a forced wolf night: the howl, the toast, the pack walking in from the woods
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_901"}, {"species": "fox", "key": "pen_fox_902"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.3)
+	var risk0: int = wolves.at_risk().size()
+	var howls0 := int(audio.played.get("howl", 0))
+	Game.hour = 20.0
+	var s0: Dictionary = wolves.state()
+	s0.erase("night")
+	Game.set_flag("wolves", s0)
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	var n0: int = wolves.pack.size()
+	var toast0: String = hud.toast_label.text
+	var models_ok: bool = wolves.pack.all(func(w): return w._model != null and w._anim != null and w._anim.has_animation("Walk"))
+	var d_start: float = wolves.pack[0].position.distance_to(home) if n0 > 0 else 0.0
+	cam_target = wolves.pack[0].position if n0 > 0 else home
+	cam_dist = 16.0
+	_set_cam_lock(true)
+	await _wait(1.5)
+	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
+	await _shot("63_wolves_coming.png")
+	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s'), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
+		risk0, int(audio.played.get("howl", 0)) - howls0, toast0.left(48), n0, str(wolves.pack.map(func(w): return w.size_id)), d_start, walking, models_ok, wolves.raid_left],
+		risk0 == 4 and wolves.active() and int(audio.played.get("howl", 0)) == howls0 + 1 and toast0.contains("howl") and n0 >= 1 and n0 <= 3
+		and d_start > 20.0 and walking == "Walk" and models_ok and wolves.raid_left > 40.0)
+	# scaring them off: three of them at the pen; Nora rushes the small one, the dog barks at the rest
+	wolves.clear()
+	wolves.start_raid(3)
+	await _wait(0.1)
+	for w in wolves.pack:
+		w.position = w.goal
+		w._path = []
+	var small = wolves.pack.filter(func(w): return w.size_id == "small")[0]
+	var medium = wolves.pack.filter(func(w): return w.size_id == "medium")[0]
+	var large = wolves.pack.filter(func(w): return w.size_id == "large")[0]
+	var nerves := [small.nerve, medium.nerve, large.nerve]
+	var out_dir: Vector3 = (small.goal - home)
+	out_dir.y = 0.0
+	out_dir = out_dir.normalized()
+	var side := Vector3(-out_dir.z, 0, out_dir.x)
+	for w in [medium, large]: # the other two along the fence, out of her rush at the small one
+		w.goal += side * 12.0
+		w.position = w.goal
+	player.position = small.position + out_dir * 11.0
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	cam_target = small.position
+	cam_dist = 15.0
+	await _wait(0.6)
+	await _shot("63_wolves_at_pen.png")
+	autotest_jog = true
+	var tw := 0.0
+	while is_instance_valid(small) and not small.fleeing and tw < 12.0:
+		player.walk(_find_path(player.position, small.position))
+		await _wait(0.3)
+		tw += 0.3
+	autotest_jog = false
+	player.walk([])
+	var small_ran: bool = not is_instance_valid(small) or small.fleeing
+	var others_stay: bool = not medium.fleeing and not large.fleeing
+	_check("the wolves have more nerve the bigger they are (%s), and Nora running at the small one sends it off (%s after %.1f s) while the others hold (%s)" % [str(nerves), small_ran, tw, others_stay],
+		nerves == [1, 2, 3] and small_ran and others_stay and wolves.active())
+	toggle_dog(true)
+	hud.hide_dialogue()
+	dog.position = (medium.position + large.position) * 0.5 + out_dir * 2.0
+	dog.path = []
+	cam_target = dog.position
+	await _wait(BARK_WAIT)
+	dog_bark()
+	await _wait(0.1)
+	var after1 := [medium.nerve, large.nerve, medium.fleeing, large.fleeing]
+	await _shot("63_wolves_bark.png")
+	for i in 4:
+		if not wolves.active():
+			break
+		await _wait(BARK_WAIT)
+		for w in wolves.pack:
+			if is_instance_valid(w) and not w.fleeing:
+				dog.position = w.position + out_dir * 2.0
+				break
+		dog_bark()
+	await _wait(0.4)
+	await _shot("63_wolves_flee.png")
+	toggle_dog(false)
+	hud.hide_dialogue()
+	var st: Dictionary = wolves.state()
+	_check("as the dog, a bark takes nerve from every wolf near (after one: medium %d, large %d, running %s %s); the big one takes three, and they're seen off ('%s'; seen off %d, raid saved %s, nothing lost %s)" % [
+		after1[0], after1[1], after1[2], after1[3], hud.toast_label.text.left(30), int(st.get("seen_off", 0)), st.has("raid"), wolves.at_risk().size() == 4],
+		after1[0] == 1 and after1[1] == 2 and after1[2] == false and after1[3] == false and not wolves.active() and int(st.get("seen_off", 0)) == 1
+		and not st.has("raid") and wolves.at_risk().size() == 4)
+	# a bark from her side does nothing: only the player herds and scares
+	wolves.start_raid(1)
+	await _wait(0.1)
+	var w1 = wolves.pack[0]
+	w1.position = w1.goal
+	w1._path = []
+	dog.position = w1.position + Vector3(1.0, 0, 0)
+	var reached: int = wolves.barked(dog.position)
+	_check("beside Nora the dog's bark doesn't reach the wolves (%d reached, nerve %d)" % [reached, w1.nerve], reached == 0 and w1.nerve == 2)
+	# missing the window: they take one, and the morning says which
+	wolves.clear()
+	st = wolves.state()
+	st["night"] = Game.day
+	Game.set_flag("wolves", st)
+	var penned0: int = wildlife.penned_list().size()
+	var sheep0 := Game.sheep_count
+	wolves.start_raid(1, 2.0)
+	await _wait(0.1)
+	cam_target = wolves.pack[0].position
+	await _wait(2.6)
+	var note_now: String = str(Game.flag("wolf_note", ""))
+	var taken := penned0 + sheep0 - wildlife.penned_list().size() - Game.sheep_count
+	var morning: String = wolves.morning_note(Game.day + 1)
+	await _shot("63_wolves_missed.png")
+	_check("missing the window loses one animal (%d gone: %d penned, %d sheep left, %d sheep nodes) and the morning says which ('%s')" % [taken, wildlife.penned_list().size(), Game.sheep_count, sheep_list.size(), morning.strip_edges()],
+		taken == 1 and not wolves.active() and sheep_list.size() == Game.sheep_count and note_now != "" and morning.contains(note_now)
+		and (morning.contains("rabbit") or morning.contains("fox") or morning.contains("sheep")) and Game.flag("wolf_note", "") == "" and int(wolves.state().get("lost", 0)) == 1)
+	# a night slept through: rolled in the morning, and a hit costs one while she slept
+	st = wolves.state()
+	st["night"] = Game.day - 2
+	Game.set_flag("wolves", st)
+	var risk1: int = wolves.at_risk().size()
+	wolves.force_next = true
+	Game.hour = 6.0
+	var slept: String = wolves.morning_note(Game.day)
+	_check("a night she slept through is rolled in the morning, and the wolves took one while she slept ('%s', %d -> %d at risk)" % [slept.strip_edges(), risk1, wolves.at_risk().size()],
+		slept.contains("While you slept") and wolves.at_risk().size() == risk1 - 1 and not wolves.active())
+	# the barn: sheep in their stalls and animals in rented stalls are safe
+	Game.hour = 21.5 # bedtime: the flock keeps to its stalls
+	flock_bedtime = true
+	st = wolves.state()
+	st["night"] = Game.day # tonight is rolled only by this check's own calls
+	Game.set_flag("wolves", st)
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_903"}, {"species": "fox", "key": "pen_fox_904"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.2)
+	var barn_ok: bool = World.barn_ready()
+	if barn_ok:
+		for i in sheep_list.size():
+			var stall: Dictionary = World.barn_stall(i)
+			sheep_list[i].place(stall["stall"], true, stall["yaw"])
+	var housed_risk: int = wolves.at_risk().size()
+	Game.set_flag("barn_rent_due", Game.day + 10)
+	Game.set_flag("barn_rent_owed", 0)
+	var rented: bool = wildlife.stalls_rented()
+	var risk_rented: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came: bool = wolves.roll(Game.day, false)
+	var safe_all: bool = not came and not wolves.active() and wildlife.penned_list().size() == 2 and Game.sheep_count == 2
+	cam_target = World.barn.global_position if World.barn and is_instance_valid(World.barn) else home
+	await _wait(0.4)
+	await _shot("63_wolves_barn.png")
+	Game.set_flag("barn_rent_owed", 60) # behind with the rent: the stalls aren't hers
+	var risk_owed: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came_owed: bool = wolves.roll(Game.day, false)
+	_check("the barn keeps them safe: sheep in their stalls (%s) are off the wolves' list (%d at risk, the two wild ones), and with the stalls rented (%s) nobody is (%d), so a forced night brings nothing (%s); behind with the rent the wild ones are at risk again (%d) and the wolves come (%s)" % [
+		barn_ok, housed_risk, rented, risk_rented, safe_all, risk_owed, came_owed],
+		barn_ok and housed_risk == 2 and rented and risk_rented == 0 and safe_all and risk_owed == 2 and came_owed and wolves.active())
+	# a save: the raid in progress, its seconds and the tally come back
+	await _wait(0.2)
+	wolves.raid_left = 30.0
+	wolves._note_raid()
+	var pack_n: int = wolves.pack.size()
+	var saved := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	wolves.clear()
+	Game.flags.erase("wolves")
+	Game.from_dict(saved)
+	wolves._resumed = false
+	await _wait(0.3)
+	var st2: Dictionary = wolves.state()
+	_check("a save keeps the wolves: the raid comes back with its pack (%d of %d) and about its seconds (%.0f), and the tally (seen off %d, lost %d)" % [wolves.pack.size(), pack_n, wolves.raid_left, int(st2.get("seen_off", 0)), int(st2.get("lost", 0))],
+		wolves.active() and wolves.pack.size() == pack_n and wolves.raid_left > 25.0 and wolves.raid_left <= 30.0 and int(st2.get("seen_off", 0)) == 1 and int(st2.get("lost", 0)) == 2)
+	# taming isn't built: the hook keeps the wild ones away once it is
+	wolves.clear()
+	Game.set_flag("wolves_tamed", true)
+	wolves.force_next = true
+	var came_tamed: bool = wolves.roll(Game.day, false)
+	_check("the taming hook: once tamed (wolves_tamed) no wild wolves come (%s)" % came_tamed, not came_tamed and not wolves.active())
+	# put it all back
+	wolves.clear()
+	wolves.force_next = false
+	Wolves.on = false
+	wildlife.clear()
+	Game.flags = keep["flags"]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	_set_flock(int(keep["sheep"]))
+	Game.time_running = keep["clock"]
+	autotest_jog = keep["jog"]
+	cam_dist = keep["cd"]
+	flock_bedtime = keep["bed"]
+	player.position = keep["pos"]
+	player.walk([])
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	cam_target = player.position
+	_set_cam_lock(false)
+	hud.hide_dialogue()
