@@ -606,7 +606,7 @@ var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.g
 ## Per graphics level: how many of the nearest lit lamps cast real shadows.
 const LAMP_SHADOWS := [0, 2, 4]
 const GRASS_THIN := [0.4, 0.4, 0.45] # grass.gd: the share of blades left at the end of the range
-const RECOMMENDED_APPLE := 2 # default_graphics() on an Apple M-series chip
+const RECOMMENDED_APPLE := 1 # Medium: on an M4 MacBook Air at 2560x1378 High runs 19-29 fps, Medium 30-50 (--only=perf)
 
 
 ## The Settings slider "3D detail": how many 3D pixels to draw, as a share of the level's own
