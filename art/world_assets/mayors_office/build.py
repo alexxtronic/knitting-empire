@@ -128,6 +128,8 @@ def materials():
     M["brick"] = K.textured("mayor_brick", i, 0.85, normal=n)
     i, n = shingle_maps("mayor_roof", SHINGLE_C)
     M["roof"] = K.textured("mayor_roof", i, 0.85, normal=n, normal_strength=1.2)
+    M["roof_arch"] = M["roof"].copy()
+    M["roof_arch"].name = "mayor_roof_arch"
     i, n = CL.plank_maps("mayor_door", TEX, base="#a5582c", light="#c47440", dark="#7a3d1c", knots=1, seams=3, seed=41)
     M["door"] = K.textured("mayor_door", i, 0.75, normal=n, normal_strength=0.8)
     M["trim"] = K.plain("mayor_trim", CREAM, 0.6)
@@ -291,7 +293,9 @@ def roof(M):
         yf = cy - hd + (zb - z0) / slope + 0.1  # where the dormer's face meets the roof
         body = K.box("dormer", (1.25, 1.4, zt - zb), (x, yf + 0.7, (zb + zt) / 2), M["trim"], bevel=0.03)
         window("dwin", M, x, zb + 0.12, zt - 0.22, yf)
-        K.ball("dormer_hood", 0.74, (x, yf + 0.6, zt - 0.02), M["roof"], scale=(1.0, 1.05, 0.36), u=18, v=10)
+        # an arched (barrel) roof, tiled along it, with a trim board round its front (Alex,
+        # 2026-11-16: the squashed-ball hoods "look ugly fix them to be arches")
+        K.arch_hood("dormer_hood", 0.74, 0.42, 1.5, yf - 0.08, zt - 0.06, x, M["roof_arch"], M["trim"])
         K.box("dormer_sill", (1.4, 0.3, 0.1), (x, yf - 0.05, zb), M["trim"], bevel=0.03)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "building_mayor",
-  "triangles": 51124,
+  "triangles": 50740,
   "materials": [
     "mayor_stone",
     "mayor_wall",
@@ -10,6 +10,7 @@
     "mayor_door",
     "mayor_roof",
     "mayor_brick",
+    "mayor_roof_arch",
     "mayor_redwood",
     "mayor_gold",
     "mayor_flag",
@@ -48,5 +49,5 @@
     "mayor_stone",
     "mayor_stone_n"
   ],
-  "glb_bytes": 5868332
+  "glb_bytes": 5840592
 }

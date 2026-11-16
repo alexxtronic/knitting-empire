@@ -34,3 +34,28 @@ width and shade, thin under the course above and thick at its butt with a shadow
 gaps between, grain down the slope, a little moss. It's turned so the courses run along the ridge with
 the butts toward +x of each slope's own space; `shingles_r` is its mirror for the other slope, built
 from a mirrored height map so its normals are right. The ridge cap and fascia boards are dark oak.
+
+## Every building (2026-11-16)
+
+Alex: "all buildings in the game should have similar realistic textures to her main house ... apply
+similar wood grain realistic textures to the barn, the coffee shop etc and give them realistic tiles
+for the roof". Four more maps: `boards` (2 m, weathered vertical boards with grain, knots and dark
+gaps), `tiles` (1 m, overlapping clay tiles in courses, each its own shade), `brick` (2 m, running
+bond with recessed mortar) and `paintwood` (1 m, painted wood with faint grain and wear).
+`scripts/building_skin.gd` dresses each shop, the Mayor's Office, the café and the barn when
+`Catalog.model()` loads it: each surface is mapped by its material name to a kind, the map is tinted so
+the surface keeps its average colour, and the light bake carries over. Roofs use
+`shaders/roof_tiles.gdshader` (courses along each slope from the face's flat normal and the smooth
+normal; the barn's smooth normals alone skewed them into diagonal bands). The Mayor's redwood
+reads as boards; timber and paintwood relief turned down after they looked furry from above.
+`--only=buildings` saves a picture of each (`review/in_game/` has copies).
+
+## Arched dormers and chimneys (2026-11-16)
+
+Alex: "these ball roofs look ugly fix them to be arches" (the Mayor's Office's squashed-ball dormer
+hoods, the café's rounded hoods with a ball on top) and "add chimneys coming out of the roof
+whenever there's a fireplace". `kelib.arch_hood()` builds an elliptical barrel roof for a dormer: a
+tiled shell with UVs in metres (courses along the barrel, butts down both sides), an arched trim
+board round its front and the arch filled behind it. Both buildings were rebuilt and their light bake
+run again. Nora's house gets a fieldstone chimney with clay pots over every fireplace inside it
+(`main._update_chimneys()`), rebuilt when one is moved. Pictures: `review/in_game/63_*` and `62_chimney.jpg`.

@@ -158,6 +158,8 @@ def materials():
     M["wall"] = K.textured("cafe_wall", i, 0.88, normal=n, normal_strength=0.9)
     i, n = tile_maps("cafe_tiles", TILE)
     M["roof"] = K.textured("cafe_roof", i, 0.8, normal=n, normal_strength=1.3)
+    M["roof_arch"] = M["roof"].copy()
+    M["roof_arch"].name = "cafe_roof_arch"
     i, n = block_maps("cafe_stone", STONE_C, "#d8cebf", seed=5)
     M["stone"] = K.textured("cafe_stone", i, 0.92, normal=n)
     i, n = block_maps("cafe_cobble", "#cdb8a6", "#8e8a66", blocks=5, courses=6, joint=7, jitter=0.35, seed=8)
@@ -510,10 +512,9 @@ def roof(M):
         dd = (zt + 0.4 - zb) / slope + 0.3  # deep enough to reach back into the roof
         K.box("dormer", (1.15, dd, zt - zb), (x, yd + dd / 2 - 0.05, (zb + zt) / 2 - 0.08), M["trim"], bevel=0.03)
         arched_window("dwin", M, x, zb + 0.08, zt - 0.32, yd, w=0.62)
-        hood = K.cyl("dormer_hood", 0.68, 0.68, dd + 0.1, (x, yd + dd / 2 - 0.1, zt - 0.3), M["roof"], verts=20, rot=(90, 0, 0))
-        hood.scale = (1, 0.55, 1)
-        K.uv_box(hood, 0.6)
-        K.ball("dormer_finial", 0.1, (x, yd - 0.12, zt + 0.08), M["roof"], u=10, v=7)
+        # an arched (barrel) roof, tiled along it, with a trim board round its front (Alex,
+        # 2026-11-16: the rounded hoods with a ball on top "look ugly fix them to be arches")
+        K.arch_hood("dormer_hood", 0.7, 0.42, dd + 0.05, yd - 0.12, zt - 0.3, x, M["roof_arch"], M["trim"])
     # the chimney (x 985..1135), stone with a cream brick top
     # over the fireplace inside, on the left wall (data/interiors.json "cafe": Godot x -4.9, z -3.1)
     cx_, cy_, top = -W / 2 + 0.8, 3.1, Z(18)
