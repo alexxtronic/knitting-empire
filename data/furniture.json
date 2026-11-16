@@ -126,6 +126,16 @@
       "wood": 70
     },
     {
+      "name": "Computer",
+      "price": 2400,
+      "size": [1.3, 0.7],
+      "where": "in",
+      "height": 1.4,
+      "id": "computer",
+      "shop": "indoors",
+      "cat": "Bed & Study"
+    },
+    {
       "name": "Stone Fireplace",
       "price": 600,
       "size": [2.0, 1.0],
