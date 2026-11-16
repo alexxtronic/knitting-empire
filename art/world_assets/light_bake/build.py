@@ -67,6 +67,7 @@ PROPS = {
     "building_shop": (1.4, True),
     "chalkboard_sign": (0.6, True),
     "coffee_table": (0.7, True),
+    "computer": (0.7, True),
     "daisy_crate": (0.6, True),
     "dining_table": (0.8, True),
     "fence_post": (0.6, True),

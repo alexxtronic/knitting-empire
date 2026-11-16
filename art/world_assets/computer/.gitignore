@@ -1,0 +1,2 @@
+# The bakes are rebuilt by build.py; the GLB in assets/props carries them.
+out/

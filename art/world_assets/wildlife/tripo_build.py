@@ -56,6 +56,9 @@ SPECIES = {
     "chinchilla": {"gait": "hop", "tail": 3},
     "mink": {"gait": "bound", "tail": 3},
     "sable": {"gait": "bound", "tail": 3},
+    "wolf_small": {"gait": "dog", "tail": 3},
+    "wolf_medium": {"gait": "dog", "tail": 3},
+    "wolf_large": {"gait": "dog", "tail": 3},
 }
 # The spine, neck, head pivot and tail, (y, z) in metres at x = 0, read off each animal's side view on
 # its 5 cm grid (out_tripo/<id>/views/side.png). The paws (and so the legs' x and y) and the nose are
@@ -81,6 +84,13 @@ HAND = {
     "chinchilla": {"chest": (-0.08, 0.08), "hips": (0.04, 0.07), "neck": (-0.08, 0.13), "head": (-0.08, 0.17),
                    "tail": [(0.10, 0.05), (0.18, 0.08), (0.20, 0.18), (0.25, 0.26)], "ground_y": 0.08,
                    "ear_reach": 2.4, "bend": 2.2},
+    # the wolves (2026-11-16): the large one stands with its head lowered, the nose below the neck
+    "wolf_small": {"chest": (-0.10, 0.27), "hips": (0.10, 0.25), "neck": (-0.13, 0.36), "head": (-0.18, 0.46),
+                   "tail": [(0.165, 0.31), (0.23, 0.235), (0.28, 0.14), (0.30, 0.05)], "elbow": 0.6, "ground_y": 0.2},
+    "wolf_medium": {"chest": (-0.32, 0.53), "hips": (0.09, 0.51), "neck": (-0.39, 0.66), "head": (-0.50, 0.77),
+                    "tail": [(0.16, 0.62), (0.28, 0.50), (0.39, 0.30), (0.45, 0.06)], "elbow": 0.64, "ground_y": 0.25},
+    "wolf_large": {"chest": (-0.50, 0.66), "hips": (0.25, 0.62), "neck": (-0.72, 0.78), "head": (-0.95, 0.86),
+                   "tail": [(0.40, 0.86), (0.59, 0.625), (0.74, 0.36), (0.83, 0.09)], "elbow": 0.64, "ground_y": 0.42},
     "mink": {"chest": (-0.18, 0.135), "hips": (0.03, 0.135), "neck": (-0.20, 0.18), "head": (-0.24, 0.215),
              "tail": [(0.08, 0.15), (0.14, 0.11), (0.19, 0.065), (0.22, 0.02)], "ground_y": 0.06},
 }
