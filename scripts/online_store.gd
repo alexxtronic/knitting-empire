@@ -449,12 +449,29 @@ func _steer() -> void:
 	if _flat or not is_instance_valid(_screen) or not main.fps.active:
 		return
 	var eye: Vector3 = main.cam.global_position
-	var to: Vector3 = _screen.global_position - eye
+	var to: Vector3 = screen_centre() - eye
 	var flat := Vector2(to.x, to.z).length()
 	if flat < 0.05:
 		return
 	main.fps.yaw = atan2(-to.x, -to.z)
 	main.fps.pitch = atan2(to.y, flat)
+
+
+## The middle of the screen's glass in the world: its mesh's bounds, since a model's "screen" node
+## may have its origin anywhere (the Tripo computer's sits at the model's foot).
+func screen_centre() -> Vector3:
+	var mi := _screen_mesh()
+	if mi == null:
+		return _screen.global_position
+	return mi.global_transform * mi.get_aabb().get_center()
+
+
+func _screen_mesh() -> MeshInstance3D:
+	if not is_instance_valid(_screen):
+		return null
+	if _screen is MeshInstance3D:
+		return _screen as MeshInstance3D
+	return _screen.find_child("*", true, false) as MeshInstance3D
 
 
 ## Where the screen is in the view, or a centred page if it isn't (or is too small to read).
@@ -463,9 +480,7 @@ func screen_rect() -> Rect2:
 	# the HUD's free middle: clear of the need bars, the minimap, the toasts and the hotbar
 	var free := Rect2(vp * Vector2(0.135, 0.14), vp * Vector2(0.72, 0.775)) # fractions: the window may be scaled
 	var fallback := free
-	var mi: MeshInstance3D = null
-	if not _flat and is_instance_valid(_screen):
-		mi = _screen as MeshInstance3D if _screen is MeshInstance3D else _screen.find_child("*", true, false) as MeshInstance3D
+	var mi: MeshInstance3D = null if _flat else _screen_mesh()
 	if mi == null:
 		return fallback
 	var box := mi.get_aabb()
