@@ -4,6 +4,8 @@ extends CanvasLayer
 
 signal mode_selected(build: bool)
 signal expand_pressed
+signal color_chosen(cid: String) # a colour for the piece in her hands (furniture.gd set_color)
+signal wall_tool_chosen(kind: String) # "wall", "door" or "" (house_builder.gd)
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -217,6 +219,9 @@ var slot_btns: Array[Slot] = [] # Game.slots, in order: the first HOTBAR are the
 var hot_sel := 0 # the hotbar slot in her hand
 var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it with
 var expand_btn: Button
+var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
+var door_btn: Button
+var wall_note: Label
 var graphics_btn: Button
 var settings_panel: PanelContainer
 var keys_panel: PanelContainer # Settings > Key bindings (built the first time it opens)
@@ -247,6 +252,8 @@ var item_buttons := {}
 var thumbs # thumbs.gd
 var holding_bar: HBoxContainer
 var sell_btn: Button
+var color_row: HBoxContainer # the colours the piece in her hands comes in
+var color_btns := {} # colour id -> Button
 var chrome: Array[Control] = [] # the everyday panels, faded out during story scenes
 var pie # pie_menu.gd: the ring of actions round whatever you clicked
 var help_panel: PanelContainer
@@ -1046,6 +1053,22 @@ func _build_catalog() -> void:
 	expand_btn = _button("Expand House", func(): expand_pressed.emit())
 	head.add_child(expand_btn)
 	vb.add_child(head)
+	# walls: build onto the house a wall at a time, or a new house on a plot from Gary
+	var HB := preload("res://scripts/house_builder.gd")
+	var wrow := HBoxContainer.new()
+	wrow.add_theme_constant_override("separation", 6)
+	wrow.add_child(_label("Walls", 15, GOLD))
+	wall_btn = _button("Wall · %dc" % HB.price("wall"), func(): wall_tool_chosen.emit("wall" if wall_btn.button_pressed else ""))
+	door_btn = _button("Doorway · %dc" % HB.price("door"), func(): wall_tool_chosen.emit("door" if door_btn.button_pressed else ""))
+	for b in [wall_btn, door_btn]:
+		b.toggle_mode = true
+		b.tooltip_text = "Build walls one at a time on a 2 m grid, against your house or a wall you've built. Close a room and it gets a floor and roof."
+		wrow.add_child(b)
+	vb.add_child(wrow)
+	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
+	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	wall_note.custom_minimum_size = Vector2(408, 0)
+	vb.add_child(wall_note)
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 6)
 	vb.add_child(tabs)
@@ -1120,6 +1143,11 @@ func _build_holding() -> void:
 	holding_bar.visible = false
 	root.add_child(holding_bar)
 	_place(holding_bar, 0.5, 1.0, Vector2(0, 96)) # above the hotbar
+	color_row = HBoxContainer.new()
+	color_row.add_theme_constant_override("separation", 6)
+	color_row.visible = false
+	root.add_child(color_row)
+	_place(color_row, 0.5, 1.0, Vector2(0, 146)) # above the holding bar
 
 
 func _build_toast() -> void:
@@ -1257,10 +1285,51 @@ func set_build_mode(on: bool) -> void:
 		set_holding(false)
 
 
+## The colour swatches for the piece in her hands: [{"id", "name", "color"}], the one it has now
+## ("" for its own), and what a new colour costs. An empty list hides them.
+func set_colors(opts: Array, current: String, price: int) -> void:
+	for c in color_row.get_children():
+		c.free()
+	color_btns.clear()
+	color_row.visible = not opts.is_empty() and holding_bar.visible
+	if opts.is_empty():
+		return
+	color_row.add_child(_label("Colour (%dc):" % price, 13, GOLD))
+	var all: Array = [{"id": "", "name": "Original", "color": ""}]
+	all.append_array(opts)
+	for o in all:
+		var cid := str(o["id"])
+		var b := _button(str(o["name"]), func(): color_chosen.emit(cid))
+		b.add_theme_font_size_override("font_size", 12)
+		if str(o["color"]) != "":
+			var img := Image.create(14, 14, false, Image.FORMAT_RGBA8)
+			img.fill(Color.html(str(o["color"])))
+			b.icon = ImageTexture.create_from_image(img)
+		b.toggle_mode = true
+		b.set_pressed_no_signal(cid == current)
+		color_row.add_child(b)
+		color_btns[cid] = b
+
+
 func set_holding(on: bool, sell_value := 0) -> void:
 	holding_bar.visible = on
+	if not on and color_row != null:
+		color_row.visible = false
 	sell_btn.visible = sell_value > 0
 	sell_btn.text = "Sell for %dc  (Del)" % sell_value
+
+
+## Which wall tool is in hand ("" for none): lights its button.
+func set_wall_tool(t: String) -> void:
+	wall_btn.set_pressed_no_signal(t == "wall")
+	door_btn.set_pressed_no_signal(t == "door")
+	if t == "":
+		wall_note.text = "Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % preload("res://scripts/house_builder.gd").new_house_fee()
+
+
+## What a wall would cost (or why it can't go) on the edge under the pointer.
+func set_wall_note(text: String) -> void:
+	wall_note.text = text
 
 
 func set_expand_text(text: String, enabled: bool) -> void:

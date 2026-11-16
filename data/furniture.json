@@ -1,5 +1,13 @@
 {
   "_about": "Furniture you can buy in Build mode (Builder's Delight's catalogue). 'size' is width x depth in metres; 'where' is in / out / any; 'shop' (indoors / yard) puts it in the catalogue, and 'cat' picks its tab (Living, Kitchen, Bed & Study, Crafts, Garden, Farm: scripts/catalog.gd CATS); 'wood' is what a wooden piece takes to build from her own wood instead of its price in coins. Each id needs a matching builder in scripts/catalog.gd, or a 'model' made by tools/import_asset.py. 'candles' (optional): [x, y, z] spots in the piece's own space where a lit candle stands (assets/props/candle.glb, Catalog.lit_candle).",
+  "_about_colors": "Colours she can buy for a piece in build mode (furniture.gd set_color; Alex, 2026-11-15): an item's 'colors' names the model's materials to recolour ('parts') and a 'palette' here. The model isn't remade: those parts are tinted, their texture turned grey first so a pattern keeps. Each change costs data/economy.json 'building' 'recolor' coins; putting its own colour back is free. Names and colours are drafts for Alex.",
+  "palettes": {
+    "fabric": [{"id": "moss", "name": "Moss", "color": "#6f8a4e"}, {"id": "wine", "name": "Wine", "color": "#8a2f3b"}, {"id": "denim", "name": "Denim", "color": "#4a6488"}, {"id": "oat", "name": "Oat", "color": "#d2c19c"}, {"id": "plum", "name": "Plum", "color": "#6d4a6e"}, {"id": "mustard", "name": "Mustard", "color": "#c99a2e"}],
+    "quilt": [{"id": "rose", "name": "Rose", "color": "#c8727a"}, {"id": "sage", "name": "Sage", "color": "#8fae84"}, {"id": "cornflower", "name": "Cornflower", "color": "#6f8fc8"}, {"id": "heather", "name": "Heather", "color": "#9b85a8"}, {"id": "honey", "name": "Honey", "color": "#d6a54a"}],
+    "paint": [{"id": "sage", "name": "Sage", "color": "#9bb08c"}, {"id": "cream", "name": "Cream", "color": "#ece0c4"}, {"id": "duck_egg", "name": "Duck egg", "color": "#a9c9c6"}, {"id": "navy", "name": "Navy", "color": "#3c4a66"}, {"id": "barn_red", "name": "Barn red", "color": "#9a3a2e"}],
+    "shade": [{"id": "linen", "name": "Linen", "color": "#efe6d2"}, {"id": "rose", "name": "Rose", "color": "#e2a3a3"}, {"id": "sage", "name": "Sage", "color": "#b4c7a2"}, {"id": "sky", "name": "Sky", "color": "#b3cbe3"}, {"id": "butter", "name": "Butter", "color": "#f0d98a"}],
+    "pottery": [{"id": "cream", "name": "Cream glaze", "color": "#ece3cf"}, {"id": "cobalt", "name": "Cobalt", "color": "#3f5f9e"}, {"id": "celadon", "name": "Celadon", "color": "#9cc0a6"}, {"id": "charcoal", "name": "Charcoal", "color": "#4a4644"}, {"id": "mustard", "name": "Mustard", "color": "#cf9f3a"}]
+  },
   "items": [
     {
       "name": "Rocking Chair",
@@ -8,6 +16,7 @@
       "where": "in",
       "height": 1.2,
       "id": "rocking_chair",
+      "colors": {"palette": "fabric", "parts": ["rocking_chair_plaid"]},
       "shop": "indoors",
       "model": "res://assets/props/rocking_chair.glb",
       "cat": "Living",
@@ -20,6 +29,7 @@
       "where": "in",
       "height": 1.0,
       "id": "armchair",
+      "colors": {"palette": "fabric", "parts": ["armchair_fabric", "armchair_fabric_light", "armchair_plaid"]},
       "shop": "indoors",
       "model": "res://assets/props/armchair.glb",
       "cat": "Living"
@@ -31,6 +41,7 @@
       "where": "in",
       "height": 1.0,
       "id": "sofa",
+      "colors": {"palette": "fabric", "parts": ["sofa_fabric", "sofa_fabric_light", "sofa_plaid"]},
       "shop": "indoors",
       "model": "res://assets/props/sofa.glb",
       "cat": "Living"
@@ -42,6 +53,7 @@
       "where": "in",
       "height": 1.0,
       "id": "bed",
+      "colors": {"palette": "quilt", "parts": ["Quilt_patchwork"]},
       "shop": "indoors",
       "model": "res://assets/props/gran_bed.glb",
       "cat": "Bed & Study"
@@ -53,6 +65,7 @@
       "where": "in",
       "height": 1.1,
       "id": "kitchen",
+      "colors": {"palette": "paint", "parts": ["kitchen_cabinet"]},
       "shop": "indoors",
       "model": "res://assets/props/kitchen.glb",
       "cat": "Kitchen",
@@ -66,6 +79,7 @@
       "where": "in",
       "height": 0.6,
       "id": "coffee_table",
+      "colors": {"palette": "fabric", "parts": ["wool_rug_wine"]},
       "shop": "indoors",
       "model": "res://assets/props/coffee_table.glb",
       "cat": "Living",
@@ -79,6 +93,7 @@
       "where": "in",
       "height": 0.9,
       "id": "dining_table",
+      "colors": {"palette": "fabric", "parts": ["dining_table_plaid"]},
       "shop": "indoors",
       "model": "res://assets/props/dining_table.glb",
       "cat": "Kitchen",
@@ -104,6 +119,7 @@
       "where": "in",
       "height": 2.0,
       "id": "wardrobe",
+      "colors": {"palette": "paint", "parts": ["wardrobe_panel"]},
       "shop": "indoors",
       "model": "res://assets/props/wardrobe.glb",
       "cat": "Bed & Study",
@@ -140,6 +156,7 @@
       "where": "in",
       "height": 1.6,
       "id": "lamp",
+      "colors": {"palette": "shade", "parts": ["lamp_shade"]},
       "shop": "indoors",
       "model": "res://assets/props/lamp.glb",
       "cat": "Living"
@@ -185,6 +202,7 @@
       "flat": true,
       "height": 0.06,
       "id": "rug_red",
+      "colors": {"palette": "quilt", "parts": ["rug_red_knit", "rug_red_cord", "rug_red_tassel"]},
       "shop": "indoors",
       "model": "res://assets/props/rug_red.glb",
       "cat": "Living"
@@ -207,6 +225,7 @@
       "where": "any",
       "height": 0.9,
       "id": "plant",
+      "colors": {"palette": "pottery", "parts": ["plant_terracotta"]},
       "shop": "indoors",
       "model": "res://assets/props/plant.glb",
       "cat": "Living"
