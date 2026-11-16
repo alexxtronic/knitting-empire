@@ -5,7 +5,7 @@ license), which scripts/house_skin.gd projects onto the house's boxes from three
 
     uv run --no-project --with numpy --with pillow python art/world_assets/house_exterior/build.py
 
-Writes tex/<kind>.png and <kind>_n.png (and timber_h, the oak with its grain across) and a review sheet (review/sheet.png), and copies the maps
+Writes tex/<kind>.png and <kind>_n.png (and timber_h, the oak with its grain across, and shingles_r, the shingles for the far slope) and a review sheet (review/sheet.png), and copies the maps
 to assets/textures/house/. Then import (see AGENTS.md).
 
 Every map tiles both ways: the noise is made in frequency space (so it wraps), and every stroke,
@@ -25,7 +25,7 @@ TEX = os.path.join(HERE, "tex")
 GAME = os.path.join(ROOT, "assets", "textures", "house")
 
 # metres one tile covers (scripts/house_skin.gd scales by these) and its size in pixels
-SIZES = {"plaster": (2.0, 1024), "timber": (1.0, 512), "stone": (2.0, 1024)}
+SIZES = {"plaster": (2.0, 1024), "timber": (1.0, 512), "stone": (2.0, 1024), "shingles": (1.0, 512)}
 
 
 def C(h):
@@ -207,6 +207,53 @@ def stone():
     return np.clip(rgb, 0, 1), h, 3.2
 
 
+def shingles():
+    """Cedar shingles stained the roof's red-brown: courses 0.25 m apart, each shingle its own
+    width and shade, thin under the course above and thick at its butt, which throws a shadow
+    line on the course below; gaps between them, grain down the slope, a little moss. Drawn with
+    the courses across the image (butts at the bottom of each); main() turns it for the roof."""
+    size, n = SIZES["shingles"]
+    rng = np.random.default_rng(91)
+    px = n / size
+    rows = 4
+    R = n // rows
+    rgb = np.zeros((n, n, 3))
+    h = np.zeros((n, n))
+    grain = fbm(rng, n, 50, 3, aspect=(1.0, 0.08)) # streaks down the slope (down the image)
+    blot = fbm(rng, n, 6, 2)
+    pal = [C("#6b3529"), C("#7a3d2c"), C("#5e2e24"), C("#834633"), C("#6a3a2e"), C("#734030")]
+    ys = np.arange(n)
+    for r in range(rows):
+        y0 = r * R
+        x = rng.uniform(0, 0.1) * px
+        while x < n + 0.1 * px:
+            w = rng.uniform(0.11, 0.3) * px
+            if x + w > n and x < n: # the course's last shingle ends where the first began
+                w = n - x
+            col = pal[rng.integers(len(pal))] * rng.uniform(0.88, 1.1)
+            butt = R - rng.uniform(0, 4) # a ragged lower edge
+            x0, x1 = int(x), int(x + w)
+            xs = np.arange(x0, x1) % n
+            for xi in xs:
+                t = (ys[y0:y0 + R] - y0) / butt
+                inside = t <= 1.0
+                rgb[y0:y0 + R, xi][inside] = col
+                h[y0:y0 + R, xi] = np.where(inside, 0.15 + 0.85 * np.clip(t, 0, 1), 0.0)
+            # the gap at its edge
+            rgb[y0:y0 + R, x0 % n] *= 0.45
+            h[y0:y0 + R, x0 % n] -= 0.3
+            x += w
+    # the shadow each butt throws on the course below
+    rowpos = (ys % R) / R
+    shade = 1.0 - 0.45 * np.exp(-rowpos / 0.06)
+    rgb = rgb * shade[:, None, None]
+    rgb = rgb * (1 + 0.12 * grain + 0.05 * blot)[..., None]
+    moss = np.clip(noise(rng, n, 25) * 0.6 + fbm(rng, n, 4, 2) - 1.4, 0, 1) * (rowpos[:, None] < 0.35)
+    rgb = rgb + (C("#6d7a3c") - rgb) * (moss * 0.55)[..., None]
+    h = h + 0.08 * grain
+    return np.clip(rgb, 0, 1), h, 3.0
+
+
 def save(name, rgb, nrm):
     for suffix, img in (("", rgb), ("_n", nrm)):
         path = os.path.join(TEX, name + suffix + ".png")
@@ -239,6 +286,12 @@ def main():
         save(name, *maps[name])
         if name == "timber": # the same oak turned a quarter, for the rails and lintels that lie flat
             save("timber_h", rgb.transpose(1, 0, 2), normal_from_height(h.T, strength))
+        if name == "shingles": # turned so the courses run along the ridge and the butts face down
+            # the slope (+x in each slope's space); shingles_r for the other slope, where down is -x
+            t, th = rgb.transpose(1, 0, 2), h.T
+            save("shingles", t, normal_from_height(th, strength))
+            save("shingles_r", t[:, ::-1], normal_from_height(th[:, ::-1], strength))
+            maps[name] = (t, normal_from_height(th, strength))
         print("wrote", name)
     sheet(maps)
 

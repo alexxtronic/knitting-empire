@@ -953,16 +953,11 @@ func _house_roof(r: Rect2, ridge_z: bool) -> Node3D:
 		side.position = Vector3(0, rise, 0)
 		side.rotation.z = -sx * deg_to_rad(ROOF_PITCH)
 		root.add_child(side)
-		Catalog.box(side, Vector3(slope, t, run), Vector3(sx * slope * 0.5, t * 0.5, 0), ROOF_COLOR)
-		# courses of shingles: each row's lower edge stands a little proud, in a slightly different shade
-		var rows := int(slope / 0.32)
-		for i in rows:
-			var d := slope - (i + 0.5) * slope / rows
-			var shade := ROOF_COLOR.darkened(0.06 * float(i % 3)) if i % 2 == 0 else ROOF_COLOR.lightened(0.04)
-			Catalog.box(side, Vector3(slope / rows, 0.03, run), Vector3(sx * d, t + 0.012, 0), shade)
-			Catalog.box(side, Vector3(0.04, 0.05, run), Vector3(sx * (d + slope / rows * 0.5 - 0.02), t + 0.02, 0), ROOF_COLOR.darkened(0.3))
-		Catalog.box(side, Vector3(0.06, 0.22, run + 0.04), Vector3(sx * (slope + 0.02), t * 0.5 - 0.02, 0), RIDGE_COLOR) # fascia
-	Catalog.box(root, Vector3(0.22, 0.14, length + ROOF_EAVES * 2.0 + 0.06), Vector3(0, rise + 0.1, 0), RIDGE_COLOR) # ridge cap
+		# cedar shingles in courses down the slope (art/world_assets/house_exterior): the map's
+		# butts face +x, so the slope whose down is -x takes its mirror
+		HouseSkin.on(Catalog.box(side, Vector3(slope, t, run), Vector3(sx * slope * 0.5, t * 0.5, 0), ROOF_COLOR), "shingles" if sx > 0.0 else "shingles_r")
+		HouseSkin.oak(Catalog.box(side, Vector3(0.06, 0.22, run + 0.04), Vector3(sx * (slope + 0.02), t * 0.5 - 0.02, 0), RIDGE_COLOR), HouseSkin.DARK_OAK) # fascia
+	HouseSkin.oak(Catalog.box(root, Vector3(0.22, 0.14, length + ROOF_EAVES * 2.0 + 0.06), Vector3(0, rise + 0.1, 0), RIDGE_COLOR), HouseSkin.DARK_OAK) # ridge cap
 	roofs.append({"node": root, "rect": r})
 	return root
 
@@ -8221,7 +8216,7 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 ## the camera sees it, the tree fades to see-through, and when she walks off it comes back solid.
 ## The outside of Nora's house (scripts/house_skin.gd, art/world_assets/house_exterior): plaster,
 ## oak and fieldstone maps on the walls, frame, footing and the flags round it, the porch step's
-## boards, and the window glass (shaders/window_glass.gdshader) with the room behind it, by day,
+## boards, the roof's cedar shingles, and the window glass (shaders/window_glass.gdshader) with the room behind it, by day,
 ## at dusk and at night.
 func _exterior_checks() -> void:
 	var skinned := {}
@@ -8240,7 +8235,7 @@ func _exterior_checks() -> void:
 			holed += 1
 	var porch := get_tree().get_nodes_in_group("planks_floor").filter(func(f): return str(f.get_meta("shade", "")) == "porch")
 	_check("the house's outside is textured: %s; %d window panes of glass in walls cut round them (%d walls), a porch step of boards (%d)" % [", ".join(skinned.keys()), panes, holed, porch.size()],
-		skinned.has("plaster") and skinned.has("timber") and skinned.has("timber_h") and skinned.has("stone") and panes >= 4 and holed >= 3 and porch.size() == 1)
+		skinned.has("plaster") and skinned.has("timber") and skinned.has("timber_h") and skinned.has("stone") and skinned.has("shingles") and skinned.has("shingles_r") and panes >= 4 and holed >= 3 and porch.size() == 1)
 	var shops_glazed := 0
 	for mi in find_children("*", "MeshInstance3D", true, false):
 		var m := mi as MeshInstance3D
@@ -8270,6 +8265,14 @@ func _exterior_checks() -> void:
 	cam_yaw_goal = cam_yaw
 	await _wait(2.0)
 	await _shot("62_window.png")
+	# the roof from above, both slopes in the sun
+	Game.hour = 12.0
+	cam_target = Vector3(4.0, 2.5, 1.0)
+	cam_dist = 13.0
+	cam_yaw = deg_to_rad(20.0)
+	cam_yaw_goal = cam_yaw
+	await _wait(2.0)
+	await _shot("62_roof.png")
 	cam_yaw = yaw0
 	cam_yaw_goal = yaw0
 	_set_cam_lock(true)

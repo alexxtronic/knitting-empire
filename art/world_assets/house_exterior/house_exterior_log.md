@@ -25,3 +25,12 @@ plaster on the walls, the door lintel and the gables; oak on the posts, rails, w
 and the door leaf (lighter); stone on the slab round the house and a new 30 cm fieldstone footing
 along the outside of every outer wall. The doormat became a porch step of weathered boards
 (`Planks` floor, shade `porch`) on a dark oak frame, with a red knitted mat on it (`world.gd`).
+
+## The roof (2026-11-16)
+
+Alex: "what about the roof". The slopes had been flat-coloured strips of felt. `shingles` (1 m a tile)
+draws cedar shingles stained the old roof's red-brown: courses 0.25 m apart, each shingle its own
+width and shade, thin under the course above and thick at its butt with a shadow on the course below,
+gaps between, grain down the slope, a little moss. It's turned so the courses run along the ridge with
+the butts toward +x of each slope's own space; `shingles_r` is its mirror for the other slope, built
+from a mirrored height map so its normals are right. The ridge cap and fascia boards are dark oak.
