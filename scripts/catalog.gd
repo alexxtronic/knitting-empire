@@ -283,6 +283,8 @@ static func model(path: String, r: Node3D) -> Node3D:
 			var baked := Lighting.bake_of(m.mesh, i)
 			if mname.begins_with("wool_"):
 				m.set_surface_override_material(i, wool(mname.substr(5), baked))
+			elif mname.begins_with("glass_"): # a walk-in shop's window panes (town_buildings)
+				m.set_surface_override_material(i, window_glass())
 			elif mname == "Quilt_patchwork":
 				m.set_surface_override_material(i, tartan()) # the bed's cover: the sofa throw's wool
 	r.add_child(inst)
@@ -798,6 +800,19 @@ static func _lantern(r: Node3D) -> void:
 	cyl(r, 0.02, 0.12, 0.06, Vector3(0.25, 1.54, 0), dark)
 	cyl(r, 0.1, 0.02, 0.03, Vector3(0.25, 1.275, 0), dark) # the cup the candle stands in
 	_lantern_candle(r, null)
+
+
+## Every window's glass (shaders/window_glass.gdshader): see-through, with a slight ripple to the
+## room behind it and the sky caught at a glancing angle.
+static var _window_glass: ShaderMaterial
+
+
+static func window_glass() -> ShaderMaterial:
+	if _window_glass == null:
+		_window_glass = ShaderMaterial.new()
+		_window_glass.shader = load("res://shaders/window_glass.gdshader")
+		_window_glass.resource_name = "window_glass"
+	return _window_glass
 
 
 ## Clear glass for the lamp post's lantern: a faint warm tint and a sharp sheen, see-through so the

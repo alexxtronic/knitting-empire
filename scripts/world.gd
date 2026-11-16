@@ -30,8 +30,11 @@ const PATHS := [Rect2(8.1, 2.55, 9.0, 0.9), Rect2(16.15, -0.95, 0.9, 4.4), Rect2
 static func build_ground(root: Node3D, lot: Rect2) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
-	# doormat
-	Catalog.box(root, Vector3(0.9, 0.02, 1.2), Vector3(8.6, 0.0, 3.0), Color(0.45, 0.33, 0.2))
+	# the porch step at the door: weathered boards running out from the sill on a dark oak frame,
+	# low enough to walk over, with a knitted doormat on them
+	Catalog.box(root, Vector3(0.95, 0.03, 1.25), Vector3(8.58, 0.0, 3.0), Catalog.WOOD_DARK)
+	Planks.lay(root, "floor", Vector3(8.12, 0.016, 2.4), Vector3(0, 0, 1), Vector3(1, 0, 0), Vector2(1.2, 0.92), Vector3.UP, [], 5, "porch")
+	Catalog.box(root, Vector3(0.5, 0.012, 0.8), Vector3(8.42, 0.022, 3.0), Color(0.45, 0.12, 0.11)) # doormat, the red rug's wool
 	# fallen leaves: drifts of a dozen or so, and strays between them
 	var pts := []
 	var cols: Array = LITTER["maple_autumn"]

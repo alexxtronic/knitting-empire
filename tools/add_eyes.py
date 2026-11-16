@@ -68,6 +68,7 @@ EYES = {
     "rosa_tripo": dict(mid=-0.3, dx=44.3, z=1299.5, a=23.3, up=15.0, lo=9.0, tilt=-4.0, k_up=-0.1, p=0.75, lash=2.2, rim=2.5),
     "max_tripo": dict(mid=-0.25, dx=38.25, z=1622.75, a=17.75, up=10.0, lo=6.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.6, iris=11.0),
     "lars_tripo": dict(mid=-0.4, dx=45.9, z=1665.5, a=18.0, up=10.0, lo=6.8, tilt=-1.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.8, iris=11.0, loose=1),
+    "rebecca_tripo": dict(mid=0.0, dx=45.75, z=1494.25, a=21.1, up=10.3, lo=7.0, tilt=7.0, k_up=-0.05, k_lo=-0.05, p=0.7, lash=2.4, iris=10.0),
 }
 DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0, reach=16.0)
 SPEC = None
@@ -102,7 +103,8 @@ REGION = _region()
 
 
 def body_mesh():
-    return next(o for o in bpy.data.objects if o.type == "MESH" and len(o.data.vertices) > 5000)
+    # the biggest mesh: a light model (Rebecca, under 5,000 points) is still far bigger than the knitting props
+    return max((o for o in bpy.data.objects if o.type == "MESH"), key=lambda o: len(o.data.vertices))
 
 
 def albedo(ob):
@@ -1168,7 +1170,10 @@ for E in EYE:
     for i in range(rest.shape[0] - 1):
         for j in range(NCOL - 1):
             q = [idx[i, j], idx[i, j + 1], idx[i + 1, j + 1], idx[i + 1, j]]
-            if i == 0:
+            # the lash line ends at the corners: past them the lid is skin all the way to its edge. (On a round face
+            # that falls away from the eyeball past the outer corner the lid can't stay under the skin there, and
+            # its dark edge showed as a dash beside the eye: Rebecca.)
+            if i == 0 and min(abs(E["s"][j]), abs(E["s"][j + 1])) <= 1:
                 face(q, [LASH_UV] * 4, 1, C)
             else:
                 face(q, [skin_uv(Ps[i, j]), skin_uv(Ps[i, j + 1]), skin_uv(Ps[i + 1, j + 1]), skin_uv(Ps[i + 1, j])], 0, C)
