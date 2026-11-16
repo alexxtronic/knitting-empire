@@ -10,6 +10,7 @@ signal walls_pressed
 signal save_pressed
 signal new_game_pressed
 signal graphics_pressed
+signal render_scale_changed(v: float)
 signal title_continue
 signal title_new_game
 signal title_quit
@@ -223,6 +224,8 @@ var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
 var wall_note: Label
 var graphics_btn: Button
+var render_scale_slider: HSlider
+var _render_scale_label: Label
 var settings_panel: PanelContainer
 var keys_panel: PanelContainer # Settings > Key bindings (built the first time it opens)
 var key_btns := {} # action id -> its key's button on that page
@@ -500,6 +503,11 @@ func _label(text: String, size := 15, color := TEXT) -> Label:
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
+
+
+func set_render_scale(v: float) -> void:
+	render_scale_slider.set_value_no_signal(v)
+	_render_scale_label.text = "%d%%" % roundi(v * 100.0)
 
 
 func set_graphics_label(level: String) -> void:
@@ -1914,6 +1922,16 @@ func _build_settings() -> void:
 	row.add_child(gl)
 	row.add_child(graphics_btn)
 	vb.add_child(row)
+	render_scale_slider = _slider_row(vb, "3D detail", 1.0)
+	render_scale_slider.min_value = 0.5
+	render_scale_slider.max_value = 1.5
+	render_scale_slider.tooltip_text = "How sharp the 3D picture is drawn before it's scaled up to the screen. Lower runs faster."
+	_render_scale_label = _label("100%", 16)
+	_render_scale_label.custom_minimum_size = Vector2(56, 0)
+	render_scale_slider.get_parent().add_child(_render_scale_label)
+	render_scale_slider.value_changed.connect(func(v: float):
+		_render_scale_label.text = "%d%%" % roundi(v * 100.0)
+		render_scale_changed.emit(v))
 	music_slider = _slider_row(vb, "Music", 0.7)
 	sound_slider = _slider_row(vb, "Sound", 0.8)
 	for s in [music_slider, sound_slider]:

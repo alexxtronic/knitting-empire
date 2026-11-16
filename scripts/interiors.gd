@@ -111,6 +111,7 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 	var lp: Vector3 = Data.vec3(s.info.get("light", [0.0, 2.5, 0.0]))
 	s.light = Catalog.omni(b, lp, Color(1.0, 0.78, 0.5), 4.2, 0.0, 1.2)
 	s.light.shadow_enabled = false
+	s.light.set_meta("no_shadow", true)
 	return rects
 
 

@@ -37,6 +37,20 @@ float vnoise(vec2 p) {
 	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
+// vnoise with its slope: (value, d/dx, d/dy) from the same four corners
+vec3 vnoise_d(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	vec2 du = 6.0 * f * (1.0 - f);
+	float a = hash(i);
+	float b = hash(i + vec2(1.0, 0.0));
+	float c = hash(i + vec2(0.0, 1.0));
+	float d = hash(i + vec2(1.0, 1.0));
+	float k = a - b - c + d;
+	return vec3(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du.x * (b - a + k * u.y), du.y * (c - a + k * u.x));
+}
+
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
@@ -130,12 +144,14 @@ void fragment() {
 	ROUGHNESS = mix(0.92, 0.82, m) * (1.0 - wet * 0.55);
 	SPECULAR = 0.3 + wet * 0.25;
 	// a little surface relief so light catches the clumps: two octaves are all that shows at this
-	// scale (it was four five-octave fbm calls a pixel; this is a fifth of the work)
+	// scale. Their slopes come straight from the noise (it was eight lookups for finite differences;
+	// the same relief for a quarter of the work, which mattered: the ground fills most of the screen)
 	vec2 rp = p * 0.9;
-	float hx = (vnoise(rp + vec2(0.045, 0.0)) - vnoise(rp - vec2(0.045, 0.0))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.193, 7.7)) - vnoise(rp * 2.07 + vec2(13.007, 7.7)));
-	float hz = (vnoise(rp + vec2(0.0, 0.045)) - vnoise(rp - vec2(0.0, 0.045))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.1, 7.793)) - vnoise(rp * 2.07 + vec2(13.1, 7.607)));
-	hx *= 0.5;
-	hz *= 0.5;
+	vec2 s1 = vnoise_d(rp).yz;
+	vec2 s2 = vnoise_d(rp * 2.07 + vec2(13.1, 7.7)).yz;
+	vec2 hs = 0.5 * (0.09 * s1 + 0.093 * s2);
+	float hx = hs.x;
+	float hz = hs.y;
 	vec3 n_world = normalize(vec3(-hx * 1.6, 1.0, -hz * 1.6));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 	AO = mix(0.85, 1.0, mid);
