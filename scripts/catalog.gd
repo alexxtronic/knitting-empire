@@ -1,4 +1,5 @@
 extends RefCounted
+const BuildingSkin = preload("res://scripts/building_skin.gd")
 ## Furniture catalog plus the tiny primitive-mesh helpers every model is built from.
 ## Placeholder art: swap any builder for an imported Tripo/Blender .glb later.
 ## Every model faces +Z and sits centered on its footprint at floor level.
@@ -283,10 +284,12 @@ static func model(path: String, r: Node3D) -> Node3D:
 			var baked := Lighting.bake_of(m.mesh, i)
 			if mname.begins_with("wool_"):
 				m.set_surface_override_material(i, wool(mname.substr(5), baked))
-			elif mname.begins_with("glass_"): # a walk-in shop's window panes (town_buildings)
+			elif mname.begins_with("glass_") or mname == "cafe_glow": # a walk-in shop's window panes (the café's had been lamplight before it had a room behind them)
 				m.set_surface_override_material(i, window_glass())
 			elif mname == "Quilt_patchwork":
 				m.set_surface_override_material(i, tartan()) # the bed's cover: the sofa throw's wool
+	if path.get_file().begins_with("building_") or path.get_file() == "barn.glb":
+		BuildingSkin.dress(inst) # the house's hand-made textures on the town's buildings and the barn
 	r.add_child(inst)
 	return inst
 

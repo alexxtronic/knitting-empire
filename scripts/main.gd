@@ -88,6 +88,8 @@ var house_root: Node3D
 var furniture_root: Node3D
 var walls: Array = [] # {tall, short, normal, cut}
 var roofs: Array = [] # {node, rect}: the roofs of Nora's house and the cottage (_house_roof)
+var house_roof: Node3D # the roof of Nora's own house, where her chimneys stand (_update_chimneys)
+var _chimney_sig := "" # where the fireplaces were when the chimneys were last built
 var wall_rects: Array = []
 var divider_rects: Array = []
 var furniture: Array = []
@@ -823,7 +825,9 @@ func _rebuild_house() -> void:
 	Catalog.box(tall, Vector3(0.6, 0.04, 0.035), Vector3(bx, 2.15, 0.135), Catalog.BRASS)
 	Catalog.ball(tall, 0.15, Vector3(bx, 1.8, 0.15), Color(0.78, 0.25, 0.3), Vector3(1, 1, 0.3))
 	Catalog.ring(tall, 0.17, 0.2, Vector3(bx, 1.8, 0.15), Catalog.BRASS, Vector3(90, 0, 0))
-	_house_roof(Rect2(0, z0, W, depth), true) # the ridge runs front to back, so it grows with the house
+	house_roof = _house_roof(Rect2(0, z0, W, depth), true) # the ridge runs front to back, so it grows with the house
+	_chimney_sig = ""
+	_update_chimneys()
 	_build_cottage()
 	_update_walls()
 
@@ -982,6 +986,50 @@ func _house_roof(r: Rect2, ridge_z: bool) -> Node3D:
 	HouseSkin.oak(Catalog.box(root, Vector3(0.22, 0.14, length + ROOF_EAVES * 2.0 + 0.06), Vector3(0, rise + 0.1, 0), RIDGE_COLOR), HouseSkin.DARK_OAK) # ridge cap
 	roofs.append({"node": root, "rect": r})
 	return root
+
+
+## A chimney stands out of her roof over every fireplace in the house (Alex, 2026-11-16: "add
+## chimneys coming out of the roof whenever there's a fireplace"): a fieldstone stack rising from
+## behind the fireplace, against the wall it backs onto, past the ridge, with a corbelled band, a
+## cap and two clay pots. They're children of the roof, so they lift off with it, and they're built
+## again whenever a fireplace is placed, moved or sold (checked each frame by where they stand).
+func _update_chimneys() -> void:
+	if house_roof == null or not is_instance_valid(house_roof):
+		return
+	var inside := interior_rect()
+	var spots: Array = []
+	var sig := ""
+	for f in furniture:
+		if not is_instance_valid(f) or (f as Furniture).item_id != "fireplace" or (f as Furniture).is_queued_for_deletion():
+			continue
+		var fp := f as Furniture
+		if not inside.has_point(Vector2(fp.position.x, fp.position.z)):
+			continue
+		var back := fp.position - fp.front() * 0.3 # its flue runs up behind it, into the wall it backs onto
+		spots.append(back)
+		sig += "%.2f,%.2f;" % [back.x, back.z]
+	if sig == _chimney_sig:
+		return
+	_chimney_sig = sig
+	for c in house_roof.get_children():
+		if c.name.begins_with("Chimney"):
+			c.free()
+	var r := house_rect().grow(-0.45)
+	var half := (house_rect().size.x) * 0.5
+	var rise := tan(deg_to_rad(ROOF_PITCH)) * half
+	for p in spots:
+		var at := Vector3(clampf(p.x, r.position.x, r.end.x), 0, clampf(p.z, r.position.y, r.end.y))
+		var ch := Node3D.new()
+		ch.name = "Chimney"
+		ch.position = at - Vector3(house_roof.position.x, 0, house_roof.position.z)
+		house_roof.add_child(ch)
+		var top := rise + 0.8
+		HouseSkin.on(Catalog.box(ch, Vector3(0.62, top, 0.74), Vector3(0, top * 0.5, 0), Catalog.STONE), "stone")
+		HouseSkin.on(Catalog.box(ch, Vector3(0.74, 0.12, 0.86), Vector3(0, top - 0.24, 0), Catalog.STONE), "stone") # the corbelled band
+		HouseSkin.on(Catalog.box(ch, Vector3(0.7, 0.07, 0.82), Vector3(0, top + 0.02, 0), Catalog.STONE), "stone") # the cap
+		for dz in [-0.17, 0.17]:
+			Catalog.cyl(ch, 0.075, 0.095, 0.3, Vector3(0, top + 0.21, dz), Color(0.62, 0.32, 0.22))
+	return
 
 
 ## Whether the roofs over her lift off now: from above while she's inside (as the barn's and
@@ -1202,6 +1250,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	see_through.update(delta)
 	_update_walls()
+	_update_chimneys()
 	_update_held_tool()
 	_update_sweater()
 	_update_hold(delta)
@@ -5268,6 +5317,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=buildings" in OS.get_cmdline_user_args(): # just the town's buildings and the barn in the house's textures
+		await _wait(1.5)
+		await _building_skin_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=exterior" in OS.get_cmdline_user_args(): # just the house's outside and its window glass
 		await _wait(1.5)
 		await _exterior_checks()
@@ -8777,6 +8832,52 @@ func _key_tap(kc: Key, hold := 0.0) -> void:
 ## never the player's), the album lists, shows and deletes it, and Esc brings the camera back to Nora.
 ## Scenery fading out of the camera's way (see_through.gd): she stands just behind a tall tree as
 ## the camera sees it, the tree fades to see-through, and when she walks off it comes back solid.
+## The town's buildings and the barn (scripts/building_skin.gd): every model's walls, frame, stone,
+## trim and roof wear the house's maps in their own colours, roofs in tiled courses down the slope;
+## a picture of each by day and the town at night.
+func _building_skin_checks() -> void:
+	var models: Array = Town.built.filter(func(e): return str(e[1]).begins_with("building_")).map(func(e): return [e[0], str(e[1]).substr(9)])
+	if World.barn:
+		models.append([World.barn, "barn"])
+	var report: Array = []
+	var all_ok := models.size() >= 7
+	for e in models:
+		var kinds := {}
+		for mi in (e[0] as Node3D).find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			for i in m.mesh.get_surface_count():
+				var o := m.get_surface_override_material(i)
+				if o and o.resource_name.begins_with("skin_"):
+					kinds[o.resource_name.substr(5)] = true
+		var roofed := kinds.has("tiles") or kinds.has("shingles")
+		all_ok = all_ok and roofed and kinds.size() >= 3
+		report.append("%s: %s" % [e[1], ",".join(kinds.keys())])
+	_check("every building wears the house's textures, with a tiled roof (%s)" % "; ".join(report), all_ok)
+	_set_cam_lock(false)
+	var yaw0 := cam_yaw
+	Game.hour = 11.0
+	for e in models:
+		var b := e[0] as Node3D
+		player.position = b.global_position + Vector3(0, 0, 14) # out of the way, so the roof stays on
+		cam_target = b.global_position + Vector3(0, 1.5, 0)
+		cam_dist = 17.0
+		cam_yaw = b.global_rotation.y + deg_to_rad(25.0)
+		cam_yaw_goal = cam_yaw
+		await _wait(2.2)
+		await _shot("63_building_%s.png" % e[1])
+	Game.hour = 22.0
+	var cafe: Array = models.filter(func(e): return e[1] == "cafe")
+	if not cafe.is_empty():
+		var b := cafe[0][0] as Node3D
+		cam_target = b.global_position + Vector3(0, 1.5, 0)
+		cam_dist = 22.0
+		await _wait(2.2)
+		await _shot("63_town_night.png")
+	cam_yaw = yaw0
+	cam_yaw_goal = yaw0
+	_set_cam_lock(true)
+
+
 ## The outside of Nora's house (scripts/house_skin.gd, art/world_assets/house_exterior): plaster,
 ## oak and fieldstone maps on the walls, frame, footing and the flags round it, the porch step's
 ## boards, the roof's cedar shingles, and the window glass (shaders/window_glass.gdshader) with the room behind it, by day,
@@ -8809,6 +8910,22 @@ func _exterior_checks() -> void:
 			if sm and sm.resource_name.begins_with("glass_") and m.get_surface_override_material(i) == Catalog.window_glass():
 				shops_glazed += 1
 	_check("the walk-in shops' windows are the same glass (%d panes)" % shops_glazed, shops_glazed >= 4)
+	# a chimney over every fireplace, and it follows one that's moved
+	var fires := furniture.filter(func(f): return is_instance_valid(f) and f.item_id == "fireplace" and interior_rect().has_point(Vector2(f.position.x, f.position.z)))
+	var chims := func() -> Array: return house_roof.get_children().filter(func(c): return c.name.begins_with("Chimney"))
+	_update_chimneys()
+	_check("a chimney stands out of the roof over each fireplace (%d fireplaces, %d chimneys)" % [fires.size(), chims.call().size()], fires.size() >= 1 and chims.call().size() == fires.size())
+	if not fires.is_empty():
+		var fp := fires[0] as Furniture
+		var was := fp.position
+		fp.position = Vector3(HOUSE_W - 0.6, 0, was.z)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var moved: Array = chims.call()
+		_check("the chimney follows the fireplace across the house", moved.size() == fires.size() and moved.any(func(c): return (c as Node3D).global_position.x > HOUSE_W * 0.5))
+		fp.position = was
+		await get_tree().process_frame
+		await get_tree().process_frame
 	_set_cam_lock(false)
 	player.position = Vector3(14.0, 0, 9.0) # out in the yard, so the roof stays on
 	var yaw0 := cam_yaw
@@ -8836,6 +8953,13 @@ func _exterior_checks() -> void:
 	cam_yaw_goal = cam_yaw
 	await _wait(2.0)
 	await _shot("62_roof.png")
+	# the chimney, from the side of the house the fireplace backs onto
+	cam_target = Vector3(0.0, 4.0, 2.0)
+	cam_dist = 10.0
+	cam_yaw = deg_to_rad(-70.0)
+	cam_yaw_goal = cam_yaw
+	await _wait(2.0)
+	await _shot("62_chimney.png")
 	cam_yaw = yaw0
 	cam_yaw_goal = yaw0
 	_set_cam_lock(true)

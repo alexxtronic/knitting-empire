@@ -285,6 +285,64 @@ def ball(name, r, loc, mat, scale=(1, 1, 1), u=16, v=10, boxy=1.0):
     return smooth(ob, keep_sharp=False)
 
 
+def arch_hood(name, half_w, rise, depth, front, spring_z, x, roof_mat, face_mat, t=0.07, n=12):
+    """A dormer's arched (barrel) roof: an elliptical arch half_w wide either side of x and rise
+    high from spring_z, running back from y=front for depth metres into the main roof. The tiled
+    shell carries roof_mat with UVs in metres (u along the barrel, v down from the crown, so the
+    courses run along it and the tiles' butts face down both sides); an arched board round its
+    front edge and the filled arch under it carry face_mat. The roof material should be a copy
+    named with "arch" so the game maps it by these UVs (scripts/building_skin.gd)."""
+    outer = [(half_w * math.cos(math.pi * i / n), rise * math.sin(math.pi * i / n)) for i in range(n + 1)]
+    inner = [((half_w - t) * math.cos(math.pi * i / n), (rise - t) * math.sin(math.pi * i / n)) for i in range(n + 1)]
+    arc = [0.0]
+    for i in range(1, n + 1):
+        arc.append(arc[-1] + math.dist(outer[i - 1], outer[i]))
+    crown = arc[n // 2]
+    y0, y1 = front, front + depth
+    # the tiled shell
+    verts, faces, uvs = [], [], []
+    for i, (px, pz) in enumerate(outer):
+        verts += [(px, y0, pz), (px, y1, pz)]
+    for i in range(n):
+        a, b = 2 * i, 2 * (i + 1)
+        faces.append((a, a + 1, b + 1, b))  # wound to face out from the barrel's axis
+        uvs.append([(y0, -abs(arc[i] - crown)), (y1, -abs(arc[i] - crown)), (y1, -abs(arc[i + 1] - crown)), (y0, -abs(arc[i + 1] - crown))])
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    me.update()
+    layer = me.uv_layers.new(name="UVMap")
+    for poly, uv in zip(me.polygons, uvs):
+        for li, (u, v) in zip(poly.loop_indices, uv):
+            layer.data[li].uv = (u, v)
+    shell = _obj(name, me, roof_mat)
+    shell.location = (x, 0, spring_z)
+    smooth(shell, keep_sharp=False)
+    # the underside, the board round the front edge and the filled arch behind it
+    fy = y0 + 0.05
+    verts, faces = [], []
+    for i in range(n + 1):
+        verts += [(outer[i][0], y0 - 0.03, outer[i][1]), (inner[i][0], y0 - 0.03, inner[i][1]), (outer[i][0], y0 + 0.06, outer[i][1]), (inner[i][0], y0 + 0.06, inner[i][1])]
+    for i in range(n):
+        a, b = 4 * i, 4 * (i + 1)
+        faces.append((a, b, b + 1, a + 1))          # front of the board
+        faces.append((a + 2, a + 3, b + 3, b + 2))  # its back
+        faces.append((a, a + 2, b + 2, b))          # its top edge
+        faces.append((a + 1, b + 1, b + 3, a + 3))  # its soffit
+    c = len(verts)
+    verts.append((0, fy, 0))
+    for i in range(n + 1):
+        verts.append((inner[i][0], fy, inner[i][1]))
+    for i in range(n):
+        faces.append((c, c + 1 + i, c + 2 + i))  # facing out the front (-y)
+    me = bpy.data.meshes.new(name + "_face")
+    me.from_pydata(verts, [], faces)
+    me.update()
+    face = _obj(name + "_face", me, face_mat)
+    face.location = (x, 0, spring_z)
+    smooth(face)
+    return shell
+
+
 def torus(name, R, r, loc, mat, rot=(0, 0, 0), major=20, minor=6):
     verts, faces = [], []
     for i in range(major):

@@ -25,7 +25,7 @@ TEX = os.path.join(HERE, "tex")
 GAME = os.path.join(ROOT, "assets", "textures", "house")
 
 # metres one tile covers (scripts/house_skin.gd scales by these) and its size in pixels
-SIZES = {"plaster": (2.0, 1024), "timber": (1.0, 512), "stone": (2.0, 1024), "shingles": (1.0, 512)}
+SIZES = {"plaster": (2.0, 1024), "timber": (1.0, 512), "stone": (2.0, 1024), "shingles": (1.0, 512), "boards": (2.0, 1024), "tiles": (1.0, 512), "brick": (2.0, 1024), "paintwood": (1.0, 512)}
 
 
 def C(h):
@@ -252,6 +252,122 @@ def shingles():
     rgb = rgb + (C("#6d7a3c") - rgb) * (moss * 0.55)[..., None]
     h = h + 0.08 * grain
     return np.clip(rgb, 0, 1), h, 3.0
+
+
+def boards():
+    """Board siding for the town's buildings and the barn: upright boards of uneven width, each its
+    own cut of grain and shade, with a dark gap and a bevel between them and the odd knot. A
+    middling brown, so a building's own colour can be laid over it (scripts/building_skin.gd)."""
+    size, n = SIZES["boards"]
+    rng = np.random.default_rng(17)
+    px = n / size
+    grain = fbm(rng, n, 50, 3, aspect=(0.5, 12.0))
+    rings = fbm(rng, n, 2.0, 2, aspect=(1.0, 2.5))
+    blot = fbm(rng, n, 5, 2)
+    xs = np.arange(n)
+    rgb = np.zeros((n, n, 3))
+    h = np.zeros((n, n))
+    x = 0.0
+    edges = []
+    while x < n - 0.1 * px:
+        w = rng.uniform(0.16, 0.26) * px
+        if n - (x + w) < 0.12 * px:
+            w = n - x
+        edges.append((x, x + w))
+        x += w
+    light, dark = C("#a77c55"), C("#6e4a2e")
+    for x0, x1 in edges:
+        cols = slice(int(x0), int(x1))
+        local = (xs[cols] - x0) / (x1 - x0)
+        t = local[None, :] * rng.uniform(6, 12) + 0.8 * rings[:, cols] + rng.uniform(0, 1)
+        late = (t - np.floor(t)) ** 2.4
+        v = 0.45 + 0.35 * (late - 0.5) + 0.2 * grain[:, cols] + 0.06 * blot[:, cols] + rng.uniform(-0.15, 0.15)
+        rgb[:, cols] = light + (dark - light) * np.clip(v, 0, 1)[..., None]
+        e = np.minimum(xs[cols] - x0, x1 - xs[cols])[None, :] * np.ones((n, 1))
+        h[:, cols] = step(0.0, 10.0, e) + 0.2 * (1 - late) + 0.2 * grain[:, cols]
+        rgb[:, cols] *= (0.3 + 0.7 * step(1.5, 7.0, e))[..., None] # the dark gap and its bevel
+        for _ in range(rng.integers(0, 3)): # knots
+            ky, kx, kr = rng.uniform(0, n), rng.uniform(x0 + 8, max(x0 + 9, x1 - 8)), rng.uniform(4, 9)
+            yy, xx = np.mgrid[0:n, int(x0):int(x1)]
+            d = np.sqrt(((xx - kx) * 1.0) ** 2 + (((yy - ky + n / 2) % n - n / 2) * 0.7) ** 2)
+            m = np.clip(1.2 - d / kr, 0, 1)
+            rgb[:, cols] = rgb[:, cols] * (1 - 0.5 * m[..., None])
+            h[:, cols] -= 0.3 * m
+    return np.clip(rgb, 0, 1), h, 2.2
+
+
+def tiles():
+    """Clay roof tiles for the town: plain tiles laid in courses, each course half a tile over from
+    the last, every tile a little curved across, its corners rounded, its own shade; the course
+    above throws a shadow on each, and there's lichen here and there. Light and neutral, so each
+    roof keeps its own colour; the butts are at the bottom of each course (down the slope)."""
+    size, n = SIZES["tiles"]
+    rng = np.random.default_rng(23)
+    px = n / size
+    across, rows = 6, 6 # tiles about 0.17 m wide and 0.17 m showing
+    tw, th = n / across, n / rows
+    ys, xs = np.mgrid[0:n, 0:n].astype(float)
+    row = (ys // th).astype(int)
+    off = np.where(row % 2 == 1, tw / 2, 0.0)
+    col = (((xs + off) // tw).astype(int)) % across
+    u = ((xs + off) % tw) / tw # across the tile
+    v = (ys % th) / th # down the tile, 1 at its butt
+    shade = rng.uniform(0.82, 1.12, (rows, across))
+    hue = rng.uniform(-0.04, 0.04, (rows, across))
+    base = C("#c9b39f")
+    s = shade[row, col]
+    rgb = base * s[..., None] * (1 + hue[row, col][..., None] * np.array([1.0, 0.0, -1.0]))
+    gap = 1 - step(0.02, 0.06, np.minimum(u, 1 - u)) # the joint between two tiles
+    corner = np.sqrt(np.clip(0.18 - np.minimum(u, 1 - u), 0, 1) ** 2 + np.clip(v - 0.82, 0, 1) ** 2) > 0.16 # rounded lower corners
+    curve = np.sin(np.pi * u) # a little curved across
+    shadow = np.exp(-v / 0.12) # under the course above
+    grit = fbm(rng, n, 80, 2)
+    rgb = rgb * (1 - 0.5 * shadow - 0.08 * (1 - curve))[..., None] * (1 + 0.06 * grit)[..., None]
+    rgb = np.where((gap > 0.5)[..., None] | corner[..., None], rgb * 0.45, rgb)
+    lichen = np.clip(noise(rng, n, 30) * 0.7 + fbm(rng, n, 5, 2) - 1.5, 0, 1)
+    rgb = rgb + (C("#a9a77a") - rgb) * (lichen * 0.5)[..., None]
+    h = 0.6 * v + 0.25 * curve - 0.6 * gap - 0.6 * corner + 0.05 * grit
+    return np.clip(rgb, 0, 1), h, 3.2
+
+
+def brick():
+    """Brick in running bond (0.215 by 0.065 m with 10 mm joints): each brick its own fired shade
+    with darker ends, a slightly worn face, set in a pale recessed mortar."""
+    size, n = SIZES["brick"]
+    rng = np.random.default_rng(47)
+    px = n / size
+    bw, bh, mj = 0.225 * px, 0.075 * px, 0.01 * px
+    across, rows = int(round(n / bw)), int(round(n / bh))
+    bw, bh = n / across, n / rows
+    ys, xs = np.mgrid[0:n, 0:n].astype(float)
+    row = (ys // bh).astype(int)
+    off = np.where(row % 2 == 1, bw / 2, 0.0)
+    col = (((xs + off) // bw).astype(int)) % across
+    u, v = (xs + off) % bw, ys % bh
+    e = np.minimum(np.minimum(u, bw - u), np.minimum(v, bh - v))
+    face = step(mj * 0.5, mj * 0.5 + 2.0, e)
+    shade = rng.uniform(0.78, 1.15, (rows, across))
+    pal = np.array([C("#a8553c"), C("#9a4a35"), C("#b8664a"), C("#8c4433"), C("#a0583f")])
+    pick = rng.integers(0, len(pal), (rows, across))
+    grit = fbm(rng, n, 90, 2)
+    burn = np.clip(1 - np.minimum(u, bw - u) / (bw * 0.25), 0, 1) ** 2 # darker ends
+    rgb = pal[pick[row, col]] * (shade[row, col] * (1 + 0.08 * grit) * (1 - 0.2 * burn))[..., None]
+    mortar = C("#c4b8a4") * (1 + 0.05 * grit)[..., None]
+    rgb = rgb + (mortar - rgb) * (1 - face)[..., None]
+    h = 0.8 * face + 0.1 * grit
+    return np.clip(rgb, 0, 1), h, 3.0
+
+
+def paintwood():
+    """Painted wood for window frames, trim and columns: a pale coat over grain that still shows
+    through a little, with brush marks along it. Near white, so a frame's own colour tints it."""
+    size, n = SIZES["paintwood"]
+    rng = np.random.default_rng(61)
+    grain = fbm(rng, n, 40, 3, aspect=(0.5, 12.0))
+    brush = fbm(rng, n, 90, 2, aspect=(0.4, 20.0))
+    rgb = C("#e9e4da") * (1 + 0.025 * grain + 0.015 * brush)[..., None]
+    h = 0.25 * grain + 0.12 * brush
+    return np.clip(rgb, 0, 1), h, 0.7
 
 
 def save(name, rgb, nrm):
