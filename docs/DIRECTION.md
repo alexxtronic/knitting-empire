@@ -18,7 +18,7 @@ A Sims-like life on a farm with a Pokémon-like hunt: go out with your dog, find
 Two rules sit over all of it:
 
 - **Money is always meaningful and hard to get.** Early on she earns a little, pays Gran's rent and buys supplies. She grows her own food from Steve's seeds so she doesn't have to buy it.
-- **Sweaters are the economy** (Alex, 2026-11-15). Every coin comes from a sweater: sold face to face to anyone in town (ask if they're looking; some days they aren't; haggle with a meter showing how likely they are to say yes), to Rosa, through the mailbox, by mail order, or for a local's request. Crops, wool and fibre can't be sold. In the beginning she scrapes by: Gran's coins build the pen, the dog herds the strays in, and their wool makes her first Common sweaters.
+- **Sweaters are the economy** (Alex, 2026-11-15). Every coin comes from a sweater: sold face to face to anyone in town (ask if they're looking; some days they aren't; haggle with a meter showing how likely they are to say yes), to Rosa, through the mailbox, by mail order, or for a local's request. Crops, wool and fibre can't be sold. In the beginning she scrapes by: Gran's coins build the pen, she herds the strays in (on foot, or playing the dog: he never herds by himself), and their wool makes her first Common sweaters.
 - **Comfort or risk is the player's choice.** Stay in town and grow slowly, or go out for rare animals, which are worth much more.
 
 ## What is parked
@@ -60,6 +60,61 @@ Two rules sit over all of it:
 
 8. **Real estate.** Bigger houses, land for more pens, more shops.
 9. **Her own city.** The end game: found a town and be its mayor.
+
+## The guided opening and how the player scales (Alex, 2026-11-16)
+
+This section adds to the phases above. Where it differs from them, it wins.
+
+### The guided opening
+
+The game teaches knitting, selling and spending, and then lets go:
+
+1. Gran leaves her common sheep yarn and her needles ("sticks") for Nora.
+2. Nora knits her first Common sweater.
+3. Wren the mayor comes by and wants to buy it ("Wow, that's beautiful. How much is it?"). Nora sets the price and sees the "likely to buy" meter. Wren says her range out loud, accepts any price inside it (a Common sale is very likely to go through) and never walks away, so the opening can't get stuck.
+4. With that cash, Nora buys seeds at Builder's Delight and plants her first turnips.
+5. She buys more yarn at the Yarn Barn, knits and sells more sweaters, and saves for a pen.
+6. She builds the pen and herds animals into it with the dog. From then on her own sheep make the wool, so she no longer has to buy yarn.
+7. **From here she isn't guided any more.** She scales the business however she thinks best.
+
+### Scaling: the player's choice
+
+- **A larger pen** holds more animals, so she can make more.
+- **Rare scarves for the dog,** knitted by her. They make him faster and keep him warm in cold areas, so he can catch rarer animals.
+- **Requested sweaters** for the townspeople pay more.
+- **Renting space in Lars's barn** keeps her animals safe from wolves:
+  - Each night there is a small chance a wolf kills one of her animals.
+  - She is alerted when wolves come and has a short window to scare them off herself.
+  - Animals in rented barn stalls are safe.
+  - The wolves are three assets in our style: small, medium and large-and-scary. They are drawn in ChatGPT, rendered in Tripo and rigged like the dog.
+- **Later she can tame the wolves,** and they round up animals for her automatically.
+- **Her house,** with no limits on customising it:
+  - expand it;
+  - buy land and build entirely new houses;
+  - add floors, as high or as wide as she likes (a skyscraper if she wants).
+  - Design note before any code: today's walking grid is flat and 2D (`_rebuild_grid`, `_find_path`). Stacked floors need a grid for each floor, joined by stairs.
+- **Late game:**
+  - build a whole new town;
+  - buy buildings such as a café or a yarn barn for passive income.
+- **Sweater automation, mid game:**
+  - hire local kids to collect wool and grannies to knit for her;
+  - they take a percentage of total sales;
+  - she still has to manage the selling herself.
+- **Selling online:**
+  - A computer is a big, expensive purchase (a Tripo model in our style).
+  - Once she owns it, she looks at its screen in first person and scrolls an Etsy-like store's orders, which she fills.
+  - Orders ask for particular animal furs, which sends her out to find those animals.
+  - The orders never run out. How often they come depends on her star rating out of 5.
+  - The rating falls the longer she takes to fill an order after it was placed. A high rating brings more orders and more room to grow.
+- **The ceiling:**
+  - a full sweater empire, with hundreds of kids and grannies (grannies knit, kids collect wool);
+  - a town of cafés and shops bringing in passive income;
+  - in theory about 100,000 coins a day by hour 30.
+  - How far she gets depends on how skilfully she plays and how she approaches scaling.
+
+### Later: remind Alex
+
+- **Non-story townspeople.** Fill the town with people who aren't in the story, so it feels more alive. Alex asked to be reminded of this (2026-11-16).
 
 ## Advice given with this direction
 

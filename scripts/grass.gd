@@ -28,6 +28,7 @@ func _ready() -> void:
 	ground_mat.shader = preload("res://shaders/ground.gdshader")
 	blade_mat = ShaderMaterial.new()
 	blade_mat.shader = preload("res://shaders/grass_blade.gdshader")
+	blade_mat.set_shader_parameter("fade_end", VIEW_RANGE)
 	_ground = MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	# out past every land (scripts/regions.gd) to the horizon, and south only as far as the beach,
@@ -194,7 +195,7 @@ func replant(area: Rect2) -> void:
 func _make_blade() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rows := [[0.0, 0.019, 0.0], [0.35, 0.016, 0.03], [0.68, 0.011, 0.09], [1.0, 0.0, 0.18]]
+	var rows := [[0.0, 0.023, 0.0], [0.35, 0.019, 0.03], [0.68, 0.012, 0.09], [1.0, 0.0, 0.18]]
 	var verts := []
 	for r in rows:
 		var y: float = r[0]
@@ -221,6 +222,7 @@ func _make_blade() -> ArrayMesh:
 func set_quality(frac: float, view_range: float) -> void:
 	_frac = clampf(frac, 0.05, 1.0)
 	_range = view_range
+	blade_mat.set_shader_parameter("fade_end", _range)
 	for c in _chunks:
 		c.multimesh.visible_instance_count = _visible(c.multimesh.instance_count)
 		c.visibility_range_end = _range

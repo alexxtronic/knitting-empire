@@ -1,0 +1,14 @@
+{
+  "id": "hydrangea",
+  "atlas": 256,
+  "reach": 0.4,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.546,
+  "light_p05": 0.114,
+  "seconds": 3.9,
+  "glb_bytes": 984180,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

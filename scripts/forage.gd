@@ -93,7 +93,7 @@ func apply() -> void:
 	for el in main.god.els:
 		if not el.scenery:
 			continue
-		var on := kept.has(key_of(el))
+		var on: bool = kept.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) # a plot she bought is cleared
 		if el.cut != on:
 			_set_cut(el, on)
 			grid = grid or el.kind.begins_with("tree_")

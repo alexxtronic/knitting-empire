@@ -1,0 +1,14 @@
+{
+  "id": "rose_bush",
+  "atlas": 256,
+  "reach": 0.4,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.549,
+  "light_p05": 0.185,
+  "seconds": 5.6,
+  "glb_bytes": 917680,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}
