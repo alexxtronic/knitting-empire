@@ -11175,10 +11175,11 @@ func _wolf_checks() -> void:
 		cam_target = wolves.pack[0].position if n0 > 0 else home
 		await _wait(0.1)
 	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
+	var toast_box: Vector2 = hud.toast_panel.size
 	await _shot("63_wolves_coming.png")
-	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s'), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
-		risk0, int(audio.played.get("howl", 0)) - howls0, toast0.left(48), n0, str(wolves.pack.map(func(w): return w.size_id)), d_start, walking, models_ok, wolves.raid_left],
-		risk0 == 4 and wolves.active() and int(audio.played.get("howl", 0)) == howls0 + 1 and toast0.contains("howl") and n0 >= 1 and n0 <= 3
+	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s', a small box %.0f x %.0f px), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
+		risk0, int(audio.played.get("howl", 0)) - howls0, toast0.left(48), toast_box.x, toast_box.y, n0, str(wolves.pack.map(func(w): return w.size_id)), d_start, walking, models_ok, wolves.raid_left],
+		risk0 == 4 and toast_box.y < 110.0 and toast_box.x <= 680.0 and wolves.active() and int(audio.played.get("howl", 0)) == howls0 + 1 and toast0.contains("howl") and n0 >= 1 and n0 <= 3
 		and d_start > 20.0 and walking == "Walk" and models_ok and wolves.raid_left > 40.0)
 	# scaring them off: three of them at the pen; Nora rushes the small one, the dog barks at the rest
 	wolves.clear()
