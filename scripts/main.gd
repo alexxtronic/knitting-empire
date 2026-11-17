@@ -365,7 +365,10 @@ func _ready() -> void:
 	store.main = self
 	add_child(store)
 	Interiors.WorkSpot.main = self
-	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
+	Interiors.StairSpot.main = self
+	player.steer_ok = func(q: Vector3) -> bool:
+		var lo: Variant = Interiors.steer_ok(player.position, q) # in the café: its stairs and loft
+		return lo if lo != null else _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -1467,6 +1470,14 @@ func _nearest_walkable(c: Vector2i, target: Vector3) -> Variant:
 
 
 func _find_path(from: Vector3, to: Vector3) -> Array:
+	# a walk up or down the café's stairs: its loft has a grid of its own (interiors.gd)
+	var loft: Variant = Interiors.loft_route(from, to, _find_path_ground)
+	if loft != null:
+		return loft
+	return _find_path_ground(from, to)
+
+
+func _find_path_ground(from: Vector3, to: Vector3) -> Array:
 	var a = _nearest_walkable(_cell(from), from)
 	var b = _nearest_walkable(_cell(to), to)
 	if a == null or b == null:
@@ -1935,6 +1946,9 @@ func _ray_target(mpos: Vector2) -> Variant:
 
 
 func _ground_point(mpos: Vector2) -> Variant:
+	var lp: Variant = Interiors.loft_pick(player.position, cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
+	if lp != null: # upstairs in the café: its floor
+		return lp
 	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
 		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
 	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
@@ -2762,7 +2776,8 @@ func reading_seat_near(p: Vector3):
 	var shop := Interiors.inside_of(p)
 	var seats: Array = []
 	if shop != "":
-		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken())
+		var up := Interiors.upstairs(p) # a seat on the floor she's on: upstairs in the café, or down
+		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken() and r.upstairs == up)
 	else:
 		seats = furniture.filter(func(f): return is_instance_valid(f) and f.item_id in ["armchair", "rocking_chair", "sofa"])
 	for st in seats:
@@ -6396,6 +6411,91 @@ func _barn_checks() -> void:
 ## the bookmark, choosing one from the shelf and carrying it to a seat, reading to the end; and the
 ## candles in Nora's house. Saves 56_cafe.png, 56_cafe_inside.png, 56_cafe_reading.png,
 ## 56_book_open.png, 56_cafe_shelf.png, 56_cafe_night.png and 56_house_candles.png.
+## The café's upstairs (interiors.gd, data/interiors.json "cafe" "loft"): its seats and shelves, the
+## walk from the door up the stairs to a sofa and back down, the loft shown only while she's up.
+func _cafe_loft_checks(s, door_in: Vector3) -> void:
+	var by: float = s.node.global_position.y
+	var up_spots: Array = Interiors.read_spots("cafe").filter(func(r): return r.upstairs)
+	var up_seats: Array = up_spots.filter(func(r): return r.kind == "seat")
+	var open_cells := 0
+	if s.loft_grid != null:
+		for x in s.loft_grid.region.size.x:
+			for z in s.loft_grid.region.size.y:
+				if not s.loft_grid.is_point_solid(Vector2i(x, z)):
+					open_cells += 1
+	_check("the café has an upstairs: its floor part, %d pieces up there, %d reading seats and %d shelves, %.1f m² to walk on, and none of its seats offered to the regulars (%d downstairs)" % [s.loft_root.get_child_count() if s.loft_root else 0, up_seats.size(), up_spots.size() - up_seats.size(), open_cells * Interiors.LOFT_CELL * Interiors.LOFT_CELL, cafe_visits.free_seats().size()],
+		s.parts.has("loft") and s.loft_root != null and s.loft_root.get_child_count() >= 20 and up_seats.size() >= 3 and up_spots.size() - up_seats.size() >= 2 and open_cells * 0.0625 > 25.0
+		and cafe_visits.free_seats().all(func(r): return not r.upstairs))
+	var sofa = up_seats.filter(func(r): return r.label.contains("Sofa"))
+	if sofa.is_empty():
+		return
+	sofa = sofa[0]
+	player.walk([])
+	player.position = Vector3(door_in.x, 0, door_in.z)
+	await _wait(0.3)
+	_check("she's downstairs in the café and the loft is out of the way from above (loft %s)" % ("shown" if (s.parts["loft"] as Node3D).visible else "hidden"),
+		s.inside and not s.up and not (s.parts["loft"] as Node3D).visible and not s.loft_root.visible)
+	cam_target = s.node.global_transform * Vector3(3.0, 1.5, 0.0)
+	cam_dist = 13.0
+	var stairs: Node = s.node.find_child("StairSpot", false, false)
+	var labels: Array = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_up")
+	var t := 0.0
+	var top_y := 0.0
+	var mid_shot := false
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+		top_y = maxf(top_y, player.position.y - by)
+		if not mid_shot and player.position.y - by > 1.5:
+			mid_shot = true
+			await _shot("56_cafe_stairs.png")
+	await _wait(0.4)
+	var dy: float = player.position.y - by - s.loft_y
+	_check("the stairs say %s from below, and up them she goes (%.1f s, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [str(labels), t, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
+		labels == ["Go upstairs"] and t < 40.0 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	# sits on a sofa up there with a book, and gets up again on the loft's floor
+	_do_action(sofa, "read_book")
+	t = 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.5)
+	var seat_dy: float = player.position.y - (sofa.seat_point() as Vector3).y
+	cam_target = player.position + Vector3(0, 0.5, 0)
+	cam_dist = 11.0
+	await _wait(1.2)
+	await _shot("56_cafe_loft.png")
+	_check("she sits down on a sofa upstairs with a book (%.1f s, %.2f m off its seat, reading %s)" % [t, seat_dy, books_ui.visible], books_ui.visible and player.busy and absf(seat_dy) < 0.05)
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.6)
+	dy = player.position.y - by - s.loft_y
+	_check("and gets up on the loft's floor (%.2f m off it, sitting %s)" % [dy, player.busy], not player.busy and absf(dy) < 0.05)
+	# a click on the loft's floor lands up there
+	var mid: Vector3 = s.node.global_transform * Vector3(-1.0, s.loft_y, -2.0)
+	var hit: Variant = _ground_point(cam.unproject_position(mid))
+	_check("a click upstairs lands on the loft's floor (%s)" % str(hit), hit != null and absf((hit as Vector3).y - (by + s.loft_y)) < 0.01 and (hit as Vector3).distance_to(mid) < 0.2)
+	# down by the stairs, then to the door
+	labels = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_down")
+	t = 0.0
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	await _wait(0.3)
+	var foot_y: float = player.position.y - by
+	player.walk(_find_path(player.position, door_in))
+	var t2 := 0.0
+	while not player.path.is_empty() and t2 < 20.0:
+		await _wait(0.1)
+		t2 += 0.1
+	await _wait(0.4)
+	_check("from above the stairs say %s, and down she goes and out to the door (%.1f + %.1f s, %.2f m up at the foot, %.2f m now, upstairs %s, %.2f m from the door)" % [str(labels), t, t2, foot_y, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
+		labels == ["Go downstairs"] and t < 40.0 and absf(foot_y) < 0.05 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+
+
 func _cafe_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -6469,6 +6569,7 @@ func _cafe_checks() -> void:
 			if not solid2:
 				leaks.append("z%.1f@%.1f" % [zz, x])
 	_check("she can't walk through the Coffee Shop's walls %s" % str(leaks), leaks.is_empty())
+	await _cafe_loft_checks(s, door_in)
 	# outside, shut; then in through the door to the armchair by the fire
 	var out_front: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.2)
 	out_front.y = 0.0
@@ -7355,6 +7456,27 @@ func _god_checks() -> void:
 	_check("god mode: the road dropdown's pavement and sidewalk paint out in the east meadows, on the lands' ground too, and Undo takes the sidewalk back (tool %s, %s, after Undo %s, cobble tiles laid on the sidewalk %s)" % [pave_tool, "pavement and sidewalk" if both else "missing", god.road_at(far_side.x, far_side.z), side_tiles],
 		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
 	god.undo()
+
+	# Bretton Oaks' cul-de-sac is on the road map, its meshes hidden, and "Grass" rubs it out
+	# (Alex, 2026-11-17: "can't delete original cul-de-sac pavement", "add grass as a god mode painting option")
+	if suburb != null:
+		var cds: Vector3 = suburb.centre
+		var meshes_hidden: bool = get_tree().get_nodes_in_group("suburb_paving").size() > 0 and get_tree().get_nodes_in_group("suburb_paving").all(func(n): return not (n as Node3D).visible)
+		var before: String = god.road_at(cds.x, cds.z)
+		var drives: Array = suburb.paving.filter(func(sh): return str(sh["kind"]) == "sidewalk" and sh.has("quad") and float(sh["quad"][2]) > 1.0)
+		var drive: Dictionary = drives[0] if not drives.is_empty() else {}
+		var dmid: Vector2 = (Vector2(drive["quad"][0]) + Vector2(drive["quad"][1])) * 0.5 if not drive.is_empty() else Vector2.ZERO
+		var drive_on: String = god.road_at(dmid.x, dmid.y) if not drive.is_empty() else "none"
+		await _god_look(cds, 18.0)
+		god.set_tool("grass")
+		var grass_tool: String = god.tool
+		god.press(cam.unproject_position(cds))
+		god.release()
+		await _shot("60_god_cul_de_sac_grass.png")
+		var grassed: String = god.road_at(cds.x, cds.z)
+		god.undo()
+		_check("god mode: the cul-de-sac is painted pavement (driveway %s) with its own meshes hidden, and the Grass brush rubs it out and Undo brings it back (before %s, hidden %s, tool %s, after grass '%s', after Undo %s)" % [drive_on, before, meshes_hidden, grass_tool, grassed, god.road_at(cds.x, cds.z)],
+			before == "pavement" and drive_on == "sidewalk" and meshes_hidden and grass_tool == "grass" and grassed == "" and god.road_at(cds.x, cds.z) == "pavement")
 
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()

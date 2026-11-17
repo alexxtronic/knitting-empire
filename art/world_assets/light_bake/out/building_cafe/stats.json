@@ -6,8 +6,8 @@
   "device": "METAL",
   "light_mean": 0.0,
   "light_p05": 0.0,
-  "seconds": 43.5,
-  "glb_bytes": 8177724,
+  "seconds": 25.4,
+  "glb_bytes": 8884180,
   "lost_nodes": [],
   "lost_materials": [],
   "lost_images": []
