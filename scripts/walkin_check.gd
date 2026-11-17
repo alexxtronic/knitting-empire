@@ -54,9 +54,27 @@ func run(m: Node) -> void:
 	main.fps.leave()
 	await main._wait(0.5)
 	# down the long flight: halfway down, the basement takes over
-	ok = await _walk(Vector3(3.2, 0, 3.5))
+	ok = await _walk(Vector3(3.0, 0, 3.5))
 	main._check("down the stairs to the basement (level %d, at %.2f m)" % [wi.level, main.player.position.y], ok and wi.level == wi.BASEMENT and main.player.position.y < -2.0)
-	ok = await _walk(Vector3(5.2, 0, -2.6))
+	var areas := {}
+	for room in wi.cfg["rooms"]:
+		var a := 0.0
+		for r in room["rects"]:
+			a += float(r[2]) * float(r[3])
+		areas[str(room["id"])] = a
+	main._check("the basement's green shag den is as big as its black-tile rec room (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
+		areas.has("den") and absf(float(areas["den"]) - float(areas.get("rec_room", 0.0))) < 0.2)
+	# the hall's door into the garage swings open as she comes up to it
+	ok = await _walk(Vector3(-0.3, 0, 1.7))
+	await main._wait(0.8)
+	var gdoor: Dictionary = {}
+	for d in wi.doors:
+		if (d["c"] as Vector2).distance_to(Vector2(0.5, 1.7)) < 0.2:
+			gdoor = d
+	main._check("through the hall's door into the garage, which swings open for her (%.2f open)" % (float(gdoor.get("open", 0.0))),
+		ok and not gdoor.is_empty() and float(gdoor["open"]) > 0.6)
+	ok = await _walk(Vector3(3.4, 0, -2.5))
+	ok = ok and await _walk(Vector3(-3.0, 0, -2.0))
 	main._check("through the den to the rec room (at %.2f m), the floors above hidden and the ground over the house cut away" % main.player.position.y,
 		ok and absf(main.player.position.y - wi.basement_y) < 0.05 and (wi.roots["basement"] as Node3D).visible and not (wi.roots["main"] as Node3D).visible and wi._hole_on)
 	await _picture(Vector3(0.0, -2.4, -0.4), 17.0, 62.0, "67_walkin_basement.png")
@@ -68,6 +86,7 @@ func run(m: Node) -> void:
 	# out of the door again
 	ok = await _walk(Vector3(-2.5, 0, 5.2))
 	main._check("out of the front door, the roof back on", ok and not wi.inside and (wi.parts["roof"] as Node3D).visible)
+	await _editor_checks()
 	main.player.position = nora0
 	if main.dog:
 		main.dog.position = dog0
@@ -106,3 +125,76 @@ func _picture(local_at: Vector3, dist: float, pitch: float, fname: String) -> vo
 	await main._wait(2.0)
 	await main._shot(fname)
 	main.cam_glide = {}
+
+
+## The world editor's house tools (house_edit.gd) on the main floor: a wall drawn across the kitchen
+## and living room, a door, a window and sliding doors put in it, an oak floor laid in the dining room,
+## the wall picked and deleted; then everything undone. The layout goes to a test file of its own.
+func _editor_checks() -> void:
+	var god = main.god
+	if not god.is_admin():
+		return
+	var path0: String = god.layout_path
+	god.layout_path = "user://autotest_walkin_layout.json"
+	var walls0: int = (wi.cfg["walls"] as Array).size()
+	var rooms0: int = (wi.cfg["rooms"] as Array).size()
+	var undo0: int = god.undo_stack.size()
+	god.set_active(true)
+	await main._wait(0.3)
+	await main._god_look(wi.house.global_transform * Vector3(-3.5, 0, -1.0), 14.0)
+	await main._wait(0.8)
+	var ht = god.house_tools
+	god.set_tool("h_wall")
+	await _drag_at("h_wall", Vector3(-6.3, 0, -0.5), Vector3(-1.5, 0, -0.5))
+	var drew: bool = (wi.cfg["walls"] as Array).size() == walls0 + 1
+	var mid: Vector2i = main._cell(wi.house.global_transform * Vector3(-3.6, 0, -0.5))
+	main._check("house editor: a wall drawn across the main floor (%s) blocks the way there (%s)" % [drew, not main._walkable(mid)], drew and not main._walkable(mid))
+	for t in [["h_door", -5.8], ["h_window", -4.6], ["h_slide", -2.6]]:
+		god.set_tool(str(t[0]))
+		ht.press(str(t[0]), _screen(Vector3(float(t[1]), 0, -0.5)))
+		ht.release()
+	var ops: Array = wi.cfg["walls"][walls0]["doors"] if drew else []
+	var kinds := ops.map(func(o): return str(o[2]))
+	var door_cell: Vector2i = main._cell(wi.house.global_transform * Vector3(-5.8, 0, -0.5))
+	var win_cell: Vector2i = main._cell(wi.house.global_transform * Vector3(-4.6, 0, -0.5))
+	main._check("house editor: a door, a window and sliding doors in it (%s; %d doors built), the door's way open (%s) and the window's shut (%s)" % [kinds, wi.doors.size(), main._walkable(door_cell), not main._walkable(win_cell)],
+		kinds == ["door", "window", "slide"] and main._walkable(door_cell) and not main._walkable(win_cell) and wi.doors.size() >= 5)
+	god.set_tool("h_floor")
+	ht.floor_kind = "wood_oak"
+	await _drag_at("h_floor", Vector3(-6.0, 0, -3.8), Vector3(-4.0, 0, -2.0))
+	var patch: Dictionary = wi.cfg["rooms"][-1]
+	main._check("house editor: an oak floor laid over the dining room's tiles (%s)" % str(patch.get("floor", "")),
+		(wi.cfg["rooms"] as Array).size() == rooms0 + 1 and bool(patch.get("patch", false)) and str(patch["floor"]) == "wood_oak")
+	await main._wait(0.4)
+	await main._shot("67_walkin_editor.png")
+	var saved: Dictionary = god.layout()
+	var in_file: bool = saved.has("split_house") and (saved["split_house"]["walls"] as Array).size() == walls0 + 1
+	god.set_tool("h_wall")
+	ht.press("h_wall", _screen(Vector3(-3.3, 0, -0.5)))
+	ht.release()
+	var picked: bool = wi.selected_wall == walls0
+	var deleted: bool = ht.delete_selected() and (wi.cfg["walls"] as Array).size() == walls0
+	while god.undo_stack.size() > undo0:
+		god.undo()
+	main._check("house editor: the layout keeps the house's walls and floors (%s); the wall picked (%s) and deleted (%s); undo puts the house back as it was (%d walls, %d rooms)" % [in_file, picked, deleted, (wi.cfg["walls"] as Array).size(), (wi.cfg["rooms"] as Array).size()],
+		in_file and picked and deleted and (wi.cfg["walls"] as Array).size() == walls0 and (wi.cfg["rooms"] as Array).size() == rooms0)
+	god.set_tool("select")
+	god.house_split_edited = false
+	god.unsaved = false
+	god.set_active(false)
+	god.layout_path = path0
+	await main._wait(0.3)
+
+
+func _screen(local_at: Vector3) -> Vector2:
+	return main.cam.unproject_position(wi.house.global_transform * local_at)
+
+
+func _drag_at(tool: String, a: Vector3, b: Vector3) -> void:
+	var ht = main.god.house_tools
+	ht.press(tool, _screen(a))
+	for i in 5:
+		ht.move(_screen(a.lerp(b, float(i + 1) / 5.0)))
+		await main._wait(0.05)
+	ht.release()
+	await main._wait(0.2)

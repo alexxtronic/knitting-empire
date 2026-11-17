@@ -1,5 +1,5 @@
 {
-  "_about": "Marcus's house in Bretton Oaks, the one you can walk into (scripts/split_house.gd, Alex 2026-11-17: 'the living room represents half of the total size and the upper floor is like the other right half and then the basement is underground'). A back-split: from the street it is the same brick ranch as its neighbours. Inside, the main floor is the left half at ground level; a half flight up from the living room is the bedroom floor over the right half (upper_y), a long flight down is the basement under the whole house (basement_y). Every number is in the house's own space (Godot: x to the right as you face the front, z toward the street, the origin on the ground in the middle of the footprint), for an unmirrored house. 'house' is its index round the cul-de-sac (data/suburb.json). Rooms: a floor rect [x, z, width, depth] or several, a floor material (tile_beige, carpet_grey, tile_black, shag_green, cement, carpet_blue, carpet_cream, tile_white) and a wall colour. Walls: [x0, z0, x1, z1] centre lines, axis-aligned, with 'doors' [[at, width], ...] along them; 'from' and 'to' are their heights. Ramps: the stairs, a rect over which the floor climbs along +x from 'from' to 'to'. Furniture: catalogue ids (data/furniture.json), 'at' [x, z], 'turn' degrees, 'y' for a piece on another one. Every name is a draft until Alex approves it.",
+  "_about": "Marcus's house in Bretton Oaks, the one you can walk into (scripts/split_house.gd, Alex 2026-11-17: 'the living room represents half of the total size and the upper floor is like the other right half and then the basement is underground'). A back-split: from the street it is the same brick ranch as its neighbours. Inside, the main floor is the left half at ground level; a half flight up from the living room is the bedroom floor over the right half (upper_y), a long flight down is the basement under the whole house (basement_y). Every number is in the house's own space (Godot: x to the right as you face the front, z toward the street, the origin on the ground in the middle of the footprint), for an unmirrored house. 'house' is its index round the cul-de-sac (data/suburb.json). Rooms: a floor rect [x, z, width, depth] or several, a floor material (tile_beige, carpet_grey, tile_black, shag_green, cement, carpet_blue, carpet_cream, tile_white) and a wall colour. Walls: [x0, z0, x1, z1] centre lines, axis-aligned, with 'doors' [[at, width, kind], ...] along them (kind: 'open' a plain gap to the ceiling, the default; 'door' a hinged door that swings as she comes up; 'slide' sliding glass doors; 'window' glass between a sill and a head that still blocks the way); the world editor's house tools draw and change them; 'from' and 'to' are their heights. Ramps: the stairs, a rect over which the floor climbs along +x from 'from' to 'to'. Furniture: catalogue ids (data/furniture.json), 'at' [x, z], 'turn' degrees, 'y' for a piece on another one. Every name is a draft until Alex approves it.",
   "house": 1,
   "split_x": 0.5,
   "upper_y": 0.85,
@@ -31,10 +31,11 @@
     {"id": "hall_bath", "level": "upper", "floor": "tile_white", "wall": "#cfe3df", "rects": [[0.5, 0.2, 1.5, 1.0]]},
     {"id": "master", "level": "upper", "floor": "carpet_grey", "wall": "#d9cfc0", "rects": [[3.4, 0.2, 2.94, 2.6], [4.9, 2.8, 1.44, 1.4]]},
     {"id": "ensuite", "level": "upper", "floor": "tile_white", "wall": "#cfe3df", "rects": [[3.4, 2.8, 1.5, 1.4]]},
-    {"id": "rec_room", "level": "basement", "floor": "tile_black", "wall": "#6f6a64", "rects": [[-6.4, -4.0, 12.74, 3.4]]},
-    {"id": "garage", "level": "basement", "floor": "cement", "wall": "#9a958c", "rects": [[-6.4, -0.6, 6.9, 3.4], [-1.24, 2.8, 1.74, 1.4]]},
-    {"id": "den", "level": "basement", "floor": "shag_green", "wall": "#b58d5e", "rects": [[2.4, -0.6, 3.94, 3.4], [0.5, -0.6, 1.9, 1.2], [3.4, 2.8, 2.94, 1.4]]},
-    {"id": "basement_bath", "level": "basement", "floor": "tile_white", "wall": "#cfe3df", "rects": [[0.5, 0.6, 1.9, 2.0]]}
+    {"id": "rec_room", "level": "basement", "floor": "tile_black", "wall": "#6f6a64", "rects": [[-6.4, -4.0, 6.9, 4.0]]},
+    {"id": "den", "level": "basement", "floor": "shag_green", "wall": "#b58d5e", "rects": [[0.5, -4.0, 5.84, 4.73]]},
+    {"id": "garage", "level": "basement", "floor": "cement", "wall": "#9a958c", "rects": [[-6.4, 0.0, 6.9, 2.8], [-1.24, 2.8, 1.74, 1.4]]},
+    {"id": "basement_hall", "level": "basement", "floor": "carpet_grey", "wall": "#d9cfc0", "rects": [[0.5, 0.73, 3.9, 2.07], [3.4, 2.8, 2.94, 1.4]]},
+    {"id": "basement_bath", "level": "basement", "floor": "tile_white", "wall": "#cfe3df", "rects": [[4.4, 0.73, 1.94, 2.07]]}
   ],
   "walls": [
     {"level": "main", "wall": [0.5, -4.0, 0.5, 1.2], "from": 0.0, "to": 3.25},
@@ -53,10 +54,12 @@
     {"level": "upper", "wall": [0.5, -4.0, 6.34, -4.0], "liner": true},
     {"level": "upper", "wall": [6.34, -4.0, 6.34, 4.2], "liner": true},
     {"level": "upper", "wall": [0.5, 4.2, 6.34, 4.2], "liner": true, "from": 0.0},
-    {"level": "basement", "wall": [-6.4, -0.6, 6.34, -0.6], "doors": [[-5.1, 1.1], [4.3, 1.1]]},
-    {"level": "basement", "wall": [0.5, -0.6, 0.5, 4.2]},
-    {"level": "basement", "wall": [0.5, 0.6, 2.4, 0.6]},
-    {"level": "basement", "wall": [2.4, 0.6, 2.4, 2.7], "doors": [[1.6, 0.9]]},
+    {"level": "basement", "wall": [-6.4, 0.0, 0.5, 0.0], "doors": [[-3.0, 1.0, "door"]]},
+    {"level": "basement", "wall": [0.5, -4.0, 0.5, 0.73], "doors": [[-1.6, 1.6]]},
+    {"level": "basement", "wall": [0.5, 0.73, 6.34, 0.73], "doors": [[2.4, 1.1]]},
+    {"level": "basement", "wall": [0.5, 0.73, 0.5, 4.2], "doors": [[1.7, 0.9, "door"]]},
+    {"level": "basement", "wall": [4.4, 0.73, 4.4, 2.8], "doors": [[1.8, 0.9, "door"]]},
+    {"level": "basement", "wall": [4.4, 2.8, 6.34, 2.8]},
     {"level": "basement", "wall": [-6.4, -4.0, 6.34, -4.0], "liner": true},
     {"level": "basement", "wall": [-6.4, -4.0, -6.4, 2.8], "liner": true},
     {"level": "basement", "wall": [6.34, -4.0, 6.34, 4.2], "liner": true},
@@ -73,11 +76,11 @@
     {"level": "upper", "at": [3.4, 3.1, -0.5]},
     {"level": "upper", "at": [5.0, 3.1, 1.6]},
     {"level": "upper", "at": [4.1, 3.1, 3.5]},
-    {"level": "basement", "at": [-3.2, -0.3, -2.3]},
-    {"level": "basement", "at": [3.4, -0.3, -2.3]},
-    {"level": "basement", "at": [-3.2, -0.3, 1.2]},
-    {"level": "basement", "at": [4.4, -0.3, 1.6]},
-    {"level": "basement", "at": [1.4, -0.3, 1.6]}
+    {"level": "basement", "at": [-3.0, -0.3, -2.0]},
+    {"level": "basement", "at": [3.4, -0.3, -1.7]},
+    {"level": "basement", "at": [-3.2, -0.3, 1.4]},
+    {"level": "basement", "at": [2.4, -0.3, 1.7]},
+    {"level": "basement", "at": [5.4, -0.3, 1.7]}
   ],
   "furniture": [
     {"level": "main", "id": "table_light", "at": [-3.2, -2.8]},
@@ -97,7 +100,7 @@
     {"level": "upper", "id": "bunk_bed", "at": [5.2, -3.35]},
     {"level": "upper", "id": "wardrobe", "at": [3.68, -2.6], "turn": 90},
     {"level": "upper", "id": "bed_double", "at": [5.2, 1.5], "turn": -90},
-    {"level": "basement", "id": "computer", "at": [5.6, 0.0]},
-    {"level": "basement", "id": "sofa", "at": [4.5, 1.6], "turn": 90}
+    {"level": "basement", "id": "computer", "at": [5.3, -3.55]},
+    {"level": "basement", "id": "sofa", "at": [3.4, -1.0], "turn": 180}
   ]
 }

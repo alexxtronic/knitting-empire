@@ -26,6 +26,7 @@ const UPPER := 0 # she is on the main floor or the bedroom floor (or outside)
 const BASEMENT := 1 # she is in the basement
 const WALL_T := 0.16 # a partition's thickness
 const LOW := 0.5 # a cut-down partition's height above its floor
+const BLOCK_T := 0.6 # how wide a partition blocks the walking grid: more than a 0.5 m cell turned 9 degrees
 const GROW := 0.1 # how far walls and furniture block the walking grid past their faces
 const SIDES := {"front": Vector3(0, 0, 1), "back": Vector3(0, 0, -1), "left": Vector3(-1, 0, 0), "right": Vector3(1, 0, 0)}
 
@@ -51,6 +52,17 @@ var _floor_surfaces: Array = [] # [MeshInstance3D, surface index, its material]:
 var _hidden: Array = [] # villagers hidden while she's in the basement (they're upstairs)
 var _inv := Transform3D.IDENTITY # the house's world -> local, kept each frame
 var _mats := {}
+var _built: Array = [] # the walls, openings, floors and ceilings: rebuild() makes them again from cfg
+var doors: Array = [] # the doors and sliding doors in the walls' openings: {"node", "part", "kind", "c", "lv", "rot0", "x0", "open"}
+var selected_wall := -1 # the world editor's house tools: the wall picked (an index into cfg "walls"), drawn gold
+
+const DOOR_GLB := "res://assets/props/door_interior.glb"
+const SLIDE_GLB := "res://assets/props/sliding_door.glb"
+const DOOR_W := 0.85 # the door model's width
+const SLIDE_W := 1.8 # the sliding door model's width
+const DOOR_HEAD := 2.06 # a door's head above its floor
+const WINDOW_SILL := 0.9
+const WINDOW_HEAD := 2.1
 
 
 ## Furnishes house `node` (a suburb house, its model loaded under its "Model" holder) for main `m`.
@@ -107,6 +119,7 @@ func _ceiling_y(lv: String) -> float:
 
 
 func _floors() -> void:
+	var patches := 0
 	for room in cfg.get("rooms", []):
 		var lv := str(room["level"])
 		var y := _level_y(lv)
@@ -117,14 +130,22 @@ func _floors() -> void:
 			# a slab: the main floor sits on the shell's planks; the upper floor and the basement
 			# floor are thick enough to show an edge at the stairs
 			var thick := 0.03 if lv == "main" else 0.2
-			_slab(roots[lv], rect, y + 0.045 - thick, y + 0.045, mat, "Floor_%s" % room["id"])
+			if bool(room.get("patch", false)):
+				# a floor laid in the world editor: a thin layer over what's there, the later ones on top
+				patches += 1
+				_built.append(_slab(roots[lv], rect, y + 0.045, y + 0.047 + 0.002 * patches, mat, "Floor_%s" % room["id"]))
+				continue
+			_built.append(_slab(roots[lv], rect, y + 0.045 - thick, y + 0.045, mat, "Floor_%s" % room["id"]))
 			var c := _slab(roots[lv], rect, _ceiling_y(lv), _ceiling_y(lv) + 0.04, cm, "Ceiling_%s" % room["id"])
 			c.visible = false
 			ceilings.append(c)
+			_built.append(c)
 
 
 func _walls() -> void:
+	var wi := -1
 	for w in cfg.get("walls", []):
+		wi += 1
 		var lv := str(w["level"])
 		var seg: Array = w["wall"]
 		var a := Vector2(float(seg[0]), float(seg[1]))
@@ -133,13 +154,151 @@ func _walls() -> void:
 		var y0 := float(w.get("from", base_y))
 		var y1 := float(w.get("to", _ceiling_y(lv) if lv != "all" else upper_y))
 		var col := _wall_colour(a.lerp(b, 0.5), lv)
+		if wi == selected_wall:
+			col = Color(1.0, 0.8, 0.3)
 		for piece in _pieces(a, b, w.get("doors", [])):
 			var p0: Vector2 = piece[0]
 			var p1: Vector2 = piece[1]
 			var full := _wall_box(roots[lv], p0, p1, y0, y1, col)
 			var low := _wall_box(roots[lv], p0, p1, y0, maxf(y0 + 0.05, _level_y(lv) + LOW), col.darkened(0.08))
 			low.visible = false
-			walls.append({"full": full, "low": low, "level": lv, "c": p0.lerp(p1, 0.5), "a": p0, "b": p1})
+			_built.append_array([full, low])
+			walls.append({"full": full, "low": low, "level": lv, "c": p0.lerp(p1, 0.5), "a": p0, "b": p1, "i": wi})
+		for d in w.get("doors", []):
+			_opening(lv, a, b, d, y0, y1, col, wi)
+
+
+## What fills an opening in a wall: nothing for a plain gap; a header and a door, or sliding glass
+## doors, that open as she comes up; or a window (sill, glass in a white frame, head) that still
+## blocks the way.
+func _opening(lv: String, a: Vector2, b: Vector2, d: Array, y0: float, y1: float, col: Color, wi: int) -> void:
+	var kind := str(d[2]) if d.size() > 2 else "open"
+	if kind == "open":
+		return
+	var along_x := absf(b.x - a.x) > absf(b.y - a.y)
+	var at := float(d[0])
+	var wd := float(d[1])
+	var p0 := Vector2(at - wd * 0.5, a.y) if along_x else Vector2(a.x, at - wd * 0.5)
+	var p1 := Vector2(at + wd * 0.5, a.y) if along_x else Vector2(a.x, at + wd * 0.5)
+	var c := p0.lerp(p1, 0.5)
+	var fl := _level_y(lv) if lv != "all" else basement_y
+	var head := fl + (WINDOW_HEAD if kind == "window" else DOOR_HEAD + (0.06 if kind == "slide" else 0.0))
+	if y1 > head + 0.01:
+		var hb := _short_box(roots[lv], p0, p1, head, y1, col)
+		_built.append(hb)
+		walls.append({"full": hb, "low": null, "level": lv, "c": c, "a": p0, "b": p1, "i": wi, "block": false})
+	var rot := 0.0 if along_x else -PI * 0.5 # a model laid along +X turned to lie along the wall
+	if kind == "window":
+		var sill := _short_box(roots[lv], p0, p1, y0, fl + WINDOW_SILL, col)
+		var low := _short_box(roots[lv], p0, p1, y0, maxf(y0 + 0.05, fl + LOW), col.darkened(0.08))
+		low.visible = false
+		_built.append_array([sill, low])
+		walls.append({"full": sill, "low": low, "level": lv, "c": c, "a": p0, "b": p1, "i": wi})
+		var win := Node3D.new()
+		win.position = Vector3(c.x, fl + WINDOW_SILL, c.y)
+		win.rotation.y = rot
+		roots[lv].add_child(win)
+		_built.append(win)
+		var h := WINDOW_HEAD - WINDOW_SILL
+		var glass := _box(win, Vector3(wd, h, 0.02), Vector3(0, h * 0.5, 0), Catalog.window_glass())
+		glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var frame := _flat_mat(Color("#f4f1ea"))
+		for fr in [[Vector3(wd, 0.06, WALL_T + 0.02), Vector3(0, 0.03, 0)], [Vector3(wd, 0.06, WALL_T + 0.02), Vector3(0, h - 0.03, 0)],
+				[Vector3(0.06, h, WALL_T + 0.02), Vector3(-wd * 0.5 + 0.03, h * 0.5, 0)], [Vector3(0.06, h, WALL_T + 0.02), Vector3(wd * 0.5 - 0.03, h * 0.5, 0)],
+				[Vector3(0.04, h, 0.05), Vector3(0, h * 0.5, 0)]]:
+			_box(win, fr[0], fr[1], frame)
+		walls.append({"full": win, "low": null, "level": lv, "c": c, "a": p0, "b": p1, "i": wi, "block": false})
+		return
+	var pivot := Node3D.new()
+	roots[lv].add_child(pivot)
+	_built.append(pivot)
+	var part: Node3D = pivot
+	if kind == "door":
+		# hinged on the gap's low end, the slab along the wall
+		pivot.position = Vector3(p0.x, fl + 0.045, p0.y)
+		pivot.rotation.y = rot
+		var holder := Node3D.new()
+		holder.scale = Vector3(wd / DOOR_W, 1, 1)
+		pivot.add_child(holder)
+		if ResourceLoader.exists(DOOR_GLB):
+			holder.add_child((load(DOOR_GLB) as PackedScene).instantiate())
+		else:
+			_box(holder, Vector3(DOOR_W, 2.02, 0.04), Vector3(DOOR_W * 0.5, 1.01, 0), _flat_mat(Color("#f4f1ea")))
+			_box(holder, Vector3(0.06, 0.06, 0.12), Vector3(DOOR_W - 0.08, 0.95, 0), _flat_mat(Color("#c9a24a")))
+	else:
+		pivot.position = Vector3(c.x, fl + 0.045, c.y)
+		pivot.rotation.y = rot
+		var holder := Node3D.new()
+		holder.scale = Vector3(wd / SLIDE_W, 1, 1)
+		pivot.add_child(holder)
+		if ResourceLoader.exists(SLIDE_GLB):
+			var m: Node3D = (load(SLIDE_GLB) as PackedScene).instantiate()
+			holder.add_child(m)
+			for mi in m.find_children("*", "MeshInstance3D", true, false):
+				var mesh: Mesh = (mi as MeshInstance3D).mesh
+				for si in mesh.get_surface_count():
+					var mat := mesh.surface_get_material(si)
+					if mat != null and "glass" in str(mat.resource_name).to_lower():
+						(mi as MeshInstance3D).set_surface_override_material(si, Catalog.window_glass())
+			var sl := m.find_child("slide", true, false)
+			part = sl if sl is Node3D else holder
+		else:
+			var fm := _flat_mat(Color("#ecebe6"))
+			for fr in [[Vector3(SLIDE_W, 0.06, 0.1), Vector3(0, 0.03, 0)], [Vector3(SLIDE_W, 0.06, 0.1), Vector3(0, 2.05, 0)],
+					[Vector3(0.06, 2.08, 0.1), Vector3(-SLIDE_W * 0.5 + 0.03, 1.04, 0)], [Vector3(0.06, 2.08, 0.1), Vector3(SLIDE_W * 0.5 - 0.03, 1.04, 0)]]:
+				_box(holder, fr[0], fr[1], fm)
+			_box(holder, Vector3(SLIDE_W * 0.5, 1.98, 0.02), Vector3(-SLIDE_W * 0.25, 1.04, -0.025), Catalog.window_glass())
+			var sl := Node3D.new()
+			sl.name = "slide"
+			holder.add_child(sl)
+			_box(sl, Vector3(SLIDE_W * 0.5, 1.98, 0.02), Vector3(SLIDE_W * 0.25, 1.04, 0.025), Catalog.window_glass())
+			_box(sl, Vector3(0.05, 1.98, 0.05), Vector3(0.05, 1.04, 0.025), fm)
+			part = sl
+	doors.append({"node": pivot, "part": part, "kind": kind, "c": c, "lv": lv, "rot0": pivot.rotation.y, "x0": part.position.x, "open": 0.0})
+
+
+## A box between two points of a wall's centre line, `y0` to `y1`, no longer than the gap.
+func _short_box(parent: Node3D, a: Vector2, b: Vector2, y0: float, y1: float, col: Color) -> MeshInstance3D:
+	var mi := _wall_box(parent, a, b, y0, y1, col)
+	var bm := mi.mesh as BoxMesh
+	if absf(b.x - a.x) > absf(b.y - a.y):
+		bm.size.x -= WALL_T
+	else:
+		bm.size.z -= WALL_T
+	return mi
+
+
+func _box(parent: Node3D, size: Vector3, at: Vector3, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = at
+	parent.add_child(mi)
+	return mi
+
+
+## The walls, openings, floors and ceilings built again from cfg (the world editor changed them).
+func rebuild() -> void:
+	for n in _built:
+		if is_instance_valid(n):
+			(n as Node).queue_free()
+	_built.clear()
+	walls.clear()
+	ceilings.clear()
+	doors.clear()
+	_floors()
+	_walls()
+	_show()
+	mark_grid()
+
+
+## The world editor's house tools change these and rebuild (god_mode.gd, house_edit.gd).
+func set_layout(new_walls: Array, new_rooms: Array) -> void:
+	cfg["walls"] = new_walls
+	cfg["rooms"] = new_rooms
+	rebuild()
 
 
 ## A wall's centre line cut at its doors: [[from, to], ...].
@@ -304,6 +463,10 @@ func _floor_mat(kind: String) -> StandardMaterial3D:
 			img = _noise(Color("#8f8b84"), 0.1, 17)
 			m.uv1_scale = Vector3(1.0, 1.0, 1.0) / 2.0
 			m.roughness = 0.8
+		"wood_oak":
+			img = _boards(Color("#b98a55"), 6)
+			m.uv1_scale = Vector3(1.0, 1.0, 1.0) / 1.0
+			m.roughness = 0.55
 		_: # carpet_grey
 			img = _noise(Color("#8b8b88"), 0.1, 5)
 	img.generate_mipmaps()
@@ -312,6 +475,30 @@ func _floor_mat(kind: String) -> StandardMaterial3D:
 		m.roughness = 0.95
 	_mats[kind] = m
 	return m
+
+
+## Oak boards: `n` across the tile, each its own shade, with fine grain along it and dark seams.
+static func _boards(wood: Color, n: int) -> Image:
+	var s := 128
+	var img := Image.create(s, s, false, Image.FORMAT_RGB8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var w := s / n
+	var shade := []
+	for i in n:
+		shade.append(rng.randf_range(-0.08, 0.08))
+	var grain := FastNoiseLite.new()
+	grain.seed = 3
+	grain.frequency = 0.08
+	for y in s:
+		for x in s:
+			var b := mini(x / w, n - 1)
+			var c: Color = wood.lightened(shade[b]) if shade[b] > 0.0 else wood.darkened(-shade[b])
+			c = c.darkened(0.06 * (grain.get_noise_2d(x * 4.0, y * 0.25) + 1.0))
+			if x % w == 0 or (y + b * 37) % s == 0:
+				c = c.darkened(0.45)
+			img.set_pixel(x, y, c)
+	return img
 
 
 static func _tiles(face: Color, grout: Color, n: int) -> Image:
@@ -433,8 +620,11 @@ func mark_grid() -> void:
 		for piece in _pieces(Vector2(float(seg[0]), float(seg[1])), Vector2(float(seg[2]), float(seg[3])), doors):
 			_block(_seg_rect(piece[0], piece[1], 0.22))
 	for w in walls:
-		if _reachable(str(w["level"])):
-			_block(_seg_rect(w["a"], w["b"], WALL_T))
+		if _reachable(str(w["level"])) and bool(w.get("block", true)):
+			# a cell wide, so no cell centre slips through between its faces; its ends only reach
+			# the wall's own, so a doorway beside it stays open
+			for c in _cells([_wall_strip(w["a"], w["b"])], 0.0):
+				main.astar.set_point_solid(c, true)
 	for n in _furniture_nodes():
 		if not n.visible: # deleted in the world editor
 			continue
@@ -474,6 +664,15 @@ func _furniture_nodes() -> Array:
 				if n is Node3D and n.has_meta("item_id"):
 					out.append(n)
 	return out
+
+
+## The ground a partition blocks: `BLOCK_T` across, its own length (and half its thickness) along.
+func _wall_strip(a: Vector2, b: Vector2) -> Rect2:
+	var lo := a.min(b)
+	var hi := a.max(b)
+	if absf(b.x - a.x) > absf(b.y - a.y):
+		return Rect2(lo.x - WALL_T * 0.5, a.y - BLOCK_T * 0.5, hi.x - lo.x + WALL_T, BLOCK_T)
+	return Rect2(a.x - BLOCK_T * 0.5, lo.y - WALL_T * 0.5, BLOCK_T, hi.y - lo.y + WALL_T)
 
 
 func _seg_rect(a: Vector2, b: Vector2, t: float) -> Rect2:
@@ -544,9 +743,66 @@ func _process(delta: float) -> void:
 	open = move_toward(open, 1.0 if (inside or at_door) else 0.0, delta * 2.5)
 	if parts.has("door"):
 		(parts["door"] as Node3D).rotation.y = deg_to_rad(100.0) * smoothstep(0.0, 1.0, open)
+	_swing_doors(q, delta)
 	_show()
 	if inside != was_inside and not inside:
 		_restore_hidden()
+
+
+## The doors and sliding doors inside open as she comes up to one on its floor, and close behind her.
+func _swing_doors(q: Vector3, delta: float) -> void:
+	for d in doors:
+		var c: Vector2 = d["c"]
+		var lv := str(d["lv"])
+		var fl := _level_y(lv) if lv != "all" else basement_y
+		var near: bool = inside and Vector2(q.x - c.x, q.z - c.y).length() < 1.5 and absf(main.player.position.y - house.global_position.y - fl) < 1.0
+		d["open"] = move_toward(float(d["open"]), 1.0 if near else 0.0, delta * 2.2)
+		var s := smoothstep(0.0, 1.0, float(d["open"]))
+		if str(d["kind"]) == "door":
+			(d["node"] as Node3D).rotation.y = float(d["rot0"]) - deg_to_rad(95.0) * s
+		else:
+			(d["part"] as Node3D).position.x = float(d["x0"]) - SLIDE_W * 0.47 * s
+
+
+## The world editor: the level a point in the house's space is drawn on (the basement while she's
+## down there, else the bedroom floor over the right half and the main floor over the left).
+func level_name_at(q: Vector3) -> String:
+	if level == BASEMENT:
+		return "basement"
+	return "upper" if q.x > split_x else "main"
+
+
+## Where the world editor's pointer meets the floors shown now (world), or null off the house.
+func editor_pick(from: Vector3, dir: Vector3) -> Variant:
+	var hs: Array = [basement_y] if level == BASEMENT else [upper_y, 0.0]
+	for h in hs:
+		var hit: Variant = Plane(Vector3.UP, house.global_position.y + float(h)).intersects_ray(from, dir)
+		if hit == null:
+			continue
+		var q := local(hit)
+		if in_footprint(q) and absf(floor_local(q, level) - float(h)) < 0.02:
+			return hit
+	return null
+
+
+## The wall in cfg "walls" nearest `q` (the house's x / z) on level `lv`, within `reach`; -1 if none.
+func wall_near(q: Vector2, lv: String, reach := 0.3) -> int:
+	var best := -1
+	var best_d := reach
+	var i := -1
+	for w in cfg.get("walls", []):
+		i += 1
+		var wl := str(w["level"])
+		if wl != lv and not (lv == "main" and wl == "upper" and q.x <= split_x + 0.2) and not (lv == "upper" and wl == "main" and q.x >= split_x - 0.2):
+			continue
+		var seg: Array = w["wall"]
+		var a := Vector2(float(seg[0]), float(seg[1]))
+		var b := Vector2(float(seg[2]), float(seg[3]))
+		var dd := Geometry2D.get_closest_point_to_segment(q, a, b).distance_to(q)
+		if dd < best_d:
+			best_d = dd
+			best = i
+	return best
 
 
 ## What's shown: the floors she can see, the roof and the walls toward the camera, the ground's hole.
@@ -594,7 +850,8 @@ func _show() -> void:
 		var c: Vector2 = w["c"]
 		var cut: bool = cut_on and Vector2(c.x - her.x, c.y - her.z).dot(Vector2(cl.x, cl.z)) > 0.6
 		(w["full"] as Node3D).visible = not cut
-		(w["low"] as Node3D).visible = cut
+		if w["low"] != null:
+			(w["low"] as Node3D).visible = cut
 	var night := clampf(1.0 - Game.daylight(), 0.0, 1.0)
 	for l in lights:
 		(l as OmniLight3D).light_energy = 0.55 + 0.75 * night

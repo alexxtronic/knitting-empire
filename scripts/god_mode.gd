@@ -22,6 +22,9 @@ extends Node3D
 ##              building; "added_in" lists pieces copied or placed inside one (its key, the node they
 ##              hang from, catalog id, x, y, z, turn and size in the building's space). Every roof
 ##              is off while the editor is open; Marcus's basement is edited from down there
+##   "split_house" Marcus's house's walls (with their doors, sliding doors and windows) and floors,
+##              the whole lists, written once the editor's house tools have changed them; they
+##              replace data/split_house.json's "walls" and "rooms" (house_edit.gd)
 ## With no file, or a part missing from it, that part of the world is exactly what the code builds.
 ##
 ## The Place tool shows the chosen thing under the pointer with a green outline (R turns it left,
@@ -51,6 +54,7 @@ const Nature = preload("res://scripts/nature.gd")
 const Regions = preload("res://scripts/regions.gd")
 const Furniture = preload("res://scripts/furniture.gd")
 const Mail = preload("res://scripts/mail.gd")
+const HouseEdit = preload("res://scripts/house_edit.gd")
 
 const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
@@ -130,6 +134,9 @@ var baked := {} # scenery kinds whose full list goes in the layout file
 var orphans := {} # saved node edits that match nothing the code builds now (kept in the file)
 var unknown_scenery := {} # saved scenery lists for kinds the game no longer has (kept in the file)
 var orphan_pieces: Array = [] # saved pieces added inside a building that isn't there now (kept in the file)
+var house_tools # house_edit.gd: Marcus's house's walls, doors, windows and floors
+var house_split_edited := false # they were changed here: the layout gets the whole lists again
+var house_split_saved := {} # the layout's "split_house" entry as read ({} = the data file's own)
 var plots_edited := false
 var home_edited := false # her furniture was arranged here: the layout gets the whole list again
 var house_list: Array = [] # the layout's "house" list, as read ([] = the code's own furnishing)
@@ -900,6 +907,9 @@ func load_layout() -> void:
 	if d.has("roads"):
 		_load_roads(d["roads"])
 	house_list = d.get("house", [])
+	house_split_saved = d.get("split_house", {})
+	if not house_split_saved.is_empty() and main.suburb != null and main.suburb.walk_in != null:
+		main.suburb.walk_in.set_layout((house_split_saved.get("walls", []) as Array).duplicate(true), (house_split_saved.get("rooms", []) as Array).duplicate(true))
 	unsaved = false
 
 
@@ -993,6 +1003,11 @@ func layout() -> Dictionary:
 	var d := {"version": 1, "nodes": nodes, "added": added, "scenery": sc}
 	if not added_in.is_empty():
 		d["added_in"] = added_in
+	if house_split_edited and house_tools != null and house_tools.house() != null:
+		var snap: Array = house_tools.snapshot()
+		d["split_house"] = {"walls": snap[0], "rooms": snap[1]}
+	elif not house_split_saved.is_empty():
+		d["split_house"] = house_split_saved
 	if home_edited:
 		d["house"] = home_now()
 	elif not house_list.is_empty():
@@ -1023,6 +1038,8 @@ func save_layout() -> bool:
 		for a in d["added_in"]:
 			irows.append("\t\t" + JSON.stringify(a))
 		lines.append('\t"added_in": [\n%s\n\t]' % ",\n".join(irows))
+	if d.has("split_house"):
+		lines.append('\t"split_house": ' + JSON.stringify(d["split_house"]))
 	if d.has("house"):
 		var hrows: Array[String] = []
 		for h in d["house"]:
@@ -1116,7 +1133,11 @@ func cam_bounds() -> Rect2:
 func set_tool(t: String) -> void:
 	_end_stroke()
 	_end_stream()
+	if tool == "h_wall" and t != "h_wall" and house_tools != null:
+		house_tools.deselect()
 	tool = t
+	if t.begins_with("h_") and house_tools != null:
+		main.hud.show_toast(house_tools.hint(t))
 	for k in _tool_btns:
 		(_tool_btns[k] as Button).set_pressed_no_signal(k == t)
 	if t == "place" and place_id == "":
@@ -1126,7 +1147,7 @@ func set_tool(t: String) -> void:
 		hover = null
 		_draw_boxes()
 	if _ring != null:
-		_ring.visible = t != "select" and t != "place" # the Place tool shows the thing itself instead
+		_ring.visible = t != "select" and t != "place" and not t.begins_with("h_") # the Place tool shows the thing itself instead
 	_make_ghost()
 	_draw_ring()
 	_show_status()
@@ -1258,6 +1279,9 @@ func press(mpos: Vector2) -> void:
 	_end_stroke()
 	_end_stream()
 	_drag = {}
+	if tool.begins_with("h_"):
+		house_tools.press(tool, mpos)
+		return
 	if tool == "place":
 		var spot = main._ground_point(mpos)
 		if spot != null:
@@ -1280,6 +1304,9 @@ func press(mpos: Vector2) -> void:
 func move(mpos: Vector2, snap := false) -> void:
 	_mouse = mpos
 	_mouse_moved = true
+	if tool.begins_with("h_"):
+		house_tools.move(mpos)
+		return
 	if tool == "place":
 		var g = main._ground_point(mpos)
 		if g != null:
@@ -1310,6 +1337,8 @@ func move(mpos: Vector2, snap := false) -> void:
 
 
 func release() -> void:
+	if house_tools != null:
+		house_tools.release()
 	_end_stream()
 	if _painting:
 		_end_stroke()
@@ -1702,6 +1731,10 @@ func undo() -> void:
 					select(null)
 				changed.append_array(_set_state(el, el.xf, true))
 			_refresh(changed)
+		"house":
+			house_tools.restore(u[1])
+			house_split_edited = true
+			_refresh([])
 		"roads":
 			road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, u[1])
 			for el in u[2]:
@@ -1727,7 +1760,8 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 				return false
 			resize(1.0 / SIZE_STEP)
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
-			delete_selected()
+			if not (tool == "h_wall" and house_tools.delete_selected()):
+				delete_selected()
 		KEY_Z:
 			if cmd:
 				undo()
@@ -2119,6 +2153,8 @@ func _show_status() -> void:
 			s = "Click anything to select it, then drag it. Right-drag or WASD moves the camera, the wheel zooms."
 	elif tool == "place":
 		s = "Click to set one down; hold and drag for a stream (Shift keeps it straight). R / T turn the preview, + / - resize it (now %d%%). Ctrl/Cmd+Z undoes." % roundi(place_size * 100.0)
+	elif tool.begins_with("h_") and house_tools != null:
+		s = house_tools.hint(tool) + " Ctrl/Cmd+Z undoes. Edit the basement with Nora down there."
 	elif tool == "erase":
 		s = "Drag over a road or the paving to rub it out. Hold Shift for a straight line. [ and ] change the brush size."
 	else:
@@ -2178,6 +2214,29 @@ func _build_ui() -> void:
 				set_tool("place"))
 			row.add_child(_place_pick)
 	vb.add_child(row)
+	if house_tools == null:
+		house_tools = HouseEdit.new(self)
+	if house_tools.house() != null:
+		# Marcus's house: its walls, doors, sliding doors, windows and floors
+		var hrow := HBoxContainer.new()
+		hrow.add_theme_constant_override("separation", 8)
+		hrow.add_child(hud._label("Marcus's house", 14, hud.GOLD))
+		for t in HouseEdit.TOOLS:
+			var id: String = t[0]
+			var b: Button = hud._button(t[1], func(): set_tool(id))
+			b.toggle_mode = true
+			_tool_btns[id] = b
+			hrow.add_child(b)
+		var fp := OptionButton.new()
+		fp.focus_mode = Control.FOCUS_NONE
+		for f in HouseEdit.FLOORS:
+			fp.add_item(str(f[1]))
+			fp.set_item_metadata(fp.item_count - 1, str(f[0]))
+		fp.item_selected.connect(func(i: int):
+			house_tools.floor_kind = str(fp.get_item_metadata(i))
+			set_tool("h_floor"))
+		hrow.add_child(fp)
+		vb.add_child(hrow)
 	var brush_row := HBoxContainer.new()
 	brush_row.add_theme_constant_override("separation", 8)
 	brush_row.add_child(hud._label("Brush", 14))
