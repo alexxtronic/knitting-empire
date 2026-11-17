@@ -316,7 +316,7 @@ func _house(i: int, d: Dictionary) -> Array:
 	var blocks: Array = []
 	for r in local_blocks:
 		blocks.append_array(_blocks(r, node.position, node.rotation.y))
-	var h := {"i": i, "node": node, "model": model, "mirror": mirror, "panes": panes, "light": light, "yaw": node.rotation.y,
+	var h := {"i": i, "node": node, "model": model, "mirror": mirror, "panes": panes, "light": light, "yaw": node.rotation.y, "at": node.position, # where the code put it, before the world layout
 		"door": _to_world(node, Vector3(DOOR_AT.x * mx, 0, DOOR_AT.z)), "inside": _to_world(node, Vector3(INSIDE_AT.x * mx, 0, INSIDE_AT.z))}
 	house_list.append(h)
 	if walks_in and not mirror:
