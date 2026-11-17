@@ -93,10 +93,10 @@ func apply() -> void:
 	for el in main.god.els:
 		if not el.scenery:
 			continue
-		var on: bool = kept.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) # a plot she bought is cleared
+		var on: bool = kept.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) or (main.suburb != null and main.suburb.clears(el.xf.origin)) # a plot she bought is cleared (and Bretton Oaks' ground)
 		if el.cut != on:
 			_set_cut(el, on)
-			grid = grid or el.kind.begins_with("tree_")
+			grid = true # trees, rocks and the rest stand in the walking grid's way
 	if grid:
 		main._rebuild_grid()
 

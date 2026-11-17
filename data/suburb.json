@@ -1,0 +1,31 @@
+{
+  "_about": "Bretton Oaks (Alex, 2026-11-17: 'a suburban area called Bretton Oaks ... very similar houses ... circling a cul-de-sac ... where the NPCs go at night to sleep'), built by scripts/suburb.gd. centre: the middle of the turning circle [x, z]; bulb: its radius; ring: how far each house's middle stands from the centre; road_to: where the road in meets the meadow trail [x, z]; road_width. houses: one per house, round the circle from just past the road (start_deg from the road's direction, step_deg between them); mirror flips it left for right; brick, vinyl (the cream siding), trim and door are colours; plants: [model in assets/props, x, z, scale] in the house's own space (its front toward +z, the right wing's front at z 4.4), arborvitae and red_shrub are the photo's. residents: who sleeps in which house (a named villager's id -> house index); anyone else (townsfolk) is given a house by home_for(), the same one every time. night_from / night_to: when they go home to bed and come out again (game hours). lights: windows lit from dusk until about this hour (each house a little later than the last), and again from lights_morning before dawn. Every name here is a draft until Alex approves it.",
+  "name": "Bretton Oaks",
+  "centre": [99.0, 8.0],
+  "bulb": 8.5,
+  "ring": 21.0,
+  "road_to": [86.5, 0.7],
+  "road_width": 6.0,
+  "start_deg": 45.0,
+  "step_deg": 54.0,
+  "lawn": ["#56802e", "#4c7629", "#5f8a33"],
+  "houses": [
+    {"mirror": false, "brick": "#8a4a36", "vinyl": "#d8ccac", "trim": "#f1efe8", "door": "#f4f2ec",
+     "plants": [["arborvitae", 0.3, 5.3, 1.0], ["arborvitae", 2.45, 5.3, 1.0], ["arborvitae", 4.6, 5.3, 1.0], ["red_shrub", 7.6, 4.6, 1.0]]},
+    {"mirror": false, "brick": "#7c4a3a", "vinyl": "#c9d2c4", "trim": "#f3f1ea", "door": "#2f4a3a",
+     "plants": [["arborvitae", 0.6, 5.3, 0.95], ["arborvitae", 4.4, 5.3, 0.95], ["hydrangea", 2.5, 5.2, 1.1], ["red_shrub", 7.6, 4.6, 0.9]]},
+    {"mirror": false, "brick": "#9a5a40", "vinyl": "#e3d6b8", "trim": "#ffffff", "door": "#7a2a2a",
+     "plants": [["red_shrub", 1.0, 5.2, 0.85], ["red_shrub", 4.0, 5.2, 0.85], ["arborvitae", 6.2, 5.3, 1.05]]},
+    {"mirror": true, "brick": "#84513d", "vinyl": "#b9c4cc", "trim": "#eef0f0", "door": "#2c3f5c",
+     "plants": [["arborvitae", 0.3, 5.3, 1.0], ["arborvitae", 2.45, 5.3, 1.0], ["arborvitae", 4.6, 5.3, 1.0]]},
+    {"mirror": true, "brick": "#7a3f30", "vinyl": "#d9c7a0", "trim": "#f4ecd8", "door": "#5a3a24",
+     "plants": [["rose_bush", 1.2, 5.2, 1.0], ["rose_bush", 3.8, 5.2, 1.0], ["arborvitae", 7.0, 3.6, 1.0], ["red_shrub", 7.6, 4.6, 1.0]]},
+    {"mirror": true, "brick": "#8e4c3a", "vinyl": "#e6dfcc", "trim": "#f1efe8", "door": "#c9a23c",
+     "plants": [["arborvitae", 1.4, 5.3, 1.1], ["arborvitae", 3.6, 5.3, 1.1], ["hydrangea", 6.6, 5.0, 1.0]]}
+  ],
+  "residents": {"wren": 0, "rowan": 1, "rosa": 2, "barbara": 2, "giorgio": 3, "steve": 4, "gary": 4, "sabrina": 5, "rebecca": 5},
+  "night_from": 21.0,
+  "night_to": 6.0,
+  "lights": 23.0,
+  "lights_morning": 5.5
+}

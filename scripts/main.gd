@@ -6,6 +6,7 @@ const Catalog = preload("res://scripts/catalog.gd")
 const World = preload("res://scripts/world.gd")
 const Furniture = preload("res://scripts/furniture.gd")
 const PerfCheck = preload("res://scripts/perf_check.gd")
+const SuburbCheck = preload("res://scripts/suburb_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
@@ -26,6 +27,7 @@ const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const Lighting = preload("res://scripts/lighting.gd")
 const Regions = preload("res://scripts/regions.gd")
+const Suburb = preload("res://scripts/suburb.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const HouseSkin = preload("res://scripts/house_skin.gd")
@@ -152,6 +154,7 @@ var fireflies # fireflies.gd: glowing orbs round things near her at night
 var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
 var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var decor_root: Node3D
+var suburb # suburb.gd: Bretton Oaks, the cul-de-sac where the town sleeps
 var sign_to_town: Landmark
 var sign_to_farm: Landmark
 var price_board: Label3D
@@ -250,6 +253,9 @@ func _ready() -> void:
 	decor_root = Node3D.new()
 	add_child(decor_root)
 	_build_town_decor()
+	suburb = Suburb.new()
+	add_child(suburb)
+	grid_blockers.append_array(suburb.build(self))
 	grid_blockers.append_array(World.build_barn(self, Vector3(21.5, 0, -9.5)))
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
@@ -371,6 +377,7 @@ func _ready() -> void:
 	cafe_visits = CafeVisits.new()
 	cafe_visits.main = self
 	story.scene_started.connect(func(_id): cafe_visits.end_all()) # before the scene places anyone
+	story.scene_started.connect(func(_id): suburb.wake_all()) # everyone out of bed for it
 	jobs = Jobs.new()
 	jobs.main = self
 	add_child(jobs)
@@ -419,6 +426,7 @@ func _ready() -> void:
 	hints_enabled = _autotest_dir == "" # Act 1's checks turn the control hints on for themselves
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
+	suburb.on = _autotest_dir == "" # and nobody goes home to Bretton Oaks at night but in its own check
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
 	Jobs.on = _autotest_dir == "" # and no boss offers a job but in the jobs check, which turns them on
 	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
@@ -5659,6 +5667,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=suburb" in OS.get_cmdline_user_args(): # just Bretton Oaks: its houses, its sign, a night there (suburb_check.gd)
+		await _wait(1.5)
+		await SuburbCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=buildings" in OS.get_cmdline_user_args(): # just the town's buildings and the barn in the house's textures
 		await _wait(1.5)
 		await _building_skin_checks()
@@ -5915,6 +5929,7 @@ func _autotest() -> void:
 	await _flock_checks()
 	await _light_checks()
 	await _world_checks()
+	await SuburbCheck.new().run(self)
 	await _dog_checks()
 	await _wildlife_checks()
 	await _empire_checks()
@@ -10382,6 +10397,7 @@ func _update_rounds(delta: float) -> void:
 	_update_gary_visit()
 	_update_max_visit()
 	cafe_visits.update()
+	suburb.update() # to bed in Bretton Oaks at night, out in the morning
 
 
 ## Gary from Willow Homes calls at the farm: first on her second day (data/scenes/town.scene

@@ -65,6 +65,7 @@ PROPS = {
     "building_mayor": (1.4, True),
     "building_office": (1.4, True),
     "building_shop": (1.4, True),
+    "building_suburb_house": (1.4, True),
     "chalkboard_sign": (0.6, True),
     "coffee_table": (0.7, True),
     "computer": (0.7, True),
@@ -104,6 +105,9 @@ PROPS = {
     "mallow": (0.4, True),
     "hollyhocks": (0.4, True),
     "hydrangea": (0.4, True),
+    # Bretton Oaks' front gardens (art/world_assets/suburb_house)
+    "arborvitae": (0.4, True),
+    "red_shrub": (0.4, True),
 }
 
 OPAQUE_NODE = "light_bake_opaque"
