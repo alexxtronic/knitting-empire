@@ -112,6 +112,7 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 	s.light = Catalog.omni(b, lp, Color(1.0, 0.78, 0.5), 4.2, 0.0, 1.2)
 	s.light.shadow_enabled = false
 	s.light.set_meta("no_shadow", true)
+	Catalog.soft_glint(s.light) # no glare off the panes and counters
 	return rects
 
 
