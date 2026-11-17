@@ -197,9 +197,12 @@ func _editor_checks() -> void:
 	var saved: Dictionary = god.layout()
 	var in_file: bool = saved.has("split_house") and (saved["split_house"]["walls"] as Array).size() == walls0 + 1
 	god.set_tool("h_wall")
-	ht.press("h_wall", _screen(Vector3(-3.3, 0, -0.5)))
+	# picked by a click on its top, as it's seen from above (Alex, 2026-11-17: clicks there used to
+	# land on the floor behind it and start a new wall instead)
+	var top := _wall_top(walls0)
+	ht.press("h_wall", main.cam.unproject_position(top))
 	ht.release()
-	var picked: bool = wi.selected_wall == walls0
+	var picked: bool = wi.selected_wall == walls0 and (wi.cfg["walls"] as Array).size() == walls0 + 1
 	var deleted: bool = ht.delete_selected() and (wi.cfg["walls"] as Array).size() == walls0
 	while god.undo_stack.size() > undo0:
 		god.undo()
@@ -211,6 +214,19 @@ func _editor_checks() -> void:
 	god.set_active(false)
 	god.layout_path = path0
 	await main._wait(0.3)
+
+
+## The top middle of wall `i` as it stands shown (full height, or cut down low toward the camera).
+func _wall_top(i: int) -> Vector3:
+	for w in wi.walls:
+		if int(w.get("i", -1)) != i:
+			continue
+		for part in ["full", "low"]:
+			var mi = w.get(part)
+			if mi is MeshInstance3D and is_instance_valid(mi) and (mi as MeshInstance3D).is_visible_in_tree():
+				var b: AABB = (mi as MeshInstance3D).get_aabb()
+				return (mi as MeshInstance3D).global_transform * (b.get_center() + Vector3(0, b.size.y * 0.5 - 0.02, 0))
+	return wi.house.global_transform * Vector3(-3.3, 2.0, -0.5)
 
 
 func _screen(local_at: Vector3) -> Vector2:

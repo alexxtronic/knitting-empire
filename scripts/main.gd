@@ -8,6 +8,7 @@ const Furniture = preload("res://scripts/furniture.gd")
 const PerfCheck = preload("res://scripts/perf_check.gd")
 const SuburbCheck = preload("res://scripts/suburb_check.gd")
 const WalkinCheck = preload("res://scripts/walkin_check.gd")
+const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
@@ -48,6 +49,7 @@ const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const Wolves = preload("res://scripts/wolves.gd")
+const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const ReadingPose = preload("res://scripts/reading_pose.gd")
@@ -137,6 +139,7 @@ var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the c
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
+var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -419,6 +422,11 @@ func _ready() -> void:
 	add_child(wildlife)
 	if _autotest_dir == "": # the autotest places them only for its own check (_wildlife_checks)
 		wildlife.build()
+	townsfolk = Townsfolk.new() # Maple Grove's passers-by (townsfolk.gd); like the wildlife, only outside the autotest
+	townsfolk.main = self
+	add_child(townsfolk)
+	if _autotest_dir == "":
+		townsfolk.build()
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
@@ -897,7 +905,7 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
-	var roads: Image = god.road_img if painted else null
+	var roads: Image = god.roads_over(Grass.REGION) if painted else null # the grass's mask covers less than the road map
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
 		grass.build(dirt, clear, pond, roads)
@@ -2569,7 +2577,7 @@ func _do_action(t, id: String) -> void:
 
 func _perform(t, id: String) -> void:
 	player.face_point(t.global_position)
-	if t is Villager:
+	if t is Villager and not t.has_method("ke_action"): # the townsfolk answer for themselves (townsperson.gd)
 		t.face_point(player.position, 10.0)
 		player.talk(4.0)
 		_villager_action(t, id)
@@ -5664,6 +5672,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=townsfolk" in OS.get_cmdline_user_args(): # just the townsfolk: wandering, benches, the café, the red pin
+		await _wait(1.5)
+		await _townsfolk_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=cast" in OS.get_cmdline_user_args(): # just the town's cast and their routines (about a minute)
 		await _wait(1.5)
 		await _cast_checks()
@@ -6018,6 +6032,7 @@ func _autotest() -> void:
 	await _barista_checks()
 	await _store_checks()
 	await _cast_checks()
+	await _townsfolk_checks()
 	await _mail_checks()
 	await _max_checks()
 	await _job_checks()
@@ -6902,6 +6917,11 @@ func _flock_checks() -> void:
 	_set_cam_lock(true)
 
 
+## The townsfolk (scripts/townsfolk_check.gd).
+func _townsfolk_checks() -> void:
+	await TownsfolkCheck.new().run(self)
+
+
 ## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
 ## both models, about one bench in five out in the world is the short one, and she sits on the
 ## boards of each.
@@ -7255,6 +7275,32 @@ func _god_checks() -> void:
 	god.set_brush(1.0)
 	_check("god mode: the square brush fills its corners, and the brush goes up to %.0f m across (corner %s, just outside %s)" % [widest * 2.0, god.road_at(sq.x + 0.9, sq.z + 0.9), god.road_at(sq.x + 1.2, sq.z)],
 		god.road_at(sq.x + 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x - 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x + 1.2, sq.z) == "" and absf(widest - 15.0) < 0.001)
+
+	# roads reach the whole map (Alex, 2026-11-17), and the dropdown has pavement and sidewalk:
+	# out in the east meadows, past where the map used to end, on the meadow's own ground
+	var far_pave := Vector3(120.0, 0, -20.0)
+	var far_side := far_pave + Vector3(2.5, 0, 0)
+	await _god_look(far_pave, 18.0)
+	var pave_item := -1
+	for i in god._road_pick.item_count:
+		if str(god._road_pick.get_item_metadata(i)) == "pavement":
+			pave_item = i
+	god._road_pick.select(pave_item)
+	god._road_pick.item_selected.emit(pave_item)
+	var pave_tool: String = god.tool
+	god.press(cam.unproject_position(far_pave))
+	god.release()
+	god.set_tool("sidewalk")
+	god.press(cam.unproject_position(far_side))
+	god.release()
+	await _shot("60_god_pavement.png")
+	var meadow_has: bool = regions.ground_mats.size() > 0 and regions.ground_mats.all(func(m): return (m as ShaderMaterial).get_shader_parameter("roads") == god.road_tex)
+	var both: bool = god.road_at(far_pave.x, far_pave.z) == "pavement" and god.road_at(far_side.x, far_side.z) == "sidewalk"
+	var side_tiles: bool = god._cell_cobbled(Vector2i(((Vector2(far_side.x, far_side.z) - god.TILE_ORIGIN) / god.TILE).floor()))
+	god.undo()
+	_check("god mode: the road dropdown's pavement and sidewalk paint out in the east meadows, on the lands' ground too, and Undo takes the sidewalk back (tool %s, %s, after Undo %s, cobble tiles laid on the sidewalk %s)" % [pave_tool, "pavement and sidewalk" if both else "missing", god.road_at(far_side.x, far_side.z), side_tiles],
+		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
+	god.undo()
 
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()
@@ -10864,6 +10910,8 @@ func _villager(id: String) -> Villager:
 		if v.vid == id:
 			return v
 	var w: Variant = visitors.get(id) # someone here for one scene (Max)
+	if (w == null or not is_instance_valid(w)) and townsfolk and id.begins_with("tf_"):
+		w = townsfolk.find(id) # one of the townsfolk (townsfolk.gd), for the café's visits
 	return w as Villager if w != null and is_instance_valid(w) else null
 
 

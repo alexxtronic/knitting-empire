@@ -15,6 +15,9 @@ uniform float wet : hint_range(0.0, 1.0) = 0.0; // rain
 
 #include "res://shaders/ground_hole.gdshaderinc"
 
+// god mode's painted roads reach out here too (scripts/god_mode.gd sets roads and roads_rect)
+#include "res://shaders/painted_roads.gdshaderinc"
+
 varying vec3 wpos;
 
 float hash(vec2 p) {
@@ -63,7 +66,11 @@ void fragment() {
 	if (k < 0.04 + 0.08 * hash(floor(p * 9.0))) {
 		discard;
 	}
-	ALBEDO = mix(edge_col, c, k) * (1.0 - 0.25 * wet);
-	ROUGHNESS = mix(0.95, 0.35, max(under, wet * 0.6));
+	vec3 col = mix(edge_col, c, k);
+	float bare;
+	float speck = vnoise(p * 31.0);
+	col = painted_roads(p, col, vec3(0.4, 0.31, 0.21) * (0.82 + 0.3 * small) * (0.9 + 0.2 * speck), speck, small, fwidth(p.x) + fwidth(p.y), bare);
+	ALBEDO = col * (1.0 - 0.25 * wet);
+	ROUGHNESS = mix(mix(0.95, 0.35, max(under, wet * 0.6)), 0.85 - wet * 0.4, bare);
 	SPECULAR = 0.3;
 }
