@@ -267,6 +267,8 @@ for side, sx in (("Left", 1), ("Right", -1)):
         # start from what is level with the shoulder (only the arm is out there), then take in the
         # points that lie along that line: a bag or an apron hanging below doesn't pull it down
         pick = far[np.abs(far[:, 2] - sh.z) < 0.15]
+        if len(pick) < 20:  # a wide A-pose (the townsfolk in overalls): nothing level with the shoulder yet
+            pick = far
         for _ in range(3):
             c = pick.mean(axis=0)
             ax = np.linalg.svd(pick - c, full_matrices=False)[2][0]

@@ -69,6 +69,15 @@ EYES = {
     "max_tripo": dict(mid=-0.25, dx=38.25, z=1622.75, a=17.75, up=10.0, lo=6.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.6, iris=11.0),
     "lars_tripo": dict(mid=-0.4, dx=45.9, z=1665.5, a=18.0, up=10.0, lo=6.8, tilt=-1.5, k_up=-0.1, k_lo=0.1, p=0.8, lash=1.8, iris=11.0, loose=1),
     "rebecca_tripo": dict(mid=0.0, dx=45.75, z=1494.25, a=21.1, up=10.3, lo=7.0, tilt=7.0, k_up=-0.05, k_lo=-0.05, p=0.7, lash=2.4, iris=10.0),
+    # the townsfolk (2026-11-17): big round cartoon eyes
+    "tf_theo_tripo": dict(mid=2.8, dx=40.9, z=1603.3, a=22.0, up=21.5, lo=21.5, p=0.55, lash=2.0, iris=15.0),
+    "tf_marcus_tripo": dict(mid=0.0, dx=48.1, z=1644.5, a=25.5, up=23.0, lo=23.0, p=0.55, lash=2.0, iris=15.0),
+    "tf_jake_tripo": dict(mid=1.9, dx=53.1, z=1594.25, a=25.6, up=24.5, lo=24.5, p=0.55, lash=2.0, iris=16.0),
+    "tf_dev_tripo": dict(mid=-5.6, dx=49.4, z=1593.75, a=23.0, up=17.0, lo=17.5, tilt=3.0, p=0.7, lash=2.0, iris=13.0),
+    "tf_hank_tripo": dict(mid=-5.3, dx=49.0, z=1588.25, a=24.0, up=17.5, lo=17.5, p=0.7, lash=2.0, iris=12.0),
+    "tf_pip_tripo": dict(mid=9.4, dx=68.1, z=1532.0, a=38.0, up=30.5, lo=30.5, p=0.55, lash=3.0, iris=20.0),
+    "tf_lily_tripo": dict(mid=6.6, dx=72.2, z=1387.0, a=39.0, up=36.5, lo=36.5, p=0.55, lash=3.0, iris=22.0),
+    "tf_edna_tripo": dict(mid=-3.75, dx=50.6, z=1437.0, a=20.0, up=19.5, lo=19.5, p=0.6, lash=2.0, iris=11.0),
 }
 DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0, reach=16.0)
 SPEC = None
@@ -508,7 +517,7 @@ for al in als:
     sel = hit & (al.excess(X, Z) < 0.006)
     P = pos[sel].astype(float)
     cen = P.mean(axis=0)
-    nrm = np.linalg.svd(P - cen)[2][2]
+    nrm = np.linalg.svd(P - cen, full_matrices=False)[2][2]   # not the full N x N U: a big face had Blender killed
     if nrm[1] > 0:
         nrm = -nrm
     FITS.append((nrm, fit_sphere(P)[1]))

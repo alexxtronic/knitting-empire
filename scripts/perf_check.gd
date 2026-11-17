@@ -17,6 +17,7 @@ extends RefCounted
 ## --perfspots=farm_day,town_night,... (default: all), and --perfprobe, which at each spot times
 ## each effect and each of the frame-rate pass's changes by switching it off and on again in turn
 ## (back to back, so the machine's load hits both halves alike); --perftoggles=a,b keeps only those.
+## --notownsfolk leaves the townsfolk (townsfolk.gd) out of the world, to time the town without them.
 ## Every line starts with PERF.
 
 const Interiors = preload("res://scripts/interiors.gd")
@@ -59,6 +60,9 @@ func run(m: Node) -> void:
 	# the world as a player has it: the animals out, the town on its rounds, the real clock (stopped)
 	if main.wildlife.get_child_count() == 0:
 		main.wildlife.build()
+	if not main.townsfolk.built and not "--notownsfolk" in OS.get_cmdline_user_args(): # and the townsfolk about town (townsfolk.gd; --notownsfolk leaves them out, to compare)
+		main.townsfolk.build()
+		main.townsfolk.place_all()
 	main.town_rounds = true
 	Game.fast_clock = false
 	Game.time_running = false

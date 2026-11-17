@@ -96,6 +96,9 @@ static func character(id: String) -> Dictionary:
 	for c in load_json("characters").get("characters", []):
 		if str(c.get("id", "")) == id:
 			return c
+	for c in load_json("townsfolk").get("people", []): # the townsfolk keep theirs with the rest of them
+		if str(c.get("id", "")) == id:
+			return c
 	return {}
 
 
