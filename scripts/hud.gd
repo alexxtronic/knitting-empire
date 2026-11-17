@@ -5,7 +5,8 @@ extends CanvasLayer
 signal mode_selected(build: bool)
 signal expand_pressed
 signal color_chosen(cid: String) # a colour for the piece in her hands (furniture.gd set_color)
-signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, or ""
+signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", or ""
+signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -223,6 +224,7 @@ var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it w
 var expand_btn: Button
 var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
+var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
 var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
 var graphics_btn: Button
@@ -1097,6 +1099,26 @@ func _build_catalog() -> void:
 	wall_btn = wall_btns["wall"]
 	door_btn = wall_btns["door"]
 	vb.add_child(wrow)
+	# floors: carpet, tile or oak boards over a whole room at a click (Alex, 2026-11-17)
+	var frow := HBoxContainer.new()
+	frow.add_theme_constant_override("separation", 6)
+	frow.add_child(_label("Floor", 15, GOLD))
+	var fb: Button
+	fb = _button("Floor", func(): wall_tool_chosen.emit("floor" if wall_btns["floor"].button_pressed else ""))
+	fb.toggle_mode = true
+	fb.tooltip_text = "Pick a floor in the list, then click a room (your house, or one you've built) to lay it over the whole room. Paid per 2 m square, in wood if you have enough, else coins. Plank boards take it up again, half back."
+	wall_btns["floor"] = fb
+	frow.add_child(fb)
+	floor_pick = OptionButton.new()
+	for fk in HB.FLOORS:
+		floor_pick.add_item(HB.floor_label(fk))
+	floor_pick.select(HB.FLOORS.find("carpet_grey"))
+	floor_pick.item_selected.connect(func(i: int):
+		floor_kind_chosen.emit(HB.FLOORS[i])
+		if not wall_btns["floor"].button_pressed:
+			wall_tool_chosen.emit("floor"))
+	frow.add_child(floor_pick)
+	vb.add_child(frow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wall_note.custom_minimum_size = Vector2(408, 0)

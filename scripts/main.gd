@@ -518,6 +518,7 @@ func _connect_hud() -> void:
 		if mode != Mode.BUILD and k != "":
 			set_mode(Mode.BUILD)
 		builder.set_tool(k))
+	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -11581,6 +11582,8 @@ func _build_checks() -> void:
 	Game.flags.erase("built_walls")
 	Game.flags.erase("built_paid")
 	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	Game.flags.erase("plots_owned")
 	builder.refresh_world()
 	set_mode(Mode.LIVE)
@@ -11655,6 +11658,7 @@ func _build_checks() -> void:
 	await _wait(0.6)
 	_check("build: from outside, the room keeps its roof on with the house (%s)" % _roof_visible_at(c), _roof_visible_at(c))
 	await _opening_checks(room, c)
+	await _floor_checks(c)
 	# a new house: only on a plot bought from Gary
 	var plot: Dictionary = HouseBuilder.plot_def("lane_end")
 	var pr := HouseBuilder.plot_rect(plot)
@@ -11747,6 +11751,8 @@ func _build_checks() -> void:
 	Game.flags.erase("plots_owned")
 	Game.flags.erase("built_paid")
 	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	builder.refresh_world()
 	Game.coins = coins0
 	Game.take_item("wood", Game.count("wood"))
@@ -11854,6 +11860,84 @@ func _opening_checks(room: Array, c: Vector2) -> void:
 	set_mode(Mode.LIVE)
 	player.position = Vector3(10.5, 0, 7.5)
 	cam_target = Vector3(c.x, 0, c.y)
+
+
+## Floors (Alex, 2026-11-17): blue carpet over the room she built for coins, oak boards over it for
+## wood with the carpet's coins half back, white tile over the whole house, all kept by a save, and
+## the planks back with half returned.
+func _floor_checks(c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var g := Vector3(c.x, 0, c.y)
+	var cells := builder.floor_cells_at(c)
+	var n := cells.size()
+	Game.take_item("wood", Game.count("wood"))
+	hud.wall_tool_chosen.emit("floor")
+	hud.floor_pick.select(HouseBuilder.FLOORS.find("carpet_blue"))
+	hud.floor_pick.item_selected.emit(HouseBuilder.FLOORS.find("carpet_blue"))
+	await _wait(0.1)
+	builder.hover_at(g)
+	var ghosts := builder._floor_ghost.get_child_count() if builder._floor_ghost != null else 0
+	var c0 := Game.coins
+	builder.click(g)
+	var laid := _laid_floors()
+	var carpet_cost := c0 - Game.coins
+	_check("build: the Floor tool lays blue carpet over the whole room she built for coins (%d cells, %d shown before the click, %d laid, %dc)" % [n, ghosts, laid.size(), carpet_cost],
+		builder.tool == "floor" and hud.wall_btns["floor"].button_pressed and n >= 2 and ghosts == n and laid.size() == n \
+		and carpet_cost == n * int(HouseBuilder.floor_cost("carpet_blue")[0]) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "carpet_blue")
+	# oak boards over it, paid in wood: the carpet comes up with half its coins back
+	Game.add_item("wood", 40)
+	builder.set_floor_kind("wood_oak")
+	c0 = Game.coins
+	builder.click(g)
+	var wood_used := 40 - Game.count("wood")
+	_check("build: oak boards over it are paid in wood (%d wood) and the carpet comes up for half its coins (+%dc)" % [wood_used, Game.coins - c0],
+		wood_used == n * int(HouseBuilder.floor_cost("wood_oak")[1]) and Game.coins - c0 == int(round(carpet_cost * 0.5)) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "wood_oak")
+	Game.take_item("wood", Game.count("wood"))
+	# white tile through the house
+	var hq := Vector2(HOUSE_W * 0.5, 1.0)
+	var hcells := builder.floor_cells_at(hq)
+	builder.set_floor_kind("tile_white")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var tile_cost := c0 - Game.coins
+	laid = _laid_floors()
+	_check("build: white tile through her house (%d cells, %dc, %d floors laid in all)" % [hcells.size(), tile_cost, laid.size()],
+		hcells.size() == builder.house_cells().size() and tile_cost == hcells.size() * int(HouseBuilder.floor_cost("tile_white")[0]) and laid.size() == n + hcells.size())
+	builder.hover_at(null)
+	_set_cam_lock(false)
+	cam_target = Vector3(HOUSE_W * 0.5, 0, 3.0)
+	cam_dist = 16.0
+	await _wait(0.8)
+	await _shot("62_build_floors.png") # in build mode, the roofs lifted
+	set_mode(Mode.LIVE)
+	# a save keeps them
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	laid = _laid_floors()
+	_check("build: the floors survive a save (%d laid)" % laid.size(), laid.size() == n + hcells.size())
+	# the planks again: the tile comes up, half its coins back
+	set_mode(Mode.BUILD)
+	builder.set_tool("floor")
+	builder.set_floor_kind("planks")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var w0 := Game.count("wood")
+	builder.click(g)
+	_check("build: plank boards take them up again, half back in what paid (+%dc for the tile, +%d wood for the oak, %d left)" % [Game.coins - c0, Game.count("wood") - w0, builder.floors().size()],
+		Game.coins - c0 == int(round(tile_cost * 0.5)) and Game.count("wood") - w0 == n * int(HouseBuilder.floor_cost("wood_oak")[1]) / 2 and builder.floors().is_empty())
+	Game.take_item("wood", Game.count("wood"))
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+
+
+## The laid floors standing now (house_builder.gd _draw_floors()).
+func _laid_floors() -> Array:
+	return house_root.find_children("*", "MeshInstance3D", true, false).filter(func(n: Node): return n.has_meta("floor") and not n.is_queued_for_deletion())
 
 
 ## The middle of a grid edge, on the ground (house_builder.gd keys).

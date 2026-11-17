@@ -77,6 +77,16 @@
       "slide": {"coins": 90, "wood": 4},
       "window": {"coins": 30, "wood": 2}
     },
+    "_about_floors": "Build mode's Floor tool (house_builder.gd; Alex, 2026-11-17), drafts: what one 2 m square of each floor costs, laid over a whole room at a click; wood when she has enough for the room, else coins; taken up (plank boards again), half back in what paid.",
+    "floors": {
+      "carpet_grey": {"coins": 12},
+      "carpet_blue": {"coins": 12},
+      "carpet_cream": {"coins": 14},
+      "tile_beige": {"coins": 16},
+      "tile_white": {"coins": 16},
+      "tile_black": {"coins": 18},
+      "wood_oak": {"coins": 14, "wood": 2}
+    },
     "recolor": 15,
     "refund": 0.5,
     "new_house_fee": 600,

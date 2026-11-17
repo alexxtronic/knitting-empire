@@ -21,6 +21,13 @@ extends Node
 ## metres on the even grid. The plots she owns are Game.flags["plots_owned"] (their ids). Rooms
 ## aren't saved: they're worked out from the walls (compute()), so a wall taken down opens its room.
 ##
+## Floors (Alex, 2026-11-17, "fully customize homes"): the Floor tool lays the floor picked in its
+## list (carpets, tiles, oak boards) over a whole room at a click: her house, or a room she built.
+## Each 2 m cell is paid for ("building" "floors", in wood when she has enough, else coins) and kept
+## in Game.flags["floors"] ("cx,cz" -> kind) with what paid in Game.flags["floors_paid"]; "planks",
+## the floor the house was built with, takes it up again for half back. Drawn over the planks by
+## _draw_floors(), only where the cell is still indoors.
+##
 ## main.gd draws it all in _rebuild_house() through build_into(), so the walls, floors and roofs
 ## are the house's own (_wall, _plank_floor, _house_roof), cut down and lifted by the same rules.
 
@@ -36,6 +43,11 @@ const DOOR_GLB := "res://assets/props/door_interior.glb" # origin at the foot of
 const SLIDE_GLB := "res://assets/props/sliding_door.glb" # "frame" and "slide", glass named glass
 const DOOR_W := 0.85 # the door model's width
 const SLIDE_W := 1.8 # the sliding door model's width
+const SplitHouse = preload("res://scripts/split_house.gd") # its drawn tiles and boards
+const FLOORS := ["planks", "carpet_grey", "carpet_blue", "carpet_cream", "tile_beige", "tile_white", "tile_black", "wood_oak"]
+const FLOOR_LABELS := {"planks": "Plank boards (as built)", "carpet_grey": "Grey carpet", "carpet_blue": "Blue carpet", "carpet_cream": "Cream carpet",
+	"tile_beige": "Beige tile", "tile_white": "White tile", "tile_black": "Black tile", "wood_oak": "Oak boards"}
+const FLOOR_Y := 0.035 # the top of a laid floor, just over the planks (0.02)
 
 var main
 var tool := "" # "" (furniture), or a kind in KINDS: what a click in build mode lays
@@ -50,6 +62,10 @@ var wall_nodes: Array = [] # Node3D per built edge (meta "edge", "kind"), for th
 var wall_rects: Array = [] # the ground each built wall stands on
 var _ghost: MeshInstance3D
 var _mats := {}
+var floor_kind := "carpet_grey" # what the Floor tool lays
+var hover_cells: Array = [] # the cells the Floor tool would lay (Vector2i)
+var _floor_ghost: Node3D
+var _floor_mats := {}
 var _plot_root: Node3D
 
 
@@ -408,6 +424,7 @@ func build_into() -> void:
 			Catalog.box(main.house_root, Vector3(rr.size.x + 0.3, 0.1, rr.size.y + 0.3), Vector3(rr.get_center().x, -0.04, rr.get_center().y), Catalog.STONE)
 			main._plank_floor(rr, 11 + i * 7 + int(rr.position.x * 3.0 + rr.position.y), "house")
 			main._house_roof(rr, rr.size.y >= rr.size.x, group)
+	_draw_floors()
 	_draw_plots()
 
 
@@ -919,13 +936,255 @@ func _process(delta: float) -> void:
 			(d["part"] as Node3D).position.x = float(d["x0"]) - SLIDE_W * 0.47 * s
 
 
+# --- floors ----------------------------------------------------------------------------------------
+
+func floors() -> Dictionary:
+	return Game.flag("floors", {})
+
+
+static func cell_key(c: Vector2i) -> String:
+	return "%d,%d" % [c.x, c.y]
+
+
+static func floor_label(kind: String) -> String:
+	return str(FLOOR_LABELS.get(kind, kind))
+
+
+## [coins, wood] for one 2 m cell of a floor kind ([0, 0] for the planks).
+static func floor_cost(kind: String) -> Array:
+	var f: Dictionary = econ().get("floors", {}).get(kind, {})
+	return [int(f.get("coins", 0)), int(f.get("wood", 0))]
+
+
+## The room the cell under q belongs to: a room she built, or her house. [] outside.
+func floor_cells_at(q: Vector2) -> Array:
+	var c := cell_of(q)
+	if room_cells.has(c):
+		return (rooms[int(room_cells[c])]["cells"] as Array).duplicate()
+	var hc := house_cells()
+	if hc.has(c):
+		return hc.keys()
+	return []
+
+
+func _floor_now(c: Vector2i) -> String:
+	return str(floors().get(cell_key(c), "planks"))
+
+
+## Whether `kind` can go down over these cells: {"ok", "why", "n" (cells it changes), "parts"
+## (what they cost), "back" ([coins, wood] the floors taken up give back)}.
+func floor_check(cells: Array, kind: String) -> Dictionary:
+	var out := {"ok": false, "why": "", "n": 0, "parts": {}, "back": [0, 0]}
+	if cells.is_empty():
+		out["why"] = "Floors go down inside your house or a room you've built."
+		return out
+	var n := 0
+	var back := [0, 0]
+	var share := float(econ().get("refund", 0.5))
+	var paid: Dictionary = Game.flag("floors_paid", {})
+	for c in cells:
+		var now := _floor_now(c)
+		if now == kind:
+			continue
+		n += 1
+		if now != "planks":
+			var p: Array = paid.get(cell_key(c), floor_cost(now))
+			back = [back[0] + int(round(int(p[0]) * share)), back[1] + int(floor(int(p[1]) * share))]
+	out["n"] = n
+	out["back"] = back
+	if n == 0:
+		out["why"] = "This room's floor is %s already." % floor_label(kind).to_lower()
+		return out
+	var one := floor_cost(kind)
+	out["parts"] = {"floor": [int(one[0]) * n, int(one[1]) * n]}
+	if kind != "planks" and not _can_pay(out["parts"], 0):
+		out["why"] = "You need %s for %d m² of %s." % [_cost_text(out["parts"], 0), n * STEP * STEP, floor_label(kind).to_lower()]
+		return out
+	out["ok"] = true
+	return out
+
+
+## Lays `kind` over the cells (a room), paying for each cell it changes; what it covers comes up
+## for half back in what paid for it. "planks" just takes them up.
+func lay_floor(cells: Array, kind: String) -> bool:
+	var chk := floor_check(cells, kind)
+	if not bool(chk["ok"]):
+		main.hud.show_toast(str(chk["why"]))
+		return false
+	var each := [0, 0]
+	if kind != "planks":
+		var got := _pay(chk["parts"], 0)
+		if got.is_empty():
+			main.hud.show_toast(str(chk["why"]) if str(chk["why"]) != "" else "You can't afford that.")
+			return false
+		var one := floor_cost(kind)
+		each = [int(one[0]), 0] if int(got["floor"][0]) > 0 else [0, int(one[1])]
+	var fl: Dictionary = floors().duplicate()
+	var paid: Dictionary = (Game.flag("floors_paid", {}) as Dictionary).duplicate()
+	var back := [0, 0]
+	for c in cells:
+		var k := cell_key(c)
+		var now := _floor_now(c)
+		if now == kind:
+			continue
+		if now != "planks":
+			var b := _refund(paid.get(k, floor_cost(now)))
+			back = [back[0] + b[0], back[1] + b[1]]
+		if kind == "planks":
+			fl.erase(k)
+			paid.erase(k)
+		else:
+			fl[k] = kind
+			paid[k] = each
+	for pair in [["floors", fl], ["floors_paid", paid]]:
+		if (pair[1] as Dictionary).is_empty():
+			Game.flags.erase(pair[0])
+		else:
+			Game.set_flag(pair[0], pair[1])
+	main._rebuild_house()
+	var got_back := "" if back == [0, 0] else " (%s for the old floor)" % _back_text(back)
+	if kind == "planks":
+		main.hud.show_toast("The floor's up: plank boards again%s." % got_back)
+	else:
+		main.hud.show_toast("%s laid: %d m²%s." % [floor_label(kind), int(chk["n"]) * STEP * STEP, got_back])
+	return true
+
+
+## The laid floors, a tile over the planks per cell that's still indoors (a room opened up keeps
+## its floor in the save and gets it back when it's closed again).
+func _draw_floors() -> void:
+	var hc := house_cells()
+	var fl := floors()
+	for k in fl:
+		var p := str(k).split(",")
+		var c := Vector2i(int(p[0]), int(p[1]))
+		if not (hc.has(c) or room_cells.has(c)):
+			continue
+		var mi := MeshInstance3D.new()
+		var m := BoxMesh.new()
+		m.size = Vector3(STEP, 0.012, STEP)
+		mi.mesh = m
+		mi.position = Vector3(c.x * STEP + STEP * 0.5, FLOOR_Y - 0.006, c.y * STEP + STEP * 0.5)
+		mi.material_override = floor_mat(str(fl[k]))
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.name = "LaidFloor"
+		mi.set_meta("floor", str(fl[k]))
+		main.house_root.add_child(mi)
+
+
+## The floor's material: Marcus's house's tiles, boards and carpets (split_house.gd), laid in world
+## space so neighbouring cells meet without a seam.
+func floor_mat(kind: String) -> StandardMaterial3D:
+	if _floor_mats.has(kind):
+		return _floor_mats[kind]
+	var m := StandardMaterial3D.new()
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.roughness = 0.95
+	var img: Image = null
+	var carpet := {"carpet_grey": Color("#9a9a97"), "carpet_blue": Color("#6a8cb6"), "carpet_cream": Color("#f0e6cf")}
+	match kind:
+		"tile_beige":
+			img = SplitHouse._tiles(Color("#d8c7a4"), Color("#b9a988"), 4)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.45
+		"tile_black":
+			img = SplitHouse._tiles(Color("#1d1d20"), Color("#47474a"), 4)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.3
+		"tile_white":
+			img = SplitHouse._tiles(Color("#eceae4"), Color("#c3c0b8"), 8)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.35
+		"wood_oak":
+			img = SplitHouse._boards(Color("#b98a55"), 6)
+			m.roughness = 0.55
+		_:
+			var tint: Color = carpet.get(kind, Color("#9a9a97"))
+			var base := "res://assets/textures/carpet/carpet_pile"
+			if ResourceLoader.exists(base + ".png"):
+				m.albedo_texture = load(base + ".png")
+				m.albedo_color = tint
+				if ResourceLoader.exists(base + "_n.png"):
+					m.normal_enabled = true
+					m.normal_texture = load(base + "_n.png")
+					m.normal_scale = 0.8
+				m.uv1_scale = Vector3.ONE / 0.6
+				m.roughness = 0.97
+			else:
+				img = SplitHouse._noise(tint, 0.1, 5)
+	if img != null:
+		img.generate_mipmaps()
+		m.albedo_texture = ImageTexture.create_from_image(img)
+	_floor_mats[kind] = m
+	return m
+
+
+func _show_floor_ghost(cells: Array, mat: String) -> void:
+	if _floor_ghost == null:
+		_floor_ghost = Node3D.new()
+		main.add_child(_floor_ghost)
+	for ch in _floor_ghost.get_children():
+		ch.queue_free()
+	for c in cells:
+		var mi := MeshInstance3D.new()
+		var m := BoxMesh.new()
+		m.size = Vector3(STEP - 0.06, 0.03, STEP - 0.06)
+		mi.mesh = m
+		mi.position = Vector3(c.x * STEP + STEP * 0.5, FLOOR_Y + 0.02, c.y * STEP + STEP * 0.5)
+		mi.material_override = _mats[mat]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_floor_ghost.add_child(mi)
+	_floor_ghost.visible = not cells.is_empty()
+
+
+func set_floor_kind(kind: String) -> void:
+	floor_kind = kind
+	hover_cells = []
+	if main.hud.floor_pick != null and main.hud.floor_pick.selected != FLOORS.find(kind):
+		main.hud.floor_pick.select(FLOORS.find(kind))
+
+
+func _hover_floor(g: Variant) -> void:
+	_ghost.visible = false
+	hover = ""
+	if g == null:
+		if _floor_ghost != null:
+			_floor_ghost.visible = false
+		return
+	var q := Vector2((g as Vector3).x, (g as Vector3).z)
+	var cells := floor_cells_at(q)
+	var chk := floor_check(cells, floor_kind)
+	hover_ok = bool(chk["ok"])
+	var mat := "bad"
+	if not hover_ok:
+		hover_note = str(chk["why"])
+	elif floor_kind == "planks":
+		hover_note = "Click to take this room's floor up (%s back)." % _back_text(chk["back"])
+		mat = "down"
+	else:
+		hover_note = "%s here: %d m², %s%s" % [floor_label(floor_kind), int(chk["n"]) * STEP * STEP, _cost_text(chk["parts"], 0),
+			" (the old floor comes up, %s)" % _back_text(chk["back"]) if chk["back"] != [0, 0] else ""]
+		mat = "ok"
+	if cells != hover_cells or _floor_ghost == null or not _floor_ghost.visible:
+		hover_cells = cells
+		_show_floor_ghost(cells, mat)
+	elif _floor_ghost.get_child_count() > 0:
+		for ch in _floor_ghost.get_children():
+			(ch as MeshInstance3D).material_override = _mats[mat]
+	main.hud.set_wall_note(hover_note)
+
+
 # --- the tool in build mode -------------------------------------------------------------------
 
 func set_tool(t: String) -> void:
 	tool = t
 	hover = ""
+	hover_cells = []
 	if _ghost != null:
 		_ghost.visible = false
+	if _floor_ghost != null:
+		_floor_ghost.visible = false
 	main.hud.set_wall_tool(t)
 
 
@@ -947,6 +1206,11 @@ func _ensure_ghost() -> void:
 ## The pointer moved over the ground at g: show the edge under it.
 func hover_at(g: Variant) -> void:
 	_ensure_ghost()
+	if tool == "floor":
+		_hover_floor(g)
+		return
+	if _floor_ghost != null:
+		_floor_ghost.visible = false
 	if tool == "" or g == null:
 		_ghost.visible = false
 		hover = ""
@@ -1003,7 +1267,10 @@ func click(g: Variant) -> void:
 	if g == null:
 		return
 	hover_at(g)
-	if tool == "wall" and edges().has(hover):
+	if tool == "floor":
+		lay_floor(floor_cells_at(Vector2((g as Vector3).x, (g as Vector3).z)), floor_kind)
+		hover_cells = []
+	elif tool == "wall" and edges().has(hover):
 		remove(hover)
 	elif tool != "wall" and (edges().has(hover) or house_edges().has(hover)):
 		set_opening(hover, tool)
