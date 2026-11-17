@@ -240,7 +240,7 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 		if s.parts.has("loft"): # the café's upstairs goes with the roof while she's downstairs
 			s.up = s.inside and who.y - s.node.global_position.y > s.loft_y * 0.5
 			# in the world editor, the floor she's on: its pieces are edited from up there
-			var show := (s.up or not s.inside or roof_on) and (not editing or s.up)
+			var show: bool = (s.up or not s.inside or roof_on) and (not editing or s.up)
 			(s.parts["loft"] as Node3D).visible = show
 			if s.loft_root != null:
 				s.loft_root.visible = show
@@ -655,8 +655,8 @@ static func _on_stairs(s: Shop, p: Vector3) -> bool:
 
 ## A path on the loft's grid, in the building's x / z, smoothed; [] if there's none.
 static func _loft_path(s: Shop, a: Vector2, b: Vector2) -> Array:
-	var ca := _loft_near(s, _loft_cell(s, a))
-	var cb := _loft_near(s, _loft_cell(s, b))
+	var ca: Variant = _loft_near(s, _loft_cell(s, a))
+	var cb: Variant = _loft_near(s, _loft_cell(s, b))
 	if ca == null or cb == null:
 		return []
 	var ids := s.loft_grid.get_id_path(ca, cb, true)
