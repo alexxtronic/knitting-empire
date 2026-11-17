@@ -136,11 +136,14 @@ func bark() -> bool:
 	return true
 
 
+var _floor_y := 0.0 # the floor of Marcus's house under him last frame (split_house.gd)
+
+
 ## Every frame: the step, then up or down to the floor under him (split_house.gd: the floors of
 ## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
 	_step(delta)
-	position.y = SplitHouse.y_at(position)
+	_floor_y = SplitHouse.follow(self, _floor_y)
 
 
 func _step(delta: float) -> void:

@@ -3,8 +3,9 @@ extends Node3D
 ## 2026-11-17). Outside it is the same brick ranch as its neighbours (art/world_assets/suburb_house,
 ## never changed for this). Inside it is a back-split, as Alex remembers living in it: the main floor
 ## (kitchen, dining, living room) is the left half at ground level; a half flight up from the living
-## room is the bedroom floor over the right half; a long flight down is the basement under the whole
-## house (a rec room in black tile, a den in green shag, a bathroom and the garage). The layout is
+## room is the bedroom floor over the right half; beside it a flight down is the basement under the
+## bedroom half (`bfoot`: a den in green shag at the foot of the stairs, a rec room in black tile the
+## same size behind it, and a bathroom), as in Alex's plans. The layout is
 ## data/split_house.json, in the house's own space, so the world editor can move or turn the house
 ## and everything goes with it.
 ##
@@ -13,14 +14,15 @@ extends Node3D
 ##   floor's height under anyone (player.gd, dog.gd, villager.gd lift themselves to it). The stairs
 ##   are ramps: the height climbs along them.
 ## - The basement does overlap: while she is down there (`level` BASEMENT, chosen by how far down the
-##   basement stairs she is) the house's cells on the grid are its walls and furniture instead
-##   (mark_grid()), only it is shown, and the ground over the house isn't drawn
+##   basement stairs she is) the house's cells on the grid are its walls and furniture instead, and
+##   the cells outside its footprint are solid (mark_grid()), only it is shown, and the ground over the house isn't drawn
 ##   (shaders/ground_hole.gdshaderinc) so the camera looks down into it.
 ## While she is inside, the roof lifts and the walls toward the camera drop to stubs, as in the
 ## walk-in shops (interiors.gd); in first person the roof is off and each floor has its own ceiling.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
+const FurnitureScript = preload("res://scripts/furniture.gd")
 
 const UPPER := 0 # she is on the main floor or the bedroom floor (or outside)
 const BASEMENT := 1 # she is in the basement
@@ -43,7 +45,8 @@ var walls: Array = [] # {"full", "low", "level", "c" (Vector2, local x / z)}
 var ceilings: Array = [] # MeshInstance3D, shown only in first person
 var lights: Array = [] # OmniLight3D: the rooms' ceiling lights
 var footprint: Array = [] # Rect2s in the house's space
-var hole: Array = [] # the same, for the ground's hole
+var hole: Array = [] # the basement's, for the ground's hole
+var bfoot: Array = [] # the basement's footprint (Rect2s): "basement_footprint", else the whole house's
 var open := 0.0 # the front door: 0 shut .. 1 swung in
 var split_x := 0.5
 var upper_y := 0.85
@@ -75,7 +78,9 @@ func build(m: Node, node: Node3D) -> void:
 	basement_y = float(cfg.get("basement_y", -2.4))
 	for r in cfg.get("footprint", []):
 		footprint.append(Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
-	hole = footprint
+	for r in cfg.get("basement_footprint", cfg.get("footprint", [])):
+		bfoot.append(Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
+	hole = bfoot
 	for mi in house.find_children("*", "MeshInstance3D", true, false):
 		parts[str(mi.name)] = mi
 	if parts.has("base"):
@@ -84,6 +89,10 @@ func build(m: Node, node: Node3D) -> void:
 			var mat: Material = b.get_active_material(i)
 			if mat != null and "floor" in str(mat.resource_name).to_lower():
 				_floor_surfaces.append([b, i, b.get_surface_override_material(i)])
+	for od in cfg.get("outside_doors", []):
+		for nm in ["wall_%s" % od["side"], "wall_%s_low" % od["side"]]:
+			if parts.has(nm):
+				_cut(parts[nm], float(od["at"]) - float(od["width"]) * 0.5 - 0.02, float(od["at"]) + float(od["width"]) * 0.5 + 0.02, DOOR_HEAD + 0.3)
 	var interior := Node3D.new()
 	interior.name = "Interior"
 	house.add_child(interior)
@@ -166,6 +175,56 @@ func _walls() -> void:
 			walls.append({"full": full, "low": low, "level": lv, "c": p0.lerp(p1, 0.5), "a": p0, "b": p1, "i": wi})
 		for d in w.get("doors", []):
 			_opening(lv, a, b, d, y0, y1, col, wi)
+	_outside_doors()
+
+
+## An outside door: the shell's wall `mi` (the house model's, this house's copy alone) loses every
+## triangle between x0 and x1 (the house's x) below `top`, the window that was there and the brick
+## under it.
+func _cut(mi: MeshInstance3D, x0: float, x1: float, top: float) -> void:
+	var src := mi.mesh as ArrayMesh
+	if src == null:
+		return
+	var xf := house.global_transform.affine_inverse() * mi.global_transform
+	var keep := []
+	for i in mi.get_surface_override_material_count():
+		keep.append(mi.get_surface_override_material(i))
+	var out := ArrayMesh.new()
+	for si in src.get_surface_count():
+		var arr := src.surface_get_arrays(si)
+		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX] if arr[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(verts.size()))
+		var kept := PackedInt32Array()
+		for t in range(0, idx.size(), 3):
+			var c: Vector3 = xf * ((verts[idx[t]] + verts[idx[t + 1]] + verts[idx[t + 2]]) / 3.0)
+			if c.x > x0 and c.x < x1 and c.y < top:
+				continue
+			kept.append_array([idx[t], idx[t + 1], idx[t + 2]])
+		if kept.is_empty():
+			kept = PackedInt32Array([0, 0, 0]) # keep the surface (and its material's index)
+		arr[Mesh.ARRAY_INDEX] = kept
+		out.add_surface_from_arrays(src.surface_get_primitive_type(si), arr)
+		out.surface_set_material(si, src.surface_get_material(si))
+		out.surface_set_name(si, src.surface_get_name(si))
+	mi.mesh = out
+	for i in mini(keep.size(), out.get_surface_count()):
+		mi.set_surface_override_material(i, keep[i])
+
+
+## The outside doors' frames and doors (cfg "outside_doors"), in the holes _cut() made.
+func _outside_doors() -> void:
+	var trim := _flat_mat(Color("#f2efe8"))
+	for od in cfg.get("outside_doors", []):
+		var z := float(od["z"])
+		var at := float(od["at"])
+		var wd := float(od["width"])
+		var a := Vector2(at - wd * 0.5 - 0.5, z)
+		var b := Vector2(at + wd * 0.5 + 0.5, z)
+		_opening("main", a, b, [at, wd, str(od.get("kind", "slide"))], 0.0, DOOR_HEAD + 0.06, Color.WHITE, -1)
+		# the reveal: jambs and a head through the brick's thickness
+		for x in [at - wd * 0.5 - 0.04, at + wd * 0.5 + 0.04]:
+			_built.append(_box(roots["main"], Vector3(0.08, DOOR_HEAD + 0.3, 0.38), Vector3(x, (DOOR_HEAD + 0.3) * 0.5, z), trim))
+		_built.append(_box(roots["main"], Vector3(wd + 0.16, 0.24, 0.38), Vector3(at, DOOR_HEAD + 0.18, z), trim))
 
 
 ## What fills an opening in a wall: nothing for a plain gap; a header and a door, or sliding glass
@@ -405,6 +464,18 @@ func _lights() -> void:
 		lights.append(o)
 
 
+## A piece's fabric or paint in another colour (its pattern kept, as Furniture.set_color() does).
+func _tint(n: Node3D, c: Color, parts: Array) -> void:
+	for m in n.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var base := mi.mesh.surface_get_material(i)
+			if base != null and parts.has(base.resource_name):
+				mi.set_surface_override_material(i, FurnitureScript.recolored(base, c))
+
+
 func _furniture() -> void:
 	for f in cfg.get("furniture", []):
 		var lv := str(f["level"])
@@ -417,6 +488,8 @@ func _furniture() -> void:
 		n.rotation.y = deg_to_rad(float(f.get("turn", 0.0)))
 		roots[lv].add_child(n)
 		Catalog.build(str(f["id"]), n)
+		if f.has("tint"):
+			_tint(n, Color.html(str(f["tint"])), f.get("tint_parts", Catalog.ITEMS.get(str(f["id"]), {}).get("colors", {}).get("parts", [])))
 
 
 # --- materials -------------------------------------------------------------------------------
@@ -547,6 +620,13 @@ func in_footprint(q: Vector3) -> bool:
 	return false
 
 
+static func _in(rects: Array, q: Vector3) -> bool:
+	for r in rects:
+		if (r as Rect2).has_point(Vector2(q.x, q.z)):
+			return true
+	return false
+
+
 func _ramp(k: String) -> Dictionary:
 	return cfg.get("ramps", {}).get(k, {})
 
@@ -586,6 +666,20 @@ static func y_at(p: Vector3) -> float:
 	return h.floor_local(h.local(p), h.level)
 
 
+## Every frame, for Nora, the dog and the villagers: keeps `n` on the house's floor under it. `prev`
+## is the floor it stood on last frame (each keeps its own), and the new one is returned. Only the
+## floor's change is applied, so anyone sitting or lying above it (a bench, the rock, a bed: their
+## own code sets that height) keeps it; outside the house nothing changes.
+static func follow(n: Node3D, prev: float) -> float:
+	var f := y_at(n.position)
+	if f == 0.0 and prev == 0.0:
+		return 0.0
+	# what's above the floor: the walk puts her back on the ground (0) each step, so a floor below the
+	# ground (the basement stairs) counts from 0, not from it
+	n.position.y = f + maxf(0.0, n.position.y - maxf(prev, 0.0))
+	return f
+
+
 ## Where a click lands: the ray from the camera meets the floor she can see under it.
 func pick(from: Vector3, dir: Vector3) -> Variant:
 	var h := (main.player as Node3D).position.y
@@ -612,7 +706,8 @@ func mark_grid() -> void:
 	var xf := house.global_transform
 	_inv = xf.affine_inverse()
 	for c in _cells(footprint, 0.0):
-		main.astar.set_point_solid(c, false)
+		# in the basement, only the cells over it are floor
+		main.astar.set_point_solid(c, level == BASEMENT and not _in(bfoot, _inv * (main._cell_center(c) as Vector3)))
 	# the shell's walls: always
 	for w in cfg.get("shell", []):
 		var seg: Array = w["wall"] if w is Dictionary else w
@@ -624,6 +719,14 @@ func mark_grid() -> void:
 			# a cell wide, so no cell centre slips through between its faces; its ends only reach
 			# the wall's own, so a doorway beside it stays open
 			for c in _cells([_wall_strip(w["a"], w["b"])], 0.0):
+				main.astar.set_point_solid(c, true)
+	if level != BASEMENT:
+		# the foot of the basement stairs belongs to the basement: from up here it's a wall, so no path
+		# runs down the flight and out beside a room on the floor above
+		var rp := _ramp("down")
+		if not rp.is_empty():
+			var r: Array = rp["rect"]
+			for c in _cells([Rect2(float(r[0]) + float(r[2]) - 0.5, float(r[1]), 0.5, float(r[3]))], 0.0):
 				main.astar.set_point_solid(c, true)
 	for n in _furniture_nodes():
 		if not n.visible: # deleted in the world editor
@@ -755,7 +858,7 @@ func _swing_doors(q: Vector3, delta: float) -> void:
 		var c: Vector2 = d["c"]
 		var lv := str(d["lv"])
 		var fl := _level_y(lv) if lv != "all" else basement_y
-		var near: bool = inside and Vector2(q.x - c.x, q.z - c.y).length() < 1.5 and absf(main.player.position.y - house.global_position.y - fl) < 1.0
+		var near: bool = (inside or lv == "main") and Vector2(q.x - c.x, q.z - c.y).length() < 1.5 and absf(main.player.position.y - house.global_position.y - fl) < 1.0
 		d["open"] = move_toward(float(d["open"]), 1.0 if near else 0.0, delta * 2.2)
 		var s := smoothstep(0.0, 1.0, float(d["open"]))
 		if str(d["kind"]) == "door":

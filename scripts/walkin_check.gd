@@ -1,9 +1,10 @@
 extends RefCounted
 ## Marcus's house, the one you can walk into (--only=walkin, and part of the full run; split_house.gd,
 ## data/split_house.json): Nora walks in at the front door to the living room on the ground, up the
-## half flight to the kids' room on the bedroom floor, down the long flight to the basement (the
-## basement takes over the house's cells on the walking grid, the floors above are hidden and the
-## ground over the house isn't drawn) and through to the rec room, then back up. Saves
+## half flight to the kids' room and each bedroom on the bedroom floor, down the flight beside it into
+## the basement's green den (the basement takes over the house's cells on the walking grid, the
+## floors above are hidden and the ground over the house isn't drawn), its bathroom and through to
+## the rec room, then back up. Saves
 ## 67_walkin_living.png, 67_walkin_upstairs.png, 67_walkin_basement.png and 67_walkin_fps.png.
 
 var main: Node
@@ -27,7 +28,7 @@ func run(m: Node) -> void:
 			if n.has_meta("item_id") and n.get_child_count() > 0:
 				pieces += 1
 	var want: int = (wi.cfg["furniture"] as Array).size()
-	main._check("its three floors are laid with their rooms' floors (%d) and furnished (%d of %d)" % [rooms, pieces, want], rooms >= 13 and pieces == want)
+	main._check("its three floors are laid with their rooms' floors (%d) and furnished (%d of %d)" % [rooms, pieces, want], rooms >= (wi.cfg["rooms"] as Array).size() and pieces == want)
 	var nora0: Vector3 = main.player.position
 	var dog0: Vector3 = main.dog.position if main.dog else Vector3.ZERO
 	var hour0: float = Game.hour
@@ -42,10 +43,24 @@ func run(m: Node) -> void:
 	main._check("in at the front door to the living room (inside %s, at %.2f m, the roof lifted %s)" % [wi.inside, main.player.position.y, not (wi.parts["roof"] as Node3D).visible],
 		ok and wi.inside and absf(main.player.position.y) < 0.05 and not (wi.parts["roof"] as Node3D).visible)
 	await _picture(Vector3(-2.4, 0, -0.6), 15.0, 58.0, "67_walkin_living.png")
-	# up the half flight to the kids' room
-	ok = await _walk(Vector3(5.0, 0, -2.1))
+	# up the half flight: every bedroom off the hall, as in Alex's plan
+	ok = await _walk(Vector3(4.8, 0, -1.0))
 	main._check("up the half flight to the kids' room (at %.2f m)" % main.player.position.y, ok and absf(main.player.position.y - wi.upper_y) < 0.05)
-	await _picture(Vector3(3.6, 0.85, -1.8), 14.0, 60.0, "67_walkin_upstairs.png")
+	await _picture(Vector3(3.4, 0.85, -0.6), 14.0, 62.0, "67_walkin_upstairs.png")
+	var rooms_ok := true
+	for r in [["baby", Vector3(1.9, 0, -2.7)], ["master", Vector3(4.6, 0, 0.8)], ["ensuite", Vector3(3.05, 0, 2.7)], ["kids", Vector3(4.8, 0, -1.0)]]:
+		var got: bool = await _walk(r[1])
+		if not got:
+			for zi in range(0, 9):
+				var line := ""
+				for xi in range(0, 14):
+					var q := Vector3(2.5 + xi * 0.2, 0, 1.5 + zi * 0.2)
+					line += "." if main._walkable(main._cell(wi.house.global_transform * q)) else "#"
+				print("WALKIN grid z %.2f %s" % [1.5 + zi * 0.2, line])
+		if not got:
+			print("WALKIN couldn't reach the ", r[0])
+		rooms_ok = rooms_ok and got
+	main._check("the baby's room and the master are each through their own door off the hall, and the ensuite (with its bathtub) through the master's", rooms_ok)
 	# first person upstairs: the roof off, the bedroom floor's ceiling on
 	main.fps.enter()
 	await main._wait(0.8)
@@ -53,9 +68,11 @@ func run(m: Node) -> void:
 	await main._shot("67_walkin_fps.png")
 	main.fps.leave()
 	await main._wait(0.5)
-	# down the long flight: halfway down, the basement takes over
-	ok = await _walk(Vector3(3.0, 0, 3.5))
-	main._check("down the stairs to the basement (level %d, at %.2f m)" % [wi.level, main.player.position.y], ok and wi.level == wi.BASEMENT and main.player.position.y < -2.0)
+	# down the flight beside it: halfway down, the basement takes over; at the foot, the green den
+	ok = await _walk(Vector3(1.5, 0, 2.7))
+	main._check("down the stairs to the basement (level %d, at %.2f m)" % [wi.level, main.player.position.y], ok and wi.level == wi.BASEMENT and main.player.position.y < -1.2)
+	ok = await _walk(Vector3(3.5, 0, 1.2))
+	main._check("off the stairs straight into the green shag den (at %.2f m)" % main.player.position.y, ok and absf(main.player.position.y - wi.basement_y) < 0.05)
 	var areas := {}
 	for room in wi.cfg["rooms"]:
 		var a := 0.0
@@ -64,25 +81,35 @@ func run(m: Node) -> void:
 		areas[str(room["id"])] = a
 	main._check("the basement's green shag den is as big as its black-tile rec room (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
 		areas.has("den") and absf(float(areas["den"]) - float(areas.get("rec_room", 0.0))) < 0.2)
-	# the hall's door into the garage swings open as she comes up to it
-	ok = await _walk(Vector3(-0.3, 0, 1.7))
+	# the bathroom, to the right at the foot of the stairs: its door swings open as she comes up to it
+	ok = await _walk(Vector3(2.9, 0, 2.8))
 	await main._wait(0.8)
-	var gdoor: Dictionary = {}
+	var bdoor: Dictionary = {}
 	for d in wi.doors:
-		if (d["c"] as Vector2).distance_to(Vector2(0.5, 1.7)) < 0.2:
-			gdoor = d
-	main._check("through the hall's door into the garage, which swings open for her (%.2f open)" % (float(gdoor.get("open", 0.0))),
-		ok and not gdoor.is_empty() and float(gdoor["open"]) > 0.6)
+		if (d["c"] as Vector2).distance_to(Vector2(2.9, 3.4)) < 0.2:
+			bdoor = d
+	main._check("up to the basement bathroom beside the stairs, whose door swings open for her (%.2f open)" % (float(bdoor.get("open", 0.0))),
+		ok and not bdoor.is_empty() and float(bdoor["open"]) > 0.6)
 	ok = await _walk(Vector3(3.4, 0, -2.5))
-	ok = ok and await _walk(Vector3(-3.0, 0, -2.0))
-	main._check("through the den to the rec room (at %.2f m), the floors above hidden and the ground over the house cut away" % main.player.position.y,
+	main._check("through the den's door to the rec room (at %.2f m), the floors above hidden and the ground over the house cut away" % main.player.position.y,
 		ok and absf(main.player.position.y - wi.basement_y) < 0.05 and (wi.roots["basement"] as Node3D).visible and not (wi.roots["main"] as Node3D).visible and wi._hole_on)
-	await _picture(Vector3(0.0, -2.4, -0.4), 17.0, 62.0, "67_walkin_basement.png")
+	await _picture(Vector3(3.4, -2.4, 0.0), 13.0, 64.0, "67_walkin_basement.png")
 	# and back up: to the top of the flight, then the living room
-	ok = await _walk(Vector3(0.75, 0, 3.5))
+	ok = await _walk(Vector3(0.75, 0, 2.7))
 	main._check("back up the stairs, the main floor shown again and the ground whole", ok and wi.level == wi.UPPER and (wi.roots["main"] as Node3D).visible and not wi._hole_on)
 	ok = await _walk(Vector3(-2.0, 0, -1.0))
 	main._check("and on into the living room", ok and absf(main.player.position.y) < 0.05)
+	# out through the sliding door at the back of the dining room, and in again
+	ok = await _walk(Vector3(-2.8, 0, -5.4))
+	var sdoor: Dictionary = {}
+	for d in wi.doors:
+		if str(d["kind"]) == "slide" and (d["c"] as Vector2).distance_to(Vector2(-2.8, -4.16)) < 0.2:
+			sdoor = d
+	main._check("out to the back garden through the dining room's sliding door, which slides open for her (%.2f open)" % float(sdoor.get("open", 0.0)),
+		ok and not wi.inside and not sdoor.is_empty() and float(sdoor["open"]) > 0.6)
+	await _picture(Vector3(-2.8, 0, -4.2), 9.0, 30.0, "67_walkin_back_door.png", 190.0)
+	ok = await _walk(Vector3(-2.0, 0, -1.0))
+	main._check("and back in to the living room", ok and wi.inside)
 	# out of the door again
 	ok = await _walk(Vector3(-2.5, 0, 5.2))
 	main._check("out of the front door, the roof back on", ok and not wi.inside and (wi.parts["roof"] as Node3D).visible)
@@ -114,13 +141,13 @@ func _walk(to: Vector3, limit := 40.0) -> bool:
 	return d <= 0.8
 
 
-func _picture(local_at: Vector3, dist: float, pitch: float, fname: String) -> void:
+func _picture(local_at: Vector3, dist: float, pitch: float, fname: String, yaw := 10.0) -> void:
 	var p: Vector3 = wi.house.global_transform * local_at
 	main.cam_target = p
 	main.cam_dist = dist
 	main.cam_pitch = pitch
 	main.cam_glide = {"pos": p, "dist": dist, "pitch": pitch}
-	main.cam_yaw = wi.house.global_rotation.y + deg_to_rad(10.0)
+	main.cam_yaw = wi.house.global_rotation.y + deg_to_rad(yaw)
 	main.cam_yaw_goal = main.cam_yaw
 	await main._wait(2.0)
 	await main._shot(fname)

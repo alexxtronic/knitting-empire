@@ -391,11 +391,14 @@ func head_point() -> Vector3:
 	return global_position + Vector3(0, (body.label_height if detailed else 1.8) + 0.05, 0)
 
 
+var _floor_y := 0.0 # the floor of Marcus's house under her last frame (split_house.gd)
+
+
 ## Every frame: the step, then up or down to the floor under her (split_house.gd: the floors of
 ## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
 	_step(delta)
-	position.y = SplitHouse.y_at(position)
+	_floor_y = SplitHouse.follow(self, _floor_y)
 
 
 func _step(delta: float) -> void:

@@ -188,11 +188,14 @@ func _add_tag_and_collider(tag_y: float) -> void:
 	add_child(body)
 
 
+var _floor_y := 0.0 # the floor of Marcus's house under them last frame (split_house.gd)
+
+
 ## Every frame: the step, then up or down to the floor under them (split_house.gd: the floors of
 ## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
 	_step(delta)
-	position.y = SplitHouse.y_at(position)
+	_floor_y = SplitHouse.follow(self, _floor_y)
 
 
 func _step(delta: float) -> void:
