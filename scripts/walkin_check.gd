@@ -67,8 +67,11 @@ func run(m: Node) -> void:
 	# first person upstairs: the roof off, the bedroom floor's ceiling on
 	main.fps.enter()
 	await main._wait(0.8)
-	main._check("in first person upstairs the roof is off and the bedroom ceilings are on", main.fps.active and not (wi.parts["roof"] as Node3D).visible and (wi.ceilings[0] as Node3D).visible)
+	main._check("in first person upstairs the roof stays on and the bedroom ceilings are on", main.fps.active and (wi.parts["roof"] as Node3D).visible and (wi.ceilings[0] as Node3D).visible)
 	await main._shot("67_walkin_fps.png")
+	main.fps.pitch = deg_to_rad(35.0)
+	await main._wait(0.4)
+	await main._shot("67_walkin_fps_up.png")
 	main.fps.leave()
 	await main._wait(0.5)
 	# down the flight beside it: halfway down, the basement takes over; at the foot, the green den
@@ -116,6 +119,17 @@ func run(m: Node) -> void:
 	# out of the door again
 	ok = await _walk(Vector3(-2.5, 0, 5.2))
 	main._check("out of the front door, the roof back on", ok and not wi.inside and (wi.parts["roof"] as Node3D).visible)
+	# in at any hour (Alex, 2026-11-17: "she should be able to go into house at any time"): from the
+	# middle of the cul-de-sac late at night, all the way to the living room
+	Game.hour = 22.5
+	main.suburb.update_lights(true)
+	main.player.position = main.suburb.centre
+	await main._wait(0.3)
+	ok = await _walk(Vector3(-2.0, 0, -1.0), 60.0)
+	main._check("in from the turning circle at half past ten at night, to the living room (inside %s)" % wi.inside, ok and wi.inside)
+	ok = await _walk(Vector3(-2.5, 0, 5.2))
+	Game.hour = 12.0
+	main.suburb.update_lights(true)
 	await _editor_checks()
 	main.player.position = nora0
 	if main.dog:

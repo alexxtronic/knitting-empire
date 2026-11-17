@@ -35,10 +35,12 @@ const VINYL_BASE := Color("#d8ccac") # the siding's colour in its own texture (b
 ## The house in its own space (x right, its front toward +z): the entry wing, the right wing, the
 ## porch post (art/world_assets/suburb_house/build.py, L and R, Blender y turned to Godot z).
 const FOOTPRINT := [Rect2(-6.6, -4.2, 5.16, 7.2), Rect2(-1.44, -4.2, 7.98, 8.6), Rect2(-6.6, 3.85, 0.25, 0.25)]
+const GARAGE := Rect2(-1.44, 4.4, 7.98, 5.6) # the right wing run out to the street as a garage (Alex, 2026-11-17), in front of Marcus's walk-in footprint
 const DOOR_AT := Vector3(-2.5, 0, 4.6) # where to stand to go in: in front of the stoop
 const INSIDE_AT := Vector3(-2.5, 0, 1.5) # where a sleeper is put, out of sight
 const PORCH_LIGHT := Vector3(-2.5, 2.2, 3.7)
-const DRIVE_X := Vector2(-6.4, -3.2) # the driveway, in front of the porch
+const DRIVE_X := Vector2(-6.4, -3.2) # the driveway, in front of the porch; the garage's door opens onto it from the side
+const DRIVE_Z := 4.6 # ... from the porch's front
 const PLANT_BLOCK := {"arborvitae": 0.45, "red_shrub": 0.8, "hydrangea": 0.6, "rose_bush": 0.6}
 const Y_LAWN := 0.0112
 const Y_ROAD := 0.015
@@ -258,6 +260,7 @@ func _house(i: int, d: Dictionary) -> Array:
 		for n in model.find_children("*_low", "", true, false):
 			(n as Node3D).visible = false # seen from outside it's the full walls (interiors.gd's rule)
 		panes = _dress(model, d)
+		_no_bake(model)
 	var mx := -1.0 if mirror else 1.0
 	# the garden: the photo's arborvitae and the red-leaf shrub, or some of the catalogue's flowers
 	var local_blocks: Array = []
@@ -266,6 +269,7 @@ func _house(i: int, d: Dictionary) -> Array:
 		if walks_in and (r as Rect2).size.x > 1.0:
 			continue # its walls block the grid instead (split_house.gd mark_grid())
 		local_blocks.append(_mirrored(r, mirror))
+	local_blocks.append(_mirrored(GARAGE, mirror))
 	for p in d.get("plants", []):
 		var id := str(p[0])
 		var g := Node3D.new()
@@ -284,7 +288,7 @@ func _house(i: int, d: Dictionary) -> Array:
 	var x0 := minf(dx.x, dx.y)
 	var x1 := maxf(dx.x, dx.y)
 	var xc := (x0 + x1) * 0.5
-	var p0 := _to_world(node, Vector3(xc, 0, 4.15))
+	var p0 := _to_world(node, Vector3(xc, 0, DRIVE_Z))
 	var p1 := centre + (p0 - centre).normalized() * (bulb - 0.5) # straight at the circle, so neighbours' don't cross
 	_quad(Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), x1 - x0, _paving(Color(0.7, 0.68, 0.64), 2.4), Y_DRIVE, "Driveway%d" % i)
 	drive_angles.append([atan2(p1.z - centre.z, p1.x - centre.x), (x1 - x0) * 0.5 / bulb + 0.06])
@@ -313,6 +317,23 @@ func _house(i: int, d: Dictionary) -> Array:
 		walk_in.name = "WalkIn"
 		add_child(walk_in)
 		walk_in.build(main, node)
+		# you look out of its windows from inside: real glass, day and night (the room's own lights
+		# show through after dark), never the other houses' cream panes or their lit night ones
+		h["glass"] = true
+		for p in panes:
+			(p[0] as MeshInstance3D).set_surface_override_material(int(p[1]), Catalog.window_glass())
+		# and its sheer curtains down: drawn across every window, they made the panes read as cream
+		# boards from inside (Alex, 2026-11-17)
+		var gone := StandardMaterial3D.new()
+		gone.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		gone.albedo_color = Color(0, 0, 0, 0)
+		gone.cull_mode = BaseMaterial3D.CULL_DISABLED
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			var cm := mi as MeshInstance3D
+			for si in cm.mesh.get_surface_count():
+				var sm := cm.mesh.surface_get_material(si)
+				if sm != null and sm.resource_name == "suburb_curtain_sheer":
+					cm.set_surface_override_material(si, gone)
 	Town.built.append([node, KIND, "House, %s" % str(cfg.get("name", "Bretton Oaks")), blocks])
 	return blocks
 
@@ -344,6 +365,32 @@ func _dress(model: Node3D, d: Dictionary) -> Array:
 				"suburb_pane":
 					panes.append([m, s])
 	return panes
+
+
+## Every surface without the model's light bake (Alex, 2026-11-17: dark blocky squares over the brick
+## and siding, inside and out). The house's bake atlas came out nearly all black (its islands are
+## brick-sized and mostly shut in by the shell), and on UV2 it printed those squares on every wall.
+## Until it's baked again properly, the house is lit by the scene alone.
+var _unbaked := {}
+func _no_bake(model: Node3D) -> void:
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		for s in m.mesh.get_surface_count():
+			var mat := m.get_active_material(s)
+			if mat == null:
+				continue
+			var k := mat.get_instance_id()
+			if not _unbaked.has(k):
+				var out: Material = mat
+				if mat is BaseMaterial3D and (mat as BaseMaterial3D).ao_enabled:
+					out = mat.duplicate()
+					(out as BaseMaterial3D).ao_enabled = false
+				elif mat is ShaderMaterial and (mat as ShaderMaterial).get_shader_parameter("ao_tex") != null:
+					out = mat.duplicate()
+					(out as ShaderMaterial).set_shader_parameter("ao_amount", 0.0)
+				_unbaked[k] = out
+			if _unbaked[k] != mat:
+				m.set_surface_override_material(s, _unbaked[k])
 
 
 func _tinted(sm: BaseMaterial3D, c: Color) -> Material:
@@ -629,6 +676,7 @@ func update_lights(force := false) -> void:
 		if not force and bool(lit.get(i, false)) == on:
 			continue
 		lit[i] = on
-		for p in h["panes"]:
-			(p[0] as MeshInstance3D).set_surface_override_material(int(p[1]), _pane_night if on else null)
+		if not bool(h.get("glass", false)):
+			for p in h["panes"]:
+				(p[0] as MeshInstance3D).set_surface_override_material(int(p[1]), _pane_night if on else null)
 		(h["light"] as OmniLight3D).visible = on

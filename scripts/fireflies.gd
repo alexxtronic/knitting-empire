@@ -6,6 +6,7 @@ extends Node3D
 ## all; a few carry a tiny light so they tint what they pass.
 
 const World = preload("res://scripts/world.gd")
+const SplitHouse = preload("res://scripts/split_house.gd")
 const COUNT := 52
 const LIGHTS := 6
 const RANGE := 18.0 # anchors are picked within this distance of the player
@@ -172,7 +173,8 @@ func _process(delta: float) -> void:
 			cos(_t * s * 0.83 + ph.y) * w.z + 0.25 * cos(_t * s * 2.3 + ph.x))
 		var env := smoothstep(0.0, 2.5, _age[i]) * (1.0 - smoothstep(_life[i] - 2.5, _life[i], _age[i]))
 		var blink := 0.3 + 0.7 * pow(0.5 + 0.5 * sin(_t * ph.w + ph.x), 3.0)
-		var g := night * env * blink
+		# never indoors: in Marcus's house one had floated through the rooms
+		var g := 0.0 if SplitHouse.covers(p) else night * env * blink
 		_glow[i] = g
 		var size := 0.55 + 0.45 * g
 		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3(size, size, size)), p))

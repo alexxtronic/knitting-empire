@@ -102,6 +102,7 @@ func build(m: Node, node: Node3D) -> void:
 		interior.add_child(r)
 		roots[k] = r
 	_floors()
+	_well_ceilings()
 	_walls()
 	_stairs()
 	_lights()
@@ -149,6 +150,17 @@ func _floors() -> void:
 			c.visible = false
 			ceilings.append(c)
 			_built.append(c)
+
+
+## The stairwells' ceilings: no room covers them, so from her eyes on the stairs she'd look up into
+## the roof (`well_ceilings` in the data, [x, z, width, depth], at the bedroom floor's ceiling).
+func _well_ceilings() -> void:
+	var cm := _flat_mat(Color("#e4ddd0").lightened(0.15))
+	for r in cfg.get("well_ceilings", []):
+		var c := _slab(roots["all"], Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])), _ceiling_y("upper"), _ceiling_y("upper") + 0.04, cm, "Ceiling_well")
+		c.visible = false
+		ceilings.append(c)
+		_built.append(c)
 
 
 func _walls() -> void:
@@ -354,6 +366,7 @@ func rebuild() -> void:
 	ceilings.clear()
 	doors.clear()
 	_floors()
+	_well_ceilings()
 	_walls()
 	_show()
 	mark_grid()
@@ -409,6 +422,10 @@ func _wall_box(parent: Node3D, a: Vector2, b: Vector2, y0: float, y1: float, col
 
 ## A wall's paint: the colour of the room beside it on that floor (the first one it touches).
 func _wall_colour(at: Vector2, lv: String) -> Color:
+	if lv == "all":
+		# a wall through every floor (the stairwells'): its own colour, not the nearest room's on
+		# some other floor (the basement den's brown had run all the way up the flight)
+		return Color(str(cfg.get("well_wall", "#e4ddd0")))
 	for room in cfg.get("rooms", []):
 		if lv != "all" and str(room["level"]) != lv:
 			continue
@@ -498,6 +515,27 @@ func _furniture() -> void:
 		Catalog.build(str(f["id"]), n)
 		if f.has("tint"):
 			_tint(n, Color.html(str(f["tint"])), f.get("tint_parts", Catalog.ITEMS.get(str(f["id"]), {}).get("colors", {}).get("parts", [])))
+		_tone(n)
+
+
+## The house's wood in quieter colours (Alex, 2026-11-17: the oak cabinets and the farmhouse table
+## and chairs came out bright orange): every surface named in the data's `tones` takes that colour
+## over its own grain, greyed first, so the wood keeps its pattern (as Furniture.set_color() does).
+## A piece with its own `tint` keeps it for those parts.
+func _tone(n: Node3D) -> void:
+	var tones: Dictionary = cfg.get("tones", {})
+	if tones.is_empty():
+		return
+	for m in n.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			if mi.get_surface_override_material(i) != null:
+				continue
+			var base := mi.mesh.surface_get_material(i)
+			if base != null and tones.has(base.resource_name):
+				mi.set_surface_override_material(i, FurnitureScript.recolored(base, Color.html(str(tones[base.resource_name]))))
 
 
 # --- materials -------------------------------------------------------------------------------
@@ -693,6 +731,14 @@ func floor_local(q: Vector3, lv: int) -> float:
 	if u != null:
 		return u
 	return upper_y if q.x > split_x else 0.0
+
+
+## Whether `p` (world) is inside the house's footprint (fireflies keep out of it).
+static func covers(p: Vector3) -> bool:
+	if current == null or not is_instance_valid(current):
+		return false
+	var h: Node3D = current
+	return h.house != null and is_instance_valid(h.house) and h.house.visible and h.in_footprint(h.local(p))
 
 
 ## The floor's height under `p` (world), for whoever stands there: 0 anywhere outside the house.
@@ -969,7 +1015,8 @@ func _show() -> void:
 	for c in ceilings:
 		(c as Node3D).visible = inside and fp
 	if parts.has("roof"):
-		(parts["roof"] as Node3D).visible = not inside
+		# from above it lifts off while she's in; from her eyes it stays on, like every roof
+		(parts["roof"] as Node3D).visible = not inside or fp
 	for fs in _floor_surfaces:
 		(fs[0] as MeshInstance3D).set_surface_override_material(fs[1], _invisible() if level == BASEMENT and inside else fs[2])
 	# the walls toward the camera, the shell's and the house's own, drop to stubs while she's in

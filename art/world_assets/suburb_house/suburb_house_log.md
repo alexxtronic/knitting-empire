@@ -44,3 +44,10 @@ Footprint x -6.60..6.54, z -4.20..4.40 (Godot, front toward +z); door hinge at (
 - No porch bench or chairs; the porch is bare.
 - The back and the sides aren't in the photo: windows and a back door are inferred, in the same style.
 - The interior isn't furnished: nobody goes inside but the sleepers, who are hidden.
+
+## Round 9 (2026-11-17): the garage and the entry wing's V
+
+- Alex: "extend the bottom right part to become a garage for cars" and "put bottom angle line on leftmost roof to finish the upside-down V shape of the reference image".
+- The entry wing's apex moved left of the upper wing (`LA`, x -2.1 at 3.8 m), just under that wing's eave corner, so its rake rises to it and comes down again to the right wing's rake; a short slope and rake board run on in front of the upper wing's front wall to where the two roofs meet (`slab(..., meet=)`), with the brick wedge under them (`valley_fill`). The porch is 1.45 m deep so that slope stands in front of the cream wall.
+- First try: a two-car garage as its own block beside the right wing. Alex: "no i didn't want a whole new building part for the garage... the garage is just that existing bottom part extended out towards the street to fit a car".
+- So the right wing `R` runs on toward the street: its front is `GARAGE_D` (5.6 m) in front of where the rooms end (`HOUSE_FRONT`, the old front, now the garage's plain back wall). A try with the garage door in the gable; Alex: "put garage door on the right hand side (by the door entrance) and put it back to how it was before in the front". So the gable is the photo's again (window in the cream strip, the three arborvitae before it), and a white sectional door 2.8 x 2.15 m with a lamp each side is in the garage's side facing the porch, an apron out to the driveway in front of the porch; a side door on the far side; a concrete floor. The houses still clear each other as Alex placed them in `data/world_layout.json`. Review: `review/round9_*.png` (`q_garage` shows the door).

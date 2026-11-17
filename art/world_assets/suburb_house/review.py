@@ -98,8 +98,8 @@ def plant(path, loc, s=1.0):
 
 props = os.path.join(PROJECT, "assets", "props")
 for x in (0.3, 2.45, 4.6):  # the three arborvitae before the right wing (the photo's)
-    plant(os.path.join(props, "arborvitae.glb"), (x, -5.3, 0), 1.0)
-plant(os.path.join(props, "red_shrub.glb"), (7.6, -4.6, 0), 1.0)
+    plant(os.path.join(props, "arborvitae.glb"), (x, -10.9, 0), 1.0)
+plant(os.path.join(props, "red_shrub.glb"), (7.6, -10.2, 0), 1.0)
 
 
 def shot(name, az, el, dist, look=(0, -1, 2.0), lens=50, res=(741, 370), shift=0.0):
@@ -120,6 +120,8 @@ REF = dict(az=8, el=0.5, dist=31.0, look=(0.6, -3.0, 2.2), lens=50, shift=-0.015
 shot("ref_cam", **REF)
 shot("q_left", -40, 18, 34, look=(0, 0, 2.0), res=(640, 400))
 shot("back", 160, 15, 34, look=(0, 0, 2.0), res=(640, 400))
+shot("q_garage", -55, 16, 38, look=(-1.0, -5.0, 1.5), res=(640, 400))  # the garage
+shot("front_wide", 3, 4, 44, look=(0.0, -3.0, 2.2), res=(741, 370))
 shot("game", 20, 48, 40, look=(0, 0, 1.5), res=(640, 400))
 clay = bpy.data.materials.new("clay")
 clay.use_nodes = True
