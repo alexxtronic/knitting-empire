@@ -20,6 +20,7 @@ var romance := false # gifts can grow romance with them
 var home := Vector3.ZERO
 var roam := Vector2(0.8, 0.4) # how far they wander from home in x / z
 var hold_time := 0.0
+var walk_speed := WALK_SPEED # a child strolls slower (data/townsfolk.json "walk_speed")
 var talk_spot = null # where you stand to talk to them (e.g. in front of a counter); null = beside them
 var rest_yaw = null # the way they face while standing at their post (a shopkeeper faces the counter); null = any
 var _via: Array = [] # the rest of the route they are walking (walk_to)
@@ -126,6 +127,9 @@ func _build(look: Dictionary) -> void:
 		_model.add_child(body)
 		if body.load_character(model_id):
 			tag_y = body.label_height + 0.12
+			# a child is rigged at a grown-up's height and shrunk here (data/townsfolk.json "scale"); its
+			# anim speeds and label height in the data are already the shrunk ones
+			_model.scale = Vector3.ONE * float(look.get("scale", 1.0))
 		else:
 			body.queue_free()
 			body = null
@@ -260,7 +264,7 @@ func _process_body(delta: float) -> void:
 	var d := to.length()
 	# ease up to a stroll and slow into the last step, turning toward the way they're going first
 	var off := absf(angle_difference(rotation.y, atan2(to.x, to.z))) if d > 0.01 else 0.0
-	var want := minf(WALK_SPEED * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
+	var want := minf(walk_speed * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
 	_speed = move_toward(_speed, want, 2.5 * delta)
 	var step := _speed * delta
 	if d <= step and not _via.is_empty():

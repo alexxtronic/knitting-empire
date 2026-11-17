@@ -8,6 +8,7 @@ const Furniture = preload("res://scripts/furniture.gd")
 const PerfCheck = preload("res://scripts/perf_check.gd")
 const SuburbCheck = preload("res://scripts/suburb_check.gd")
 const WalkinCheck = preload("res://scripts/walkin_check.gd")
+const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
@@ -48,6 +49,7 @@ const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const Wolves = preload("res://scripts/wolves.gd")
+const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const ReadingPose = preload("res://scripts/reading_pose.gd")
@@ -137,6 +139,7 @@ var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the c
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
+var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -419,6 +422,11 @@ func _ready() -> void:
 	add_child(wildlife)
 	if _autotest_dir == "": # the autotest places them only for its own check (_wildlife_checks)
 		wildlife.build()
+	townsfolk = Townsfolk.new() # Maple Grove's passers-by (townsfolk.gd); like the wildlife, only outside the autotest
+	townsfolk.main = self
+	add_child(townsfolk)
+	if _autotest_dir == "":
+		townsfolk.build()
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
@@ -2569,7 +2577,7 @@ func _do_action(t, id: String) -> void:
 
 func _perform(t, id: String) -> void:
 	player.face_point(t.global_position)
-	if t is Villager:
+	if t is Villager and not t.has_method("ke_action"): # the townsfolk answer for themselves (townsperson.gd)
 		t.face_point(player.position, 10.0)
 		player.talk(4.0)
 		_villager_action(t, id)
@@ -5664,6 +5672,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=townsfolk" in OS.get_cmdline_user_args(): # just the townsfolk: wandering, benches, the café, the red pin
+		await _wait(1.5)
+		await _townsfolk_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=cast" in OS.get_cmdline_user_args(): # just the town's cast and their routines (about a minute)
 		await _wait(1.5)
 		await _cast_checks()
@@ -6018,6 +6032,7 @@ func _autotest() -> void:
 	await _barista_checks()
 	await _store_checks()
 	await _cast_checks()
+	await _townsfolk_checks()
 	await _mail_checks()
 	await _max_checks()
 	await _job_checks()
@@ -6900,6 +6915,11 @@ func _flock_checks() -> void:
 		sheep_list.all(home))
 	flock_bedtime = false
 	_set_cam_lock(true)
+
+
+## The townsfolk (scripts/townsfolk_check.gd).
+func _townsfolk_checks() -> void:
+	await TownsfolkCheck.new().run(self)
 
 
 ## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
@@ -10864,6 +10884,8 @@ func _villager(id: String) -> Villager:
 		if v.vid == id:
 			return v
 	var w: Variant = visitors.get(id) # someone here for one scene (Max)
+	if (w == null or not is_instance_valid(w)) and townsfolk and id.begins_with("tf_"):
+		w = townsfolk.find(id) # one of the townsfolk (townsfolk.gd), for the café's visits
 	return w as Villager if w != null and is_instance_valid(w) else null
 
 

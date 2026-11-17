@@ -96,6 +96,7 @@ func load_character(char_id: String) -> bool:
 			var f := Face.new()
 			if f.setup(m as MeshInstance3D, skeleton, self):
 				face = f
+				f.rest_lid = float(info.get("lid_rest", 0.0))
 				add_child(f)
 				break
 			f.free()
