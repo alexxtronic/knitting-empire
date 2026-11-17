@@ -16,6 +16,12 @@ extends Node3D
 ##              is in the file the list replaces what scripts/world.gd and scripts/nature.gd
 ##              scatter, so later changes to their random placement can't undo your arrangement
 ##   "roads"    the painted road map (a PNG, base64): red = dirt, green = gravel, blue = cobbles
+##   the furniture inside the walk-in buildings (the shops, the café, Marcus's house) is picked up
+##              piece by piece: a moved, turned or deleted piece is in "nodes" as
+##              "in:<building's key>:<piece>@x,z", in the building's own space, so it goes with the
+##              building; "added_in" lists pieces copied or placed inside one (its key, the node they
+##              hang from, catalog id, x, y, z, turn and size in the building's space). Every roof
+##              is off while the editor is open; Marcus's basement is edited from down there
 ## With no file, or a part missing from it, that part of the world is exactly what the code builds.
 ##
 ## The Place tool shows the chosen thing under the pointer with a green outline (R turns it left,
@@ -108,6 +114,9 @@ class El:
 	var block_world: Array = [] # the obstacle rects it has in main.gd's lists now
 	var leaves: Array = [] # trees: fallen leaves, each [Transform3D relative to the tree, Color, Color]
 	var leaf0 := -1
+	var inside: El # a piece of furniture inside a walk-in building (a shop, the café, Marcus's house): that building
+	var local_base := Transform3D.IDENTITY # pieces: where the code put it, in its building's own space
+	var pieces: Array = [] # walk-in buildings: the El of every piece inside
 
 
 var main # main.gd
@@ -120,6 +129,7 @@ var templates := {} # kind -> how its MultiMeshes are made
 var baked := {} # scenery kinds whose full list goes in the layout file
 var orphans := {} # saved node edits that match nothing the code builds now (kept in the file)
 var unknown_scenery := {} # saved scenery lists for kinds the game no longer has (kept in the file)
+var orphan_pieces: Array = [] # saved pieces added inside a building that isn't there now (kept in the file)
 var plots_edited := false
 var home_edited := false # her furniture was arranged here: the layout gets the whole list again
 var house_list: Array = [] # the layout's "house" list, as read ([] = the code's own furnishing)
@@ -205,6 +215,7 @@ func collect() -> void:
 			_collect_node(c, "decor_" + c.item_id, c.display_name(), [] if c.is_flat() else [c.footprint()])
 	for b in Town.built:
 		_collect_node(b[0], b[1], b[2], b[3])
+	_collect_furnishings()
 	for f in main.decor:
 		_collect_node(f, "decor_" + f.item_id, f.display_name(), [] if f.is_flat() else [f.footprint()])
 	if World.barn != null and is_instance_valid(World.barn):
@@ -344,6 +355,115 @@ func _collect_node(n: Node3D, kind: String, title: String, blocks: Array) -> El:
 	return el
 
 
+## The furniture inside the buildings you can walk into (the shops, the café, Marcus's house; their
+## builders mark each piece "furnishing" and the building "walk_in"): each piece is its own thing
+## here, to move, turn, copy or delete inside its building. It goes with the building when that is
+## moved, and the layout keeps it against the building, in the building's own space
+## ("in:<building's key>:<piece>@x,z").
+func _collect_furnishings() -> void:
+	for b in els.duplicate():
+		if b.scenery or b.node == null or not is_instance_valid(b.node) or not b.node.has_meta("walk_in"):
+			continue
+		for n in b.node.find_children("*", "Node3D", true, false):
+			if n.has_meta("furnishing") and n.has_meta("item_id"):
+				_collect_piece(b, n)
+
+
+func _collect_piece(b: El, n: Node3D) -> El:
+	var id := str(n.get_meta("item_id"))
+	var blocks: Array = []
+	if n.has_meta("block"):
+		# a shop's piece: its obstacle was handed in with the building's; it's the piece's own now
+		var r: Rect2 = n.get_meta("block")
+		for i in b.block_local.size():
+			if (b.block_local[i] as Rect2).is_equal_approx(r):
+				blocks.append(b.block_world[i])
+				b.block_local.remove_at(i)
+				b.block_world.remove_at(i)
+				break
+	elif n.has_meta("god_added") and _piece_blocks_itself(n):
+		blocks = _piece_rect(id, n.global_transform)
+	var el := _collect_node(n, "piece_" + id, str(Catalog.ITEMS.get(id, {}).get("name", id.capitalize())), blocks)
+	by_key.erase(el.key)
+	var lb := b.base.affine_inverse() * n.global_transform
+	el.key = "in:%s:%s@%.2f,%.2f" % [b.key, id, lb.origin.x, lb.origin.z]
+	var n_same := 2
+	while by_key.has(el.key):
+		el.key = "in:%s:%s@%.2f,%.2f#%d" % [b.key, id, lb.origin.x, lb.origin.z, n_same]
+		n_same += 1
+	by_key[el.key] = el
+	el.inside = b
+	el.local_base = lb
+	b.pieces.append(el)
+	return el
+
+
+## A piece set down in a shop blocks the walking grid by itself (the house's split floors keep their
+## own grid from the pieces' nodes: split_house.gd mark_grid()).
+func _piece_blocks_itself(n: Node3D) -> bool:
+	var p := n.get_parent()
+	while p != null:
+		if p.has_meta("walk_in"):
+			return str(p.get_meta("walk_in")) != "split_house"
+		p = p.get_parent()
+	return false
+
+
+## The ground a catalogue piece stands on at `xf`, as the shops' furnishing lays it ([] if it's
+## flat or up on something).
+func _piece_rect(id: String, xf: Transform3D) -> Array:
+	var item: Dictionary = Catalog.ITEMS.get(id, {})
+	if item.is_empty() or bool(item.get("flat", false)):
+		return []
+	var fs: Vector2 = Vector2(1, 1)
+	var sz = item.get("size", [1.0, 1.0])
+	if sz is Array and (sz as Array).size() >= 2:
+		fs = Vector2(float(sz[0]), float(sz[1]))
+	return [_turned(Rect2(-fs * 0.5, fs), _yaw(xf), Vector2(xf.origin.x, xf.origin.z))]
+
+
+## The walk-in building whose room `at` (world) is in, and where a piece set down there goes:
+## {"b": its El, "parent": the node it hangs from, "y": the floor's height}, or {}.
+func _room_at(at: Vector3) -> Dictionary:
+	for b in els:
+		if b.scenery or b.deleted or b.node == null or not is_instance_valid(b.node) or not b.node.has_meta("walk_in"):
+			continue
+		var w := str(b.node.get_meta("walk_in"))
+		if w == "split_house":
+			if main.suburb == null or main.suburb.walk_in == null:
+				continue
+			var r: Array = main.suburb.walk_in.root_at(at)
+			if not r.is_empty():
+				return {"b": b, "parent": r[0], "y": float(r[1])}
+		elif Interiors.shops.has(w):
+			var s = Interiors.shops[w]
+			var q: Vector3 = b.node.global_transform.affine_inverse() * at
+			var room := (s.room as Rect2).grow(-0.2)
+			var f := b.node.get_node_or_null("Furnishings")
+			if f != null and room.has_point(Vector2(q.x, q.z)):
+				return {"b": b, "parent": f, "y": b.node.global_position.y}
+	return {}
+
+
+## One more piece inside building `b`, hung from `parent`, at `xf` (world).
+func _add_piece(b: El, parent: Node3D, id: String, xf: Transform3D) -> El:
+	var n := Node3D.new()
+	n.name = id
+	n.set_meta("item_id", id)
+	n.set_meta("furnishing", true)
+	n.set_meta("god_added", true)
+	parent.add_child(n)
+	Catalog.build(id, n)
+	n.global_transform = xf
+	var el := _collect_piece(b, n)
+	el.added = true
+	el.local_base = b.xf.affine_inverse() * xf
+	el.base = xf
+	_set_state(el, xf, false)
+	_measure(el)
+	return el
+
+
 func _measure(el: El) -> void:
 	var s: Vector3 = el.xf.basis.get_scale()
 	el.radius = (el.bounds.size * 0.5).length() * maxf(s.x, maxf(s.y, s.z)) + 0.05
@@ -407,6 +527,12 @@ func _apply(el: El) -> void:
 	var n := el.node
 	n.global_transform = el.xf
 	n.visible = not el.deleted
+	for p in el.pieces:
+		# the furniture inside goes with the building
+		var pe := p as El
+		pe.base = el.xf * pe.local_base
+		pe.xf = pe.node.global_transform
+		_measure(pe)
 	for b in n.find_children("*", "StaticBody3D", true, false):
 		var body := b as StaticBody3D
 		if not body.has_meta("god_layer"):
@@ -623,6 +749,8 @@ func _reblock(el: El) -> Array:
 			main.grid_blockers.append(r)
 			main.place_blockers.append(r)
 			changed.append(r)
+	for p in el.pieces:
+		changed.append_array(_reblock(p))
 	if el.kind == "pen":
 		main.place_blockers.erase(_pen_place)
 		_pen_place = (main.pen_rect as Rect2).grow(0.3)
@@ -731,11 +859,15 @@ func load_layout() -> void:
 	if trees_changed:
 		_rebuild_litter()
 	var nodes: Dictionary = d.get("nodes", {})
+	var later: Array = []
 	for key in nodes:
 		var el: El = by_key.get(key)
 		var v: Dictionary = nodes[key]
 		if el == null:
 			orphans[key] = v
+			continue
+		if el.inside != null:
+			later.append([el, v]) # after its building has gone where it goes
 			continue
 		if bool(v.get("del", false)):
 			_set_state(el, el.base, true)
@@ -745,12 +877,37 @@ func load_layout() -> void:
 	for a in d.get("added", []):
 		if Catalog.ITEMS.has(str(a.get("id", ""))):
 			_add_decor(str(a["id"]), Vector3(float(a["x"]), 0, float(a["z"])), deg_to_rad(float(a.get("r", 0.0))), float(a.get("s", 1.0)))
+	for pv in later:
+		var el: El = pv[0]
+		var v: Dictionary = pv[1]
+		if bool(v.get("del", false)):
+			_set_state(el, el.base, true)
+		else:
+			_set_state(el, el.inside.xf * _piece_local(el.local_base, v), false)
+	orphan_pieces.clear()
+	for a in d.get("added_in", []):
+		var b: El = by_key.get(str(a.get("in", "")))
+		var parent: Node = b.node.get_node_or_null(NodePath(str(a.get("under", "")))) if b != null else null
+		if b == null or not parent is Node3D or not Catalog.ITEMS.has(str(a.get("id", ""))):
+			orphan_pieces.append(a)
+			continue
+		var lb := Transform3D(Basis(Vector3.UP, deg_to_rad(float(a.get("r", 0.0)))).scaled(Vector3.ONE * float(a.get("s", 1.0))), Vector3(float(a["x"]), float(a.get("y", 0.0)), float(a["z"])))
+		_add_piece(b, parent, str(a["id"]), b.xf * lb)
+	if not orphan_pieces.is_empty():
+		push_warning("world layout: %d pieces added inside buildings match no building now (kept in the file)" % orphan_pieces.size())
 	if not orphans.is_empty() or not unknown_scenery.is_empty():
 		push_warning("world layout: %d saved changes match nothing in the world now (kept in the file): %s" % [orphans.size() + unknown_scenery.size(), ", ".join(orphans.keys() + unknown_scenery.keys())])
 	if d.has("roads"):
 		_load_roads(d["roads"])
 	house_list = d.get("house", [])
 	unsaved = false
+
+
+## A piece's place in its building from the layout file: where the code put it, moved to x, z,
+## turned by r degrees and sized by s.
+static func _piece_local(lb: Transform3D, v: Dictionary) -> Transform3D:
+	var b := (Basis(Vector3.UP, deg_to_rad(float(v.get("r", 0.0)))) * lb.basis).scaled(Vector3.ONE * float(v.get("s", 1.0)))
+	return Transform3D(b, Vector3(float(v.get("x", lb.origin.x)), lb.origin.y, float(v.get("z", lb.origin.z))))
 
 
 ## Her furniture as it stands now, for the layout's "house" list: what a new game starts with.
@@ -791,10 +948,29 @@ func _item_of(el: El) -> Array:
 func layout() -> Dictionary:
 	var nodes := orphans.duplicate()
 	var added: Array = []
+	var added_in: Array = orphan_pieces.duplicate()
 	for el in els:
 		if el.scenery or el.home or el.built:
 			continue
 		var o := el.xf.origin
+		if el.inside != null:
+			# a piece inside a building: kept in the building's own space
+			var lx := el.inside.xf.affine_inverse() * el.xf
+			var sz := lx.basis.get_scale().x / maxf(el.local_base.basis.get_scale().x, 0.0001)
+			if el.added:
+				if not el.deleted:
+					var a := {"in": el.inside.key, "under": str(el.inside.node.get_path_to(el.node.get_parent())), "id": str(el.node.get_meta("item_id")),
+						"x": snappedf(lx.origin.x, 0.001), "y": snappedf(lx.origin.y, 0.001), "z": snappedf(lx.origin.z, 0.001), "r": snappedf(rad_to_deg(_yaw(lx)), 0.01)}
+					if absf(lx.basis.get_scale().x - 1.0) > 0.0005:
+						a["s"] = snappedf(lx.basis.get_scale().x, 0.001)
+					added_in.append(a)
+			elif el.deleted:
+				nodes[el.key] = {"del": true}
+			elif not lx.is_equal_approx(el.local_base):
+				nodes[el.key] = {"x": snappedf(lx.origin.x, 0.001), "z": snappedf(lx.origin.z, 0.001), "r": snappedf(rad_to_deg(angle_difference(_yaw(el.local_base), _yaw(lx))), 0.01)}
+				if absf(sz - 1.0) > 0.0005:
+					nodes[el.key]["s"] = snappedf(sz, 0.001)
+			continue
 		if el.added:
 			if not el.deleted:
 				var a := {"id": str(el.node.get("item_id")), "x": snappedf(o.x, 0.001), "z": snappedf(o.z, 0.001), "r": snappedf(rad_to_deg(_yaw(el.xf)), 0.01)}
@@ -815,6 +991,8 @@ func layout() -> Dictionary:
 				list.append(_item_of(el))
 		sc[kind] = list
 	var d := {"version": 1, "nodes": nodes, "added": added, "scenery": sc}
+	if not added_in.is_empty():
+		d["added_in"] = added_in
 	if home_edited:
 		d["house"] = home_now()
 	elif not house_list.is_empty():
@@ -840,6 +1018,11 @@ func save_layout() -> bool:
 	for a in d["added"]:
 		arows.append("\t\t" + JSON.stringify(a))
 	lines.append('\t"added": [%s]' % ("" if arows.is_empty() else "\n" + ",\n".join(arows) + "\n\t"))
+	if d.has("added_in"):
+		var irows: Array[String] = []
+		for a in d["added_in"]:
+			irows.append("\t\t" + JSON.stringify(a))
+		lines.append('\t"added_in": [\n%s\n\t]' % ",\n".join(irows))
 	if d.has("house"):
 		var hrows: Array[String] = []
 		for h in d["house"]:
@@ -874,6 +1057,7 @@ func set_active(on: bool) -> void:
 	if on == active or (on and not is_admin()):
 		return
 	active = on
+	Interiors.editing = on
 	if on:
 		sync_home()
 		sync_built()
@@ -987,7 +1171,7 @@ func pick(mpos: Vector2) -> El:
 	var best: El = null
 	var best_t := INF
 	for el in els:
-		if el.deleted or (not small_on and SMALL.has(el.kind)):
+		if el.deleted or (not small_on and SMALL.has(el.kind)) or (not el.scenery and not el.node.is_visible_in_tree()):
 			continue
 		var to_c: Vector3 = el.xf * el.bounds.get_center() - from
 		var along := to_c.dot(dir)
@@ -1030,12 +1214,25 @@ func _triangles(el: El) -> TriangleMesh:
 		var inv: Transform3D = el.node.global_transform.affine_inverse()
 		for mi in el.node.find_children("*", "MeshInstance3D", true, false):
 			var m := mi as MeshInstance3D
-			if m.mesh != null and m.visible:
+			if m.mesh != null and m.visible and not _belongs_to_piece(m, el.node):
 				faces.append_array((inv * m.global_transform) * m.mesh.get_faces())
 		el.tri = TriangleMesh.new()
 		if faces.size() >= 3:
 			el.tri.create_from_faces(faces)
 	return el.tri
+
+
+## A walk-in building's furnishings (and its roof, which is off while the editor is open) are
+## clicked as themselves, not as the building.
+func _belongs_to_piece(m: Node, top: Node) -> bool:
+	if top.has_meta("walk_in") and str(m.name) == "roof":
+		return true
+	var p := m
+	while p != null and p != top:
+		if p.has_meta("furnishing"):
+			return true
+		p = p.get_parent()
+	return false
 
 
 ## Mouse events from main.gd while the editor is on. True = the editor used it.
@@ -1167,6 +1364,8 @@ func duplicate_selected() -> El:
 	var el: El
 	if src.scenery:
 		el = _add_scenery(src.kind, Transform3D(src.xf.basis, at), src.tint)
+	elif src.inside != null:
+		el = _add_piece(src.inside, src.node.get_parent(), str(src.node.get_meta("item_id")), Transform3D(src.xf.basis, Vector3(at.x, src.xf.origin.y, at.z)))
 	elif src.home:
 		el = _add_home(str(src.node.get("item_id")), at, _yaw(src.xf), src.xf.basis.get_scale().x)
 	elif src.node is Furniture:
@@ -1274,7 +1473,11 @@ func _place_one(at: Vector3, changed: Array) -> El:
 	if place_id.begins_with("decor:"):
 		if not Catalog.ITEMS.has(what):
 			return null
-		if main.interior_rect().has_point(Vector2(at.x, at.z)):
+		var room := _room_at(at)
+		if not room.is_empty():
+			# inside a shop, the café or Marcus's house: it joins that building's furnishings
+			el = _add_piece(room["b"], room["parent"], what, Transform3D(Basis(Vector3.UP, _ghost_yaw).scaled(Vector3.ONE * _ghost_scale), Vector3(at.x, float(room["y"]), at.z)))
+		elif main.interior_rect().has_point(Vector2(at.x, at.z)):
 			el = _add_home(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale) # into her house: it's hers
 		else:
 			el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale)

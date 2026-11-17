@@ -86,6 +86,7 @@ func build(m: Node, node: Node3D) -> void:
 	_lights()
 	_furniture()
 	current = self
+	house.set_meta("walk_in", "split_house")
 	_inv = house.global_transform.affine_inverse()
 	_show()
 
@@ -252,6 +253,7 @@ func _furniture() -> void:
 		var n := Node3D.new()
 		n.name = str(f["id"])
 		n.set_meta("item_id", str(f["id"]))
+		n.set_meta("furnishing", true) # the world editor moves each piece on its own (god_mode.gd)
 		n.position = Vector3(at.x, _level_y(lv) + 0.045 + float(f.get("y", 0.0)), at.y)
 		n.rotation.y = deg_to_rad(float(f.get("turn", 0.0)))
 		roots[lv].add_child(n)
@@ -434,6 +436,8 @@ func mark_grid() -> void:
 		if _reachable(str(w["level"])):
 			_block(_seg_rect(w["a"], w["b"], WALL_T))
 	for n in _furniture_nodes():
+		if not n.visible: # deleted in the world editor
+			continue
 		var item: Dictionary = Catalog.ITEMS.get(str(n.get_meta("item_id", "")), {})
 		if item.is_empty() or bool(item.get("flat", false)):
 			continue
@@ -441,6 +445,19 @@ func mark_grid() -> void:
 		if absi(int(roundf(rad_to_deg(n.rotation.y) / 90.0))) % 2 == 1:
 			fs = Vector2(fs.y, fs.x)
 		_block(Rect2(Vector2(n.position.x, n.position.z) - fs * 0.5, fs))
+
+
+## Where a catalogue piece set down at `p` (world) in the world editor goes: [the level's node, the
+## floor's height in the world], or [] if `p` isn't inside the house. The basement while she's down
+## there, else the bedroom floor over the right half and the main floor over the left.
+func root_at(p: Vector3) -> Array:
+	if house == null or not is_instance_valid(house):
+		return []
+	var q := local(p)
+	if not in_footprint(q):
+		return []
+	var lv := "basement" if inside and level == BASEMENT else ("upper" if q.x > split_x else "main")
+	return [roots[lv], house.global_position.y + _level_y(lv) + 0.045]
 
 
 func _reachable(lv: String) -> bool:
@@ -537,6 +554,17 @@ func _show() -> void:
 	if main == null or main.player == null or not is_instance_valid(house):
 		return
 	var fp: bool = main.fps != null and main.fps.active
+	if main.god != null and main.god.active:
+		# the world editor: the roof off and the floors she's on shown, so every room can be furnished
+		(roots["main"] as Node3D).visible = level == UPPER
+		(roots["upper"] as Node3D).visible = level == UPPER
+		(roots["basement"] as Node3D).visible = inside and level == BASEMENT
+		(roots["all"] as Node3D).visible = true
+		for c in ceilings:
+			(c as Node3D).visible = false
+		if parts.has("roof"):
+			(parts["roof"] as Node3D).visible = false
+		return
 	var near := inside or (main.player as Node3D).position.distance_to(house.global_position) < 24.0
 	(roots["main"] as Node3D).visible = near and level == UPPER
 	(roots["upper"] as Node3D).visible = inside and level == UPPER

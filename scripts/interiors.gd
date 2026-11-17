@@ -36,6 +36,7 @@ class Shop:
 	var t := 0.0
 
 static var shops := {} # building id -> Shop
+static var editing := false # the world editor is open: every roof is off, so the rooms can be furnished
 
 
 ## Sets up building `b` (its model already loaded under it) as a walk-in shop, if its model has
@@ -60,6 +61,7 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 		s.room = Rect2(float(rr[0]) - float(rr[2]) * 0.5, float(rr[1]) - float(rr[3]) * 0.5, float(rr[2]), float(rr[3]))
 	s.t = randf() * 10.0
 	shops[id] = s
+	b.set_meta("walk_in", id)
 	for side in WALLS:
 		if parts.has("wall_%s_low" % side):
 			(parts["wall_%s_low" % side] as Node3D).visible = false
@@ -85,6 +87,8 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 		var turn := float(f.get("turn", 0.0))
 		var n := Node3D.new()
 		n.name = fid
+		n.set_meta("item_id", fid)
+		n.set_meta("furnishing", true) # the world editor moves each piece on its own (god_mode.gd)
 		n.position = Vector3(at.x, float(f.get("y", 0.0)), at.y)
 		n.rotation.y = deg_to_rad(turn)
 		room.add_child(n)
@@ -107,6 +111,7 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 		var fs: Vector2 = Data.vec2(item.get("size", [1.0, 1.0]))
 		if absi(int(roundf(turn / 90.0))) % 2 == 1:
 			fs = Vector2(fs.y, fs.x)
+		n.set_meta("block", Rect2(at - fs * 0.5, fs))
 		rects.append(Rect2(at - fs * 0.5, fs))
 	var lp: Vector3 = Data.vec3(s.info.get("light", [0.0, 2.5, 0.0]))
 	s.light = Catalog.omni(b, lp, Color(1.0, 0.78, 0.5), 4.2, 0.0, 1.2)
@@ -185,7 +190,7 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 				at_door = true
 		s.open = move_toward(s.open, 1.0 if (s.inside or at_door) and s.node.visible else 0.0, delta * 2.5)
 		(s.parts["door"] as Node3D).rotation.y = deg_to_rad(100.0) * smoothstep(0.0, 1.0, s.open)
-		(s.parts["roof"] as Node3D).visible = not s.inside or roof_on # first person keeps it on
+		(s.parts["roof"] as Node3D).visible = (not s.inside or roof_on) and not editing # first person keeps it on
 		for side in WALLS:
 			if not s.parts.has("wall_" + side) or not s.parts.has("wall_%s_low" % side):
 				continue

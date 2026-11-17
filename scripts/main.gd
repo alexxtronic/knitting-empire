@@ -7270,6 +7270,9 @@ func _god_checks() -> void:
 	await _god_look(lamp.xf.origin, 16.0)
 	await _shot("61_god_editor.png")
 
+	# the furniture inside the walk-in buildings: every piece on its own, the roofs off while editing
+	var furn: Dictionary = await _god_furnishing_checks()
+
 	# Done saves the layout (to the test's own file, never data/world_layout.json)
 	var real_before := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
 	god.set_active(false)
@@ -7277,14 +7280,78 @@ func _god_checks() -> void:
 	var saved = JSON.parse_string(FileAccess.get_file_as_string(GOD_TEST_LAYOUT)) if FileAccess.file_exists(GOD_TEST_LAYOUT) else null
 	var real_after := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
 	var saved_ok: bool = typeof(saved) == TYPE_DICTIONARY and saved["nodes"].has(lamp.key) and saved["nodes"][bale.key].get("del", false) == true \
+		and (furn.is_empty() or (saved["nodes"].has(furn["piece"]) and saved["nodes"][furn["gone"]].get("del", false) == true and saved.get("added_in", []).size() == int(furn["added"]) and saved["nodes"].has(furn["msofa"]))) \
 		and saved["added"].size() >= 1 and saved["scenery"].has(tree_kind) and saved["scenery"].has("rock_single") and saved["scenery"].has("bush_round") and saved.has("roads")
 	_check("god mode: Done closes the editor and saves the layout (lamp, hay bale, copy, trees, rocks, bushes and roads in the file; the real layout file untouched %s)" % (real_before == real_after),
 		not god.active and Game.time_running and saved_ok and real_before == real_after and hud.chrome.any(func(c): return c.visible))
 	# the last step: the whole scene again, built from that layout
 	Engine.set_meta("ke_god_reload", {"lamp": lamp.key, "lamp_at": lamp.xf.origin, "lamp_turn": lamp_turn, "bale": bale.key, "copy_at": copy.xf.origin,
 		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": god.scenery["rock_single"].filter(func(e): return not e.deleted).size(), "bushes": bushes0 - 1, "lamp_size": lamp_size, "patch": patch,
-		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1})
+		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1, "furn": furn})
 	get_tree().reload_current_scene()
+
+
+## The world editor on the furniture inside the walk-in buildings (god_mode.gd _collect_furnishings):
+## in the café a click picks a piece, not the building, with the roof off; a piece moves, another is
+## deleted (its spot freed), one is copied beside itself and a catalogue pouf is placed in the room;
+## in Marcus's house the grey couch moves on the main floor. Returns what the reload checks look for.
+func _god_furnishing_checks() -> Dictionary:
+	var cafe_b: GodMode.El = null
+	var house_b: GodMode.El = null
+	for e in god.els:
+		if e.kind == "building_cafe":
+			cafe_b = e
+		elif suburb != null and suburb.walk_in != null and e.node == suburb.walk_in.house:
+			house_b = e
+	_check("god mode: the café and Marcus's house have their furniture as pieces of their own (%d in the café, %d in the house)" % [cafe_b.pieces.size() if cafe_b else 0, house_b.pieces.size() if house_b else 0],
+		cafe_b != null and cafe_b.pieces.size() >= 20 and house_b != null and house_b.pieces.size() >= 15)
+	if cafe_b == null or house_b == null:
+		return {}
+	var blocking: Array = cafe_b.pieces.filter(func(e): return not e.block_world.is_empty())
+	var piece: GodMode.El = blocking[0]
+	var gone_el: GodMode.El = blocking[1]
+	await _god_look(piece.xf.origin, 9.0)
+	await _wait(0.3)
+	var roof_off: bool = not (Interiors.shops["cafe"].parts["roof"] as Node3D).visible
+	god.press(cam.unproject_position(piece.xf * piece.bounds.get_center()))
+	god.release()
+	var picked: GodMode.El = god.selected
+	_check("god mode: in the café, with its roof off (%s), a click picks up a piece of furniture, not the building (%s)" % [roof_off, picked.title if picked else "nothing"],
+		roof_off and picked != null and picked.inside == cafe_b)
+	var from := piece.xf
+	var block0: Rect2 = piece.block_world[0]
+	var step: Vector3 = cafe_b.xf.basis.x.normalized() * 0.5
+	piece.xf.origin += step
+	god._edited(piece, from, false)
+	god.select(gone_el)
+	var gone_rect: Rect2 = gone_el.block_world[0]
+	god.delete_selected()
+	god.select(piece)
+	var copy: GodMode.El = god.duplicate_selected()
+	god.place_id = "decor:pouf"
+	god.set_tool("place")
+	var pouf: GodMode.El = god.place(cafe_b.xf * Vector3(0.0, 0, 0.5))
+	god.set_tool("select")
+	var moved_ok: bool = piece.node.global_position.distance_to(from.origin + step) < 0.001 and (piece.block_world[0] as Rect2).get_center().distance_to(block0.get_center() + Vector2(step.x, step.z)) < 0.01 \
+		and grid_blockers.has(piece.block_world[0]) and not grid_blockers.has(block0)
+	_check("god mode: a café piece moves with its obstacle (%s), another is deleted and its spot freed (%s), a copy stands beside it in the same room (%s) and a pouf placed in the café joins its furnishings (%s)" % [moved_ok, not grid_blockers.has(gone_rect), copy != null and copy.inside == cafe_b, pouf != null and pouf.inside == cafe_b],
+		moved_ok and gone_el.deleted and not gone_el.node.visible and not grid_blockers.has(gone_rect) and copy != null and copy.inside == cafe_b and copy.node.get_parent() == piece.node.get_parent()
+		and pouf != null and pouf.inside == cafe_b and pouf.node.get_parent().name == "Furnishings" and grid_blockers.has(pouf.block_world[0]))
+	# Marcus's grey couch, on the main floor
+	var msofa: GodMode.El = null
+	for e in house_b.pieces:
+		if e.kind == "piece_sofa_grey":
+			msofa = e
+	var mfrom := msofa.xf
+	var mstep: Vector3 = house_b.xf.basis.z.normalized() * -0.4
+	msofa.xf.origin += mstep
+	god._edited(msofa, mfrom, false)
+	await _god_look(msofa.xf.origin, 12.0)
+	await _wait(0.3)
+	_check("god mode: in Marcus's house the roof is off and the grey couch moves on the main floor (%.2f m)" % msofa.node.global_position.distance_to(mfrom.origin),
+		not (suburb.walk_in.parts["roof"] as Node3D).visible and msofa.node.global_position.distance_to(mfrom.origin + mstep) < 0.001 and (suburb.walk_in.roots["main"] as Node3D).visible)
+	await _shot("61_god_furnishings.png")
+	return {"piece": piece.key, "piece_at": piece.xf.origin, "gone": gone_el.key, "added": 2, "msofa": msofa.key, "msofa_at": msofa.xf.origin}
 
 
 ## The world built again from the layout _god_checks saved: everything is where it was left.
@@ -7325,6 +7392,16 @@ func _god_reload_checks() -> void:
 	_check("saved layout: the straight gravel line, the square patch, the placed gold leaves, spruce and milk churn, and the moved sheep pen are all back (line %s, square corner %s, %d leaves, %d spruces, pen %.2f m off, sheep inside %s)" % [god.road_at(31.0, 10.0), god.road_at(33.9, 16.9), god.scenery.get("leaf_yellow", []).size(), god.scenery["tree_spruce"].size(), pen.node.global_position.distance_to(pen_at), sheep_in],
 		god.road_at(31.0, 10.0) == "gravel" and god.road_at(33.9, 16.9) == "gravel" and god.scenery.get("leaf_yellow", []).size() == 2 and god.scenery["tree_spruce"].size() == int(want["spruces"])
 		and churns.size() == 1 and pen.node.global_position.distance_to(pen_at) < 0.01 and pen_rect.get_center().distance_to(Vector2(pen_at.x, pen_at.z)) < 0.01 and sheep_in)
+	var furn: Dictionary = want["furn"]
+	if not furn.is_empty():
+		var piece: GodMode.El = god.by_key.get(furn["piece"])
+		var gone: GodMode.El = god.by_key.get(furn["gone"])
+		var msofa: GodMode.El = god.by_key.get(furn["msofa"])
+		var added_in: Array = god.els.filter(func(e): return e.added and e.inside != null and not e.deleted)
+		_check("saved layout: the café's moved piece, its deleted one, the two added inside and Marcus's moved couch are all as they were left (piece %.2f m off, deleted gone %s, %d added, couch %.2f m off)" % [
+			piece.node.global_position.distance_to(furn["piece_at"]) if piece else -1.0, gone != null and not gone.node.visible, added_in.size(), msofa.node.global_position.distance_to(furn["msofa_at"]) if msofa else -1.0],
+			piece != null and piece.node.global_position.distance_to(furn["piece_at"]) < 0.01 and gone != null and not gone.node.visible and added_in.size() == int(furn["added"])
+			and msofa != null and msofa.node.global_position.distance_to(furn["msofa_at"]) < 0.01)
 	cam_follow = false
 	await _god_look(Vector3(17.0, 0, 7.0), 24.0)
 	await _shot("62_god_reloaded.png")
