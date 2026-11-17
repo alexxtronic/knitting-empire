@@ -1,0 +1,21 @@
+{
+	"_about": "Wolves at night (scripts/wolves.gd; Alex, 2026-11-16, docs/DIRECTION.md: renting space in Lars's barn keeps her animals safe from wolves). Once a night, at `hour`, there is a `chance` that wolves come for her pens, but only once Act 1 is done and only if some animal is at risk (wolves.at_risk()). At risk means: her sheep that aren't in their barn stalls (`housed`, flock bedtime), and the penned wild animals beyond the `barn_stalls` (data/wildlife.json) that Lars's barn shelters while its rent is paid up (wildlife.stalls_rented()). The rented stalls shelter the wild animals first, then any sheep out in the pen. When they come she hears a howl and a toast, and `min_pack` to `max_pack` wolves of the sizes below walk in from the woods `spawn_dist` metres off towards the pen. She has `window` real seconds (not counting the title, a story scene, the cinematic camera or a pause) to see them off: Nora running at one inside `shy` metres, or the dog's bark while she plays him inside `bark_range`, takes one of its `nerve` (one at most every `hit_every` seconds each); a wolf with none left runs back into the woods. Miss the window and they take one animal at risk; a morning note says which. If she sleeps through the night (bed before `hour`), the night is rolled in the morning at `asleep_chance` and a hit takes one animal while she slept. `walk` and `run` are metres a second; `model` is each size's own rig (art/world_assets/wildlife/tripo_build.py, 2026-11-16) and `stride` the ground its loops cover per second at speed 1 (its kiln log, wildlife_log.md); `model_scale` (default 1) sizes it. While a size's `model` isn't in the project the coyote stands in (`fallback_model`, `fallback_stride`), scaled up by `scale`. Every word the player sees is a draft until Alex approves it.",
+	"chance": 0.125,
+	"asleep_chance": 0.125,
+	"hour": 21.0,
+	"window": 45.0,
+	"min_pack": 1,
+	"max_pack": 3,
+	"spawn_dist": 30.0,
+	"shy": 7.0,
+	"bark_range": 10.0,
+	"hit_every": 0.9,
+	"fallback_model": "res://assets/wildlife/coyote.glb",
+	"fallback_stride": {"Walk": 0.694, "Run": 2.298},
+	"sizes": {
+		"small": {"name": "young wolf", "model": "res://assets/wildlife/wolf_small.glb", "stride": {"Walk": 0.535, "Run": 1.773}, "scale": 1.15, "nerve": 1, "walk": 0.75, "run": 2.6, "click": 0.6},
+		"medium": {"name": "grey wolf", "model": "res://assets/wildlife/wolf_medium.glb", "stride": {"Walk": 0.764, "Run": 2.532}, "scale": 1.35, "nerve": 2, "walk": 1.0, "run": 3.6, "click": 0.95},
+		"large": {"name": "big black wolf", "model": "res://assets/wildlife/wolf_large.glb", "stride": {"Walk": 0.843, "Run": 2.792}, "scale": 1.6, "nerve": 3, "walk": 1.1, "run": 4.0, "click": 1.25}
+	},
+	"pack_order": ["medium", "small", "large"]
+}

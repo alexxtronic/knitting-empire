@@ -279,6 +279,32 @@ def dog_bark():
     return normalize(reverb(x * fade(n, 0.002, 0.08), secs=0.5, wet=0.12, tone=3500), 0.8)
 
 
+def wolf_howl():
+    """Two wolves howling far off in the woods: a long, breathy voice that swells up from a low
+    moan, holds with a slow waver and sinks away, the second answering a little higher and late.
+    Lots of room round it, so it sounds a field away. Its own random stream."""
+    r = np.random.default_rng(57)
+    secs = 4.2
+    n = int(secs * SR)
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    for (start, f0, f1, dur, amp) in [(0.0, 330.0, 560.0, 3.2, 1.0), (1.1, 400.0, 640.0, 2.8, 0.6)]:
+        s = int(start * SR)
+        m = min(int(dur * SR), n - s)
+        tt = np.arange(m) / SR
+        u = tt / dur
+        # a quick swell up to the held note, a slow sag at the end
+        f = f0 + (f1 - f0) * np.minimum(u / 0.22, 1.0) ** 0.7 - (f1 - f0) * 0.35 * np.clip((u - 0.7) / 0.3, 0, 1) ** 2
+        f = f * (1.0 + 0.012 * np.sin(2 * np.pi * 5.2 * tt) + 0.006 * np.sin(2 * np.pi * 1.3 * tt))
+        phase = 2 * np.pi * np.cumsum(f) / SR
+        voice = np.sin(phase) + 0.35 * np.sin(2 * phase) + 0.12 * np.sin(3 * phase)
+        env = np.minimum(u / 0.12, 1.0) * np.clip((1.0 - u) / 0.3, 0, 1) ** 1.2
+        breath = band(r.standard_normal(m), 500, 2600) * 0.08
+        x[s:s + m] += (voice + breath) * env * amp
+    x = band(x, 200, 3200)
+    return normalize(reverb(x * fade(n, 0.01, 0.6), secs=2.6, wet=0.42, tone=2600), 0.7)
+
+
 # --- ambience loops ----------------------------------------------------------------------------
 
 def wind(secs, level=1.0, low=420):
@@ -451,7 +477,8 @@ if __name__ == "__main__":
     if "--only" in sys.argv:  # one effect, leaving the rest as they are: --only coins
         {"coins": lambda: write_wav("coins", cha_ching()),
          "flutter": lambda: write_wav("flutter", wing_flutter()),
-         "bark": lambda: write_wav("bark", dog_bark())}[sys.argv[sys.argv.index("--only") + 1]]()
+         "bark": lambda: write_wav("bark", dog_bark()),
+         "howl": lambda: write_wav("howl", wolf_howl())}[sys.argv[sys.argv.index("--only") + 1]]()
         sys.exit(0)
     for i in range(4):
         write_wav("step_grass_%d" % (i + 1), footstep_grass(i))
@@ -464,6 +491,7 @@ if __name__ == "__main__":
     write_wav("coins", cha_ching())
     write_wav("flutter", wing_flutter())
     write_wav("bark", dog_bark())
+    write_wav("howl", wolf_howl())
     write_ogg("amb_day", ambience_day(), 4)
     write_ogg("amb_night", ambience_night(), 4)
     write_ogg("amb_rain", rain(), 4)
