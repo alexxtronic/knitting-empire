@@ -1362,11 +1362,8 @@ func show_toast(text: String, progress := -1.0) -> void:
 	toast_meter.visible = progress >= 0.0
 	if progress >= 0.0:
 		toast_meter.set_value(progress)
-	toast_panel.reset_size()
-	# keep it centred under the goal: resizing alone grows it to the right, under the minimap
-	var half := toast_panel.get_combined_minimum_size().x * 0.5
-	toast_panel.offset_left = -half
-	toast_panel.offset_right = half
+	_fit_toast()
+	_fit_toast.call_deferred() # again once the wrapped text has laid out at its new width
 	toast_panel.visible = true
 	toast_panel.modulate.a = 1.0
 	if toast_tween:
@@ -1374,6 +1371,21 @@ func show_toast(text: String, progress := -1.0) -> void:
 	toast_tween = create_tween()
 	toast_tween.tween_interval(2.6)
 	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, 0.6)
+
+
+## The toast's box hugs its text: as wide as the text (or the wrap width) and as tall as its lines,
+## centred under the goal. A wrapped label reports its height for the width it had before, so a long
+## toast once came out several times too tall; setting the label's width first and sizing from it
+## keeps it a small box (Alex, 2026-11-16).
+func _fit_toast() -> void:
+	var w: float = maxf(toast_label.custom_minimum_size.x, toast_label.get_combined_minimum_size().x)
+	toast_label.size.x = w
+	toast_label.reset_size()
+	toast_panel.reset_size()
+	var sz := toast_panel.get_combined_minimum_size()
+	toast_panel.offset_left = -sz.x * 0.5 # resizing alone grows it to the right, under the minimap
+	toast_panel.offset_right = sz.x * 0.5
+	toast_panel.offset_bottom = toast_panel.offset_top + sz.y
 
 
 ## Coins earned: the coin and "+N" pop up beside the coin chip, rise and fade, with the cha-ching.

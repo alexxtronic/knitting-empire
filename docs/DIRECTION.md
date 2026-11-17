@@ -87,7 +87,9 @@ The game teaches knitting, selling and spending, and then lets go:
   - She is alerted when wolves come and has a short window to scare them off herself.
   - Animals in rented barn stalls are safe.
   - The wolves are three assets in our style: small, medium and large-and-scary. They are drawn in ChatGPT, rendered in Tripo and rigged like the dog.
+  - Built (2026-11-16): `scripts/wolves.gd`, numbers in `data/wolves.json`. About one night in eight, at 21:00, she hears a howl and one to three wolves walk in to the pen. She has 45 seconds to see them off, by running at them as Nora or barking as the dog; the bigger the wolf, the more it takes. Miss the window and one animal is lost, which the morning note names. Sheep in their barn stalls are safe, and so are as many animals as the rented stalls hold. A night she sleeps through is rolled in the morning.
 - **Later she can tame the wolves,** and they round up animals for her automatically.
+  - Not built yet. The hook is `wolves.tamed()`: once `Game.flags["wolves_tamed"]` is true, wild wolves stop coming. Since 2026-11-16 herding belongs to the player, so a tamed pack that collects animals "automatically" needs Alex's decision first: either it's another animal the player plays, or it's an exception he approves.
 - **Her house,** with no limits on customising it:
   - expand it;
   - buy land and build entirely new houses;
