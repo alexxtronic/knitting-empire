@@ -10,6 +10,7 @@ const PX_PER_M := 2.0
 const CHUNK := 8.0
 const DENSITY := 34.0 # blades per square metre on full grass
 const VIEW_RANGE := 46.0 # chunks further than this from the camera aren't drawn
+const PATCH_PX := 4.0 # the baked patch texture's pixels per metre (_bake_patches)
 
 var ground_mat: ShaderMaterial
 var blade_mat: ShaderMaterial
@@ -48,6 +49,34 @@ func _ready() -> void:
 	_blade_mesh = _make_blade()
 	blade_mat.set_shader_parameter("thin_near", THIN_NEAR)
 	blade_mat.set_shader_parameter("thin_keep", thin_keep)
+	_bake_patches()
+
+
+## The light and dark patches (grass_patches.gdshaderinc) cost each blade's vertices sixteen hashes;
+## they depend only on where the blade stands, so draw them once over REGION into a texture on the
+## GPU (the CPU can't repeat the shader's sin hash exactly, and the blades must match the ground's
+## patches, which keeps working them out itself). The blades read it once it has drawn.
+var patch_vp: SubViewport
+
+func _bake_patches() -> void:
+	patch_vp = SubViewport.new()
+	patch_vp.size = Vector2i(int(REGION.size.x * PATCH_PX), int(REGION.size.y * PATCH_PX))
+	patch_vp.disable_3d = true
+	patch_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var rect := ColorRect.new()
+	rect.size = Vector2(patch_vp.size)
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://shaders/grass_patch_bake.gdshader")
+	var r := Vector4(REGION.position.x, REGION.position.y, REGION.size.x, REGION.size.y)
+	m.set_shader_parameter("rect", r)
+	rect.material = m
+	patch_vp.add_child(rect)
+	add_child(patch_vp)
+	blade_mat.set_shader_parameter("patch_tex", patch_vp.get_texture())
+	blade_mat.set_shader_parameter("patch_rect", r)
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	blade_mat.set_shader_parameter("patch_baked", true)
 
 
 ## Bare-earth areas: `dirt` rects (paths, beds: worn earth, wide soft edges), `clear` rects and
@@ -222,6 +251,7 @@ func _make_blade() -> ArrayMesh:
 		tri.call(a, a + 1, a + 2)
 		if i < 2:
 			tri.call(a + 1, a + 3, a + 2)
+	st.index() # 7 shared points rather than 15: the vertex shader runs once per point
 	return st.commit()
 
 

@@ -5,7 +5,7 @@ extends Node
 ##   thickest just after first light and gone by mid-morning. The low sun's shadows through it are
 ##   the light shafts between the tree branches; the sun's fog energy and forward scattering go up
 ##   with it. On Low graphics (no volumetric fog) a plain height fog stands in.
-## - SDFGI on High: light bouncing across the whole scene and the sky shut out under the trees and
+## - SDFGI on High and Ultra: light bouncing across the whole scene and the sky shut out under the trees and
 ##   inside buildings, which the screen-space effects (SSIL, SSAO) can't see off screen.
 ## The other half is baked: art/world_assets/light_bake/build.py path-traces each prop's own contact
 ## shadows and bounce light in Cycles into an atlas the prop's material reads as ambient occlusion.
@@ -92,8 +92,8 @@ func setup(m: Node) -> void:
 
 func apply_graphics(level: int) -> void:
 	gfx = level
-	# SDFGI: big-scale bounce and sky occlusion. High only: it costs a few milliseconds a frame.
-	env.sdfgi_enabled = level == 2
+	# SDFGI: big-scale bounce and sky occlusion. High and Ultra only: it costs a few milliseconds a frame.
+	env.sdfgi_enabled = level >= 2
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_read_sky_light = true
 	env.sdfgi_cascades = 4

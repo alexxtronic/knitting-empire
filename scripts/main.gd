@@ -151,7 +151,7 @@ var minimap: Minimap # the map under the coins (minimap.gd): click it to walk th
 var see_through: SeeThrough # scenery between the camera and the people fades (see_through.gd)
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
-var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
+var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High and Ultra
 var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var decor_root: Node3D
 var sign_to_town: Landmark
@@ -605,21 +605,35 @@ func _setup_environment() -> void:
 ## The 3D scene is drawn at about 1.6 million pixels whatever the window size, then upscaled
 ## (MetalFX on Macs, FSR elsewhere); the menus stay at full resolution. A full-screen Retina
 ## window is 4 to 7 million pixels, which a laptop GPU can't fill at 60 fps with these effects.
-## Per graphics level (Low, Medium, High): 3D pixels to aim for and the lowest scale allowed.
-const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.6e6]
-const MIN_3D_SCALE := [0.25, 0.3, 0.35]
+## Per graphics level (Low, Medium, High, Ultra): 3D pixels to aim for and the lowest scale allowed.
+const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.35e6, 1.6e6]
+const MIN_3D_SCALE := [0.25, 0.3, 0.33, 0.35]
 const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 
 # --- graphics setting ----------------------------------------------------------------
-## Low / Medium / High, set in Settings and kept in user://settings.cfg (not the
-## save file: it belongs to the computer, not the farm). The autotest always runs on High.
-const GFX_NAMES := ["Low", "Medium", "High"]
+## Low / Medium / High / Ultra, set in Settings and kept in user://settings.cfg (not the
+## save file: it belongs to the computer, not the farm). Ultra is everything (the High of before
+## 2026-11-17); High keeps Ultra's look (light bounce, reflections, haze) at a lower cost. The
+## autotest always runs on Ultra.
+const GFX_NAMES := ["Low", "Medium", "High", "Ultra"]
+const GFX_HIGH := 2
+const GFX_ULTRA := 3
 const SETTINGS_PATH := "user://settings.cfg"
-var gfx := 2
+var gfx := GFX_ULTRA
 var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.gd)
 ## Per graphics level: how many of the nearest lit lamps cast real shadows.
-const LAMP_SHADOWS := [0, 2, 4]
-const GRASS_THIN := [0.4, 0.4, 0.45] # grass.gd: the share of blades left at the end of the range
+const LAMP_SHADOWS := [0, 1, 2, 4]
+## Per graphics level: how far from the camera a lamp's shadow fades out (Catalog.omni's 40 m on Ultra).
+## Measured from the camera, which sits about 23 m from Nora: 30 keeps the shadow of a lamp beside her
+## at the usual zoom and drops it sooner when zoomed out.
+const LAMP_SHADOW_FADE := [20.0, 30.0, 35.0, 40.0]
+## grass.gd per level: the share of blades drawn, how far from the camera they go, and the share
+## left at the end of that range
+const GRASS_FRAC := [0.45, 0.75, 1.0, 1.0]
+const GRASS_RANGE := [30.0, 32.0, 40.0, 46.0]
+const GRASS_THIN := [0.4, 0.4, 0.4, 0.45]
+## How far the sun's shadow reaches at most, per level (it follows the zoom below that).
+const SUN_SHADOW_REACH := [40.0, 55.0, 62.0, 70.0]
 const RECOMMENDED_APPLE := 1 # Medium: on an M4 MacBook Air at 2560x1378 High runs 19-29 fps, Medium 30-50 (--only=perf)
 
 
@@ -629,8 +643,9 @@ var render_scale := 1.0
 const RENDER_SCALE_MIN := 0.5
 const RENDER_SCALE_MAX := 1.5
 ## Settings saved before the graphics pass of 2026-11-16 (version 1) start once on the computer's
-## recommended level, since High then cost three times what it does now.
-const GFX_SETTINGS_VERSION := 2
+## recommended level, since High then cost three times what it does now. Version 2 had three levels:
+## its High (2) is read as the new High, the lighter one; Ultra has to be picked.
+const GFX_SETTINGS_VERSION := 3
 
 
 ## The level a computer starts on before the player picks one: what --only=perf shows holds
@@ -647,16 +662,16 @@ static func recommended_graphics(gpu: String, cores: int) -> int:
 		return 0
 	if cores <= 4:
 		return 1
-	return 2
+	return GFX_HIGH
 
 
 func _load_graphics() -> void:
-	gfx = default_graphics() if _autotest_dir == "" else 2 # the autotest always runs on High
+	gfx = default_graphics() if _autotest_dir == "" else GFX_ULTRA # the autotest always runs on Ultra
 	if _autotest_dir == "":
 		var cfg := ConfigFile.new()
 		if cfg.load(SETTINGS_PATH) == OK:
-			if int(cfg.get_value("graphics", "version", 1)) >= GFX_SETTINGS_VERSION:
-				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, 2)
+			if int(cfg.get_value("graphics", "version", 1)) >= 2:
+				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, GFX_NAMES.size() - 1)
 			render_scale = clampf(float(cfg.get_value("graphics", "render_scale", 1.0)), RENDER_SCALE_MIN, RENDER_SCALE_MAX)
 	hud.set_render_scale(render_scale)
 	apply_graphics()
@@ -674,7 +689,7 @@ func _save_graphics() -> void:
 
 
 func _cycle_graphics() -> void:
-	gfx = (gfx + 2) % 3 # High → Medium → Low → High
+	gfx = (gfx + GFX_NAMES.size() - 1) % GFX_NAMES.size() # Ultra → High → Medium → Low → Ultra
 	apply_graphics()
 	_save_graphics()
 	hud.show_toast("Graphics: %s" % GFX_NAMES[gfx])
@@ -688,7 +703,8 @@ func set_render_scale(v: float) -> void:
 
 func apply_graphics() -> void:
 	var med := gfx >= 1
-	var hi := gfx == 2
+	var hi := gfx >= GFX_HIGH # High and Ultra: the full look
+	var ultra := gfx == GFX_ULTRA # everything at full cost
 	env.ssao_enabled = med # contact shading
 	env.ssil_enabled = hi # light bouncing off nearby surfaces
 	env.ssr_enabled = hi # reflections in the pond and wet ground
@@ -698,11 +714,20 @@ func apply_graphics() -> void:
 	# keeps the extra samples cheap.
 	# (High had the ultra filter, 5: 4-5 ms a frame on a MacBook Air for edges you can't tell apart)
 	RenderingServer.directional_soft_shadow_filter_set_quality(4)
-	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3, 3][gfx])
 	Catalog.lamp_shadows = med
 	light_budget.max_shadows = LAMP_SHADOWS[gfx] # only the nearest lit lamps cast shadows (candles never)
+	light_budget.fade = LAMP_SHADOW_FADE[gfx]
+	# the sun's shadow on Low and Medium (Alex, 2026-11-17: "keep high as it is", now Ultra): two splits
+	# and a 2048 map instead of four and 4096, and shut shops' lights left off (interiors.gd). High
+	# keeps four splits and the big map but reaches less far (SUN_SHADOW_REACH). Below Ultra a shop's
+	# furnishings cast no shadow while its roof is on.
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if hi else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	RenderingServer.directional_shadow_atlas_set_size(4096 if hi else 2048, true)
+	Interiors.no_casters = not ultra
+	Interiors.lights_off = not hi
 	light_budget.update(get_tree(), cam_target, 0.0, true)
-	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx], GRASS_THIN[gfx])
+	grass.set_quality(GRASS_FRAC[gfx], GRASS_RANGE[gfx], GRASS_THIN[gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
@@ -1539,7 +1564,7 @@ func _update_camera(delta: float) -> void:
 	if _photo_dof.is_empty():
 		cam_attr.dof_blur_far_enabled = near
 	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
-	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, [40.0, 55.0, 70.0][gfx])
+	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, SUN_SHADOW_REACH[gfx])
 	if near and _photo_dof.is_empty():
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
@@ -3532,29 +3557,70 @@ func _wait(s: float) -> void:
 
 ## The graphics setting turns the expensive effects off and back on, and the autotest never
 ## writes the player's settings file.
+## The walk-in shops she isn't in whose doors are shut (for the graphics checks).
+func _shut_shops() -> Array:
+	var out := []
+	for sh in Interiors.shops.values():
+		if is_instance_valid(sh.node) and sh.node.visible and not sh.inside and sh.open <= 0.0 and not sh.all_lights.is_empty():
+			out.append(sh)
+	return out
+
+
+## A shut shop's state: its lights on or off, and its furnishings casting their own shadows or none.
+func _shop_state(sh: Interiors.Shop, lights_on: bool, casting: bool) -> bool:
+	for l in sh.all_lights:
+		if is_instance_valid(l) and (l as Light3D).visible != lights_on:
+			return false
+	for e in sh.casters:
+		if not is_instance_valid(e[0]):
+			continue
+		var want: int = e[1] if casting else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (e[0] as GeometryInstance3D).cast_shadow != want:
+			return false
+	return true
+
+
 func _graphics_checks() -> void:
-	var blades_hi: int = grass.drawn_blades()
-	var scale_hi := get_viewport().scaling_3d_scale
+	var blades_ultra: int = grass.drawn_blades()
+	var scale_ultra := get_viewport().scaling_3d_scale
 	var had_cfg := FileAccess.file_exists(SETTINGS_PATH)
+	var lamps: Array = find_children("*", "OmniLight3D", true, false)
+	var shut := _shut_shops()
+	_cycle_graphics() # High
+	await _wait(0.3)
+	_check("High graphics: Ultra's look (light bounce, reflections, haze, the sun's shadow in 4 splits) for less: %d lamp shadows at most, grass to %d m, 3D at %d%% (Ultra %d%%), and %d shut shops keep their lights with their furnishings casting nothing under the roof" % [LAMP_SHADOWS[GFX_HIGH], int(GRASS_RANGE[GFX_HIGH]), roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100), shut.size()],
+		gfx == GFX_HIGH and env.sdfgi_enabled and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled
+		and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[GFX_HIGH] and get_viewport().scaling_3d_scale <= scale_ultra
+		and not shut.is_empty() and shut.all(func(sh) -> bool: return _shop_state(sh, true, false))
+		and hud.graphics_btn.text == "Graphics: High")
 	_cycle_graphics() # Medium
+	await _wait(0.3)
+	_check("Medium graphics: the sun's shadow in 2 splits, %d lamp shadow at most (fading by %d m), and %d shops she isn't in with their door shut have their lights off and their furnishings casting nothing" % [LAMP_SHADOWS[1], int(LAMP_SHADOW_FADE[1]), shut.size()],
+		gfx == 1 and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS and not env.sdfgi_enabled
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[1]
+		and shut.all(func(sh) -> bool: return _shop_state(sh, false, false)))
 	_cycle_graphics() # Low
 	await _wait(0.3)
-	var lamps: Array = find_children("*", "OmniLight3D", true, false)
-	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (High %d%%)" % [grass.drawn_blades(), blades_hi, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_hi * 100)],
+	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (Ultra %d%%)" % [grass.drawn_blades(), blades_ultra, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100)],
 		gfx == 0 and not env.ssao_enabled and not env.ssil_enabled and not env.ssr_enabled and not env.volumetric_fog_enabled
-		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
-		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
-	_cycle_graphics() # High
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_ultra * 0.5
+		and get_viewport().scaling_3d_scale <= scale_ultra and hud.graphics_btn.text == "Graphics: Low")
+	_cycle_graphics() # Ultra
 	await _wait(0.3)
 	var flush := coplanar_faces()
 	for f in flush:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
 	var casting: int = light_budget.casting(get_tree())
-	_check("back on High: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[2]],
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[2]
+	_check("back on Ultra: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[GFX_ULTRA]],
+		gfx == GFX_ULTRA and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[GFX_ULTRA]
 		and lamps.all(func(l): return not is_instance_valid(l) or not l.has_meta("no_shadow") or not l.shadow_enabled)
-		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
+		and grass.drawn_blades() == blades_ultra and FileAccess.file_exists(SETTINGS_PATH) == had_cfg
+		and hud.graphics_btn.text == "Graphics: Ultra")
+	_check("Ultra as High was: the sun's shadow in 4 splits, and every shop's lights on and furnishings casting their shadows again",
+		sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS and not Interiors.no_casters and not Interiors.lights_off
+		and shut.all(func(sh) -> bool: return _shop_state(sh, true, true)))
 
 
 func _shot(fname: String) -> void:
@@ -6017,7 +6083,7 @@ func _light_checks() -> void:
 			missing.append(id)
 		inst.free()
 	_check("the %d baked props carry their Cycles light bake (ambient occlusion on UV2)%s" % [Lighting.BAKED.size(), "" if missing.is_empty() else ": missing " + ", ".join(missing)], missing.is_empty())
-	_check("SDFGI is on at High graphics", gfx == 2 and env.sdfgi_enabled)
+	_check("SDFGI is on at Ultra graphics", gfx == GFX_ULTRA and env.sdfgi_enabled)
 	Lighting.SkyBodies.clouds_override = 0.15 # a fair sky for the pictures, whatever the day's clouds (_sky_checks puts it back)
 	var hours := [["dawn", 6.6], ["noon", 12.5], ["dusk", 18.7]]
 	var mist_at := {}
@@ -6895,6 +6961,26 @@ func _flower_checks() -> void:
 	await _shot("62_grass.png")
 	var blades: int = grass.drawn_blades()
 	_check("flowers: the grass still draws the same blades (%d)" % blades, blades > 10000)
+	# the blade is 7 shared points, and the patches come from the bake (grass.gd _bake_patches): the same
+	# view worked out per blade is saved beside it to compare
+	var bm: ArrayMesh = grass._blade_mesh
+	var arrs := bm.surface_get_arrays(0)
+	var pts: int = (arrs[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var idx: int = (arrs[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arrs[Mesh.ARRAY_INDEX] != null else 0
+	var baked: bool = grass.blade_mat.get_shader_parameter("patch_baked") == true
+	var pimg: Image = grass.patch_vp.get_texture().get_image()
+	var lo := 1.0
+	var hi := 0.0
+	for i in 64:
+		var c := pimg.get_pixel(i * 37 % pimg.get_width(), i * 53 % pimg.get_height())
+		lo = minf(lo, c.r)
+		hi = maxf(hi, c.r)
+	grass.blade_mat.set_shader_parameter("patch_baked", false)
+	await _wait(0.3)
+	await _shot("62_grass_unbaked.png")
+	grass.blade_mat.set_shader_parameter("patch_baked", true)
+	_check("grass: each blade is %d shared points (%d indices), and its light and dark patches come from the %dx%d bake (drifts %.2f..%.2f)" % [pts, idx, pimg.get_width(), pimg.get_height(), lo, hi],
+		pts == 7 and idx == 15 and baked and hi - lo > 0.3)
 	for f in set_out:
 		f.queue_free()
 	_set_cam_lock(true)

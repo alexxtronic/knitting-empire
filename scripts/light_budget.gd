@@ -14,6 +14,7 @@ const STICKY := 0.8 # a light casting now counts as this much of its distance
 const EVERY := 0.2 # seconds between choices
 
 var max_shadows := 6
+var fade := 40.0 # metres from the camera a lamp's shadow fades out by (distance_fade_shadow; Catalog.omni's 40 on Ultra)
 var enabled := true # false: every lamp casts, as before (the frame-rate probe's comparison)
 var _t := 0.0
 
@@ -29,6 +30,8 @@ func update(tree: SceneTree, centre: Vector3, delta: float, now := false) -> voi
 		var l := n as OmniLight3D
 		if l == null or l.get_viewport() != main_vp: # the catalogue's thumbnails light their own pieces
 			continue
+		if l.distance_fade_shadow != fade:
+			l.distance_fade_shadow = fade
 		if not enabled:
 			l.shadow_enabled = max_shadows > 0 and not l.has_meta("no_shadow")
 			continue

@@ -13,7 +13,7 @@ extends RefCounted
 ## the farm) at the start and the end shows how loaded the machine was. Compare runs only when the
 ## calibration rows agree.
 ##
-## Options after --only=perf: --perflevels=low,medium,high (default: all three),
+## Options after --only=perf: --perflevels=low,medium,high,ultra (default: all four),
 ## --perfspots=farm_day,town_night,... (default: all), and --perfprobe, which at each spot times
 ## each effect and each of the frame-rate pass's changes by switching it off and on again in turn
 ## (back to back, so the machine's load hits both halves alike); --perftoggles=a,b keeps only those.
@@ -63,14 +63,14 @@ func run(m: Node) -> void:
 	Game.fast_clock = false
 	Game.time_running = false
 	main.hud.visible = true
-	var levels: Array = [0, 1, 2]
+	var levels: Array = [0, 1, 2, 3]
 	var probe := false
 	var only: PackedStringArray = []
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--perflevels="):
 			levels = []
 			for w in a.substr(13).split(","):
-				var i: int = ["low", "medium", "high"].find(w.strip_edges().to_lower())
+				var i: int = ["low", "medium", "high", "ultra"].find(w.strip_edges().to_lower())
 				if i >= 0:
 					levels.append(i)
 		if a == "--perfprobe":
@@ -115,14 +115,14 @@ func run(m: Node) -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 
 
-## --perfsoak=MINUTES: play on High for that long the way a player does (the clock running, the
+## --perfsoak=MINUTES: play on High (main.GFX_HIGH) for that long the way a player does (the clock running, the
 ## town on its rounds, Nora walking between the farm and the square and back) and print a row
 ## every half minute: frame time and what the frame holds (nodes, objects drawn, draws, memory).
 ## Every two minutes it also times the fixed calibration scene (Low at the farm at 11): if that
 ## slows down too, the computer is slowing (a fanless MacBook Air throttles as it warms up); if it
 ## holds while the live rows climb, something in the game is piling up.
 func soak(minutes: float) -> void:
-	_set_level(2)
+	_set_level(main.GFX_HIGH)
 	Game.hour = 7.0
 	Game.time_running = true
 	main.player.position = Vector3(6.0, 0.0, 5.0)
@@ -142,7 +142,7 @@ func soak(minutes: float) -> void:
 			var keep_hour: float = Game.hour
 			Game.time_running = false
 			await _calibrate("%.1f min" % mins)
-			_set_level(2)
+			_set_level(main.GFX_HIGH)
 			main.player.position = keep_pos
 			Game.hour = keep_hour
 			Game.time_running = true
@@ -269,7 +269,7 @@ func _probe(spot: Array) -> void:
 			for c in main.grass._chunks:
 				(c as Node3D).visible = on,
 		"grass_thinning": func(on: bool) -> void:
-			main.grass.set_quality([0.45, 0.75, 1.0][main.gfx], [30.0, 40.0, 46.0][main.gfx], main.GRASS_THIN[main.gfx] if on else 1.0),
+			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx] if on else 1.0),
 		"lamp_shadows_4v2": func(on: bool) -> void:
 			main.light_budget.max_shadows = 4 if on else 2
 			main.light_budget.update(main.get_tree(), main.cam_target, 0.0, true),
@@ -288,7 +288,8 @@ func _probe(spot: Array) -> void:
 		"fog_64": func(on: bool) -> void:
 			RenderingServer.environment_set_volumetric_fog_volume_size(64 if on else 48, 64 if on else 48),
 		"grass_full_density": func(on: bool) -> void:
-			main.grass.set_quality(1.0 if on else 0.75, [30.0, 40.0, 46.0][main.gfx], main.GRASS_THIN[main.gfx]),
+			main.grass.set_quality(1.0 if on else 0.75, main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx]),
+		"grass_patch_bake": func(on: bool) -> void: main.grass.blade_mat.set_shader_parameter("patch_baked", on),
 		"3d_res_x0.7": func(on: bool) -> void:
 			main.render_scale = 1.0 if on else 0.7
 			main._fit_3d_resolution(),

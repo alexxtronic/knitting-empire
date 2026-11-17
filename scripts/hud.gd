@@ -1924,8 +1924,8 @@ func _build_settings() -> void:
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
 	vb.add_child(_label("Settings", 24, GOLD))
-	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
-	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
+	graphics_btn = _button("Graphics: Ultra", func(): graphics_pressed.emit())
+	graphics_btn.tooltip_text = "Ultra: every effect at full cost. High: the same look for less. Medium: no light bounce or reflections, less grass. Low: for slower computers."
 	graphics_btn.custom_minimum_size = Vector2(200, 36)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
