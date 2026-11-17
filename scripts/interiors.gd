@@ -46,6 +46,9 @@ class Shop:
 	var loft_grid: AStarGrid2D
 	var loft_light: OmniLight3D
 	var up := false # Nora is upstairs (or on the top half of the stairs)
+	var shown := -1 # which floor's hitboxes take clicks: 1 the loft's, 0 the room's (-1 not yet set)
+	var down_bodies: Array = [] # [CollisionObject3D, its layer]: the room's furnishings'
+	var up_bodies: Array = [] # the loft's
 
 static var shops := {} # building id -> Shop
 static var lofts: Array = [] # the shops with an upstairs (the café)
@@ -236,10 +239,21 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 		(s.parts["roof"] as Node3D).visible = (not s.inside or roof_on) and not editing # first person keeps it on
 		if s.parts.has("loft"): # the café's upstairs goes with the roof while she's downstairs
 			s.up = s.inside and who.y - s.node.global_position.y > s.loft_y * 0.5
-			var show := (s.up or not s.inside or roof_on) and not editing
+			# in the world editor, the floor she's on: its pieces are edited from up there
+			var show := (s.up or not s.inside or roof_on) and (not editing or s.up)
 			(s.parts["loft"] as Node3D).visible = show
 			if s.loft_root != null:
 				s.loft_root.visible = show
+			# only the floor she's on takes clicks: no seat through the floor, none hidden overhead
+			var want := 1 if s.up else 0
+			if want != s.shown:
+				s.shown = want
+				for e in s.down_bodies:
+					if is_instance_valid(e[0]):
+						(e[0] as CollisionObject3D).collision_layer = 0 if s.up else int(e[1])
+				for e in s.up_bodies:
+					if is_instance_valid(e[0]):
+						(e[0] as CollisionObject3D).collision_layer = int(e[1]) if s.up else 0
 			if s.loft_light != null:
 				s.loft_light.light_energy = (0.3 + 0.8 * night) if s.up or roof_on else 0.0
 		_economise(s)
@@ -493,6 +507,13 @@ static func _build_loft(s: Shop, wood: bool) -> Array:
 						break
 			g.set_point_solid(Vector2i(x, z), not ok)
 	s.loft_grid = g
+	var furn: Node = s.node.find_child("Furnishings", false, false)
+	for pair in [[furn, s.down_bodies], [s.loft_root, s.up_bodies]]:
+		if pair[0] == null:
+			continue
+		for c in (pair[0] as Node).find_children("*", "CollisionObject3D", true, false):
+			(pair[1] as Array).append([c, (c as CollisionObject3D).collision_layer])
+	StairSpot.make(s)
 	lofts = lofts.filter(func(o: Shop) -> bool: return o.id != s.id and is_instance_valid(o.node))
 	lofts.append(s)
 	var under: Array = []
@@ -599,7 +620,7 @@ static func loft_route(from: Vector3, to: Vector3, ground: Callable) -> Variant:
 	var climb := [Vector2(sx, float(st["low_z"]) + 0.25), Vector2(sx, float(st["high_z"])), top]
 	var out: Array = []
 	var on_stairs := _on_stairs(s, from)
-	if up_from and up_to:
+	if up_from and up_to and not on_stairs:
 		for v in _loft_path(s, Vector2(qf.x, qf.z), Vector2(qt.x, qt.z)):
 			out.append(w.call(v))
 		return out
@@ -686,4 +707,65 @@ static func loft_pick(who: Vector3, from: Vector3, dir: Vector3) -> Variant:
 	if not upstairs(who):
 		return null
 	var s := loft_shop(who)
-	return Plane(Vector3.UP, s.node.global_position.y + s.loft_y).intersects_ray(from, dir)
+	var hit: Variant = Plane(Vector3.UP, s.node.global_position.y + s.loft_y).intersects_ray(from, dir)
+	if hit == null:
+		return null
+	var q: Vector3 = s.node.global_transform.affine_inverse() * (hit as Vector3)
+	if not s.room.has_point(Vector2(q.x, q.z)) or (s.loft.has("stairwell") and _rect(s.loft["stairwell"]).has_point(Vector2(q.x, q.z))):
+		return null # off the loft's floor: the ground beyond (or the stairs' own hitbox)
+	return hit
+
+
+## The flight up to the loft, as something to click: "Go upstairs" from below, "Go downstairs" from
+## above (it walks her to the top or the foot; main._find_path does the rest).
+class StairSpot extends Node3D:
+	static var main: Node
+	var shop: Shop
+
+	static func make(s: Shop) -> StairSpot:
+		var st: Dictionary = s.loft["stairs"]
+		var la: Array = st["lane"]
+		var lane := Rect2(float(la[0]), float(la[1]), float(la[2]), float(la[3]))
+		var sp := StairSpot.new()
+		sp.name = "StairSpot"
+		sp.shop = s
+		s.node.add_child(sp)
+		var body := StaticBody3D.new()
+		body.collision_layer = 2
+		body.collision_mask = 0
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(lane.size.x, s.loft_y + 1.0, lane.size.y)
+		cs.shape = bs
+		cs.position = Vector3(lane.get_center().x, (s.loft_y + 1.0) * 0.5, lane.get_center().y)
+		body.add_child(cs)
+		body.set_meta("target", sp)
+		sp.add_child(body)
+		return sp
+
+	func display_name() -> String:
+		return "Stairs"
+
+	func ke_actions() -> Array:
+		if main == null:
+			return []
+		if _up():
+			return [{"id": "stairs_down", "label": "Go downstairs", "enabled": true}]
+		return [{"id": "stairs_up", "label": "Go upstairs", "enabled": true}]
+
+	func _up() -> bool:
+		return main != null and main.player.position.y - shop.node.global_position.y > shop.loft_y * 0.5
+
+	func ke_action(_id: String) -> void:
+		pass # main walked her there already (stand_point)
+
+	## Where "Go upstairs" (or down) takes her, in the world: a step off the top, or the foot.
+	func target(going_up: bool) -> Vector3:
+		var st: Dictionary = shop.loft["stairs"]
+		var v: Vector2 = Data.vec2(st["top"] if going_up else st["foot"])
+		var p := shop.node.global_transform * Vector3(v.x, shop.loft_y if going_up else 0.0, v.y + (-0.35 if going_up else 0.0))
+		return p
+
+	## Where she walks to for it (main.gd _stand_point): straight to its target.
+	func stand_point() -> Vector3:
+		return target(not _up())

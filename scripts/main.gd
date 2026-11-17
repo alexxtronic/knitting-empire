@@ -365,6 +365,7 @@ func _ready() -> void:
 	store.main = self
 	add_child(store)
 	Interiors.WorkSpot.main = self
+	Interiors.StairSpot.main = self
 	player.steer_ok = func(q: Vector3) -> bool:
 		var lo: Variant = Interiors.steer_ok(player.position, q) # in the café: its stairs and loft
 		return lo if lo != null else _walkable(_cell(q))
@@ -6375,7 +6376,6 @@ func _cafe_loft_checks(s, door_in: Vector3) -> void:
 	if sofa.is_empty():
 		return
 	sofa = sofa[0]
-	var sp: Vector3 = sofa.stand_point()
 	player.walk([])
 	player.position = Vector3(door_in.x, 0, door_in.z)
 	await _wait(0.3)
@@ -6383,11 +6383,14 @@ func _cafe_loft_checks(s, door_in: Vector3) -> void:
 		s.inside and not s.up and not (s.parts["loft"] as Node3D).visible and not s.loft_root.visible)
 	cam_target = s.node.global_transform * Vector3(3.0, 1.5, 0.0)
 	cam_dist = 13.0
-	player.walk(_find_path(player.position, sp))
+	var stairs: Node = s.node.find_child("StairSpot", false, false)
+	var labels: Array = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_up")
 	var t := 0.0
 	var top_y := 0.0
 	var mid_shot := false
-	while not player.path.is_empty() and t < 40.0:
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
 		await _wait(0.1)
 		t += 0.1
 		top_y = maxf(top_y, player.position.y - by)
@@ -6396,26 +6399,47 @@ func _cafe_loft_checks(s, door_in: Vector3) -> void:
 			await _shot("56_cafe_stairs.png")
 	await _wait(0.4)
 	var dy: float = player.position.y - by - s.loft_y
-	var d: float = Vector2(player.position.x - sp.x, player.position.z - sp.z).length()
-	_check("she walks from the door up the stairs to a sofa upstairs (%.1f s, %.2f m from its spot, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [t, d, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
-		t < 40.0 and d < 0.6 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	_check("the stairs say %s from below, and up them she goes (%.1f s, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [str(labels), t, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
+		labels == ["Go upstairs"] and t < 40.0 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	# sits on a sofa up there with a book, and gets up again on the loft's floor
+	_do_action(sofa, "read_book")
+	t = 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.5)
+	var seat_dy: float = player.position.y - (sofa.seat_point() as Vector3).y
 	cam_target = player.position + Vector3(0, 0.5, 0)
 	cam_dist = 11.0
 	await _wait(1.2)
 	await _shot("56_cafe_loft.png")
+	_check("she sits down on a sofa upstairs with a book (%.1f s, %.2f m off its seat, reading %s)" % [t, seat_dy, books_ui.visible], books_ui.visible and player.busy and absf(seat_dy) < 0.05)
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.6)
+	dy = player.position.y - by - s.loft_y
+	_check("and gets up on the loft's floor (%.2f m off it, sitting %s)" % [dy, player.busy], not player.busy and absf(dy) < 0.05)
 	# a click on the loft's floor lands up there
 	var mid: Vector3 = s.node.global_transform * Vector3(-1.0, s.loft_y, -2.0)
 	var hit: Variant = _ground_point(cam.unproject_position(mid))
 	_check("a click upstairs lands on the loft's floor (%s)" % str(hit), hit != null and absf((hit as Vector3).y - (by + s.loft_y)) < 0.01 and (hit as Vector3).distance_to(mid) < 0.2)
-	# and back down to the door
-	player.walk(_find_path(player.position, door_in))
+	# down by the stairs, then to the door
+	labels = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_down")
 	t = 0.0
-	while not player.path.is_empty() and t < 40.0:
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
 		await _wait(0.1)
 		t += 0.1
+	await _wait(0.3)
+	var foot_y: float = player.position.y - by
+	player.walk(_find_path(player.position, door_in))
+	var t2 := 0.0
+	while not player.path.is_empty() and t2 < 20.0:
+		await _wait(0.1)
+		t2 += 0.1
 	await _wait(0.4)
-	_check("and back down the stairs to the door (%.1f s, %.2f m up, upstairs %s, %.2f m from the door)" % [t, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
-		t < 40.0 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+	_check("from above the stairs say %s, and down she goes and out to the door (%.1f + %.1f s, %.2f m up at the foot, %.2f m now, upstairs %s, %.2f m from the door)" % [str(labels), t, t2, foot_y, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
+		labels == ["Go downstairs"] and t < 40.0 and absf(foot_y) < 0.05 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
 
 
 func _cafe_checks() -> void:
