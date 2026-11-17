@@ -38,8 +38,8 @@ for p in me.polygons:
         pts=[(uv[l].uv[0]*W, uv[l].uv[1]*H) for l in p.loop_indices]
         for k in range(1,len(pts)-1): tri([pts[0],pts[k],pts[k+1]])
 rgb=px[...,:3]; lum=rgb.mean(2); med=np.median(lum[mask])
-red=np.array([0.62,0.07,0.08])
-rgb[mask]=np.clip(red[None,:]*(lum[mask]/med)[:,None],0,1)
+red=np.array([0.50,0.05,0.06])
+rgb[mask]=np.clip(red[None,:]*(0.65+0.35*np.clip(lum[mask]/med,0.5,1.5))[:,None],0,1)  # an even lacquer, a little of the bake's shading kept
 px[...,:3]=rgb; img.pixels.foreach_set(px.ravel()); img.pack()
 if write: bpy.ops.wm.save_mainfile()
 bpy.ops.export_scene.gltf(filepath=os.path.join(proj,"assets",cid+"_eyes.glb") if write else a[a.index("--out")+1], export_format="GLB", export_apply=False,
