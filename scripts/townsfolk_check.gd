@@ -58,7 +58,7 @@ func run(main: Node) -> void:
 	var pos0: Vector3 = m.player.position
 	m._set_cam_lock(false)
 
-	# the data: Alex's four lines and ten more, eight people
+	# the data: Alex's four lines and ten more, the people in the file
 	var data := Data.load_json("townsfolk")
 	var lines: Array = data.get("lines", []).map(func(l): return str(l["text"]))
 	var alex := ["I hope my wife forgives me", "Don't you have a job?", "do I know you?", "STRANGER DANGER!"]

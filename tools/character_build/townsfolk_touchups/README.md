@@ -10,7 +10,5 @@ rig's blend, so it loses these: run them again after it.
 - `uvfix.py`: gives the filled faces the skin's UVs (Marcus picked up a stripe of his shirt).
 - `handfix.py -- "$PWD" tf_marcus_tripo --th 0.65`: paints dark texels on the hands with the hand's skin (a mark on
   the back of Marcus's hand).
-- `redglass.py -- "$PWD" tf_edna_tripo --rin 0.66 --rout 1.04 --ax 0.045 --az 0.05 --dx 0.009 --dz -0.007 --front 0.003 --write`:
-  Edna's glasses red (Alex). The frames are raised rings round her eye bones; their texels are tinted, keeping the shading.
 
 `Blender -b <blend> -P tools/character_build/townsfolk_touchups/<script>.py -- "$PWD" tf_<id>_tripo [...]`

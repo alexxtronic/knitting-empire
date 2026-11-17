@@ -77,7 +77,6 @@ EYES = {
     "tf_hank_tripo": dict(mid=-5.3, dx=49.0, z=1588.25, a=24.0, up=17.5, lo=17.5, p=0.7, lash=2.0, iris=12.0),
     "tf_pip_tripo": dict(mid=9.4, dx=68.1, z=1532.0, a=38.0, up=30.5, lo=30.5, p=0.55, lash=3.0, iris=20.0),
     "tf_lily_tripo": dict(mid=6.6, dx=72.2, z=1387.0, a=39.0, up=36.5, lo=36.5, p=0.55, lash=3.0, iris=22.0),
-    "tf_edna_tripo": dict(mid=-3.75, dx=50.6, z=1437.0, a=20.0, up=19.5, lo=19.5, p=0.6, lash=2.0, iris=11.0),
 }
 DEFAULTS = dict(tilt=0.0, k_up=0.0, k_lo=0.0, p=0.85, lash=1.0, iris=0.0, rim=2.0, R=0.0, loose=0, reach=16.0)
 SPEC = None
