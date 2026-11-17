@@ -697,20 +697,35 @@ def roof(M):
         K.uv_box(cl, 0.6, grain="y")
         # an arched (barrel) roof, tiled along it, with a trim board round its front (Alex,
         # 2026-11-16: the rounded hoods with a ball on top "look ugly fix them to be arches")
-        K.arch_hood("dormer_hood", 0.7, 0.42, dd + 0.05, yd - 0.12, zt - 0.3, x, M["roof_arch"], M["trim"])
+        hood = K.arch_hood("dormer_hood", 0.7, 0.42, dd + 0.05, yd - 0.12, zt - 0.3, x, M["roof_arch"], M["trim"])
+        # each line of the barrel ends where it meets the main slope, so its back never hangs into the loft
+        for vt in hood.data.vertices:
+            if vt.co.y > yd:
+                vt.co.y = min(vt.co.y, cy - (RIDGE - (spring + vt.co.z)) / slope + 0.06)
+        hood.data.update()
         holes.append(K.box("cut", (0.99, ys + 0.02 - (yd - 0.3), spring - (zb - 0.45)), (x, (yd - 0.3 + ys + 0.02) / 2, (spring + zb - 0.45) / 2), M["trim"], bevel=0))
     # the cross-gable's space opens into the loft too: a nook as wide as its round window, walled on
     # each side and ceiled in two slopes just under its roof, back until it meets the loft's ceiling
     gw, gc = 0.9, 5.0  # the nook's half width, and its walls' height there
-    ga_ = G_APEX - 0.32  # its ceiling's ridge, under the cross-gable's own
+    # its ceiling's ridge, under the cross-gable's own and just under the loft's (higher, the nook's
+    # ceiling ran on past the main ridge and hung down through the back slope's planks)
+    ga_ = min(G_APEX - 0.32, RIDGE - 0.24 - 0.05)
     gy0 = FRONT + 0.02
 
     def meet(h):  # where the loft's ceiling planks (0.24 under the slope) reach height h
         return FRONT + (h + 0.24 - ROOF_WALL) / slope
     sec = [(G_CX - gw, ROOF_EDGE - 0.6), (G_CX + gw, ROOF_EDGE - 0.6), (G_CX + gw, gc), (G_CX, ga_), (G_CX - gw, gc)]
     gy1 = cy - 0.02
-    holes.append(_mesh("cut", [(x_, gy0, z_) for x_, z_ in sec] + [(x_, gy1, z_) for x_, z_ in sec],
-                       [(0, 1, 2, 3, 4), (9, 8, 7, 6, 5)] + [(k, (k + 1) % 5, (k + 1) % 5 + 5, k + 5) for k in range(5)], M["trim"]))
+
+    def prism5(sec_):
+        return _mesh("cut", [(x_, gy0, z_) for x_, z_ in sec_] + [(x_, gy1, z_) for x_, z_ in sec_],
+                     [(0, 1, 2, 3, 4), (9, 8, 7, 6, 5)] + [(k, (k + 1) % 5, (k + 1) % 5 + 5, k + 5) for k in range(5)], M["trim"])
+    lining_holes = [prism5(sec)]
+    # the main slope opens only under the cross-gable's own roof (just inside its underside), so the
+    # gap between the nook and that roof is never open to the sky
+    ge = G_HALF + 0.15 - 0.3
+    slope_holes = [prism5([(G_CX - ge, ROOF_EDGE - 0.6), (G_CX + ge, ROOF_EDGE - 0.6), (G_CX + ge, ROOF_EDGE + 0.1),
+                           (G_CX, G_APEX - 0.22), (G_CX - ge, ROOF_EDGE + 0.1)])]
     for sx in (-1, 1):
         xw = G_CX + sx * gw
         wall = prism_yz("gable_nook_wall", [(gy0, ROOF_WALL - 0.3), (gy0, gc + 0.02), (meet(gc) + 0.05, gc + 0.02)], xw, xw + sx * 0.06, M["lining"])
@@ -739,15 +754,15 @@ def roof(M):
         K.uv_box(ln, 0.6, grain="y")
         if sy < 0:
             slopes["lining"] = ln
-    for target in (slopes[-1], slopes["lining"]):
-        for c in holes:
+    for target, extra in ((slopes[-1], slope_holes), (slopes["lining"], lining_holes)):
+        for c in holes + extra:
             m = target.modifiers.new("hole", "BOOLEAN")
             m.operation = "DIFFERENCE"
             m.solver = "EXACT"
             m.material_mode = "TRANSFER"
             m.object = c
         K.apply_mods(target)
-    for c in holes:
+    for c in holes + slope_holes + lining_holes:
         bpy.data.objects.remove(c)
     # the chimney (x 985..1135), stone with a cream brick top
     # over the fireplace inside, on the left wall (data/interiors.json "cafe": Godot x -4.9, z -3.1)

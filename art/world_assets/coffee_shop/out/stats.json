@@ -131,7 +131,7 @@
       ]
     },
     "roof": {
-      "triangles": 8632,
+      "triangles": 8628,
       "materials": [
         "cafe_trim",
         "cafe_roof",
@@ -146,6 +146,6 @@
       ]
     }
   },
-  "triangles": 73506,
-  "glb_bytes": 6771832
+  "triangles": 73502,
+  "glb_bytes": 6771644
 }
