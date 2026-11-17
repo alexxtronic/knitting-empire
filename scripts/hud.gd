@@ -22,6 +22,7 @@ signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
 signal cinematic_pressed # Menu > Cinematic camera (cinematic.gd)
 signal first_person_pressed # Menu > First person (first_person.gd)
+signal eat_pressed(item: String) # a food in her hand clicked (or its number key pressed) again: main.gd eat_item()
 signal wardrobe_pressed # Menu > Wardrobe (main.gd's wardrobe_panel.gd)
 signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
@@ -642,6 +643,7 @@ class Slot extends Button:
 		"lantern": ["Lantern", Color(0.98, 0.76, 0.36)],
 		"turnip_seeds": ["Turnip seeds", Color(0.78, 0.66, 0.86)],
 		"pumpkin_seeds": ["Pumpkin seeds", Color(0.95, 0.8, 0.55)],
+		"pastry": ["Pastry", Color(0.93, 0.7, 0.38)], # from Heart Bakery, eaten from her hand (EDIBLE)
 		# tools: a third entry says what a click does with it in her hand
 		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "right-click open ground on the farm and pick Dig bed"],
 		"watering_can": ["Watering can", Color(0.45, 0.5, 0.6), "click a growing crop to water it"],
@@ -650,6 +652,8 @@ class Slot extends Button:
 		"axe": ["Axe", Color(0.55, 0.4, 0.3), "click a tree on the farm to fell it for wood"],
 		"scythe": ["Scythe", Color(0.5, 0.55, 0.5), "click long grass to cut hay"],
 	}
+	## What she can eat straight from her hand, and how she's told so.
+	const EDIBLE := {"pastry": "click it again in your hand (or press its key again) to eat it"}
 	static var _icons := {}
 	## More things she can carry, added as the game loads their data: id -> [name, colour] (the wild
 	## fibres, scripts/wildlife.gd).
@@ -691,6 +695,8 @@ class Slot extends Button:
 			tooltip_text = ""
 		elif holds_tool(id):
 			tooltip_text = "%s: %s" % [item_name(id), tool_hint(id)]
+		elif EDIBLE.has(id):
+			tooltip_text = "%s × %d: %s" % [item_name(id), n, EDIBLE[id]]
 		else:
 			tooltip_text = "%s × %d" % [item_name(id), n]
 		queue_redraw()
@@ -781,6 +787,9 @@ func toggle_bag() -> void:
 
 func _slot_clicked(i: int) -> void:
 	if not bag_panel.visible:
+		if i == hot_sel and Slot.EDIBLE.has(selected_item()):
+			eat_pressed.emit(selected_item()) # a second click on the food in her hand eats it
+			return
 		hot_sel = i # only the hotbar can be clicked with the bag shut
 		_announce_tool()
 		return
@@ -794,7 +803,11 @@ func _slot_clicked(i: int) -> void:
 
 ## Number keys 1 to 9 (main.gd): puts that hotbar slot in her hand.
 func hotbar_key(n: int) -> void:
-	hot_sel = clampi(n - 1, 0, HOTBAR - 1)
+	var slot := clampi(n - 1, 0, HOTBAR - 1)
+	if slot == hot_sel and Slot.EDIBLE.has(selected_item()):
+		eat_pressed.emit(selected_item())
+		return
+	hot_sel = slot
 	click()
 	_announce_tool()
 
@@ -804,6 +817,8 @@ func _announce_tool() -> void:
 	var id := selected_item()
 	if Slot.holds_tool(id):
 		show_toast("%s: %s." % [Slot.item_name(id), Slot.tool_hint(id)])
+	elif Slot.EDIBLE.has(id):
+		show_toast("%s: %s." % [Slot.item_name(id), Slot.EDIBLE[id]])
 
 
 ## The id of the thing in her hand ("" for an empty slot).
@@ -1266,7 +1281,7 @@ func _build_help() -> void:
 [b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.
 [b]Tools:[/b] with a tool in her hand, a click uses it. To dig a new bed, right-click open ground on her farm and pick Dig bed (never indoors). The watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
 [b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons. [b]V[/b] plays in first person, through her eyes: the mouse looks, WASD walks, a click or [b]E[/b] uses what's under the dot, [b]V[/b] or [b]Esc[/b] goes back.
-[b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Ask anyone if they're looking for a sweater and haggle over the price, or sell them to Rosa (the Yarn Barn, or her market stall in the mornings) for today's price and buy wool and sheep from her, croissants from Giorgio, coffee from Sabrina. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
+[b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Ask anyone if they're looking for a sweater and haggle over the price, or sell them to Rosa (the Yarn Barn, or her market stall in the mornings) for today's price and buy wool and sheep from her, pastries from Giorgio (they keep in your bag: click one in your hand again to eat it), coffee from Sabrina. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]Sheep pen:[/b] in the story, buy wood from Steve at Builder's Delight. [b]F[/b] builds the pen: click to lay a panel (1 wood), right-click to take one up, [b]T[/b] switches to the gate. [b]G[/b] crafts a gate from 2 wood. Walk up behind sheep and they move away from you.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
 [b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (Menu, or [b]Esc[/b]).
