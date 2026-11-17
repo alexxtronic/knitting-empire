@@ -6685,6 +6685,16 @@ func _fire_checks() -> void:
 	var sparks := fp.find_child("Sparks", false, false) as GPUParticles3D
 	_check("the fire is three living sheets of flame over glowing coals with sparks rising, and the mantel's candles burn with real flames (%d sheets, %d candle flames, sparks %s)" % [sheets.size(), candles.size(), sparks != null and sparks.emitting],
 		sheets.size() == 3 and candles.size() == 2 and sparks != null and sparks.emitting)
+	# its crackle (Catalog.fire_sound): a looping 3D sound by the fire, and one in the café's fireplace
+	await _wait(0.2)
+	var snd := fp.find_child("FireSound", false, false) as AudioStreamPlayer3D
+	var cafe_snd := 0
+	var cafe = Interiors.shops.get("cafe")
+	if cafe != null:
+		cafe_snd = cafe.node.find_children("FireSound", "AudioStreamPlayer3D", true, false).size()
+	var looped: bool = snd != null and snd.stream is AudioStreamOggVorbis and (snd.stream as AudioStreamOggVorbis).loop
+	_check("the fire crackles: a looping sound by the hearth, heard within %.0f m on the Ambience bus (playing %s, looped %s), and the café's fireplace too (%d)" % [snd.max_distance if snd else 0.0, snd != null and snd.playing, looped, cafe_snd],
+		snd != null and snd.playing and looped and snd.bus == "Ambience" and cafe_snd >= 1)
 	Game.hour = 21.5
 	player.walk([])
 	player.position = fp.global_transform * Vector3(0, 0, 2.6)
