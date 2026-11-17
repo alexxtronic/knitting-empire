@@ -1262,13 +1262,14 @@ func _triangles(el: El) -> TriangleMesh:
 
 
 ## A walk-in building's furnishings (and its roof, which is off while the editor is open) are
-## clicked as themselves, not as the building.
+## clicked as themselves, not as the building. So is the café's loft (its floor and the model's
+## `loft` part): it lies over the room below, which is edited from downstairs.
 func _belongs_to_piece(m: Node, top: Node) -> bool:
 	if top.has_meta("walk_in") and str(m.name) == "roof":
 		return true
 	var p := m
 	while p != null and p != top:
-		if p.has_meta("furnishing"):
+		if p.has_meta("furnishing") or (top.has_meta("walk_in") and (str(p.name) == "loft" or str(p.name) == "LoftFurnishings")):
 			return true
 		p = p.get_parent()
 	return false

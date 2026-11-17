@@ -470,6 +470,7 @@ static func _build_loft(s: Shop, wood: bool) -> Array:
 		var h := _rect(s.loft["stairwell"])
 		holes.append(Rect2(h.position - room.position, h.size))
 	var fl := Planks.lay(s.loft_root, "floor", Vector3(room.position.x, s.loft_y + 0.012, room.position.y), Vector3(1, 0, 0), Vector3(0, 0, 1), room.size, Vector3.UP, holes, hash(s.id) + 7, s.id)
+	fl.remove_from_group("planks_floor") # the café's own second storey, not another building's floor
 	if wood:
 		fl.material_override = BuildingSkin.material("wood_floor", Color(str(s.info.get("floor_colour", "#9a6a44"))))
 	var blocks: Array = []
