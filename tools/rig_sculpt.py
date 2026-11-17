@@ -35,6 +35,8 @@ RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
 HEIGHT = float(argv[argv.index("--height") + 1]) if "--height" in argv else 0.0  # the sculpt's full height in metres when it is not the rig's: a tall hat or big hair puts the chin too low otherwise
 COAT = float(argv[argv.index("--coat") + 1]) if "--coat" in argv else 0.0  # nearest-bone weights: jacket length below the hips
 ARM_THICK = float(argv[argv.index("--arm-thick") + 1]) if "--arm-thick" in argv else 1.0  # fatten thin T-pose arms round their own line (a 'noodle' arm), shoulder to wrist; the hands keep their size
+NECK = float(argv[argv.index("--neck") + 1]) if "--neck" in argv else 0.0  # the sculpt's neck base in metres at the rig's height: a child's big head puts it far below a grown-up rig's, and the shoulders and arms then hang from her ears (Lily)
+ARM = [float(x) for x in argv[argv.index("--arm") + 1:argv.index("--arm") + 3]] if "--arm" in argv else None  # DEG K: the sculpt's arm angle out from the side and its length over the rig's, when the outline can't give them (Lily: puffed sleeves, a flared skirt and hair curls at shoulder height)
 APRON = "--apron" in argv  # a long apron or skirt hangs free in front of the thighs: let its hem drape off the knees
 
 scene = bpy.context.scene
@@ -187,6 +189,29 @@ else:
     bpy.data.objects.remove(hi)
 
 # ----------------------------------------------------------------------------- 3. bind in the sculpt's pose
+if NECK:
+    # lower the rig's neck to the sculpt's: everything between the hips and the neck is squeezed down,
+    # everything above it (the head, the eyes) stretched to keep the head's top, the legs left alone
+    select_only(rig)
+    bpy.ops.object.mode_set(mode="EDIT")
+    reb = rig.data.edit_bones
+    z_h, z_n, z_t = reb["Hips"].tail.z, reb["Neck"].head.z, head_top
+    remap = lambda z: z if z <= z_h else (z_h + (z - z_h) * (NECK - z_h) / (z_n - z_h) if z <= z_n
+                                          else NECK + (z - z_n) * (z_t - NECK) / (z_t - z_n))
+    legs = ("UpperLeg", "LowerLeg", "Foot", "Toes")
+    arms = ("UpperArm", "LowerArm", "Hand")
+    lift = {sd: remap(reb[sd + "UpperArm"].head.z) - reb[sd + "UpperArm"].head.z for sd in ("Left", "Right")}
+    for b in reb:
+        if b.name.endswith(legs):
+            continue
+        if b.name.endswith(arms) and b.name.startswith(("Left", "Right")):
+            sd = "Left" if b.name.startswith("Left") else "Right"
+            b.head.z += lift[sd]  # the arm moves down with its shoulder, keeping its own length
+            b.tail.z += lift[sd]
+            continue
+        b.head.z, b.tail.z = remap(b.head.z), remap(b.tail.z)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    print("NECK moved from", round(z_n, 3), "to", NECK, "shoulder now", round(rig.data.bones["LeftUpperArm"].head_local.z, 3))
 L = np.array([v.co[:] for v in lo.data.vertices])
 temp = rig.copy()
 temp.data = rig.data.copy()
@@ -263,7 +288,15 @@ for side, sx in (("Left", 1), ("Right", -1)):
     # don't follow the arm, so take its line from the arm itself, everything well outside the shoulder
     # joint and within half a metre of its height, along its main direction
     far = L[(L[:, 0] * sx > sh.x * sx + 0.12) & (np.abs(L[:, 2] - sh.z) < 0.5)]
-    if len(far) > 50 and (far[:, 0] * sx).max() > sh.x * sx + 0.35:
+    if ARM:
+        want = Vector((math.sin(math.radians(ARM[0])) * sx, 0.0, -math.cos(math.radians(ARM[0]))))
+        S_ = Matrix.Translation(sh) @ Matrix.Scale(ARM[1], 4) @ Matrix.Translation(-sh)
+        for b in ("UpperArm", "LowerArm", "Hand"):
+            eb[side + b].transform(S_)
+        moved_joint[side] = (Vector((0.0, 0.0, 0.0)), ARM[1])
+        tip = eb[side + "Hand"].tail.copy()
+        print("ARM GIVEN", side, ARM)
+    elif len(far) > 50 and (far[:, 0] * sx).max() > sh.x * sx + 0.35:
         # start from what is level with the shoulder (only the arm is out there), then take in the
         # points that lie along that line: a bag or an apron hanging below doesn't pull it down
         pick = far[np.abs(far[:, 2] - sh.z) < 0.15]

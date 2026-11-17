@@ -40,6 +40,7 @@ var closed := false
 var look_target = null # Vector3 in world space, or null
 var hold_gaze = null # a world point that wins over look_target while set (a story beat, the autotest)
 var blinks := true # the autotest turns this off to hold a pose still
+var rest_lid := 0.0 # lid_half held at rest (a character's "lid_rest"): eyes that look too wide open
 
 var _shape := {} # blend shape name -> index
 var _w := {} # current weight of each mood shape
@@ -128,7 +129,10 @@ func _process(delta: float) -> void:
 	# mood: ease each lid shape toward the mood's value
 	var want: Dictionary = MOODS[mood]
 	for n in _w:
-		_w[n] = move_toward(_w[n], float(want.get(n, 0.0)), delta * 4.0)
+		var to := float(want.get(n, 0.0))
+		if n == "lid_half":
+			to = maxf(to, rest_lid)
+		_w[n] = move_toward(_w[n], to, delta * 4.0)
 		if _shape.has(n):
 			mesh.set_blend_shape_value(_shape[n], _w[n] * ((1.0 - eased) if n in UPPER else 1.0))
 	_turn_eyes(delta)
