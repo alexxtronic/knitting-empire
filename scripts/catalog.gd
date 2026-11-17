@@ -217,6 +217,16 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	return l
 
 
+## Candles and the café's pendant lamps light a room without mirroring themselves in every pane
+## and polished top (Alex, 2026-11-17: "too much glare and blurred light" on the café's glass,
+## counters and jars): a faint highlight, from a point rather than a 12 cm ball, which glow had
+## smeared into big soft discs.
+const GLINT := 0.12
+static func soft_glint(l: Light3D) -> void:
+	l.light_specular = GLINT
+	l.light_size = 0.0
+
+
 # --- imported models (tools/import_asset.py) ----------------------------------------
 
 ## The Woolcore palette (data/palette.json): id -> [colour, knit stitch width or 0 for felt].
@@ -358,6 +368,7 @@ static func build(id: String, r: Node3D) -> void:
 			var pl := omni(r, Vector3(0, PENDANT_BULB - 0.08, 0), Color(1.0, 0.74, 0.44), 4.8, 0.25, 1.3)
 			pl.shadow_enabled = false
 			pl.set_meta("no_shadow", true) # main.gd's graphics setting leaves it off
+			soft_glint(pl)
 		for at in ITEMS.get(id, {}).get("candles", []):
 			lit_candle(r, Data.vec3(at))
 		return
@@ -598,6 +609,38 @@ static func _fireplace_fire(r: Node3D, at: Vector3) -> void:
 	_sparks(r, root + Vector3(0, 0.12, 0))
 	var l := omni(r, at + Vector3(0, 0.22, 0.65), Color(1.0, 0.55, 0.25), 7.0, 1.2, 2.6)
 	l.set_meta("fire", true)
+	fire_sound(r, root + Vector3(0, 0.2, 0.1))
+
+
+const FIRE_SOUND := "res://assets/audio/fire.ogg" # "The Fireplace 3" by NoOneIsReal, Freesound 387128, CC0; looped
+static var _fire_stream: AudioStream
+
+
+## The crackle of a fire (Alex, 2026-11-17: "realistic fire sound ... for fireplace and bonfire and
+## any time we have fire"): a looping 3D sound at `pos` under `r`, heard within about `reach`
+## metres and loudest close by, each fire starting at its own place in the loop so two never
+## crackle in step. On the Ambience bus, so the Settings' Sound slider sets it and the autotest's
+## mute silences it. Use it for any new fire (the bonfire).
+static func fire_sound(r: Node3D, pos: Vector3, reach := 14.0, db := -3.0) -> AudioStreamPlayer3D:
+	if _fire_stream == null:
+		_fire_stream = load(FIRE_SOUND) if ResourceLoader.exists(FIRE_SOUND) else null
+		if _fire_stream is AudioStreamOggVorbis:
+			(_fire_stream as AudioStreamOggVorbis).loop = true
+	var p := AudioStreamPlayer3D.new()
+	p.name = "FireSound"
+	p.stream = _fire_stream
+	p.position = pos
+	p.bus = "Ambience"
+	p.volume_db = db
+	p.unit_size = 2.5
+	p.max_distance = reach
+	p.attenuation_filter_cutoff_hz = 6000.0 # duller from across the room
+	p.set_meta("fire_sound", true)
+	if _fire_stream != null:
+		var start := randf() * maxf(_fire_stream.get_length() - 1.0, 0.0)
+		p.ready.connect(func(): p.play(start))
+	r.add_child(p)
+	return p
 
 
 const FIRE_SHADER := preload("res://shaders/fire.gdshader")
@@ -884,6 +927,7 @@ static func _lantern_candle(r: Node3D, inst: Node3D) -> void:
 	candle_flame_quad(r, c + Vector3(0, 1.377, 0), 0.9)
 	var l := omni(r, c + Vector3(0, 1.41, 0), Color(1.0, 0.66, 0.34), 5.5, 0.15, 1.6)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 
 
@@ -950,6 +994,7 @@ static func _candle_flame(r: Node3D, at: Vector3, inst: Node3D) -> void:
 	l.shadow_enabled = false # a few dozen of them in the café: their glow, not their shadows
 	l.set_meta("no_shadow", true) # and the graphics setting leaves them off (main.gd)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 	l.set_meta("phase", phase)
 

@@ -27,6 +27,11 @@ uniform float fade_end = 46.0;
 // thin_keep of them at fade_end, each widened so the turf looks as full
 uniform float thin_near = 16.0;
 uniform float thin_keep = 1.0;
+// the patches baked once over grass.gd's REGION (grass_patch_bake.gdshader); until the bake has drawn,
+// each blade works its patch out itself
+uniform sampler2D patch_tex : filter_linear, repeat_disable;
+uniform vec4 patch_rect = vec4(0.0, 0.0, 1.0, 1.0);
+uniform bool patch_baked = false;
 
 #include "res://shaders/grass_patches.gdshaderinc"
 
@@ -40,7 +45,11 @@ void vertex() {
 	float height = INSTANCE_CUSTOM.r;
 	rnd = INSTANCE_CUSTOM.g;
 	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-	gpatch = grass_patches(root.xz);
+	if (patch_baked) {
+		gpatch = textureLod(patch_tex, (root.xz - patch_rect.xy) / patch_rect.zw, 0.0).rg * 2.0 - 1.0;
+	} else {
+		gpatch = grass_patches(root.xz);
+	}
 	float far = length(root - INV_VIEW_MATRIX[3].xyz);
 	height *= 1.0 - smoothstep(fade_end - 14.0, fade_end - 2.0, far);
 	vec3 v = VERTEX;

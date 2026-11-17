@@ -23,7 +23,8 @@ extends Node
 ## one night, like the walls she builds they live in the save, never in data/world_layout.json, so
 ## the world editor doesn't list them.
 ##
-## The look reuses the fireplace's pieces (Catalog.fire_material(), flame_quad(), _sparks()):
+## The look and sound reuse the fireplace's pieces (Catalog.fire_material(), flame_quad(), _sparks(),
+## fire_sound()):
 ## three sheets of shader flame, a bed of coals and rising sparks, on a ring of stones and a
 ## tepee of logs built here from plain shapes.
 
@@ -370,6 +371,9 @@ class Fire extends Node3D:
 		light = Catalog.omni(self, Vector3(0, 0.9, 0), Color(1.0, 0.58, 0.28), rng, energy, energy)
 		light.set_meta("fire", true)
 		light.omni_attenuation = 1.1
+		# its crackle (Catalog.fire_sound(), as at every fireplace): louder and further-reaching
+		# outdoors, and gone with the fire (put_out() frees the node)
+		Catalog.fire_sound(self, Vector3(0, 0.5, 0), 18.0, 0.0)
 		# its hitbox: click it for its menu
 		var body := StaticBody3D.new()
 		body.collision_layer = 2
@@ -457,6 +461,10 @@ func checks() -> void:
 	if f == null:
 		_restore(keep)
 		return
+	await m._wait(0.3)
+	var crackle := f.find_child("FireSound", false, false) as AudioStreamPlayer3D
+	m._check("it crackles: a FireSound on the Ambience bus, playing, heard %.0f m off" % (crackle.max_distance if crackle else 0.0),
+		crackle != null and crackle.playing and crackle.stream != null and crackle.bus == "Ambience" and crackle.max_distance >= 16.0)
 	var dawn := dawn_after(float(keep["day"] - 1) * 24.0 + 21.0)
 	m._check("it burns till dawn (out at hour %.1f, day %d 6:00)" % [f.until, int(f.until / 24.0) + 1], is_equal_approx(f.until, float(Game.day) * 24.0 + 6.0) or is_equal_approx(f.until, dawn))
 	var acts: Array = m._actions_for(f).map(func(a): return a["label"])
@@ -506,6 +514,9 @@ func checks() -> void:
 	update()
 	m._check("bed in the small hours: still day %d (was %d), 6:00, and the fire is out at dawn" % [Game.day, day1],
 		Game.day == day1 and is_equal_approx(Game.hour, 6.0) and fires.is_empty() and not Game.flags.has("bonfires") and not Game.flags.has("stayed_up"))
+	await m._wait(0.1)
+	m._check("burned out, its crackle is gone with it (%s)" % ("still playing!" if is_instance_valid(crackle) and crackle.playing else "freed"),
+		not (is_instance_valid(crackle) and crackle.is_inside_tree() and crackle.playing))
 	m._check("with no fire burning, midnight still means bed", not keeps_her_up())
 	# sleeping by a fire: till morning, half a night's rest, no walk home
 	Game.hour = 1.5

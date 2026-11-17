@@ -34,8 +34,17 @@ class Shop:
 	var lights := [] # the furnishings' candles and lamps (Furniture.animate)
 	var flames := []
 	var t := 0.0
+	var casters := [] # [GeometryInstance3D, its own cast_shadow]: the furnishings that cast shadows
+	var all_lights := [] # every light in the building: its lamp, the candles, the pendants
+	var casting := true
+	var lit := true
 
 static var shops := {} # building id -> Shop
+## Graphics levels below Ultra (main.apply_graphics): while a shop's roof is on its furnishings cast
+## no shadows (the sun can't reach them and nobody can see in from above). Low and Medium also turn
+## its lights off while she's outside with its door shut. Ultra keeps both, as High always did.
+static var no_casters := false
+static var lights_off := false
 
 
 ## Sets up building `b` (its model already loaded under it) as a walk-in shop, if its model has
@@ -112,6 +121,12 @@ static func furnish(b: Node3D, id: String, size: Vector2) -> Array:
 	s.light = Catalog.omni(b, lp, Color(1.0, 0.78, 0.5), 4.2, 0.0, 1.2)
 	s.light.shadow_enabled = false
 	s.light.set_meta("no_shadow", true)
+	Catalog.soft_glint(s.light) # no glare off the panes and counters
+	for g in room.find_children("*", "GeometryInstance3D", true, false):
+		var gi := g as GeometryInstance3D
+		if gi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			s.casters.append([gi, gi.cast_shadow])
+	s.all_lights = b.find_children("*", "Light3D", true, false)
 	return rects
 
 
@@ -186,6 +201,7 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 		s.open = move_toward(s.open, 1.0 if (s.inside or at_door) and s.node.visible else 0.0, delta * 2.5)
 		(s.parts["door"] as Node3D).rotation.y = deg_to_rad(100.0) * smoothstep(0.0, 1.0, s.open)
 		(s.parts["roof"] as Node3D).visible = not s.inside or roof_on # first person keeps it on
+		_economise(s)
 		for side in WALLS:
 			if not s.parts.has("wall_" + side) or not s.parts.has("wall_%s_low" % side):
 				continue
@@ -198,6 +214,23 @@ static func update(who: Vector3, cam_yaw: float, walls_up: bool, delta: float, m
 		if not s.lights.is_empty() or not s.flames.is_empty():
 			s.t += delta
 			FurnitureScript.animate(s.lights, s.flames, s.t, night)
+
+
+## `no_casters`: no furnishing shadows under a roof; `lights_off`: no lights in a shut shop she isn't
+## in. Only touches the nodes when the state changes.
+static func _economise(s: Shop) -> void:
+	var cast := not (no_casters and (s.parts["roof"] as Node3D).visible)
+	if cast != s.casting:
+		s.casting = cast
+		for e in s.casters:
+			if is_instance_valid(e[0]):
+				(e[0] as GeometryInstance3D).cast_shadow = e[1] if cast else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var on := not (lights_off and not s.inside and s.open <= 0.0)
+	if on != s.lit:
+		s.lit = on
+		for l in s.all_lights:
+			if is_instance_valid(l):
+				(l as Light3D).visible = on
 
 
 ## The reading seats and bookshelves in shop `id`, wherever it stands now ([] if none).

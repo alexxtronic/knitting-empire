@@ -44,6 +44,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
+const Wolves = preload("res://scripts/wolves.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const ReadingPose = preload("res://scripts/reading_pose.gd")
@@ -136,6 +137,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
+var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -153,7 +155,7 @@ var minimap: Minimap # the map under the coins (minimap.gd): click it to walk th
 var see_through: SeeThrough # scenery between the camera and the people fades (see_through.gd)
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
-var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
+var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High and Ultra
 var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var decor_root: Node3D
 var sign_to_town: Landmark
@@ -424,6 +426,9 @@ func _ready() -> void:
 	fog.main = self
 	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
 	add_child(fog)
+	wolves = Wolves.new()
+	wolves.main = self
+	add_child(wolves)
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -432,6 +437,7 @@ func _ready() -> void:
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
+	Wolves.on = _autotest_dir == "" # and no wolves come but in their own check (_wolf_checks)
 	Jobs.on = _autotest_dir == "" # and no boss offers a job but in the jobs check, which turns them on
 	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
@@ -483,6 +489,7 @@ func _connect_hud() -> void:
 	hud.hud_option.connect(_save_hud_option)
 	hud.cinematic_pressed.connect(func(): cinema.enter())
 	hud.first_person_pressed.connect(func(): fps.enter())
+	hud.eat_pressed.connect(func(item: String): eat_item(item))
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -611,21 +618,35 @@ func _setup_environment() -> void:
 ## The 3D scene is drawn at about 1.6 million pixels whatever the window size, then upscaled
 ## (MetalFX on Macs, FSR elsewhere); the menus stay at full resolution. A full-screen Retina
 ## window is 4 to 7 million pixels, which a laptop GPU can't fill at 60 fps with these effects.
-## Per graphics level (Low, Medium, High): 3D pixels to aim for and the lowest scale allowed.
-const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.6e6]
-const MIN_3D_SCALE := [0.25, 0.3, 0.35]
+## Per graphics level (Low, Medium, High, Ultra): 3D pixels to aim for and the lowest scale allowed.
+const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.35e6, 1.6e6]
+const MIN_3D_SCALE := [0.25, 0.3, 0.33, 0.35]
 const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 
 # --- graphics setting ----------------------------------------------------------------
-## Low / Medium / High, set in Settings and kept in user://settings.cfg (not the
-## save file: it belongs to the computer, not the farm). The autotest always runs on High.
-const GFX_NAMES := ["Low", "Medium", "High"]
+## Low / Medium / High / Ultra, set in Settings and kept in user://settings.cfg (not the
+## save file: it belongs to the computer, not the farm). Ultra is everything (the High of before
+## 2026-11-17); High keeps Ultra's look (light bounce, reflections, haze) at a lower cost. The
+## autotest always runs on Ultra.
+const GFX_NAMES := ["Low", "Medium", "High", "Ultra"]
+const GFX_HIGH := 2
+const GFX_ULTRA := 3
 const SETTINGS_PATH := "user://settings.cfg"
-var gfx := 2
+var gfx := GFX_ULTRA
 var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.gd)
 ## Per graphics level: how many of the nearest lit lamps cast real shadows.
-const LAMP_SHADOWS := [0, 2, 4]
-const GRASS_THIN := [0.4, 0.4, 0.45] # grass.gd: the share of blades left at the end of the range
+const LAMP_SHADOWS := [0, 1, 2, 4]
+## Per graphics level: how far from the camera a lamp's shadow fades out (Catalog.omni's 40 m on Ultra).
+## Measured from the camera, which sits about 23 m from Nora: 30 keeps the shadow of a lamp beside her
+## at the usual zoom and drops it sooner when zoomed out.
+const LAMP_SHADOW_FADE := [20.0, 30.0, 35.0, 40.0]
+## grass.gd per level: the share of blades drawn, how far from the camera they go, and the share
+## left at the end of that range
+const GRASS_FRAC := [0.45, 0.75, 1.0, 1.0]
+const GRASS_RANGE := [30.0, 32.0, 40.0, 46.0]
+const GRASS_THIN := [0.4, 0.4, 0.4, 0.45]
+## How far the sun's shadow reaches at most, per level (it follows the zoom below that).
+const SUN_SHADOW_REACH := [40.0, 55.0, 62.0, 70.0]
 const RECOMMENDED_APPLE := 1 # Medium: on an M4 MacBook Air at 2560x1378 High runs 19-29 fps, Medium 30-50 (--only=perf)
 
 
@@ -635,8 +656,9 @@ var render_scale := 1.0
 const RENDER_SCALE_MIN := 0.5
 const RENDER_SCALE_MAX := 1.5
 ## Settings saved before the graphics pass of 2026-11-16 (version 1) start once on the computer's
-## recommended level, since High then cost three times what it does now.
-const GFX_SETTINGS_VERSION := 2
+## recommended level, since High then cost three times what it does now. Version 2 had three levels:
+## its High (2) is read as the new High, the lighter one; Ultra has to be picked.
+const GFX_SETTINGS_VERSION := 3
 
 
 ## The level a computer starts on before the player picks one: what --only=perf shows holds
@@ -653,16 +675,16 @@ static func recommended_graphics(gpu: String, cores: int) -> int:
 		return 0
 	if cores <= 4:
 		return 1
-	return 2
+	return GFX_HIGH
 
 
 func _load_graphics() -> void:
-	gfx = default_graphics() if _autotest_dir == "" else 2 # the autotest always runs on High
+	gfx = default_graphics() if _autotest_dir == "" else GFX_ULTRA # the autotest always runs on Ultra
 	if _autotest_dir == "":
 		var cfg := ConfigFile.new()
 		if cfg.load(SETTINGS_PATH) == OK:
-			if int(cfg.get_value("graphics", "version", 1)) >= GFX_SETTINGS_VERSION:
-				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, 2)
+			if int(cfg.get_value("graphics", "version", 1)) >= 2:
+				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, GFX_NAMES.size() - 1)
 			render_scale = clampf(float(cfg.get_value("graphics", "render_scale", 1.0)), RENDER_SCALE_MIN, RENDER_SCALE_MAX)
 	hud.set_render_scale(render_scale)
 	apply_graphics()
@@ -680,7 +702,7 @@ func _save_graphics() -> void:
 
 
 func _cycle_graphics() -> void:
-	gfx = (gfx + 2) % 3 # High → Medium → Low → High
+	gfx = (gfx + GFX_NAMES.size() - 1) % GFX_NAMES.size() # Ultra → High → Medium → Low → Ultra
 	apply_graphics()
 	_save_graphics()
 	hud.show_toast("Graphics: %s" % GFX_NAMES[gfx])
@@ -694,7 +716,8 @@ func set_render_scale(v: float) -> void:
 
 func apply_graphics() -> void:
 	var med := gfx >= 1
-	var hi := gfx == 2
+	var hi := gfx >= GFX_HIGH # High and Ultra: the full look
+	var ultra := gfx == GFX_ULTRA # everything at full cost
 	env.ssao_enabled = med # contact shading
 	env.ssil_enabled = hi # light bouncing off nearby surfaces
 	env.ssr_enabled = hi # reflections in the pond and wet ground
@@ -704,11 +727,20 @@ func apply_graphics() -> void:
 	# keeps the extra samples cheap.
 	# (High had the ultra filter, 5: 4-5 ms a frame on a MacBook Air for edges you can't tell apart)
 	RenderingServer.directional_soft_shadow_filter_set_quality(4)
-	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3, 3][gfx])
 	Catalog.lamp_shadows = med
 	light_budget.max_shadows = LAMP_SHADOWS[gfx] # only the nearest lit lamps cast shadows (candles never)
+	light_budget.fade = LAMP_SHADOW_FADE[gfx]
+	# the sun's shadow on Low and Medium (Alex, 2026-11-17: "keep high as it is", now Ultra): two splits
+	# and a 2048 map instead of four and 4096, and shut shops' lights left off (interiors.gd). High
+	# keeps four splits and the big map but reaches less far (SUN_SHADOW_REACH). Below Ultra a shop's
+	# furnishings cast no shadow while its roof is on.
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if hi else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	RenderingServer.directional_shadow_atlas_set_size(4096 if hi else 2048, true)
+	Interiors.no_casters = not ultra
+	Interiors.lights_off = not hi
 	light_budget.update(get_tree(), cam_target, 0.0, true)
-	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx], GRASS_THIN[gfx])
+	grass.set_quality(GRASS_FRAC[gfx], GRASS_RANGE[gfx], GRASS_THIN[gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
@@ -1551,7 +1583,7 @@ func _update_camera(delta: float) -> void:
 	if _photo_dof.is_empty():
 		cam_attr.dof_blur_far_enabled = near
 	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
-	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, [40.0, 55.0, 70.0][gfx])
+	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, SUN_SHADOW_REACH[gfx])
 	if near and _photo_dof.is_empty():
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
@@ -1930,6 +1962,8 @@ func dog_bark() -> bool:
 	audio.play("bark", -3.0, 0.12)
 	if wildlife:
 		wildlife.barked(dog.global_position)
+	if wolves:
+		wolves.barked(dog.global_position)
 	return true
 
 
@@ -2906,6 +2940,8 @@ func _on_day_started(_day: int) -> void:
 		forage.apply() # what she cut a while ago grows back
 	if wildlife:
 		wildlife.restock() # another animal turns up where one was caught, once its time is up
+	if wolves:
+		_morning_note += wolves.morning_note(_day) # a night she slept through, and any animal the wolves took
 	for p in plots:
 		p.on_new_day()
 	for s in sheep_list:
@@ -3547,29 +3583,71 @@ func _wait(s: float) -> void:
 
 ## The graphics setting turns the expensive effects off and back on, and the autotest never
 ## writes the player's settings file.
+## The walk-in shops she isn't in whose doors are shut (for the graphics checks).
+func _shut_shops() -> Array:
+	var out := []
+	for sh in Interiors.shops.values():
+		if is_instance_valid(sh.node) and sh.node.visible and not sh.inside and sh.open <= 0.0 and not sh.all_lights.is_empty():
+			out.append(sh)
+	return out
+
+
+## A shut shop's state: its lights on or off, and its furnishings casting their own shadows or none.
+func _shop_state(sh: Interiors.Shop, lights_on: bool, casting: bool) -> bool:
+	for l in sh.all_lights:
+		if is_instance_valid(l) and (l as Light3D).visible != lights_on:
+			return false
+	for e in sh.casters:
+		if not is_instance_valid(e[0]):
+			continue
+		var want: int = e[1] if casting else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (e[0] as GeometryInstance3D).cast_shadow != want:
+			return false
+	return true
+
+
 func _graphics_checks() -> void:
-	var blades_hi: int = grass.drawn_blades()
-	var scale_hi := get_viewport().scaling_3d_scale
+	var blades_ultra: int = grass.drawn_blades()
+	var scale_ultra := get_viewport().scaling_3d_scale
 	var had_cfg := FileAccess.file_exists(SETTINGS_PATH)
+	var lamps: Array = find_children("*", "OmniLight3D", true, false)
+	var shut := _shut_shops()
+	_cycle_graphics() # High
+	await _wait(0.3)
+	_check("High graphics: Ultra's look (light bounce in 3 cascades, reflections, haze, the sun's shadow in 4 splits) for less: %d lamp shadows at most, grass to %d m, 3D at %d%% (Ultra %d%%), and %d shut shops keep their lights with their furnishings casting nothing under the roof" % [LAMP_SHADOWS[GFX_HIGH], int(GRASS_RANGE[GFX_HIGH]), roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100), shut.size()],
+		gfx == GFX_HIGH and env.sdfgi_enabled and env.sdfgi_cascades == 3 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled
+		and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[GFX_HIGH] and get_viewport().scaling_3d_scale <= scale_ultra
+		and not shut.is_empty() and shut.all(func(sh) -> bool: return _shop_state(sh, true, false))
+		and hud.graphics_btn.text == "Graphics: High")
 	_cycle_graphics() # Medium
+	await _wait(0.3)
+	_check("Medium graphics: the sun's shadow in 2 splits, %d lamp shadow at most (fading by %d m), and %d shops she isn't in with their door shut have their lights off and their furnishings casting nothing" % [LAMP_SHADOWS[1], int(LAMP_SHADOW_FADE[1]), shut.size()],
+		gfx == 1 and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS and not env.sdfgi_enabled
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[1]
+		and shut.all(func(sh) -> bool: return _shop_state(sh, false, false)))
 	_cycle_graphics() # Low
 	await _wait(0.3)
-	var lamps: Array = find_children("*", "OmniLight3D", true, false)
-	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (High %d%%)" % [grass.drawn_blades(), blades_hi, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_hi * 100)],
+	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (Ultra %d%%)" % [grass.drawn_blades(), blades_ultra, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100)],
 		gfx == 0 and not env.ssao_enabled and not env.ssil_enabled and not env.ssr_enabled and not env.volumetric_fog_enabled
-		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
-		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
-	_cycle_graphics() # High
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_ultra * 0.5
+		and get_viewport().scaling_3d_scale <= scale_ultra and hud.graphics_btn.text == "Graphics: Low")
+	_cycle_graphics() # Ultra
 	await _wait(0.3)
 	var flush := coplanar_faces()
 	for f in flush:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
 	var casting: int = light_budget.casting(get_tree())
-	_check("back on High: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[2]],
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[2]
+	_check("back on Ultra: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[GFX_ULTRA]],
+		gfx == GFX_ULTRA and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[GFX_ULTRA]
 		and lamps.all(func(l): return not is_instance_valid(l) or not l.has_meta("no_shadow") or not l.shadow_enabled)
-		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
+		and grass.drawn_blades() == blades_ultra and FileAccess.file_exists(SETTINGS_PATH) == had_cfg
+		and hud.graphics_btn.text == "Graphics: Ultra")
+	_check("Ultra as High was: the sun's shadow in 4 splits, and every shop's lights on and furnishings casting their shadows again",
+		sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS and not Interiors.no_casters and not Interiors.lights_off
+		and env.sdfgi_cascades == 4
+		and shut.all(func(sh) -> bool: return _shop_state(sh, true, true)))
 
 
 func _shot(fname: String) -> void:
@@ -5684,6 +5762,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=wolves" in OS.get_cmdline_user_args(): # just the wolves at night: the roll, the alert, scaring them off, a loss, the barn, a save
+		await _wait(1.5)
+		await _wolf_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=wildlife" in OS.get_cmdline_user_args(): # just the wild animals and birds: placing, combing, fleeing, flushing
 		await _wait(1.5)
 		await _wildlife_checks()
@@ -5955,6 +6039,7 @@ func _autotest() -> void:
 	await _dog_checks()
 	await _wildlife_checks()
 	await _empire_checks()
+	await _wolf_checks()
 	await _sale_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
@@ -6039,7 +6124,7 @@ func _light_checks() -> void:
 			missing.append(id)
 		inst.free()
 	_check("the %d baked props carry their Cycles light bake (ambient occlusion on UV2)%s" % [Lighting.BAKED.size(), "" if missing.is_empty() else ": missing " + ", ".join(missing)], missing.is_empty())
-	_check("SDFGI is on at High graphics", gfx == 2 and env.sdfgi_enabled)
+	_check("SDFGI is on at Ultra graphics", gfx == GFX_ULTRA and env.sdfgi_enabled)
 	Lighting.SkyBodies.clouds_override = 0.15 # a fair sky for the pictures, whatever the day's clouds (_sky_checks puts it back)
 	var hours := [["dawn", 6.6], ["noon", 12.5], ["dusk", 18.7]]
 	var mist_at := {}
@@ -6639,6 +6724,16 @@ func _fire_checks() -> void:
 	var sparks := fp.find_child("Sparks", false, false) as GPUParticles3D
 	_check("the fire is three living sheets of flame over glowing coals with sparks rising, and the mantel's candles burn with real flames (%d sheets, %d candle flames, sparks %s)" % [sheets.size(), candles.size(), sparks != null and sparks.emitting],
 		sheets.size() == 3 and candles.size() == 2 and sparks != null and sparks.emitting)
+	# its crackle (Catalog.fire_sound): a looping 3D sound by the fire, and one in the café's fireplace
+	await _wait(0.2)
+	var snd := fp.find_child("FireSound", false, false) as AudioStreamPlayer3D
+	var cafe_snd := 0
+	var cafe = Interiors.shops.get("cafe")
+	if cafe != null:
+		cafe_snd = cafe.node.find_children("FireSound", "AudioStreamPlayer3D", true, false).size()
+	var looped: bool = snd != null and snd.stream is AudioStreamOggVorbis and (snd.stream as AudioStreamOggVorbis).loop
+	_check("the fire crackles: a looping sound by the hearth, heard within %.0f m on the Ambience bus (playing %s, looped %s), and the café's fireplace too (%d)" % [snd.max_distance if snd else 0.0, snd != null and snd.playing, looped, cafe_snd],
+		snd != null and snd.playing and looped and snd.bus == "Ambience" and cafe_snd >= 1)
 	Game.hour = 21.5
 	player.walk([])
 	player.position = fp.global_transform * Vector3(0, 0, 2.6)
@@ -6710,8 +6805,10 @@ func _shop_checks() -> void:
 		var at_post: bool = v.position.distance_to(k["pos"]) < 0.8 and Interiors.inside_of(v.position) == id
 		var price := _pastry_price()
 		var c0 := Game.coins
+		var pastries0 := Game.count("pastry")
 		if id == "bakery":
-			Game.fullness = 40.0
+			Game.coins = maxi(Game.coins, price + 5)
+			c0 = Game.coins
 			_do_action(v, "buy_pastry")
 		else:
 			_do_action(v, "talk")
@@ -6728,8 +6825,9 @@ func _shop_checks() -> void:
 		_check("%s is behind the counter inside, and talks to her across it (%.1f m from their post)" % [v.title, v.position.distance_to(k["pos"])],
 			at_post and v.position.distance_to(k["pos"]) < 1.0 and hud.dlg_panel.visible)
 		if id == "bakery":
-			_check("Giorgio sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
-				Game.coins == c0 - price and Game.fullness > 40.0 + PASTRY_FOOD - 3.0) # less what she burned walking over
+			_check("Giorgio sells her a pastry for her bag (%dc, pastries %d -> %d)" % [c0 - Game.coins, pastries0, Game.count("pastry")],
+				Game.coins == c0 - price and Game.count("pastry") == pastries0 + 1)
+			await _pastry_checks(v)
 		await _shot("46_%s_inside.png" % id)
 		hud.hide_dialogue()
 		player.walk(_find_path(player.position, out_front))
@@ -6917,6 +7015,26 @@ func _flower_checks() -> void:
 	await _shot("62_grass.png")
 	var blades: int = grass.drawn_blades()
 	_check("flowers: the grass still draws the same blades (%d)" % blades, blades > 10000)
+	# the blade is 7 shared points, and the patches come from the bake (grass.gd _bake_patches): the same
+	# view worked out per blade is saved beside it to compare
+	var bm: ArrayMesh = grass._blade_mesh
+	var arrs := bm.surface_get_arrays(0)
+	var pts: int = (arrs[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var idx: int = (arrs[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arrs[Mesh.ARRAY_INDEX] != null else 0
+	var baked: bool = grass.blade_mat.get_shader_parameter("patch_baked") == true
+	var pimg: Image = grass.patch_vp.get_texture().get_image()
+	var lo := 1.0
+	var hi := 0.0
+	for i in 64:
+		var c := pimg.get_pixel(i * 37 % pimg.get_width(), i * 53 % pimg.get_height())
+		lo = minf(lo, c.r)
+		hi = maxf(hi, c.r)
+	grass.blade_mat.set_shader_parameter("patch_baked", false)
+	await _wait(0.3)
+	await _shot("62_grass_unbaked.png")
+	grass.blade_mat.set_shader_parameter("patch_baked", true)
+	_check("grass: each blade is %d shared points (%d indices), and its light and dark patches come from the %dx%d bake (drifts %.2f..%.2f)" % [pts, idx, pimg.get_width(), pimg.get_height(), lo, hi],
+		pts == 7 and idx == 15 and baked and hi - lo > 0.3)
 	for f in set_out:
 		f.queue_free()
 	_set_cam_lock(true)
@@ -10704,14 +10822,69 @@ func _yarn_price(base: int) -> int:
 	return int(round(base * (1.0 - 0.05 * Game.hearts("rosa"))))
 
 
-const PASTRY_PRICE := 12 # Giorgio's croissants, before his friendship discount
-const PASTRY_FOOD := 25.0
 const COFFEE_PRICE := 6 # a coffee from Sabrina: warms her up
 const COFFEE_WARMTH := 15.0
 
 
+## Heart Bakery's pastries: data/economy.json "pastry" (price, energy, food, happiness, max).
+func pastry() -> Dictionary:
+	return Data.economy().get("pastry", {"price": 20, "energy": 30, "food": 30, "happiness": 40, "max": 6})
+
+
 func _pastry_price() -> int:
-	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("giorgio"))))
+	return int(round(float(pastry().get("price", 20)) * (1.0 - 0.05 * Game.hearts("giorgio"))))
+
+
+## Pastries (--only=shops, at Giorgio's counter): one in her bag is eaten by clicking it again in her
+## hand, giving data/economy.json "pastry"'s energy, food and happiness; the bag holds "max" at most.
+func _pastry_checks(giorgio) -> void:
+	var p := pastry()
+	hud.hide_dialogue()
+	await _wait(0.3)
+	var at := Game.slots.find("pastry")
+	_check("the pastry is in her bag (slot %d)" % (at + 1), at >= 0)
+	if at < 0:
+		return
+	if at >= Hud.HOTBAR: # a full hotbar: bring it down from the bag first
+		Game.swap_slots(at, Hud.HOTBAR - 1)
+		at = Hud.HOTBAR - 1
+	Game.energy = 40.0
+	Game.fullness = 40.0
+	Game.happiness = 40.0
+	var n0 := Game.count("pastry")
+	hud.slot_btns[at].pressed.emit() # in her hand
+	var in_hand := hud.selected_item() == "pastry" and Game.count("pastry") == n0
+	hud.slot_btns[at].pressed.emit() # and eaten
+	await _wait(0.2)
+	_check("clicking the pastry in her hand again eats it (held first %s, pastries %d -> %d, energy %.0f, food %.0f, happiness %.0f from 40)" % [in_hand, n0, Game.count("pastry"), Game.energy, Game.fullness, Game.happiness],
+		in_hand and Game.count("pastry") == n0 - 1 and absf(Game.energy - 40.0 - float(p["energy"])) < 1.0 and absf(Game.fullness - 40.0 - float(p["food"])) < 1.0 and absf(Game.happiness - 40.0 - float(p["happiness"])) < 1.0)
+	var mx := int(p.get("max", 6))
+	Game.add_item("pastry", mx - Game.count("pastry"))
+	Game.coins = maxi(Game.coins, 500)
+	var row: Dictionary = {}
+	for a in _villager_actions(giorgio):
+		if str(a.get("id", "")) == "buy_pastry":
+			row = a
+	_check("with %d pastries her bag is full and Giorgio's row says so ('%s')" % [mx, str(row.get("label", ""))],
+		not row.is_empty() and not bool(row.get("enabled", true)))
+	Game.take_item("pastry", Game.count("pastry"))
+	hud.hot_sel = 0
+
+
+## Eats one of a food she carries (hud.eat_pressed: a second click on it in her hand). Returns
+## whether she ate it: not while she's busy, in a story scene or asleep.
+func eat_item(item: String) -> bool:
+	if item != "pastry" or not Game.has_item(item) or player.busy or story.is_playing() or sleeping:
+		return false
+	var p := pastry()
+	if not Game.take_item(item):
+		return false
+	Game.add_need("energy", float(p.get("energy", 30)))
+	Game.add_need("fullness", float(p.get("food", 30)))
+	Game.add_need("happiness", float(p.get("happiness", 40)))
+	hud.click("ui_open")
+	hud.show_toast("A pastry from Heart Bakery. (+%d energy, +%d food, +%d happiness)" % [int(p.get("energy", 30)), int(p.get("food", 30)), int(p.get("happiness", 40))])
+	return true
 
 
 func _cottage_price() -> int:
@@ -10800,7 +10973,8 @@ func _villager_actions(v) -> Array:
 			acts.append_array(empire.lantern_rows())
 		"giorgio":
 			var pp := _pastry_price()
-			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
+			var room: bool = Game.count("pastry") < int(pastry().get("max", 6))
+			acts.append(_act("buy_pastry", "Buy a pastry  (%dc)" % pp if room else "Your bag's full of pastries", Game.coins >= pp and room))
 		"sabrina":
 			acts.append(_act("buy_coffee", "Buy a coffee  (%dc)" % COFFEE_PRICE, Game.coins >= COFFEE_PRICE and Game.warmth < 99.0))
 		"gary":
@@ -10942,12 +11116,11 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Her name is %s. I'll have her walked over to your pen by teatime. Be nice to her!" % sheep_name)
 				hud.show_toast("%s the sheep joined your flock! (%d sheep)" % [sheep_name, Game.sheep_count])
 		"buy_pastry":
-			if Game.spend(_pastry_price()):
-				Game.fullness = minf(100.0, Game.fullness + PASTRY_FOOD)
-				Game.add_need("happiness", 4.0)
-				var said: Array = ["Still warm. Sit, eat. The world can wait ten minutes.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take the window seat. Nobody rushes in here."]
+			if Game.count("pastry") < int(pastry().get("max", 6)) and Game.spend(_pastry_price()):
+				Game.add_item("pastry")
+				var said: Array = ["Still warm. Wrap it up, eat it when the day gets long.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take it for later. Take two."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
-				hud.show_toast("A warm croissant. (+%d food)" % int(PASTRY_FOOD))
+				hud.show_toast("A pastry, wrapped for later (%d in your bag). Click it in your hand to eat it." % Game.count("pastry"))
 		"buy_coffee":
 			if Game.spend(COFFEE_PRICE):
 				Game.add_need("warmth", COFFEE_WARMTH)
@@ -11661,3 +11834,269 @@ func _bonfire_checks() -> void:
 ## Saves 65_fog_edge.png, 65_fog_cleared.png, 65_fog_minimap.png and 65_fog_night.png.
 func _fog_checks() -> void:
 	await fog.checks()
+
+
+# --- wolves at night (wolves.gd, data/wolves.json) -------------------------------------------
+
+## Her flock at `n` sheep, in the pen (the wolves check takes them and puts them back).
+func _set_flock(n: int) -> void:
+	while sheep_list.size() > n:
+		var s = sheep_list.pop_back()
+		s.queue_free()
+	Game.sheep_count = n
+	while sheep_list.size() < n:
+		_add_sheep()
+
+
+## Wolves: nothing comes while nothing is at risk; a forced night brings the howl, the toast and the
+## pack walking in; Nora's rush and the dog's barks see them off, the bigger taking more; a missed
+## window costs one animal and the morning says which; a night slept through can cost one too; the
+## barn (housed sheep, rented stalls) keeps them safe; a raid and the tally survive a save.
+func _wolf_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var keep := {"flags": Game.flags.duplicate(true), "day": Game.day, "hour": Game.hour, "sheep": Game.sheep_count, "clock": Game.time_running,
+		"jog": autotest_jog, "cd": cam_dist, "bed": flock_bedtime, "pos": player.position, "follow": cam_follow}
+	player.walk([])
+	autotest_jog = false
+	Game.time_running = false
+	flock_bedtime = false
+	Wolves.on = true
+	wolves.clear()
+	wildlife.clear()
+	for k in ["wolves", "wolf_note", "penned", "wild_gone", "wild", "barn_rent_due", "barn_rent_owed", "wolves_tamed"]:
+		Game.flags.erase(k)
+	Game.flags["act1_done"] = true
+	Game.hour = 20.0
+	var home: Vector3 = wolves.pen_centre()
+	# nothing at risk: the night passes quietly
+	_set_flock(0)
+	wildlife.build()
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	_check("with nothing in the pens the wolves don't come (raid %s, night rolled %s)" % [wolves.active(), int(wolves.state().get("night", -1)) == Game.day],
+		not wolves.active() and int(wolves.state().get("night", -1)) == Game.day)
+	# a forced wolf night: the howl, the toast, the pack walking in from the woods
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_901"}, {"species": "fox", "key": "pen_fox_902"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.3)
+	var risk0: int = wolves.at_risk().size()
+	var howls0 := int(audio.played.get("howl", 0))
+	Game.hour = 20.0
+	var s0: Dictionary = wolves.state()
+	s0.erase("night")
+	Game.set_flag("wolves", s0)
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	var n0: int = wolves.pack.size()
+	var toast0: String = hud.toast_label.text
+	var models_ok: bool = wolves.pack.all(func(w): return w._model != null and w._anim != null and w._anim.has_animation("Walk"))
+	var d_start: float = wolves.pack[0].position.distance_to(home) if n0 > 0 else 0.0
+	_set_cam_lock(false) # the camera on the pack, not on her
+	cam_dist = 16.0
+	for i in 30: # long enough for the warning to settle
+		cam_target = wolves.pack[0].position if n0 > 0 else home
+		await _wait(0.1)
+	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
+	var toast_box: Vector2 = hud.toast_panel.size
+	await _shot("63_wolves_coming.png")
+	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s', a small box %.0f x %.0f px), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
+		risk0, int(audio.played.get("howl", 0)) - howls0, toast0.left(48), toast_box.x, toast_box.y, n0, str(wolves.pack.map(func(w): return w.size_id)), d_start, walking, models_ok, wolves.raid_left],
+		risk0 == 4 and toast_box.y < 110.0 and toast_box.x <= 680.0 and wolves.active() and int(audio.played.get("howl", 0)) == howls0 + 1 and toast0.contains("howl") and n0 >= 1 and n0 <= 3
+		and d_start > 20.0 and walking == "Walk" and models_ok and wolves.raid_left > 40.0)
+	# scaring them off: three of them at the pen; Nora rushes the small one, the dog barks at the rest
+	wolves.clear()
+	wolves.start_raid(3)
+	await _wait(0.1)
+	for w in wolves.pack:
+		w.position = w.goal
+		w._path = []
+	var small = wolves.pack.filter(func(w): return w.size_id == "small")[0]
+	var medium = wolves.pack.filter(func(w): return w.size_id == "medium")[0]
+	var large = wolves.pack.filter(func(w): return w.size_id == "large")[0]
+	var nerves := [small.nerve, medium.nerve, large.nerve]
+	var out_dir: Vector3 = (small.goal - home)
+	out_dir.y = 0.0
+	out_dir = out_dir.normalized()
+	var side := Vector3(-out_dir.z, 0, out_dir.x)
+	for w in [medium, large]: # the other two along the fence, out of her rush at the small one
+		w.goal += side * 12.0
+		w.position = w.goal
+	var start: Vector3 = small.position + out_dir * 11.0
+	var sc = _nearest_walkable(_cell(start), start)
+	player.position = _cell_center(sc) if sc != null else start
+	player.walk([])
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	_set_cam_lock(false)
+	cam_target = small.position + side * 6.0 + out_dir * 3.0
+	cam_dist = 19.0
+	await _wait(0.6)
+	await _shot("63_wolves_at_pen.png")
+	autotest_jog = true
+	var tw := 0.0
+	var closest := INF
+	var top_speed := 0.0
+	while is_instance_valid(small) and not small.fleeing and tw < 12.0:
+		if player.path.is_empty():
+			player.walk(_find_path(player.position, small.position))
+		closest = minf(closest, Vector2(player.position.x - small.position.x, player.position.z - small.position.z).length())
+		top_speed = maxf(top_speed, player.speed)
+		await _wait(0.1)
+		tw += 0.1
+	autotest_jog = false
+	player.walk([])
+	var small_ran: bool = not is_instance_valid(small) or small.fleeing
+	var others_stay: bool = not medium.fleeing and not large.fleeing
+	_check("the wolves have more nerve the bigger they are (%s), and Nora running at the small one sends it off (%s after %.1f s; she came within %.1f m at up to %.1f m/s, walking pace %.1f) while the others hold (%s)" % [
+		str(nerves), small_ran, tw, closest, top_speed, player.walk_speed, others_stay],
+		nerves == [1, 2, 3] and small_ran and others_stay and wolves.active())
+	toggle_dog(true)
+	hud.hide_dialogue()
+	dog.position = (medium.position + large.position) * 0.5 + out_dir * 2.0
+	dog.path = []
+	cam_target = dog.position
+	await _wait(BARK_WAIT)
+	dog_bark()
+	await _wait(0.1)
+	var after1 := [medium.nerve, large.nerve, medium.fleeing, large.fleeing]
+	await _shot("63_wolves_bark.png")
+	for i in 4:
+		if not wolves.active():
+			break
+		await _wait(BARK_WAIT)
+		for w in wolves.pack:
+			if is_instance_valid(w) and not w.fleeing:
+				dog.position = w.position + out_dir * 2.0
+				break
+		dog_bark()
+	await _wait(0.4)
+	await _shot("63_wolves_flee.png")
+	toggle_dog(false)
+	hud.hide_dialogue()
+	var st: Dictionary = wolves.state()
+	_check("as the dog, a bark takes nerve from every wolf near (after one: medium %d, large %d, running %s %s); the big one takes three, and they're seen off ('%s'; seen off %d, raid saved %s, nothing lost %s)" % [
+		after1[0], after1[1], after1[2], after1[3], hud.toast_label.text.left(30), int(st.get("seen_off", 0)), st.has("raid"), wolves.at_risk().size() == 4],
+		after1[0] == 1 and after1[1] == 2 and after1[2] == false and after1[3] == false and not wolves.active() and int(st.get("seen_off", 0)) == 1
+		and not st.has("raid") and wolves.at_risk().size() == 4)
+	# a bark from her side does nothing: only the player herds and scares
+	wolves.start_raid(1)
+	await _wait(0.1)
+	var w1 = wolves.pack[0]
+	w1.position = w1.goal
+	w1._path = []
+	dog.position = w1.position + Vector3(1.0, 0, 0)
+	var reached: int = wolves.barked(dog.position)
+	_check("beside Nora the dog's bark doesn't reach the wolves (%d reached, nerve %d)" % [reached, w1.nerve], reached == 0 and w1.nerve == 2)
+	# missing the window: they take one, and the morning says which
+	wolves.clear()
+	st = wolves.state()
+	st["night"] = Game.day
+	Game.set_flag("wolves", st)
+	var penned0: int = wildlife.penned_list().size()
+	var sheep0 := Game.sheep_count
+	wolves.start_raid(1, 2.5)
+	await _wait(0.1)
+	var w_in = wolves.pack[0] # a few steps out from the pen, coming in
+	w_in.position = w_in.goal + (w_in.den - w_in.goal).normalized() * 3.0
+	w_in.go_to(w_in.goal)
+	_set_cam_lock(false)
+	cam_target = w_in.goal
+	cam_dist = 15.0
+	await _wait(1.6)
+	await _shot("63_wolves_missed.png")
+	await _wait(1.2)
+	var note_now: String = str(Game.flag("wolf_note", ""))
+	var taken := penned0 + sheep0 - wildlife.penned_list().size() - Game.sheep_count
+	var morning: String = wolves.morning_note(Game.day + 1)
+	_check("missing the window loses one animal (%d gone: %d penned, %d sheep left, %d sheep nodes) and the morning says which ('%s')" % [taken, wildlife.penned_list().size(), Game.sheep_count, sheep_list.size(), morning.strip_edges()],
+		taken == 1 and not wolves.active() and sheep_list.size() == Game.sheep_count and note_now != "" and morning.contains(note_now)
+		and (morning.contains("rabbit") or morning.contains("fox") or morning.contains("sheep")) and Game.flag("wolf_note", "") == "" and int(wolves.state().get("lost", 0)) == 1)
+	# a night slept through: rolled in the morning, and a hit costs one while she slept
+	st = wolves.state()
+	st["night"] = Game.day - 2
+	Game.set_flag("wolves", st)
+	var risk1: int = wolves.at_risk().size()
+	wolves.force_next = true
+	Game.hour = 6.0
+	var slept: String = wolves.morning_note(Game.day)
+	_check("a night she slept through is rolled in the morning, and the wolves took one while she slept ('%s', %d -> %d at risk)" % [slept.strip_edges(), risk1, wolves.at_risk().size()],
+		slept.contains("While you slept") and wolves.at_risk().size() == risk1 - 1 and not wolves.active())
+	# the barn: sheep in their stalls and animals in rented stalls are safe
+	Game.hour = 21.5 # bedtime: the flock keeps to its stalls
+	flock_bedtime = true
+	st = wolves.state()
+	st["night"] = Game.day # tonight is rolled only by this check's own calls
+	Game.set_flag("wolves", st)
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_903"}, {"species": "fox", "key": "pen_fox_904"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.2)
+	var barn_ok: bool = World.barn_ready()
+	if barn_ok:
+		for i in sheep_list.size():
+			var stall: Dictionary = World.barn_stall(i)
+			sheep_list[i].place(stall["stall"], true, stall["yaw"])
+	var housed_risk: int = wolves.at_risk().size()
+	Game.set_flag("barn_rent_due", Game.day + 10)
+	Game.set_flag("barn_rent_owed", 0)
+	var rented: bool = wildlife.stalls_rented()
+	var risk_rented: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came: bool = wolves.roll(Game.day, false)
+	var safe_all: bool = not came and not wolves.active() and wildlife.penned_list().size() == 2 and Game.sheep_count == 2
+	cam_target = World.barn.global_position if World.barn and is_instance_valid(World.barn) else home
+	await _wait(0.4)
+	await _shot("63_wolves_barn.png")
+	Game.set_flag("barn_rent_owed", 60) # behind with the rent: the stalls aren't hers
+	var risk_owed: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came_owed: bool = wolves.roll(Game.day, false)
+	_check("the barn keeps them safe: sheep in their stalls (%s) are off the wolves' list (%d at risk, the two wild ones), and with the stalls rented (%s) nobody is (%d), so a forced night brings nothing (%s); behind with the rent the wild ones are at risk again (%d) and the wolves come (%s)" % [
+		barn_ok, housed_risk, rented, risk_rented, safe_all, risk_owed, came_owed],
+		barn_ok and housed_risk == 2 and rented and risk_rented == 0 and safe_all and risk_owed == 2 and came_owed and wolves.active())
+	# a save: the raid in progress, its seconds and the tally come back
+	await _wait(0.2)
+	wolves.raid_left = 30.0
+	wolves._note_raid()
+	var pack_n: int = wolves.pack.size()
+	var saved := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	wolves.clear()
+	Game.flags.erase("wolves")
+	Game.flags = (saved["flags"] as Dictionary).duplicate(true) # as Game.from_dict() reads them, without reloading the rest of the game (the checks after this one count on it)
+	wolves._resumed = false
+	await _wait(0.3)
+	var st2: Dictionary = wolves.state()
+	_check("a save keeps the wolves: the raid comes back with its pack (%d of %d) and about its seconds (%.0f), and the tally (seen off %d, lost %d)" % [wolves.pack.size(), pack_n, wolves.raid_left, int(st2.get("seen_off", 0)), int(st2.get("lost", 0))],
+		wolves.active() and wolves.pack.size() == pack_n and wolves.raid_left > 25.0 and wolves.raid_left <= 30.0 and int(st2.get("seen_off", 0)) == 1 and int(st2.get("lost", 0)) == 2)
+	# taming isn't built: the hook keeps the wild ones away once it is
+	wolves.clear()
+	Game.set_flag("wolves_tamed", true)
+	wolves.force_next = true
+	var came_tamed: bool = wolves.roll(Game.day, false)
+	_check("the taming hook: once tamed (wolves_tamed) no wild wolves come (%s)" % came_tamed, not came_tamed and not wolves.active())
+	# put it all back
+	wolves.clear()
+	wolves.force_next = false
+	Wolves.on = false
+	wildlife.clear()
+	Game.flags = keep["flags"]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	_set_flock(int(keep["sheep"]))
+	Game.time_running = keep["clock"]
+	autotest_jog = keep["jog"]
+	cam_dist = keep["cd"]
+	flock_bedtime = keep["bed"]
+	player.position = keep["pos"]
+	player.walk([])
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	cam_target = player.position
+	_set_cam_lock(keep["follow"])
+	hud.hide_dialogue()
