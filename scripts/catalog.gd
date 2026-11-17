@@ -217,6 +217,16 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	return l
 
 
+## Candles and the café's pendant lamps light a room without mirroring themselves in every pane
+## and polished top (Alex, 2026-11-17: "too much glare and blurred light" on the café's glass,
+## counters and jars): a faint highlight, from a point rather than a 12 cm ball, which glow had
+## smeared into big soft discs.
+const GLINT := 0.12
+static func soft_glint(l: Light3D) -> void:
+	l.light_specular = GLINT
+	l.light_size = 0.0
+
+
 # --- imported models (tools/import_asset.py) ----------------------------------------
 
 ## The Woolcore palette (data/palette.json): id -> [colour, knit stitch width or 0 for felt].
@@ -358,6 +368,7 @@ static func build(id: String, r: Node3D) -> void:
 			var pl := omni(r, Vector3(0, PENDANT_BULB - 0.08, 0), Color(1.0, 0.74, 0.44), 4.8, 0.25, 1.3)
 			pl.shadow_enabled = false
 			pl.set_meta("no_shadow", true) # main.gd's graphics setting leaves it off
+			soft_glint(pl)
 		for at in ITEMS.get(id, {}).get("candles", []):
 			lit_candle(r, Data.vec3(at))
 		return
@@ -884,6 +895,7 @@ static func _lantern_candle(r: Node3D, inst: Node3D) -> void:
 	candle_flame_quad(r, c + Vector3(0, 1.377, 0), 0.9)
 	var l := omni(r, c + Vector3(0, 1.41, 0), Color(1.0, 0.66, 0.34), 5.5, 0.15, 1.6)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 
 
@@ -950,6 +962,7 @@ static func _candle_flame(r: Node3D, at: Vector3, inst: Node3D) -> void:
 	l.shadow_enabled = false # a few dozen of them in the café: their glow, not their shadows
 	l.set_meta("no_shadow", true) # and the graphics setting leaves them off (main.gd)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 	l.set_meta("phase", phase)
 
