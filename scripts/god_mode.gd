@@ -59,8 +59,15 @@ const HouseEdit = preload("res://scripts/house_edit.gd")
 const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
 const ROAD_PX := 8 # pixels of the painted road map per metre
-const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1)}
-const TOOLS := [["select", "Select & move"], ["place", "Place"], ["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["erase", "Erase road"]]
+## Each surface's colour on the road map (shaders/painted_roads.gdshaderinc reads it the same way)
+const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1), "pavement": Color(1, 1, 0), "sidewalk": Color(0, 1, 1)}
+## The road brush's surfaces, in its dropdown (Alex, 2026-11-17: pavement and sidewalk added)
+const ROADS := [["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["pavement", "Pavement"], ["sidewalk", "Sidewalk"]]
+const TOOLS := [["select", "Select & move"], ["place", "Place"], ["road", "Paint road"], ["erase", "Erase road"]]
+## Where roads can be painted: the whole map (main.gd's walking grid, x -96..144, z -100..62;
+## Alex, 2026-11-17: "god mode should apply to the entire game space"). The map was Grass.REGION
+## alone before; a layout saved then is pasted into this one where it lay (_load_roads).
+const ROAD_RECT := Rect2(-96.0, -100.0, 240.0, 162.0)
 const BRUSH_MAX := 15.0 # metres (radius)
 const SIZE_STEP := 1.1 # how much bigger one press of + makes a thing (and - smaller)
 const SIZE_MIN := 0.2
@@ -165,15 +172,18 @@ var _tile_mmis: Array[MultiMeshInstance3D] = []
 var _drag := {}
 var _painting := false
 var _stroke_rect := Rect2()
-var _stroke_before := PackedByteArray()
+var _stroke_before: Image # the whole map as it was when the stroke began
 var _last_dab := Vector3.ZERO
 var _line_on := false # Shift held while painting: a straight line from _line_from
 var _line_from := Vector3.ZERO
-var _line_base := PackedByteArray() # the road map as it was when the line began
+var _line_base: Image # the road map over _line_rect as it was when the line began
+var _line_rect := Rect2()
 var _pen_at := Vector3.ZERO
 var _pen_place := Rect2()
 var _pond: El
 var _place_pick: OptionButton
+var _road_pick: OptionButton
+var road_kind := "dirt" # what the Paint road button lays: one of ROADS
 var _ghost: Node3D # the Place tool's preview: the thing itself under the pointer, outlined in green
 var _ghost_yaw := 0.0
 var _ghost_scale := 1.0
@@ -1013,7 +1023,7 @@ func layout() -> Dictionary:
 	elif not house_list.is_empty():
 		d["house"] = house_list
 	if roads_on:
-		var r := Grass.REGION
+		var r := ROAD_RECT
 		d["roads"] = {"px": ROAD_PX, "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "png": Marshalls.raw_to_base64(road_img.save_png_to_buffer())}
 	return d
 
@@ -1135,11 +1145,19 @@ func set_tool(t: String) -> void:
 	_end_stream()
 	if tool == "h_wall" and t != "h_wall" and house_tools != null:
 		house_tools.deselect()
+	if t == "road":
+		t = road_kind
+	if ROAD_COLOURS.has(t):
+		road_kind = t
+		if _road_pick != null:
+			for i in _road_pick.item_count:
+				if str(_road_pick.get_item_metadata(i)) == t:
+					_road_pick.select(i)
 	tool = t
 	if t.begins_with("h_") and house_tools != null:
 		main.hud.show_toast(house_tools.hint(t))
 	for k in _tool_btns:
-		(_tool_btns[k] as Button).set_pressed_no_signal(k == t)
+		(_tool_btns[k] as Button).set_pressed_no_signal(k == t or (k == "road" and ROAD_COLOURS.has(t)))
 	if t == "place" and place_id == "":
 		place_id = str(place_options()[0][0])
 	if t != "select":
@@ -1736,11 +1754,12 @@ func undo() -> void:
 			house_split_edited = true
 			_refresh([])
 		"roads":
-			road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, u[1])
+			# only the part the stroke touched was kept: [its pixels, where they go, its area]
+			road_img.blit_rect(u[1], Rect2i(Vector2i.ZERO, (u[1] as Image).get_size()), u[3])
 			for el in u[2]:
 				(el as El).deleted = false
 				_apply(el)
-			_roads_changed(Grass.REGION)
+			_roads_changed(u[4])
 
 
 ## Keys from main.gd while the editor is on. True = the editor used it.
@@ -1831,7 +1850,7 @@ func _enable_roads(seed: bool) -> void:
 	if roads_on:
 		return
 	roads_on = true
-	var size := Vector2i(Grass.REGION.size * ROAD_PX)
+	var size := Vector2i(ROAD_RECT.size * ROAD_PX)
 	road_img = Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
 	if seed:
 		for r in World.PATHS:
@@ -1847,10 +1866,14 @@ func _enable_roads(seed: bool) -> void:
 
 func _show_roads() -> void:
 	road_tex = ImageTexture.create_from_image(road_img)
-	var r := Grass.REGION
+	var r := ROAD_RECT
 	var rect := Vector4(r.position.x, r.position.y, r.size.x, r.size.y)
 	main.grass.ground_mat.set_shader_parameter("roads", road_tex)
 	main.grass.ground_mat.set_shader_parameter("roads_rect", rect)
+	if main.regions != null: # the lands' own ground (and their trails) lies over the farm's out there
+		for gm in main.regions.ground_mats:
+			(gm as ShaderMaterial).set_shader_parameter("roads", road_tex)
+			(gm as ShaderMaterial).set_shader_parameter("roads_rect", rect)
 	# the cobbles the code laid give way to tiles that follow the painted map
 	for c in main.get_children():
 		if str(c.name).begins_with("Cobbles_"):
@@ -1886,39 +1909,61 @@ func _show_roads() -> void:
 				m.set_shader_parameter("roads", road_tex)
 				m.set_shader_parameter("roads_rect", rect)
 	_tiles.clear()
-	_retile(Grass.REGION)
+	_retile(ROAD_RECT)
 
 
 func _load_roads(d: Dictionary) -> void:
 	var img := Image.new()
-	var size := Vector2i(Grass.REGION.size * ROAD_PX)
-	if img.load_png_from_buffer(Marshalls.base64_to_raw(str(d.get("png", "")))) != OK or img.get_size() != size:
+	var size := Vector2i(ROAD_RECT.size * ROAD_PX)
+	var saved: Array = d.get("rect", [ROAD_RECT.position.x, ROAD_RECT.position.y, ROAD_RECT.size.x, ROAD_RECT.size.y])
+	var at := Rect2(float(saved[0]), float(saved[1]), float(saved[2]), float(saved[3]))
+	var want := Vector2i((at.size * ROAD_PX).round())
+	if img.load_png_from_buffer(Marshalls.base64_to_raw(str(d.get("png", "")))) != OK or int(d.get("px", ROAD_PX)) != ROAD_PX or img.get_size() != want or not ROAD_RECT.encloses(at):
 		push_warning("world layout: the saved roads don't fit this map, so the code's own paths are used")
 		return
 	img.convert(Image.FORMAT_RGB8)
 	_enable_roads(false)
-	road_img = img
+	if img.get_size() == size:
+		road_img = img
+	else: # a map saved when roads covered less of the world: it goes where it lay
+		road_img = Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
+		road_img.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), _px_rect(at).position)
 	_show_roads()
 
 
 func _px_rect(r: Rect2) -> Rect2i:
-	return Rect2i(Vector2i(((r.position - Grass.REGION.position) * ROAD_PX).round()), Vector2i((r.size * ROAD_PX).round()))
+	return Rect2i(Vector2i(((r.position - ROAD_RECT.position) * ROAD_PX).round()), Vector2i((r.size * ROAD_PX).round()))
 
 
-## What's painted at a spot: "dirt", "gravel", "cobble" or "".
+## The road map over `r` alone (the grass's mask covers less of the world than the roads do).
+func roads_over(r: Rect2) -> Image:
+	return road_img.get_region(_px_in(r))
+
+
+## _px_rect cut to the map's own pixels.
+func _px_in(r: Rect2) -> Rect2i:
+	return _px_rect(r).intersection(Rect2i(Vector2i.ZERO, road_img.get_size()))
+
+
+## What's painted at a spot: "dirt", "gravel", "cobble", "pavement", "sidewalk" or "".
 func road_at(x: float, z: float) -> String:
 	if not roads_on:
 		return ""
-	var p := Vector2i(((Vector2(x, z) - Grass.REGION.position) * ROAD_PX).floor())
+	var p := Vector2i(((Vector2(x, z) - ROAD_RECT.position) * ROAD_PX).floor())
 	if p.x < 0 or p.y < 0 or p.x >= road_img.get_width() or p.y >= road_img.get_height():
 		return ""
 	var c := road_img.get_pixelv(p)
-	return "cobble" if c.b > 0.5 else ("gravel" if c.g > 0.5 else ("dirt" if c.r > 0.5 else ""))
+	var r := c.r > 0.5
+	var g := c.g > 0.5
+	var b := c.b > 0.5
+	if g:
+		return "pavement" if r else ("sidewalk" if b else "gravel")
+	return "cobble" if b else ("dirt" if r else "")
 
 
 ## One round dab of the brush at a spot on the ground.
 func _dab(p: Vector3) -> void:
-	var c := (Vector2(p.x, p.z) - Grass.REGION.position) * ROAD_PX
+	var c := (Vector2(p.x, p.z) - ROAD_RECT.position) * ROAD_PX
 	var r := brush * ROAD_PX
 	var col: Color = ROAD_COLOURS.get(tool, Color(0, 0, 0))
 	var w := road_img.get_width()
@@ -1948,7 +1993,7 @@ func _begin_stroke(mpos: Vector2) -> void:
 	_enable_roads(true)
 	_painting = true
 	_line_on = false
-	_stroke_before = road_img.get_data()
+	_stroke_before = road_img.duplicate() as Image
 	_stroke_rect = Rect2()
 	_last_dab = g
 	_dab(g)
@@ -1964,13 +2009,17 @@ func _stroke_to(g: Vector3, straight := false) -> void:
 		if not _line_on:
 			_line_on = true
 			_line_from = _last_dab
-			_line_base = road_img.get_data()
+			_line_base = road_img.get_region(_px_in(_stroke_rect))
+			_line_rect = _stroke_rect
 		var d := Vector2(g.x - _line_from.x, g.z - _line_from.z)
 		var end := _line_from
 		if d.length() > 0.05:
 			var dir := Vector2.from_angle(snappedf(d.angle(), PI / 4.0))
 			end = _line_from + Vector3(dir.x, 0, dir.y) * maxf(d.dot(dir), 0.0)
-		road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, _line_base)
+		# back to the map as it was when the line began: only the part this stroke has touched
+		var undone := _px_in(_stroke_rect)
+		road_img.blit_rect(_stroke_before, undone, undone.position)
+		road_img.blit_rect(_line_base, Rect2i(Vector2i.ZERO, _line_base.get_size()), _px_in(_line_rect).position)
 		var count := maxi(1, ceili(_line_from.distance_to(end) / step))
 		for i in range(0, count + 1):
 			_dab(_line_from.lerp(end, float(i) / count))
@@ -2001,7 +2050,7 @@ func _end_stroke() -> void:
 		return
 	_painting = false
 	_line_on = false
-	_line_base = PackedByteArray()
+	_line_base = null
 	# a new road clears the grass tufts, flowers and clover it was painted over
 	var cleared: Array = []
 	if tool != "erase":
@@ -2011,10 +2060,12 @@ func _end_stroke() -> void:
 				baked[el.kind] = true
 				_apply(el)
 				cleared.append(el)
-	undo_stack.append(["roads", _stroke_before, cleared])
+	# keep only the part the stroke touched: the whole map is millions of pixels
+	var px := _px_in(_stroke_rect.grow(0.5))
+	undo_stack.append(["roads", _stroke_before.get_region(px), cleared, px.position, _stroke_rect.grow(0.5)])
 	if undo_stack.size() > 80:
 		undo_stack.pop_front()
-	_stroke_before = PackedByteArray()
+	_stroke_before = null
 	_roads_changed(_stroke_rect)
 
 
@@ -2030,7 +2081,7 @@ func _roads_changed(area: Rect2) -> void:
 
 ## Lays a cobble tile on every 4 x 2 m square of `area` that has cobbles painted in it.
 func _retile(area: Rect2) -> void:
-	var a := area.intersection(Grass.REGION)
+	var a := area.intersection(ROAD_RECT)
 	if a.size.x <= 0.0 or a.size.y <= 0.0:
 		return
 	var c0 := Vector2i(((a.position - TILE_ORIGIN) / TILE).floor())
@@ -2076,7 +2127,8 @@ func _cell_cobbled(cell: Vector2i) -> bool:
 	var px := _px_rect(Rect2(TILE_ORIGIN + Vector2(cell) * TILE, TILE)).intersection(Rect2i(Vector2i.ZERO, road_img.get_size()))
 	for y in range(px.position.y, px.end.y, 2):
 		for x in range(px.position.x, px.end.x, 2):
-			if road_img.get_pixel(x, y).b > 0.5:
+			var c := road_img.get_pixel(x, y)
+			if c.b > 0.5 and c.g < 0.5: # blue with green is sidewalk
 				return true
 	return false
 
@@ -2213,6 +2265,15 @@ func _build_ui() -> void:
 				place_id = str(_place_pick.get_item_metadata(i))
 				set_tool("place"))
 			row.add_child(_place_pick)
+		if id == "road":
+			# which surface the brush lays
+			_road_pick = OptionButton.new()
+			_road_pick.focus_mode = Control.FOCUS_NONE
+			for r in ROADS:
+				_road_pick.add_item(str(r[1]))
+				_road_pick.set_item_metadata(_road_pick.item_count - 1, str(r[0]))
+			_road_pick.item_selected.connect(func(i: int): set_tool(str(_road_pick.get_item_metadata(i))))
+			row.add_child(_road_pick)
 	vb.add_child(row)
 	if house_tools == null:
 		house_tools = HouseEdit.new(self)

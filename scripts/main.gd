@@ -905,7 +905,7 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
-	var roads: Image = god.road_img if painted else null
+	var roads: Image = god.roads_over(Grass.REGION) if painted else null # the grass's mask covers less than the road map
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
 		grass.build(dirt, clear, pond, roads)
@@ -7275,6 +7275,32 @@ func _god_checks() -> void:
 	god.set_brush(1.0)
 	_check("god mode: the square brush fills its corners, and the brush goes up to %.0f m across (corner %s, just outside %s)" % [widest * 2.0, god.road_at(sq.x + 0.9, sq.z + 0.9), god.road_at(sq.x + 1.2, sq.z)],
 		god.road_at(sq.x + 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x - 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x + 1.2, sq.z) == "" and absf(widest - 15.0) < 0.001)
+
+	# roads reach the whole map (Alex, 2026-11-17), and the dropdown has pavement and sidewalk:
+	# out in the east meadows, past where the map used to end, on the meadow's own ground
+	var far_pave := Vector3(120.0, 0, -20.0)
+	var far_side := far_pave + Vector3(2.5, 0, 0)
+	await _god_look(far_pave, 18.0)
+	var pave_item := -1
+	for i in god._road_pick.item_count:
+		if str(god._road_pick.get_item_metadata(i)) == "pavement":
+			pave_item = i
+	god._road_pick.select(pave_item)
+	god._road_pick.item_selected.emit(pave_item)
+	var pave_tool: String = god.tool
+	god.press(cam.unproject_position(far_pave))
+	god.release()
+	god.set_tool("sidewalk")
+	god.press(cam.unproject_position(far_side))
+	god.release()
+	await _shot("60_god_pavement.png")
+	var meadow_has: bool = regions.ground_mats.size() > 0 and regions.ground_mats.all(func(m): return (m as ShaderMaterial).get_shader_parameter("roads") == god.road_tex)
+	var both: bool = god.road_at(far_pave.x, far_pave.z) == "pavement" and god.road_at(far_side.x, far_side.z) == "sidewalk"
+	var side_tiles: bool = god._cell_cobbled(Vector2i(((Vector2(far_side.x, far_side.z) - god.TILE_ORIGIN) / god.TILE).floor()))
+	god.undo()
+	_check("god mode: the road dropdown's pavement and sidewalk paint out in the east meadows, on the lands' ground too, and Undo takes the sidewalk back (tool %s, %s, after Undo %s, cobble tiles laid on the sidewalk %s)" % [pave_tool, "pavement and sidewalk" if both else "missing", god.road_at(far_side.x, far_side.z), side_tiles],
+		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
+	god.undo()
 
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()
