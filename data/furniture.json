@@ -877,6 +877,24 @@
     {"name": "Crib", "price": 240, "size": [1.4, 0.9], "where": "in", "height": 0.92, "id": "crib", "shop": "indoors", "model": "res://assets/props/crib.glb", "cat": "Bed & Study", "wood": 60},
     {"name": "Farmhouse Table", "price": 300, "size": [1.5, 0.95], "where": "in", "height": 0.76, "id": "table_light", "shop": "indoors", "model": "res://assets/props/table_light.glb", "cat": "Kitchen", "wood": 75},
     {"name": "Spindle Chair", "price": 70, "size": [0.5, 0.45], "where": "in", "height": 0.95, "id": "chair_spindle", "shop": "indoors", "model": "res://assets/props/chair_spindle.glb", "cat": "Kitchen", "wood": 18},
-    {"name": "Oak Side Table", "price": 140, "size": [0.9, 0.7], "where": "in", "height": 0.46, "id": "coffee_table_oak", "shop": "indoors", "model": "res://assets/props/coffee_table_oak.glb", "cat": "Living", "wood": 35}
+    {"name": "Oak Side Table", "price": 140, "size": [0.9, 0.7], "where": "in", "height": 0.46, "id": "coffee_table_oak", "shop": "indoors", "model": "res://assets/props/coffee_table_oak.glb", "cat": "Living", "wood": 35},
+    {"name": "Kitchen Counter, 90s", "price": 520, "size": [2.4, 0.62], "where": "in", "height": 2.14, "id": "kitchen_counter_90s", "shop": "indoors", "model": "res://assets/props/kitchen_counter_90s.glb", "cat": "Kitchen", "wood": 130},
+    {"name": "Counter with Sink", "price": 640, "size": [2.4, 0.62], "where": "in", "height": 1.17, "id": "kitchen_counter_sink", "shop": "indoors", "model": "res://assets/props/kitchen_counter_sink.glb", "cat": "Kitchen", "wood": 130},
+    {"name": "Counter with Stove", "price": 720, "size": [2.4, 0.62], "where": "in", "height": 1.01, "id": "kitchen_counter_stove", "shop": "indoors", "model": "res://assets/props/kitchen_counter_stove.glb", "cat": "Kitchen", "wood": 130},
+    {"name": "Kitchen Island", "price": 480, "size": [1.6, 0.9], "where": "in", "height": 0.94, "id": "kitchen_island_90s", "shop": "indoors", "model": "res://assets/props/kitchen_island_90s.glb", "cat": "Kitchen", "wood": 120},
+    {"name": "Almond Fridge", "price": 600, "size": [0.8, 0.8], "where": "in", "height": 1.73, "id": "fridge_90s", "shop": "indoors", "model": "res://assets/props/fridge_90s.glb", "cat": "Kitchen"},
+    {"name": "Toilet", "price": 180, "size": [0.5, 0.66], "where": "in", "height": 0.8, "id": "toilet", "shop": "indoors", "model": "res://assets/props/toilet.glb", "cat": "Bed & Study"},
+    {"name": "Bathroom Vanity", "price": 260, "size": [0.92, 0.56], "where": "in", "height": 1.56, "id": "bathroom_vanity", "shop": "indoors", "model": "res://assets/props/bathroom_vanity.glb", "cat": "Bed & Study", "wood": 65},
+    {"name": "Tub and Shower", "price": 700, "size": [1.53, 0.75], "where": "in", "height": 1.93, "id": "bathtub", "shop": "indoors", "model": "res://assets/props/bathtub.glb", "cat": "Bed & Study"},
+    {"name": "Pinball Machine", "price": 1500, "size": [0.76, 1.4], "where": "in", "height": 1.9, "id": "pinball_machine", "shop": "indoors", "model": "res://assets/props/pinball_machine.glb", "cat": "Living"},
+    {"name": "CRT Television", "price": 350, "size": [0.9, 0.5], "where": "in", "height": 1.06, "id": "crt_tv", "shop": "indoors", "model": "res://assets/props/crt_tv.glb", "cat": "Living"},
+    {"name": "Workbench", "price": 380, "size": [1.8, 0.66], "where": "in", "height": 1.87, "id": "workbench", "shop": "indoors", "model": "res://assets/props/workbench.glb", "cat": "Crafts", "wood": 95},
+    {"name": "Garage Shelf", "price": 220, "size": [1.21, 0.46], "where": "in", "height": 1.8, "id": "garage_shelf", "shop": "indoors", "model": "res://assets/props/garage_shelf.glb", "cat": "Crafts"},
+    {"name": "Rocking Horse", "price": 160, "size": [0.86, 0.32], "where": "in", "height": 0.71, "id": "rocking_horse", "shop": "indoors", "model": "res://assets/props/rocking_horse.glb", "cat": "Living", "wood": 40},
+    {"name": "Teddy Bear", "price": 25, "size": [0.27, 0.22], "where": "in", "height": 0.35, "id": "teddy_bear", "shop": "indoors", "model": "res://assets/props/teddy_bear.glb", "cat": "Living", "flat": true},
+    {"name": "Toy Blocks", "price": 15, "size": [0.21, 0.08], "where": "in", "height": 0.2, "id": "toy_blocks", "shop": "indoors", "model": "res://assets/props/toy_blocks.glb", "cat": "Living", "wood": 4, "flat": true},
+    {"name": "Toy Truck", "price": 20, "size": [0.36, 0.19], "where": "in", "height": 0.21, "id": "toy_truck", "shop": "indoors", "model": "res://assets/props/toy_truck.glb", "cat": "Living", "flat": true},
+    {"name": "Toy Ball", "price": 10, "size": [0.25, 0.25], "where": "in", "height": 0.25, "id": "toy_ball", "shop": "indoors", "model": "res://assets/props/toy_ball.glb", "cat": "Living", "flat": true},
+    {"name": "Toy Train", "price": 30, "size": [0.52, 0.11], "where": "in", "height": 0.21, "id": "toy_train", "shop": "indoors", "model": "res://assets/props/toy_train.glb", "cat": "Living", "wood": 8, "flat": true}
   ]
 }
