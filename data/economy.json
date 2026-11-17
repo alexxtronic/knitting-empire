@@ -165,6 +165,8 @@
     "wool_packs_a_day": 2,
     "seed_tin": {"turnip": 6, "pumpkin": 2}
   },
+  "_about_pastry": "Heart Bakery's pastries (Giorgio; Alex, 2026-11-17): she buys them over his counter into her bag and eats one whenever she likes (click it on the hotbar when it's already in her hand, or press its number key again). Each gives 'energy', 'food' (her Hunger bar) and 'happiness' points out of 100. 'price' is before Giorgio's friendship discount (5% a heart). 'max' is how many her bag holds. The price is a draft.",
+  "pastry": {"price": 20, "energy": 30, "food": 30, "happiness": 40, "max": 6},
   "_about_gear": "What her money buys to knit better and go further (scripts/empire.gd; Alex, 2026-11-15). 'lantern': Steve's price for the lantern that lights her way at night. 'needles': better pairs, in order, sold by Rosa one step at a time; 'floor' is the least a sweater knitted with them can be (1 Common .. 5 Legendary). 'first_needles' is what she starts with. Names, prices and lines are drafts.",
   "gear": {
     "lantern": 45,

@@ -477,6 +477,7 @@ func _connect_hud() -> void:
 	hud.hud_option.connect(_save_hud_option)
 	hud.cinematic_pressed.connect(func(): cinema.enter())
 	hud.first_person_pressed.connect(func(): fps.enter())
+	hud.eat_pressed.connect(func(item: String): eat_item(item))
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -6755,8 +6756,10 @@ func _shop_checks() -> void:
 		var at_post: bool = v.position.distance_to(k["pos"]) < 0.8 and Interiors.inside_of(v.position) == id
 		var price := _pastry_price()
 		var c0 := Game.coins
+		var pastries0 := Game.count("pastry")
 		if id == "bakery":
-			Game.fullness = 40.0
+			Game.coins = maxi(Game.coins, price + 5)
+			c0 = Game.coins
 			_do_action(v, "buy_pastry")
 		else:
 			_do_action(v, "talk")
@@ -6773,8 +6776,9 @@ func _shop_checks() -> void:
 		_check("%s is behind the counter inside, and talks to her across it (%.1f m from their post)" % [v.title, v.position.distance_to(k["pos"])],
 			at_post and v.position.distance_to(k["pos"]) < 1.0 and hud.dlg_panel.visible)
 		if id == "bakery":
-			_check("Giorgio sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
-				Game.coins == c0 - price and Game.fullness > 40.0 + PASTRY_FOOD - 3.0) # less what she burned walking over
+			_check("Giorgio sells her a pastry for her bag (%dc, pastries %d -> %d)" % [c0 - Game.coins, pastries0, Game.count("pastry")],
+				Game.coins == c0 - price and Game.count("pastry") == pastries0 + 1)
+			await _pastry_checks(v)
 		await _shot("46_%s_inside.png" % id)
 		hud.hide_dialogue()
 		player.walk(_find_path(player.position, out_front))
@@ -10769,14 +10773,69 @@ func _yarn_price(base: int) -> int:
 	return int(round(base * (1.0 - 0.05 * Game.hearts("rosa"))))
 
 
-const PASTRY_PRICE := 12 # Giorgio's croissants, before his friendship discount
-const PASTRY_FOOD := 25.0
 const COFFEE_PRICE := 6 # a coffee from Sabrina: warms her up
 const COFFEE_WARMTH := 15.0
 
 
+## Heart Bakery's pastries: data/economy.json "pastry" (price, energy, food, happiness, max).
+func pastry() -> Dictionary:
+	return Data.economy().get("pastry", {"price": 20, "energy": 30, "food": 30, "happiness": 40, "max": 6})
+
+
 func _pastry_price() -> int:
-	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("giorgio"))))
+	return int(round(float(pastry().get("price", 20)) * (1.0 - 0.05 * Game.hearts("giorgio"))))
+
+
+## Pastries (--only=shops, at Giorgio's counter): one in her bag is eaten by clicking it again in her
+## hand, giving data/economy.json "pastry"'s energy, food and happiness; the bag holds "max" at most.
+func _pastry_checks(giorgio) -> void:
+	var p := pastry()
+	hud.hide_dialogue()
+	await _wait(0.3)
+	var at := Game.slots.find("pastry")
+	_check("the pastry is in her bag (slot %d)" % (at + 1), at >= 0)
+	if at < 0:
+		return
+	if at >= Hud.HOTBAR: # a full hotbar: bring it down from the bag first
+		Game.swap_slots(at, Hud.HOTBAR - 1)
+		at = Hud.HOTBAR - 1
+	Game.energy = 40.0
+	Game.fullness = 40.0
+	Game.happiness = 40.0
+	var n0 := Game.count("pastry")
+	hud.slot_btns[at].pressed.emit() # in her hand
+	var in_hand := hud.selected_item() == "pastry" and Game.count("pastry") == n0
+	hud.slot_btns[at].pressed.emit() # and eaten
+	await _wait(0.2)
+	_check("clicking the pastry in her hand again eats it (held first %s, pastries %d -> %d, energy %.0f, food %.0f, happiness %.0f from 40)" % [in_hand, n0, Game.count("pastry"), Game.energy, Game.fullness, Game.happiness],
+		in_hand and Game.count("pastry") == n0 - 1 and absf(Game.energy - 40.0 - float(p["energy"])) < 1.0 and absf(Game.fullness - 40.0 - float(p["food"])) < 1.0 and absf(Game.happiness - 40.0 - float(p["happiness"])) < 1.0)
+	var mx := int(p.get("max", 6))
+	Game.add_item("pastry", mx - Game.count("pastry"))
+	Game.coins = maxi(Game.coins, 500)
+	var row: Dictionary = {}
+	for a in _villager_actions(giorgio):
+		if str(a.get("id", "")) == "buy_pastry":
+			row = a
+	_check("with %d pastries her bag is full and Giorgio's row says so ('%s')" % [mx, str(row.get("label", ""))],
+		not row.is_empty() and not bool(row.get("enabled", true)))
+	Game.take_item("pastry", Game.count("pastry"))
+	hud.hot_sel = 0
+
+
+## Eats one of a food she carries (hud.eat_pressed: a second click on it in her hand). Returns
+## whether she ate it: not while she's busy, in a story scene or asleep.
+func eat_item(item: String) -> bool:
+	if item != "pastry" or not Game.has_item(item) or player.busy or story.is_playing() or sleeping:
+		return false
+	var p := pastry()
+	if not Game.take_item(item):
+		return false
+	Game.add_need("energy", float(p.get("energy", 30)))
+	Game.add_need("fullness", float(p.get("food", 30)))
+	Game.add_need("happiness", float(p.get("happiness", 40)))
+	hud.click("ui_open")
+	hud.show_toast("A pastry from Heart Bakery. (+%d energy, +%d food, +%d happiness)" % [int(p.get("energy", 30)), int(p.get("food", 30)), int(p.get("happiness", 40))])
+	return true
 
 
 func _cottage_price() -> int:
@@ -10865,7 +10924,8 @@ func _villager_actions(v) -> Array:
 			acts.append_array(empire.lantern_rows())
 		"giorgio":
 			var pp := _pastry_price()
-			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
+			var room: bool = Game.count("pastry") < int(pastry().get("max", 6))
+			acts.append(_act("buy_pastry", "Buy a pastry  (%dc)" % pp if room else "Your bag's full of pastries", Game.coins >= pp and room))
 		"sabrina":
 			acts.append(_act("buy_coffee", "Buy a coffee  (%dc)" % COFFEE_PRICE, Game.coins >= COFFEE_PRICE and Game.warmth < 99.0))
 		"gary":
@@ -11007,12 +11067,11 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Her name is %s. I'll have her walked over to your pen by teatime. Be nice to her!" % sheep_name)
 				hud.show_toast("%s the sheep joined your flock! (%d sheep)" % [sheep_name, Game.sheep_count])
 		"buy_pastry":
-			if Game.spend(_pastry_price()):
-				Game.fullness = minf(100.0, Game.fullness + PASTRY_FOOD)
-				Game.add_need("happiness", 4.0)
-				var said: Array = ["Still warm. Sit, eat. The world can wait ten minutes.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take the window seat. Nobody rushes in here."]
+			if Game.count("pastry") < int(pastry().get("max", 6)) and Game.spend(_pastry_price()):
+				Game.add_item("pastry")
+				var said: Array = ["Still warm. Wrap it up, eat it when the day gets long.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take it for later. Take two."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
-				hud.show_toast("A warm croissant. (+%d food)" % int(PASTRY_FOOD))
+				hud.show_toast("A pastry, wrapped for later (%d in your bag). Click it in your hand to eat it." % Game.count("pastry"))
 		"buy_coffee":
 			if Game.spend(COFFEE_PRICE):
 				Game.add_need("warmth", COFFEE_WARMTH)
