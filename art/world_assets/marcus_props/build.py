@@ -277,6 +277,54 @@ def tex_label(name, colour, n=128):
 
 # --- materials -----------------------------------------------------------------------------------
 
+def tex_linen(n=256):
+    """The shade's linen: a cream weave, fine slubs across and down."""
+    rng = np.random.default_rng(5)
+    u, v = np.meshgrid(np.arange(n), np.arange(n))
+    weave = 0.5 + 0.25 * np.sin(u * 2 * np.pi / 4) * np.sin(v * 2 * np.pi / 4)
+    slub = rng.normal(0, 1, (n, 1)) * 0.03 + rng.normal(0, 1, (1, n)) * 0.03
+    base = np.array(K.hex_rgb("#f3e6c8"))
+    rgb = base[None, None, :] * (0.93 + 0.07 * weave + slub)[..., None]
+    hgt = weave + slub * 3
+    return painted("lamp_linen", rgb, hgt, 1.0)
+
+
+def tex_leather(w=2048, h=1024, panels=6):
+    """The beanbag's mustard leather (Alex, 2026-11-17: "less glossy and more leather, add
+    stitching"): a fine pebbled grain with soft creases and a little wear in colour, and `panels`
+    sewn panels round it, each seam a pressed groove with a row of cream stitches either side.
+    Laid on the sphere's UVs: u once round (w px), v pole to pole (h px)."""
+    pebble = K.tile_noise(w, beta=0.35, seed=12, m=h)
+    pebble2 = K.tile_noise(w, beta=0.6, seed=14, m=h)
+    crease = K.tile_noise(w, beta=1.6, seed=13, m=h)
+    blot = K.tile_noise(w, beta=2.4, seed=15, m=h)
+    grain = 0.6 * pebble + 0.4 * pebble2
+    hgt = 0.55 * grain - 0.35 * np.clip(0.5 - crease, 0, 1) ** 2 * 4
+    base = np.array(K.hex_rgb("#c98f1c"))
+    shade = 0.86 + 0.1 * (grain - 0.5) + 0.12 * (blot - 0.5) - 0.08 * np.clip(0.45 - crease, 0, 1)
+    rgb = base[None, None, :] * shade[..., None]
+    thread = np.array(K.hex_rgb("#f0dca8"))
+    x = np.arange(w)[None, :].repeat(h, 0).astype(float)
+    y = np.arange(h)[:, None].repeat(w, 1).astype(float)
+    for k in range(panels + 1):
+        cx = k * w / panels
+        d = np.abs(x - cx)
+        # the seam: a soft groove, darker in its bottom
+        g = np.exp(-(d / 5.0) ** 2)
+        hgt -= 1.4 * g
+        rgb *= (1.0 - 0.35 * g)[..., None]
+        # the stitches: dashes along v, 5 px on, 4 off, 9 px either side of the seam
+        for side in (-1, 1):
+            sd = np.abs(x - (cx + side * 9))
+            on = ((y + (0 if side > 0 else 4)) % 9) < 5
+            st = (sd < 1.6) & on
+            rgb[st] = thread * (0.9 + 0.1 * pebble[st])[:, None]
+            hgt[st] += 0.9
+            # the needle holes at each end of a stitch pull the leather in
+            hole = (sd < 1.6) & (((y + (0 if side > 0 else 4)) % 9) >= 5)
+            hgt[hole] -= 0.3
+    return K.save_image("leather_mustard", np.clip(rgb, 0, 1), TEX), K.save_image("leather_mustard_n", K.normal_from_height(hgt, 1.6), TEX)
+
 def _metal(m, metallic):
     m.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value = metallic
     return m
@@ -347,6 +395,18 @@ MATS = {
     "grille": _tex(tex_grille, 0.5, ns=0),
     "speaker": _tex(tex_speaker, 0.6, ns=0),
     "vcr": _tex(tex_vcr, 0.4, emit=0.0, ns=0),
+    "shade": _tex(tex_linen, 0.85, emit=0.35, ns=0.4),
+    "toy_white": lambda k: K.plain("m90_toy_white", "#f2ebdc", 0.22),
+    "toy_white_shade": lambda k: K.plain("m90_toy_white_shade", "#e2d9c6", 0.25),
+    "toy_lid": lambda k: K.plain("m90_toy_lid_blue", "#2f5fc4", 0.18),
+    "leather": _tex(tex_leather, 0.52, ns=1.0),
+    "brown_wood": lambda k: _wood("m90_brown_wood", "#8a4c22", "#a8622e", "#5e3216", 23, knots=0),
+    "brown_wood_light": lambda k: _wood("m90_brown_wood_light", "#9a5a2a", "#b87436", "#6a3a1a", 29, knots=0),
+    "walnut": lambda k: _wood("m90_walnut", "#4a2c1a", "#5e3a22", "#2e1a0e", 31, knots=0),
+    "black_metal": lambda k: _metal(K.plain("m90_black_metal", "#1a1a1c", 0.35), 0.7),
+    "gilt": lambda k: _metal(K.plain("m90_gilt", "#d4a640", 0.28), 0.9),
+    "gilt_dark": lambda k: _metal(K.plain("m90_gilt_dark", "#a07a28", 0.35), 0.85),
+    "kraft_back": lambda k: K.plain("m90_frame_back", "#8a7458", 0.9),
 }
 for _c, _hex in (("can_blue", "#3a6ad0"), ("can_green", "#4aa050"), ("can_cream", "#efe0b8"), ("can_red", "#c83a30")):
     MATS["label_" + _c] = _tex(lambda c=_c, h=_hex: tex_label("label_" + c, h), 0.5, ns=0)
@@ -1225,7 +1285,186 @@ def build_sliding_door():
     bx("slide_pull_in", (0.025, 0.012, 0.18), (px, -0.02 + 0.023, 1.0), "charcoal", bevel=0.004)
 
 
+
+# --- the second round (2026-11-17, ref/lineup_4.jpg and ref/paintings.jpg) -------------------------
+
+def build_floor_lamp_gold():
+    """A floor lamp: a stepped round brass base, a thin polished brass post with a collar, a
+    cream linen drum shade (it glows; the game adds the light) and a little brass finial."""
+    K.lathe("base", [(0.0, 0.0), (0.15, 0.0), (0.152, 0.012), (0.145, 0.03), (0.11, 0.04), (0.095, 0.055), (0.03, 0.06), (0.0, 0.062)],
+            mat("brass"), steps=28, sharp=50)
+    cy("post", 0.012, 0.012, 1.18, (0, 0, 0.65), "brass", verts=12)
+    cy("collar", 0.02, 0.02, 0.03, (0, 0, 0.62), "brass", verts=12)
+    cy("neck", 0.016, 0.02, 0.05, (0, 0, 1.25), "brass", verts=12)
+    sh = K.lathe("shade", [(0.215, 1.24), (0.21, 1.25), (0.175, 1.5), (0.17, 1.505)], mat("shade"), steps=32, u_rep=3.0, sharp=60)
+    inner = K.lathe("shade_in", [(0.168, 1.503), (0.173, 1.498), (0.208, 1.248), (0.213, 1.243)], mat("shade"), steps=32, u_rep=3.0, sharp=60)
+    bl("finial", 0.018, (0, 0, 1.53), "brass", u=8, v=6)
+    cy("finial_stem", 0.005, 0.005, 0.05, (0, 0, 1.5), "brass", verts=6)
+
+
+def build_toy_box():
+    """A white plastic toy box with four upright grooves on the front and back, a notch under each
+    end for feet, a blue domed lid with a lip all round and a finger dip at the front."""
+    w, d, h = 0.78, 0.48, 0.4
+    bx("body", (w, d, h - 0.03), (0, 0, 0.03 + (h - 0.03) / 2), "toy_white", bevel=0.045)
+    for sx in (-1, 1):
+        bx("foot_%d" % sx, (0.16, d - 0.02, 0.04), (sx * (w / 2 - 0.1), 0, 0.02), "toy_white", bevel=0.012)
+    for sy in (-1, 1):
+        for i in range(4):
+            x = -0.24 + i * 0.16
+            bx("groove_%d_%d" % (sy, i), (0.055, 0.012, 0.2), (x, sy * (d / 2 + 0.002), 0.2), "toy_white_shade", bevel=0.02)
+    bx("lid_rim", (w + 0.04, d + 0.04, 0.05), (0, 0, h + 0.025), "toy_lid", bevel=0.018)
+    bx("lid_top", (w + 0.0, d + 0.0, 0.1), (0, 0, h + 0.07), "toy_lid", bevel=0.045)
+    bx("finger_dip", (0.16, 0.02, 0.03), (0, -(d / 2 + 0.028), h + 0.02), "toy_white_shade", bevel=0.01)
+
+def build_beanbag():
+    """A big mustard beanbag in glossy leather (Alex, 2026-11-17: "glossy leather material"), shaped
+    as ref/lineup_4.jpg: a wide soft base on the floor, the back rising taller behind and leaning a
+    little forward, a seat hollow pressed into the front, and soft folds round it."""
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=28, radius=1.0, calc_uvs=True)
+    for v in bm.verts:
+        x, y, z = v.co
+        rh = math.hypot(x, y)
+        dx, dy = (x / rh, y / rh) if rh > 1e-6 else (0.0, 0.0)
+        # the profile: a soft drum slumped on the floor under a round dome
+        if z >= 0.0:
+            R, zz = 0.46 * math.sqrt(max(0.0, 1.0 - z * z)), 0.34 + 0.42 * z
+        else:
+            R, zz = 0.46 + 0.05 * math.sin(-z * math.pi * 0.6), 0.34 * (1.0 + z)
+            if z < -0.75:
+                R *= 0.75 + 0.25 * math.sqrt(max(0.0, (z + 1.0) / 0.25))
+        # the back (+Y) taller and the front lower
+        zz += 0.12 * dy * (R / 0.46) * (zz / 0.76)
+        X, Y = R * dx, R * dy * 0.95
+        # the seat: a hollow pressed back and down into the front, under the tall back
+        front = min(1.0, max(0.0, -dy * 1.2 + 0.2)) * min(1.0, R / 0.25)
+        dent = 0.26 * math.exp(-(X / 0.36) ** 2) * math.exp(-((zz - 0.42) / 0.17) ** 2) * front
+        Y += dent
+        zz -= 0.35 * dent
+        # soft folds round the sides
+        a = math.atan2(dy, dx)
+        f = 0.012 * math.sin(a * 7 + 0.6 * math.sin(zz * 5)) * min(1.0, zz / 0.15) * min(1.0, R / 0.2)
+        v.co = (X * (1 + f), Y * (1 + f), max(0.0, zz))
+    # the panel seams: the leather pulled in a little along each sewn line (the same u as the
+    # texture's seams: every 8th of the 48 segments)
+    seam = set()
+    for f in bm.faces:
+        for l in f.loops:
+            u = l[uv].uv.x * 48
+            if abs(u - round(u)) < 1e-3 and round(u) % 8 == 0:
+                seam.add(l.vert.index)
+    for v in bm.verts:
+        if v.index in seam and v.co.z > 0.03:
+            v.co.x *= 0.982
+            v.co.y *= 0.982
+    me = bpy.data.meshes.new("bag")
+    bm.to_mesh(me)
+    bm.free()
+    me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+    K._obj("bag", me, mat("leather"))
+
+def build_kids_desk():
+    """A plain brown wooden kids' desk: a thick top with a rounded edge, square legs, an apron, a
+    drawer at the right with a round knob, side and back stretchers."""
+    w, d, h = 1.0, 0.55, 0.72
+    bx("top", (w, d, 0.04), (0, 0, h - 0.02), "brown_wood", bevel=0.012, grain="x")
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            bx("leg", (0.05, 0.05, h - 0.04), (sx * (w / 2 - 0.05), sy * (d / 2 - 0.05), (h - 0.04) / 2), "brown_wood", bevel=0.006)
+        bx("side_stretcher", (0.035, d - 0.1, 0.04), (sx * (w / 2 - 0.05), 0, 0.14), "brown_wood", bevel=0.005, grain="y")
+        bx("side_apron", (0.025, d - 0.1, 0.1), (sx * (w / 2 - 0.05), 0, h - 0.09), "brown_wood", bevel=0.005, grain="y")
+    bx("back_apron", (w - 0.1, 0.025, 0.12), (0, d / 2 - 0.05, h - 0.1), "brown_wood", bevel=0.005, grain="x")
+    bx("back_stretcher", (w - 0.1, 0.03, 0.04), (0, d / 2 - 0.05, 0.14), "brown_wood", bevel=0.005, grain="x")
+    bx("front_apron", (w - 0.1 - 0.32, 0.025, 0.08), (-(w / 2 - 0.05) + (w - 0.42) / 2, -(d / 2 - 0.05), h - 0.08), "brown_wood", bevel=0.005, grain="x")
+    bx("drawer_box", (0.32, d - 0.12, 0.13), (w / 2 - 0.24, 0, h - 0.105), "brown_wood", bevel=0.005)
+    bx("drawer_front", (0.3, 0.025, 0.11), (w / 2 - 0.24, -(d / 2 - 0.045), h - 0.105), "brown_wood_light", bevel=0.008, grain="x")
+    bl("knob", 0.018, (w / 2 - 0.24, -(d / 2 - 0.02), h - 0.105), "brown_wood_light", u=8, v=6)
+
+
+def build_kids_desk_chair():
+    """The desk's chair: a shaped seat, four splayed legs with stretchers, two back posts with a
+    curved top rail and four upright slats."""
+    sw, sd, sh = 0.42, 0.4, 0.44
+    bx("seat", (sw, sd, 0.035), (0, 0, sh), "brown_wood", bevel=0.012, grain="y")
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            hgt = sh if sy < 0 else 0.86
+            bx("leg", (0.04, 0.04, hgt), (sx * (sw / 2 - 0.035), sy * (sd / 2 - 0.035), hgt / 2), "brown_wood", bevel=0.006)
+        bx("side_stretcher", (0.025, sd - 0.07, 0.025), (sx * (sw / 2 - 0.035), 0, 0.16), "brown_wood", bevel=0.004, grain="y")
+    bx("front_stretcher", (sw - 0.07, 0.025, 0.025), (0, -(sd / 2 - 0.035), 0.12), "brown_wood", bevel=0.004, grain="x")
+    bx("top_rail", (sw - 0.03, 0.035, 0.08), (0, sd / 2 - 0.035, 0.81), "brown_wood", bevel=0.01, grain="x")
+    bx("low_rail", (sw - 0.07, 0.025, 0.03), (0, sd / 2 - 0.035, 0.5), "brown_wood", bevel=0.005, grain="x")
+    for i in range(4):
+        bx("slat", (0.028, 0.02, 0.27), (-0.105 + i * 0.07, sd / 2 - 0.035, 0.635), "brown_wood", bevel=0.004)
+
+
+# The five paintings (ref/paintings.jpg): each canvas is the ChatGPT painting cropped to
+# ref/paintings/<id>.png; the frames are built after the sheet's.
+PAINTINGS = {
+    # id: (canvas w, canvas h, frame style)
+    "painting_modern": (0.6, 0.8, "black_metal"),
+    "painting_cubist": (0.6, 0.8, "oak"),
+    "painting_surreal": (0.9, 0.62, "baroque"),
+    "painting_nature": (0.9, 0.62, "walnut_gold"),
+    "painting_harbour": (0.8, 0.56, "white"),
+}
+FRAMES = {
+    # style: [(width, depth, material), ...] from the outside in
+    "black_metal": [(0.018, 0.03, "black_metal")],
+    "oak": [(0.07, 0.05, "oak")],
+    "baroque": [(0.035, 0.06, "gilt"), (0.03, 0.05, "gilt_dark"), (0.025, 0.04, "gilt")],
+    "walnut_gold": [(0.065, 0.05, "walnut"), (0.015, 0.035, "gilt")],
+    "white": [(0.05, 0.04, "white_paint")],
+}
+
+
+def painting_size(pid):
+    cw, ch, style = PAINTINGS[pid]
+    fw = sum(r[0] for r in FRAMES[style])
+    return (cw + 2 * fw, max(r[1] for r in FRAMES[style]) + (0.02 if style == "baroque" else 0.0), ch + 2 * fw)
+
+
+def build_painting(pid):
+    cw, ch, style = PAINTINGS[pid]
+    img = bpy.data.images.load(os.path.join(HERE, "ref", "paintings", pid + ".png"))
+    img.pack()
+    canvas = K.textured("m90_canvas_" + pid, img, rough=0.6)
+    fw = sum(r[0] for r in FRAMES[style])
+    W, H = cw + 2 * fw, ch + 2 * fw
+    zc = H / 2
+    # the canvas, a hair in front of the back board
+    me = bpy.data.meshes.new("canvas")
+    y = -0.012
+    me.from_pydata([(-cw / 2, y, zc - ch / 2), (cw / 2, y, zc - ch / 2), (cw / 2, y, zc + ch / 2), (-cw / 2, y, zc + ch / 2)], [], [(0, 1, 2, 3)])
+    me.uv_layers.new(name="UVMap").data.foreach_set("uv", [0, 0, 1, 0, 1, 1, 0, 1])
+    K._obj("canvas", me, canvas)
+    bx("backboard", (cw + 0.01, 0.01, ch + 0.01), (0, 0.0, zc), "kraft_back", bevel=0.0)
+    # the frame, ring by ring from the outside in; each ring's bars overlap at the corners
+    out = 0.0
+    for i, (bw, bd, m) in enumerate(FRAMES[style]):
+        ow, oh = W - 2 * out, H - 2 * out
+        yc = -bd / 2 + 0.005
+        bx("frame_%d_top" % i, (ow, bd, bw), (0, yc, zc + oh / 2 - bw / 2), m, bevel=min(0.012, bw * 0.3), grain="x")
+        bx("frame_%d_bottom" % i, (ow, bd, bw), (0, yc, zc - oh / 2 + bw / 2), m, bevel=min(0.012, bw * 0.3), grain="x")
+        bx("frame_%d_left" % i, (bw, bd, oh - 2 * bw + 0.002), (-ow / 2 + bw / 2, yc, zc), m, bevel=min(0.012, bw * 0.3))
+        bx("frame_%d_right" % i, (bw, bd, oh - 2 * bw + 0.002), (ow / 2 - bw / 2, yc, zc), m, bevel=min(0.012, bw * 0.3))
+        out += bw
+    if style == "baroque":
+        # carved corner ornaments and a beaded line round the middle ring
+        for sx in (-1, 1):
+            for sz in (-1, 1):
+                bl("corner_%d_%d" % (sx, sz), 0.04, (sx * (W / 2 - 0.035), -0.055, zc + sz * (H / 2 - 0.035)), "gilt", scale=(1, 0.5, 1), u=10, v=6)
+        for sx in (-1, 1):
+            bl("crest_%d" % sx, 0.035, (0, -0.06, zc + sx * (H / 2 - 0.02)), "gilt", scale=(1.8, 0.45, 0.8), u=10, v=6)
+
 KINDS = {
+    "floor_lamp_gold": build_floor_lamp_gold,
+    "toy_box": build_toy_box,
+    "beanbag": build_beanbag,
+    "kids_desk": build_kids_desk,
+    "kids_desk_chair": build_kids_desk_chair,
     "kitchen_counter_90s": build_kitchen_counter_90s,
     "kitchen_island_90s": build_kitchen_island_90s,
     "fridge_90s": build_fridge_90s,
@@ -1251,6 +1490,11 @@ KINDS = {
 # the size each should come out (width x depth x height, metres): make() fails if one is more
 # than 12% off, so a slip in a constant can't reach the game unnoticed
 TARGET = {
+    "floor_lamp_gold": (0.43, 0.43, 1.55),
+    "toy_box": (0.82, 0.54, 0.52),
+    "beanbag": (1.0, 0.92, 0.82),
+    "kids_desk": (1.0, 0.55, 0.72),
+    "kids_desk_chair": (0.42, 0.4, 0.86),
     "kitchen_counter_90s": (2.4, 0.62, 2.14),
     "kitchen_island_90s": (1.6, 0.9, 0.93),
     "fridge_90s": (0.8, 0.75, 1.75),
@@ -1272,6 +1516,10 @@ TARGET = {
     "door_interior": (0.86, 0.19, 2.03),
     "sliding_door": (1.8, 0.13, 2.05),
 }
+for _pid in PAINTINGS:
+    KINDS[_pid] = (lambda p=_pid: build_painting(p))
+    TARGET[_pid] = painting_size(_pid)
+
 # pieces exported as named nodes about their own origin instead of one centred "model":
 # {kind: {node: name prefixes}}; the first node's origin is the model's origin
 NODES = {

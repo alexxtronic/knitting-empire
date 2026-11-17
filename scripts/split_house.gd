@@ -241,24 +241,28 @@ func _opening(lv: String, a: Vector2, b: Vector2, d: Array, y0: float, y1: float
 	var p1 := Vector2(at + wd * 0.5, a.y) if along_x else Vector2(a.x, at + wd * 0.5)
 	var c := p0.lerp(p1, 0.5)
 	var fl := _level_y(lv) if lv != "all" else basement_y
-	var head := fl + (WINDOW_HEAD if kind == "window" else DOOR_HEAD + (0.06 if kind == "slide" else 0.0))
+	# a window may give its own sill and head over the floor ([at, width, "window", sill, head]), to
+	# line up with the house model's own windows
+	var w_sill := float(d[3]) if d.size() > 3 else WINDOW_SILL
+	var w_head := float(d[4]) if d.size() > 4 else WINDOW_HEAD
+	var head := fl + (w_head if kind == "window" else DOOR_HEAD + (0.06 if kind == "slide" else 0.0))
 	if y1 > head + 0.01:
 		var hb := _short_box(roots[lv], p0, p1, head, y1, col)
 		_built.append(hb)
 		walls.append({"full": hb, "low": null, "level": lv, "c": c, "a": p0, "b": p1, "i": wi, "block": false})
 	var rot := 0.0 if along_x else -PI * 0.5 # a model laid along +X turned to lie along the wall
 	if kind == "window":
-		var sill := _short_box(roots[lv], p0, p1, y0, fl + WINDOW_SILL, col)
+		var sill := _short_box(roots[lv], p0, p1, y0, fl + w_sill, col)
 		var low := _short_box(roots[lv], p0, p1, y0, maxf(y0 + 0.05, fl + LOW), col.darkened(0.08))
 		low.visible = false
 		_built.append_array([sill, low])
 		walls.append({"full": sill, "low": low, "level": lv, "c": c, "a": p0, "b": p1, "i": wi})
 		var win := Node3D.new()
-		win.position = Vector3(c.x, fl + WINDOW_SILL, c.y)
+		win.position = Vector3(c.x, fl + w_sill, c.y)
 		win.rotation.y = rot
 		roots[lv].add_child(win)
 		_built.append(win)
-		var h := WINDOW_HEAD - WINDOW_SILL
+		var h := w_head - w_sill
 		var glass := _box(win, Vector3(wd, h, 0.02), Vector3(0, h * 0.5, 0), Catalog.window_glass())
 		glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var frame := _flat_mat(Color("#f4f1ea"))
@@ -526,11 +530,20 @@ func _floor_mat(kind: String) -> StandardMaterial3D:
 			m.uv1_scale = Vector3(1.0, 1.0, 1.0) / 1.2
 			m.roughness = 0.35
 		"shag_green":
+			if _carpet(m, "carpet_shag", Color("#5a7a30"), 0.5, 1.4):
+				_mats[kind] = m
+				return m
 			img = _noise(Color("#4f6b2a"), 0.28, 9)
 			m.uv1_scale = Vector3(1.0, 1.0, 1.0) / 0.8
 		"carpet_blue":
+			if _carpet(m, "carpet_pile", Color("#6a8cb6"), 0.6, 0.8):
+				_mats[kind] = m
+				return m
 			img = _noise(Color("#5d7fa8"), 0.12, 3)
 		"carpet_cream":
+			if _carpet(m, "carpet_pile", Color("#f0e6cf"), 0.6, 0.8):
+				_mats[kind] = m
+				return m
 			img = _noise(Color("#e3d8c0"), 0.08, 3)
 		"cement":
 			img = _noise(Color("#8f8b84"), 0.1, 17)
@@ -541,6 +554,9 @@ func _floor_mat(kind: String) -> StandardMaterial3D:
 			m.uv1_scale = Vector3(1.0, 1.0, 1.0) / 1.0
 			m.roughness = 0.55
 		_: # carpet_grey
+			if _carpet(m, "carpet_pile", Color("#9a9a97"), 0.6, 0.8):
+				_mats[kind] = m
+				return m
 			img = _noise(Color("#8b8b88"), 0.1, 5)
 	img.generate_mipmaps()
 	m.albedo_texture = ImageTexture.create_from_image(img)
@@ -548,6 +564,23 @@ func _floor_mat(kind: String) -> StandardMaterial3D:
 		m.roughness = 0.95
 	_mats[kind] = m
 	return m
+
+
+## A carpet from art/world_assets/carpet's maps (greyscale pile, tinted here, and its normal map),
+## one tile every `tile` metres. False if the maps aren't there, so the drawn noise stands in.
+func _carpet(m: StandardMaterial3D, map: String, tint: Color, tile: float, bump: float) -> bool:
+	var base := "res://assets/textures/carpet/%s" % map
+	if not ResourceLoader.exists(base + ".png"):
+		return false
+	m.albedo_texture = load(base + ".png")
+	m.albedo_color = tint
+	if ResourceLoader.exists(base + "_n.png"):
+		m.normal_enabled = true
+		m.normal_texture = load(base + "_n.png")
+		m.normal_scale = bump
+	m.uv1_scale = Vector3(1.0, 1.0, 1.0) / tile
+	m.roughness = 0.97
+	return true
 
 
 ## Oak boards: `n` across the tile, each its own shade, with fine grain along it and dark seams.

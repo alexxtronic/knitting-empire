@@ -895,6 +895,16 @@
     {"name": "Toy Blocks", "price": 15, "size": [0.21, 0.08], "where": "in", "height": 0.2, "id": "toy_blocks", "shop": "indoors", "model": "res://assets/props/toy_blocks.glb", "cat": "Living", "wood": 4, "flat": true},
     {"name": "Toy Truck", "price": 20, "size": [0.36, 0.19], "where": "in", "height": 0.21, "id": "toy_truck", "shop": "indoors", "model": "res://assets/props/toy_truck.glb", "cat": "Living", "flat": true},
     {"name": "Toy Ball", "price": 10, "size": [0.25, 0.25], "where": "in", "height": 0.25, "id": "toy_ball", "shop": "indoors", "model": "res://assets/props/toy_ball.glb", "cat": "Living", "flat": true},
+    {"name": "Floor Lamp (brass)", "price": 220, "size": [0.44, 0.44], "where": "in", "height": 1.55, "id": "floor_lamp_gold", "shop": "indoors", "model": "res://assets/props/floor_lamp_gold.glb", "cat": "Living"},
+    {"name": "Toy Box", "price": 90, "size": [0.82, 0.54], "where": "in", "height": 0.52, "id": "toy_box", "shop": "indoors", "model": "res://assets/props/toy_box.glb", "cat": "Living"},
+    {"name": "Beanbag Chair", "price": 160, "size": [1.0, 0.95], "where": "in", "height": 0.8, "id": "beanbag", "shop": "indoors", "model": "res://assets/props/beanbag.glb", "cat": "Living"},
+    {"name": "Kids' Desk", "price": 180, "size": [1.0, 0.55], "where": "in", "height": 0.72, "id": "kids_desk", "shop": "indoors", "model": "res://assets/props/kids_desk.glb", "cat": "Bed & Study", "wood": 45},
+    {"name": "Desk Chair", "price": 80, "size": [0.42, 0.4], "where": "in", "height": 0.86, "id": "kids_desk_chair", "shop": "indoors", "model": "res://assets/props/kids_desk_chair.glb", "cat": "Bed & Study", "wood": 20},
+    {"name": "Painting: Primary Shapes", "price": 260, "size": [0.64, 0.1], "where": "in", "height": 0.84, "hang": 1.1, "id": "painting_modern", "shop": "indoors", "model": "res://assets/props/painting_modern.glb", "cat": "Living", "flat": true},
+    {"name": "Painting: Guitar and Fruit", "price": 300, "size": [0.74, 0.1], "where": "in", "height": 0.94, "hang": 1.05, "id": "painting_cubist", "shop": "indoors", "model": "res://assets/props/painting_cubist.glb", "cat": "Living", "flat": true},
+    {"name": "Painting: Melting Desert", "price": 340, "size": [1.09, 0.1], "where": "in", "height": 0.82, "hang": 1.15, "id": "painting_surreal", "shop": "indoors", "model": "res://assets/props/painting_surreal.glb", "cat": "Living", "flat": true},
+    {"name": "Painting: Mountain Lake", "price": 280, "size": [1.06, 0.1], "where": "in", "height": 0.78, "hang": 1.15, "id": "painting_nature", "shop": "indoors", "model": "res://assets/props/painting_nature.glb", "cat": "Living", "flat": true},
+    {"name": "Painting: Harbour Sails", "price": 240, "size": [0.9, 0.1], "where": "in", "height": 0.66, "hang": 1.2, "id": "painting_harbour", "shop": "indoors", "model": "res://assets/props/painting_harbour.glb", "cat": "Living", "flat": true},
     {"name": "Toy Train", "price": 30, "size": [0.52, 0.11], "where": "in", "height": 0.21, "id": "toy_train", "shop": "indoors", "model": "res://assets/props/toy_train.glb", "cat": "Living", "wood": 8, "flat": true}
   ]
 }
