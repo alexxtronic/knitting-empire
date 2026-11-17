@@ -77,6 +77,11 @@ func run(m: Node) -> void:
 			probe = true
 		if a.begins_with("--perfspots="):
 			only = a.substr(12).split(",")
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--perfsoak="):
+			await soak(float(a.substr(11)))
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+			return
 	var start_gfx: int = main.gfx
 	var d: int = main.default_graphics()
 	print("PERF window %s, screen %s, %s, default level %s, 3D at %d%% (%s)" % [main.get_window().size, DisplayServer.screen_get_size(), RenderingServer.get_video_adapter_name(), main.GFX_NAMES[d], roundi(main.get_viewport().scaling_3d_scale * 100.0), ["bilinear", "FSR", "FSR2", "MetalFX spatial", "MetalFX temporal"][main.get_viewport().scaling_3d_mode]])
@@ -110,6 +115,49 @@ func run(m: Node) -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 
 
+## --perfsoak=MINUTES: play on High for that long the way a player does (the clock running, the
+## town on its rounds, Nora walking between the farm and the square and back) and print a row
+## every half minute: frame time and what the frame holds (nodes, objects drawn, draws, memory).
+## Every two minutes it also times the fixed calibration scene (Low at the farm at 11): if that
+## slows down too, the computer is slowing (a fanless MacBook Air throttles as it warms up); if it
+## holds while the live rows climb, something in the game is piling up.
+func soak(minutes: float) -> void:
+	_set_level(2)
+	Game.hour = 7.0
+	Game.time_running = true
+	main.player.position = Vector3(6.0, 0.0, 5.0)
+	main._set_cam_lock(true)
+	var legs := [Vector3(50.0, 0.0, -1.0), Vector3(6.0, 0.0, 5.0)]
+	var leg := 0
+	var t0 := Time.get_ticks_msec()
+	var next_cal := 0.0
+	print("PERF SOAK %6s %6s %7s %7s %6s %7s %7s %6s %7s %8s %6s" % ["min", "hour", "med ms", "p95 ms", "fps", "draws", "objs", "nodes", "orphans", "mem MB", "vram MB"])
+	while true:
+		var mins := (Time.get_ticks_msec() - t0) / 60000.0
+		if mins >= minutes:
+			break
+		if mins >= next_cal:
+			next_cal += 2.0
+			var keep_pos: Vector3 = main.player.position
+			var keep_hour: float = Game.hour
+			Game.time_running = false
+			await _calibrate("%.1f min" % mins)
+			_set_level(2)
+			main.player.position = keep_pos
+			Game.hour = keep_hour
+			Game.time_running = true
+			await main._wait(1.0)
+		if main.player.position.distance_to(legs[leg]) < 3.0 or main.player.path.is_empty():
+			leg = (leg + 1) % legs.size()
+			main.minimap_walk(legs[leg])
+		var r := await measure(3.0)
+		print("PERF SOAK %6.1f %6.1f %7.2f %7.2f %6.1f %7d %7d %6d %7d %8.0f %6.0f%s" % [mins, Game.hour, r.med, r.p95, 1000.0 / r.med, r.draws, r.objs,
+			Performance.get_monitor(Performance.OBJECT_NODE_COUNT), Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT),
+			Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, "" if r.ok else " covered"])
+		await main._wait(27.0)
+	Game.time_running = false
+
+
 func _set_level(lv: int) -> void:
 	main.gfx = lv
 	main.apply_graphics()
@@ -128,9 +176,9 @@ func _calibrate(when: String) -> void:
 	if not out.is_empty():
 		load = str(out[0]).strip_edges()
 	var others := []
-	OS.execute("pgrep", ["-f", "Godot.app/Contents/MacOS/Godot"], others)
+	OS.execute("pgrep", ["-x", "Godot"], others) # by process name: -f also matched shells waiting on Godot
 	var n_godot := str(others[0]).strip_edges().split("\n").size() if not others.is_empty() and str(others[0]).strip_edges() != "" else 0
-	print("PERF calibration %s: Low at the farm %.2f ms median, %.2f p95%s; load average %s; Godot processes running: %d" % [when, r.med, r.p95, "" if r.ok else " (covered)", load, n_godot])
+	print("PERF calibration %s: Low at the farm %.2f ms median, %.2f p95%s; load average %s; other Godot processes: %d" % [when, r.med, r.p95, "" if r.ok else " (covered)", load, maxi(n_godot - 1, 0)])
 	_set_level(keep)
 
 
@@ -229,6 +277,18 @@ func _probe(spot: Array) -> void:
 			for l in lamps:
 				if is_instance_valid(l) and not (l as Light3D).shadow_enabled:
 					(l as Light3D).visible = on,
+		# cheaper settings for High's effects ("without" = the cheaper one)
+		"sdfgi_lights_4f": func(on: bool) -> void:
+			RenderingServer.environment_set_sdfgi_frames_to_update_light(RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES if on else RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES),
+		"sdfgi_4_cascades": func(on: bool) -> void: env.sdfgi_cascades = 4 if on else 3,
+		"ssao_high": func(on: bool) -> void:
+			RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH if on else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, true, 0.5, 2, 50.0, 300.0),
+		"ssil_medium": func(on: bool) -> void:
+			RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_MEDIUM if on else RenderingServer.ENV_SSIL_QUALITY_LOW, true, 0.5, 4, 50.0, 300.0),
+		"fog_64": func(on: bool) -> void:
+			RenderingServer.environment_set_volumetric_fog_volume_size(64 if on else 48, 64 if on else 48),
+		"grass_full_density": func(on: bool) -> void:
+			main.grass.set_quality(1.0 if on else 0.75, [30.0, 40.0, 46.0][main.gfx], main.GRASS_THIN[main.gfx]),
 		"3d_res_x0.7": func(on: bool) -> void:
 			main.render_scale = 1.0 if on else 0.7
 			main._fit_3d_resolution(),
@@ -236,17 +296,33 @@ func _probe(spot: Array) -> void:
 	var casting: int = main.light_budget.casting(main.get_tree())
 	print("PERF probe %-11s %d omni lights, %d casting shadows" % [spot[0], lamps.size(), casting])
 	var pick: PackedStringArray = []
+	var reps := 3
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--perftoggles="):
 			pick = a.substr(14).split(",")
+		if a.begins_with("--perfreps="):
+			reps = maxi(int(a.substr(11)), 1)
 	for k in toggles:
 		if not pick.is_empty() and not (str(k) in pick):
 			continue
-		var with := await measure()
-		toggles[k].call(false)
-		await main._wait(0.6)
-		var off := await measure()
-		toggles[k].call(true)
-		await main._wait(0.5)
-		print("PERF probe %-11s without %-16s %6.2f ms, with %6.2f (saves %6.2f); draws %d / %d, prims %dk / %dk%s" % [spot[0], k, off.med, with.med, with.med - off.med, off.draws, with.draws, off.prims / 1000, with.prims / 1000, "" if off.ok and with.ok else " (covered: ignore)"])
+		# with, without, with, without...: the median of the savings, so a busy moment on the machine
+		# lands in one pair and not in the answer
+		var savings: Array[float] = []
+		var with := {}
+		var off := {}
+		for rep in reps:
+			with = await measure(1.5)
+			toggles[k].call(false)
+			await main._wait(0.6)
+			off = await measure(1.5)
+			toggles[k].call(true)
+			await main._wait(0.5)
+			if off.ok and with.ok:
+				savings.append(float(with.med) - float(off.med))
+		savings.sort()
+		var each := PackedStringArray()
+		for x in savings:
+			each.append("%.1f" % x)
+		var saved: float = savings[savings.size() / 2] if not savings.is_empty() else NAN
+		print("PERF probe %-11s without %-18s %6.2f ms, with %6.2f (saves %6.2f, median of %d: %s); draws %d / %d, prims %dk / %dk" % [spot[0], k, off.med, with.med, saved, savings.size(), ", ".join(each), off.draws, with.draws, off.prims / 1000, with.prims / 1000])
 	main.apply_graphics()
