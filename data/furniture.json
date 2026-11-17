@@ -868,6 +868,15 @@
       "height": 0.1,
       "id": "pendant_lamp",
       "model": "res://assets/props/pendant_lamp.glb"
-    }
+    },
+    {"name": "TV Armoire", "price": 520, "size": [2.0, 0.7], "where": "in", "height": 1.75, "id": "tv_armoire", "shop": "indoors", "model": "res://assets/props/tv_armoire.glb", "cat": "Living", "wood": 130},
+    {"name": "Grey Couch", "price": 480, "size": [2.2, 0.9], "where": "in", "height": 0.92, "id": "sofa_grey", "shop": "indoors", "model": "res://assets/props/sofa_grey.glb", "cat": "Living"},
+    {"name": "Christmas Tree", "price": 180, "size": [1.4, 1.4], "where": "in", "height": 1.95, "id": "christmas_tree", "shop": "indoors", "model": "res://assets/props/christmas_tree.glb", "cat": "Living"},
+    {"name": "Bunk Bed", "price": 420, "size": [1.95, 1.2], "where": "in", "height": 1.9, "id": "bunk_bed", "shop": "indoors", "model": "res://assets/props/bunk_bed.glb", "cat": "Bed & Study", "wood": 105},
+    {"name": "Double Bed", "price": 520, "size": [1.8, 2.1], "where": "in", "height": 1.3, "id": "bed_double", "shop": "indoors", "model": "res://assets/props/bed_double.glb", "cat": "Bed & Study", "wood": 130},
+    {"name": "Crib", "price": 240, "size": [1.4, 0.9], "where": "in", "height": 0.92, "id": "crib", "shop": "indoors", "model": "res://assets/props/crib.glb", "cat": "Bed & Study", "wood": 60},
+    {"name": "Farmhouse Table", "price": 300, "size": [1.5, 0.95], "where": "in", "height": 0.76, "id": "table_light", "shop": "indoors", "model": "res://assets/props/table_light.glb", "cat": "Kitchen", "wood": 75},
+    {"name": "Spindle Chair", "price": 70, "size": [0.5, 0.45], "where": "in", "height": 0.95, "id": "chair_spindle", "shop": "indoors", "model": "res://assets/props/chair_spindle.glb", "cat": "Kitchen", "wood": 18},
+    {"name": "Oak Side Table", "price": 140, "size": [0.9, 0.7], "where": "in", "height": 0.46, "id": "coffee_table_oak", "shop": "indoors", "model": "res://assets/props/coffee_table_oak.glb", "cat": "Living", "wood": 35}
   ]
 }

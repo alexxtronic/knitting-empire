@@ -15,6 +15,7 @@ extends Node3D
 ## with her from the start of every game (main.DOG_FROM_START); in Act 1 he can only herd once the
 ## pen is built (the "pen_done" flag, main.dog_herds()).
 
+const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const MODEL := "res://assets/props/dog.glb"
 const LOOPS := ["Idle", "Walk", "Trot", "Run"]
@@ -135,7 +136,14 @@ func bark() -> bool:
 	return true
 
 
+## Every frame: the step, then up or down to the floor under him (split_house.gd: the floors of
+## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
+	_step(delta)
+	position.y = SplitHouse.y_at(position)
+
+
+func _step(delta: float) -> void:
 	if _bark_t > 0.0:
 		_bark_t -= delta
 	if _woof and _woof.visible: # the "Woof!" rises and fades in the time between barks

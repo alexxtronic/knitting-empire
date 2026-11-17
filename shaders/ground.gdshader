@@ -20,6 +20,8 @@ uniform float patch_strength : hint_range(0.0, 1.0) = 1.0;
 
 #include "res://shaders/grass_patches.gdshaderinc"
 
+#include "res://shaders/ground_hole.gdshaderinc"
+
 varying vec3 wpos;
 
 void vertex() {
@@ -92,6 +94,9 @@ vec3 gravel(vec2 p, float soften) {
 
 void fragment() {
 	vec2 p = wpos.xz;
+	if (in_ground_hole(p)) {
+		discard;
+	}
 	float big = fbm(p * 0.045);
 	float mid = fbm(p * 0.35);
 	float fine = vnoise(p * 9.0);

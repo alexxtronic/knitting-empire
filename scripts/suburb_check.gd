@@ -105,7 +105,7 @@ func run(m: Node) -> void:
 	# the API: who sleeps where
 	main._check("home_for gives each named villager their house and anyone else the same one every time",
 		sb.home_for("wren") == 0 and sb.home_for("rosa") == 2 and sb.home_for("someone_new") == sb.home_for("someone_new")
-		and sb.home_for("someone_new") >= 0 and sb.door_for("rowan").distance_to(sb.houses()[1]["door"]) < 0.01)
+		and sb.home_for("someone_new") >= 0 and sb.door_for("rowan").distance_to(sb.houses()[3]["door"]) < 0.01)
 	await _night(sb)
 	await _pictures(sb)
 

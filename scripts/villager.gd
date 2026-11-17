@@ -4,6 +4,7 @@ extends Node3D
 ## With look.model set (a character id from data/characters.json) they wear that skinned
 ## body and share the player's animations; otherwise they get a simple shape model.
 
+const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const Body = preload("res://scripts/body.gd")
 const WALK_SPEED := 1.0
@@ -187,7 +188,14 @@ func _add_tag_and_collider(tag_y: float) -> void:
 	add_child(body)
 
 
+## Every frame: the step, then up or down to the floor under them (split_house.gd: the floors of
+## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
+	_step(delta)
+	position.y = SplitHouse.y_at(position)
+
+
+func _step(delta: float) -> void:
 	_t += delta
 	if body:
 		_process_body(delta)

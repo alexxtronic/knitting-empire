@@ -23,6 +23,7 @@ const Data = preload("res://scripts/data.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const BuildingSkin = preload("res://scripts/building_skin.gd")
 const Town = preload("res://scripts/town.gd")
+const SplitHouse = preload("res://scripts/split_house.gd")
 const PAVING := preload("res://shaders/paving.gdshader")
 const MODEL := "res://assets/props/building_suburb_house.glb"
 const SIGN_MODEL := "res://assets/props/welcome_sign.glb"
@@ -57,6 +58,7 @@ var lamps: Array = [] # the street lamps (main.decor)
 var sleepers := {} # id -> {"v", "state": walking|asleep|returning, "house", "home", "roam", "route", "route_i", "rest", "t"}
 var extra := {} # id -> Villager: townsfolk who sleep here too (add_sleeper)
 var lit := {} # house index -> its windows lit
+var walk_in: Node3D = null # split_house.gd: the one house you can go into (Marcus's)
 var on := true # bedtimes at all: main.gd turns it off in the autotest (its town keeps still) but for the suburb check
 var _pane_night: StandardMaterial3D
 var _mats := {}
@@ -259,7 +261,10 @@ func _house(i: int, d: Dictionary) -> Array:
 	var mx := -1.0 if mirror else 1.0
 	# the garden: the photo's arborvitae and the red-leaf shrub, or some of the catalogue's flowers
 	var local_blocks: Array = []
+	var walks_in := i == int(Data.load_json("split_house").get("house", -1))
 	for r in FOOTPRINT:
+		if walks_in and (r as Rect2).size.x > 1.0:
+			continue # its walls block the grid instead (split_house.gd mark_grid())
 		local_blocks.append(_mirrored(r, mirror))
 	for p in d.get("plants", []):
 		var id := str(p[0])
@@ -303,6 +308,11 @@ func _house(i: int, d: Dictionary) -> Array:
 	var h := {"i": i, "node": node, "model": model, "mirror": mirror, "panes": panes, "light": light, "yaw": node.rotation.y,
 		"door": _to_world(node, Vector3(DOOR_AT.x * mx, 0, DOOR_AT.z)), "inside": _to_world(node, Vector3(INSIDE_AT.x * mx, 0, INSIDE_AT.z))}
 	house_list.append(h)
+	if walks_in and not mirror:
+		walk_in = SplitHouse.new()
+		walk_in.name = "WalkIn"
+		add_child(walk_in)
+		walk_in.build(main, node)
 	Town.built.append([node, KIND, "House, %s" % str(cfg.get("name", "Bretton Oaks")), blocks])
 	return blocks
 

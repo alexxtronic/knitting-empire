@@ -4,6 +4,7 @@ extends Node3D
 ## which shares its skeleton and animation loops with every other character.
 ## Falls back to a simple shape model if the model is missing.
 
+const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
 const Body = preload("res://scripts/body.gd")
@@ -390,7 +391,14 @@ func head_point() -> Vector3:
 	return global_position + Vector3(0, (body.label_height if detailed else 1.8) + 0.05, 0)
 
 
+## Every frame: the step, then up or down to the floor under her (split_house.gd: the floors of
+## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
+	_step(delta)
+	position.y = SplitHouse.y_at(position)
+
+
+func _step(delta: float) -> void:
 	_ring.visible = _ring_on and not in_scene
 	_t += delta
 	if _lying and is_instance_valid(_lie_bed):

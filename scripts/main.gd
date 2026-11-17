@@ -7,6 +7,7 @@ const World = preload("res://scripts/world.gd")
 const Furniture = preload("res://scripts/furniture.gd")
 const PerfCheck = preload("res://scripts/perf_check.gd")
 const SuburbCheck = preload("res://scripts/suburb_check.gd")
+const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
@@ -1314,6 +1315,8 @@ func _rebuild_grid() -> void:
 			rects.append(f.footprint())
 	for r in rects:
 		_mark_rect((r as Rect2).grow(0.2))
+	if suburb != null and suburb.walk_in != null:
+		suburb.walk_in.mark_grid() # Marcus's house: its own walls, on the floor she's on (split_house.gd)
 
 
 ## Where she may walk: the whole map (Alex, 2026-11-14: she, and the dog, can go anywhere until the
@@ -1844,6 +1847,8 @@ func _ray_target(mpos: Vector2) -> Variant:
 
 
 func _ground_point(mpos: Vector2) -> Variant:
+	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
+		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
 	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
 
 
@@ -5686,6 +5691,12 @@ func _autotest() -> void:
 	if "--only=suburb" in OS.get_cmdline_user_args(): # just Bretton Oaks: its houses, its sign, a night there (suburb_check.gd)
 		await _wait(1.5)
 		await SuburbCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=walkin" in OS.get_cmdline_user_args(): # just Marcus's house: in, up, down to the basement, out (walkin_check.gd)
+		await _wait(1.5)
+		await WalkinCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

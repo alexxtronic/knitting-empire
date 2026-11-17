@@ -23,7 +23,7 @@
     {"mirror": true, "brick": "#8e4c3a", "vinyl": "#e6dfcc", "trim": "#f1efe8", "door": "#c9a23c",
      "plants": [["arborvitae", 1.4, 5.3, 1.1], ["arborvitae", 3.6, 5.3, 1.1], ["hydrangea", 6.6, 5.0, 1.0]]}
   ],
-  "residents": {"wren": 0, "rowan": 1, "rosa": 2, "barbara": 2, "giorgio": 3, "steve": 4, "gary": 4, "sabrina": 5, "rebecca": 5},
+  "residents": {"wren": 0, "rowan": 3, "rosa": 2, "barbara": 2, "giorgio": 3, "steve": 4, "gary": 4, "sabrina": 5, "rebecca": 5},
   "night_from": 21.0,
   "night_to": 6.0,
   "lights": 23.0,

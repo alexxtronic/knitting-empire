@@ -13,6 +13,8 @@ uniform float fade = 9.0; // metres over which the edge blends away
 uniform float wet_below = -100.0;
 uniform float wet : hint_range(0.0, 1.0) = 0.0; // rain
 
+#include "res://shaders/ground_hole.gdshaderinc"
+
 varying vec3 wpos;
 
 float hash(vec2 p) {
@@ -43,6 +45,9 @@ void vertex() {
 
 void fragment() {
 	vec2 p = wpos.xz;
+	if (in_ground_hole(p)) {
+		discard;
+	}
 	float big = fbm(p * 0.06);
 	float small = fbm(p * 0.55 + 7.0);
 	vec3 c = mix(col_a, col_b, smoothstep(0.3, 0.7, big));
