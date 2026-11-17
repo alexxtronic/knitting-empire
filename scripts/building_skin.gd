@@ -72,6 +72,8 @@ static func dress(inst: Node3D) -> int:
 			if old == null:
 				continue
 			var tex_name := old.albedo_texture.resource_path.get_file() if old.albedo_texture else ""
+			if tex_name.contains("light_bake_white"):
+				tex_name = "" # the light bake's plain white stand-in: a plain-coloured surface
 			var kind := kind_for(old.resource_name, tex_name)
 			if kind == "":
 				continue
@@ -146,6 +148,13 @@ static func material(kind: String, colour: Color, old: BaseMaterial3D = null) ->
 	var ao: Texture2D = old.ao_texture if old and old.ao_enabled else null
 	## an arched dormer roof (kelib.arch_hood) carries its own UVs in metres, laid along the barrel
 	var arched: bool = old != null and old.resource_name.to_lower().contains("arch")
+	## Godot's glTF import swaps a mesh's two UV sets where a material's only texture is the light
+	## bake (TEXCOORD_1), and says so on the material it makes: ao_on_uv2 off. These maps are
+	## projected in world space, so they can't read the bake from UV; leave it off rather than read
+	## it from UV2, which drew grey zebra stripes on the café's trim and dormers and the Bretton Oaks
+	## houses (2026-11-17). The light bake now gives such materials a white texture so it can't happen.
+	if ao != null and not old.ao_on_uv2:
+		ao = null
 	var key := "%s/%s/%s/%s" % [kind, colour.to_html(false), ao.resource_path if ao else "", arched]
 	if _mats.has(key):
 		return _mats[key]
