@@ -9735,8 +9735,38 @@ func _building_skin_checks() -> void:
 		cam_yaw_goal = cam_yaw
 		await _wait(2.2)
 		await _shot("63_building_%s.png" % e[1])
-	Game.hour = 22.0
 	var cafe: Array = models.filter(func(e): return e[1] == "cafe")
+	if not cafe.is_empty():
+		# Low graphics (no SDFGI): the café's front in the afternoon must not go black
+		var b := cafe[0][0] as Node3D
+		var g0 := gfx
+		Game.hour = 13.5
+		cam_target = b.global_position + Vector3(0, 1.5, 0)
+		cam_dist = 14.0
+		cam_yaw = b.global_rotation.y + deg_to_rad(-20.0)
+		cam_yaw_goal = cam_yaw
+		var p0 := cam_pitch
+		cam_pitch = 14.0
+		for lv in [0, 3]:
+			gfx = lv
+			apply_graphics()
+			await _wait(2.5)
+			await _shot("63_cafe_gfx%d.png" % lv)
+		cam_pitch = p0
+		gfx = g0
+		apply_graphics()
+	# the light bake reads from UV2 everywhere: Godot's glTF import swaps a mesh's UV sets for a
+	# material whose only texture is the bake, which drew grey zebra stripes (light_bake white_base())
+	var swapped: Array = []
+	for e in models:
+		for mi in (e[0] as Node).find_children("*", "MeshInstance3D", true, false):
+			var mesh := (mi as MeshInstance3D).mesh
+			for i in mesh.get_surface_count():
+				var mat := mesh.surface_get_material(i) as BaseMaterial3D
+				if mat and mat.ao_enabled and not mat.ao_on_uv2:
+					swapped.append("%s:%s" % [e[1], mat.resource_name])
+	_check("every building's light bake is read from UV2, none swapped by the import (%s)" % str(swapped.slice(0, 5)), swapped.is_empty())
+	Game.hour = 22.0
 	if not cafe.is_empty():
 		var b := cafe[0][0] as Node3D
 		cam_target = b.global_position + Vector3(0, 1.5, 0)

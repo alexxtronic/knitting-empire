@@ -2,12 +2,11 @@
   "name": "building_cafe",
   "parts": {
     "base": {
-      "triangles": 18748,
+      "triangles": 18642,
       "materials": [
         "cafe_floor",
         "cafe_stone",
         "cafe_mat",
-        "cafe_cobble",
         "cafe_wood",
         "cafe_iron",
         "cafe_bulb",
@@ -146,6 +145,6 @@
       ]
     }
   },
-  "triangles": 73502,
-  "glb_bytes": 6771644
+  "triangles": 73396,
+  "glb_bytes": 6203796
 }

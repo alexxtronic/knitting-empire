@@ -59,7 +59,7 @@ def Z(py):
 # façade now, with a wing either side (two more shop windows, two more dormers); the height is the concept's.
 W = 11.8  # the front wall (the concept's was 5.9)
 D = 10.0  # its depth (the concept's, inferred, was 5.0)
-TERRACE = 4.0  # cobbles in front of the wall
+TERRACE = 4.0  # the terrace in front of the wall (the town's ground, no floor of its own)
 DT = D + TERRACE
 BACK = DT / 2
 FRONT = BACK - D  # the front wall's face; -Y is the front
@@ -986,18 +986,9 @@ CHALK = (1.7, FRONT - 3.2)  # the A-frame menu, out by the path
 
 
 def terrace(M):
-    """Cobbles in front, the bistro tables, pots, the barrel, the chalkboard, fallen leaves."""
+    """The bistro tables in front, pots, the barrel, the chalkboard, fallen leaves."""
     yf = FRONT
-    # the cobbled terrace: half an oval out from the wall, 10 m across
-    pts = [(7.0 * math.cos(a), yf - (TERRACE - 0.05) * math.sin(a)) for a in np.linspace(0, math.pi, 36)]
-    verts = [(x, y, 0.035) for x, y in pts] + [(x, y, 0.0) for x, y in pts]
-    n = len(pts)
-    faces = [tuple(range(n))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
-    me = bpy.data.meshes.new("terrace")
-    me.from_pydata(verts, [], faces)
-    me.update()
-    ob = K._obj("terrace", me, M["cobble"])
-    K.uv_box(ob, 0.55)
+    # no cobbled floor (Alex, 2026-11-17: it fought the town's own ground, which shows through now)
     for k, (x, d) in enumerate(BISTROS):
         bistro(M, x, yf - d, 41 + k, 1 if k % 2 else -1)
     # a barrel of hydrangeas at the left
@@ -1032,12 +1023,12 @@ def terrace(M):
         for li in poly.loop_indices:
             co = face.data.vertices[face.data.loops[li].vertex_index].co
             lay[li].uv = (co.x / fw + 0.5, co.z / fh + 0.5)
-    # fallen maple leaves on the cobbles
+    # fallen maple leaves on the ground
     rng = np.random.default_rng(71)
     for k in range(26):
         a = rng.uniform(0.1, math.pi - 0.1)
         r = rng.uniform(1.0, 6.6)
-        p = (r * math.cos(a), yf - min(TERRACE - 0.2, 0.4 + r * 0.5 * math.sin(a)), 0.045)
+        p = (r * math.cos(a), yf - min(TERRACE - 0.2, 0.4 + r * 0.5 * math.sin(a)), 0.015)
         K.star("fallen_leaf", 0.08, p, [M["leaf_o"], M["leaf_y"], M["leaf_o"]][k % 3], points=5, inner=0.5, turn=rng.uniform(0, 6))
 
 

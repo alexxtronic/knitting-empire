@@ -209,6 +209,96 @@ def mesh_area(obs):
     return a
 
 
+FINE = [False]  # light_uvs fell back on the fine margins: a big building, given a bigger atlas
+
+
+def unwrap(obs, island_margin, pack_margin):
+    """Unwraps LightUV on welded copies of the meshes, then copies it back corner by corner.
+    A model read from a GLB has every hard edge split (each flat-shaded face its own vertices), so
+    unwrapped as it is every face is an island: the café came out as 34,000 islands, 30,000 of them
+    under 16 pixels, and those specks showed in the game as grey zebra stripes on its dormers and
+    trim (2026-11-17). Welded, it is 5,600. The meshes themselves are not welded, so their own
+    shading and vertices are exported as they were."""
+    temps = []
+    for ob in obs:
+        t = ob.copy()
+        t.data = ob.data.copy()
+        at = t.data.attributes.new("src_face", "INT", "FACE")
+        at.data.foreach_set("value", list(range(len(t.data.polygons))))
+        bpy.context.scene.collection.objects.link(t)
+        temps.append(t)
+    bpy.ops.object.select_all(action="DESELECT")
+    for t in temps:
+        t.select_set(True)
+    bpy.context.view_layer.objects.active = temps[0]
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.reveal()
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.remove_doubles(threshold=0.0001)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=island_margin, area_weight=0.0,
+                             correct_aspect=True, scale_to_bounds=False)
+    bpy.ops.uv.pack_islands(udim_source="CLOSEST_UDIM", rotate=True, margin_method="FRACTION", margin=pack_margin)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for ob, t in zip(obs, temps):
+        copy_light_uv(t, ob)
+        me = t.data
+        bpy.data.objects.remove(t)
+        bpy.data.meshes.remove(me)
+    bpy.ops.object.select_all(action="DESELECT")
+    for ob in obs:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = obs[0]
+
+
+def copy_light_uv(src, dst):
+    """LightUV from the welded copy back onto the mesh. Each face carries its own index ("src_face",
+    set before welding), and each corner takes the welded face's corner at the same point. A face
+    that welded away (a sliver, or a duplicate lying on another) takes the nearest kept face's UV at
+    its centre, a single point."""
+    from mathutils import Vector, kdtree
+    a, b = src.data, dst.data
+    su, du = a.uv_layers["LightUV"].data, b.uv_layers["LightUV"].data
+    idx = a.attributes["src_face"].data
+    kept = {}
+    for p in a.polygons:
+        kept[idx[p.index].value] = p
+    tree = kdtree.KDTree(len(a.polygons))
+    for p in a.polygons:
+        tree.insert(p.center, p.index)
+    tree.balance()
+    for q in b.polygons:
+        p = kept.get(q.index)
+        if p is None:
+            _, i, _ = tree.find(q.center)
+            pp = a.polygons[i]
+            c = sum((su[pp.loop_start + k].uv for k in range(pp.loop_total)), Vector((0.0, 0.0))) / pp.loop_total
+            for k in range(q.loop_total):
+                du[q.loop_start + k].uv = c
+            continue
+        pts = [(a.vertices[a.loops[p.loop_start + k].vertex_index].co, su[p.loop_start + k].uv.copy()) for k in range(p.loop_total)]
+        for k in range(q.loop_total):
+            co = b.vertices[b.loops[q.loop_start + k].vertex_index].co
+            du[q.loop_start + k].uv = min(pts, key=lambda t: (t[0] - co).length_squared)[1]
+
+
+def uv_coverage(obs):
+    """How much of the 0..1 square the LightUV faces cover (overlaps would count twice; there are none)."""
+    total = 0.0
+    for ob in obs:
+        me = ob.data
+        a = np.zeros(len(me.loops) * 2, dtype=np.float64)
+        me.uv_layers["LightUV"].data.foreach_get("uv", a)
+        a = a.reshape(-1, 2)
+        for p in me.polygons:
+            idx = list(p.loop_indices)
+            o = a[idx[0]]
+            for i in range(1, len(idx) - 1):
+                u = a[idx[i]] - o
+                v = a[idx[i + 1]] - o
+                total += abs(u[0] * v[1] - u[1] * v[0]) / 2.0
+    return total
+
+
 def light_uvs(obs):
     """Give every mesh a LightUV map (the second UV, Godot's UV2) packed with the rest into one atlas.
     Meshes that already have one (an earlier bake) keep it."""
@@ -217,7 +307,12 @@ def light_uvs(obs):
         me = ob.data
         if len(me.uv_layers) == 0:
             me.uv_layers.new(name="UVMap")
-        if "LightUV" not in me.uv_layers:
+        if "LightUV" not in me.uv_layers and len(me.uv_layers) == 2:
+            # an earlier bake's map comes back from the GLB as "UVMap.001": bake into it again (a new
+            # third map would be TEXCOORD_2, which Godot never reads), unwrapped afresh
+            me.uv_layers[1].name = "LightUV"
+            fresh.append(ob)
+        elif "LightUV" not in me.uv_layers:
             me.uv_layers.new(name="LightUV")
             fresh.append(ob)
         me.uv_layers.active = me.uv_layers["LightUV"]
@@ -228,13 +323,23 @@ def light_uvs(obs):
         for ob in obs:
             ob.select_set(True)
         bpy.context.view_layer.objects.active = obs[0]
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.reveal()
-        bpy.ops.mesh.select_all(action="SELECT")
-        bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.006, area_weight=0.0,
-                                 correct_aspect=True, scale_to_bounds=False)
-        bpy.ops.uv.pack_islands(udim_source="CLOSEST_UDIM", rotate=True, margin_method="FRACTION", margin=0.006)
-        bpy.ops.object.mode_set(mode="OBJECT")
+        unwrap(obs, 0.006, 0.006)
+        # On a big building (the café's terrace, 15,000 faces in thousands of islands) a pack margin of
+        # 0.006 of the square leaves no room for the islands themselves: Blender 5 shrank every one
+        # to a point, the bake wrote nothing, and the café's and the Mayor's Office's atlases came
+        # out black, so their sides went black wherever only the sky lit them (2026-11-17, plainest on
+        # Low with no SDFGI to fill in). Then unwrap again with margins of a pixel or two.
+        # and where the islands only shrank (the barn and the Mayor's Office came out at 8 and 16%,
+        # baked dark and coarse), the finer margins too: keep whichever covers more
+        coarse = uv_coverage(obs)
+        if coarse < 0.45:
+            log("  LightUV covers only %.0f%%: unwrapping again with finer margins" % (100.0 * coarse))
+            unwrap(obs, 0.001, 0.001)
+            FINE[0] = True
+            if uv_coverage(obs) < coarse:
+                unwrap(obs, 0.006, 0.006)
+                FINE[0] = False
+        log("  LightUV covers %.0f%% of the atlas" % (100.0 * uv_coverage(obs)))
     for ob in obs:
         # the exporter writes UV maps in order: UVMap stays TEXCOORD_0, LightUV is TEXCOORD_1 (Godot's UV2)
         me = ob.data
@@ -282,6 +387,36 @@ def wire_occlusion(mat, img):
     nt.links.new(uv.outputs[0], tex.inputs[0])
     nt.links.new(tex.outputs[0], sep.inputs[0])
     nt.links.new(sep.outputs[0], sock)
+    white_base(mat)
+
+
+def white_base(mat):
+    """A plain-coloured material gets a 1 x 1 white texture times its colour as its base colour, so
+    it looks the same. Godot's glTF import swaps a mesh's two UV sets for a material whose only
+    texture is on TEXCOORD_1 (this bake): the bake lands in UV and the material reads it from there,
+    and then BuildingSkin's world-projected maps can't read it at all. The café's trim, dormers and
+    the Bretton Oaks houses came out in grey zebra stripes (2026-11-17)."""
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None or bsdf.inputs["Base Color"].is_linked:
+        return
+    img = bpy.data.images.get("light_bake_white")
+    if img is None:
+        img = bpy.data.images.new("light_bake_white", 1, 1, alpha=False)
+        img.pixels[:] = [1.0, 1.0, 1.0, 1.0]
+        img.pack()
+    col = tuple(bsdf.inputs["Base Color"].default_value)
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    tex.location = (-500, 300)
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.blend_type = "MULTIPLY"
+    mix.inputs["Factor"].default_value = 1.0
+    mix.inputs[7].default_value = col  # B
+    mix.location = (-250, 300)
+    nt.links.new(tex.outputs["Color"], mix.inputs[6])  # A
+    nt.links.new(mix.outputs[2], bsdf.inputs["Base Color"])
 
 
 def soften(px, w, h):
@@ -364,9 +499,12 @@ def bake(id_):
         if ob.data.name in seen:
             ob.data = ob.data.copy()
         seen.add(ob.data.name)
+    FINE[0] = False
     light_uvs(obs)
     area = mesh_area(obs)
-    size = int(min(2048, max(256, 2 ** math.ceil(math.log2(max(1.0, math.sqrt(area) * DENSITY))))))
+    # thousands of islands on a big building leave its trim boards a few pixels wide at 2048: their
+    # light smeared into black streaks (the café's dormers and bargeboards), so they get 4096
+    size = int(min(4096 if FINE[0] else 2048, max(256, 2 ** math.ceil(math.log2(max(1.0, math.sqrt(area) * DENSITY))))))
     log("%s: %d meshes, %.1f m2, atlas %d px, reach %.1f m, %s" % (id_, len(obs), area, size, reach, dev))
 
     img = bpy.data.images.new("light", size, size, alpha=False, float_buffer=True)
@@ -389,7 +527,9 @@ def bake(id_):
             ob.data.materials[i] = bm
     if ground:
         lo_z = min((ob.matrix_world @ v.co).z for ob in obs for v in ob.data.vertices)
-        bpy.ops.mesh.primitive_plane_add(size=80, location=(0, 0, lo_z))
+        # a little under the lowest point: a floor lying flush with the plane (the café's terrace)
+        # met it at once with every ray and baked black
+        bpy.ops.mesh.primitive_plane_add(size=80, location=(0, 0, lo_z - 0.02))
         gp = bpy.context.object
         gm = bake_material(reach)
         gm.node_tree.nodes["Diffuse BSDF"].inputs["Color"].default_value = (GROUND_ALBEDO,) * 3 + (1,)
