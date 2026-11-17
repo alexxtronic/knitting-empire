@@ -65,15 +65,48 @@ vec3 gravel(vec2 p, float soften) {
 	return mix(col, vec3(0.35, 0.33, 0.3), soften); // far away the pebbles blur into one grey
 }
 
-// Asphalt: dark grey, a fine speckle of aggregate, worn lighter in broad patches, the odd patch
-// of fresher black.
+// Asphalt (Alex, 2026-11-17: "darker shade of grey with textures"): a dark grey binder with the
+// aggregate showing through as pale and dark chips a centimetre or two across, mottled and worn
+// lighter in broad patches, hairline cracks sealed with black tar, and the odd square repair patch
+// of fresher, blacker asphalt with a seam round it. The fine detail fades out before it could shimmer.
 vec3 pavement(vec2 p, float px_m) {
-	float wear = rd_noise(p * 0.18) * 0.6 + rd_noise(p * 0.7) * 0.4;
-	vec3 col = mix(vec3(0.13, 0.13, 0.14), vec3(0.24, 0.235, 0.23), wear);
-	float grit = rd_hash(floor(p * 40.0));
-	float near = 1.0 - smoothstep(0.01, 0.05, px_m); // the grit fades before it could shimmer
-	col *= 1.0 + (grit - 0.5) * 0.35 * near;
-	col = mix(col, vec3(0.09, 0.09, 0.1), smoothstep(0.78, 0.86, rd_noise(p * 0.11 + 3.3)) * 0.6);
+	float near = 1.0 - smoothstep(0.012, 0.05, px_m);
+	float mid_near = 1.0 - smoothstep(0.05, 0.2, px_m);
+	float wear = rd_noise(p * 0.15) * 0.6 + rd_noise(p * 0.6) * 0.4;
+	vec3 col = mix(vec3(0.03, 0.034, 0.042), vec3(0.062, 0.065, 0.072), wear); // linear, a little blue: a cool grey under the warm sun
+	// mottling and speck that still read from the camera's height: blotches of 30 cm and 6 cm
+	float mot = rd_noise(p * 3.1 + 7.7) * 0.6 + rd_noise(p * 16.0 + 2.2) * 0.4 * mid_near + 0.2 * (1.0 - mid_near);
+	col *= 0.78 + 0.44 * mot;
+	float speck = rd_noise(p * 45.0);
+	col = mix(col, col * (speck > 0.72 ? 1.9 : (speck < 0.2 ? 0.6 : 1.0)), mid_near * (1.0 - near) * 0.55); // pale and dark grains, blurred further off
+	// the aggregate: one chip in each 1.6 cm cell, round-ish, its own shade
+	vec2 q = p * 62.0;
+	vec2 cell = floor(q);
+	vec2 o = vec2(rd_hash(cell + 3.1), rd_hash(cell + 8.3)) * 0.5 + 0.25;
+	float chip = 1.0 - smoothstep(0.18, 0.32, length(fract(q) - o));
+	float shade = rd_hash(cell + 1.7);
+	vec3 stone = shade > 0.55 ? vec3(0.17, 0.168, 0.165) * (0.7 + 0.6 * shade) : vec3(0.018, 0.018, 0.02);
+	col = mix(col, stone, chip * near * 0.7);
+	col = mix(col, col * (0.9 + 0.25 * rd_hash(floor(p * 40.0))), (1.0 - near) * mid_near * 0.6); // the chips as grain further off
+	// cracks: thin wandering lines where a noise crosses its middle, in some stretches only
+	float cn = rd_noise(p * 0.55 + 11.0) * 0.7 + rd_noise(p * 2.3) * 0.3;
+	float slope = max(fwidth(cn) / max(px_m, 1e-5), 0.05); // the noise's change per metre, so the line is a set width
+	float cd = abs(cn - 0.5) / slope; // metres from the crack
+	float cw = max(0.006, px_m * 0.5);
+	float crack = (1.0 - smoothstep(cw, cw * 2.0, cd)) * smoothstep(0.62, 0.75, rd_noise(p * 0.09 + 5.0));
+	col = mix(col, vec3(0.012, 0.012, 0.014), crack * mid_near * 0.9);
+	// repair patches: some 3 m squares carry a fresher, blacker patch with a pale seam round it
+	vec2 pc = floor(p / 3.0);
+	if (rd_hash(pc + 21.0) > 0.86) {
+		vec2 f = fract(p / 3.0);
+		vec2 lo = vec2(rd_hash(pc + 2.0), rd_hash(pc + 4.0)) * 0.3 + 0.08;
+		vec2 hi = 1.0 - vec2(rd_hash(pc + 6.0), rd_hash(pc + 9.0)) * 0.3 - 0.08;
+		vec2 e = min(f - lo, hi - f) * 3.0;
+		float inside = step(0.0, min(e.x, e.y));
+		float seam = inside * (1.0 - smoothstep(0.02, 0.05, min(e.x, e.y)));
+		col = mix(col, col * 0.65, inside);
+		col = mix(col, vec3(0.1, 0.098, 0.095), seam * mid_near * 0.7);
+	}
 	return col;
 }
 

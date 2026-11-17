@@ -7403,6 +7403,27 @@ func _god_checks() -> void:
 		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
 	god.undo()
 
+	# Bretton Oaks' cul-de-sac is on the road map, its meshes hidden, and "Grass" rubs it out
+	# (Alex, 2026-11-17: "can't delete original cul-de-sac pavement", "add grass as a god mode painting option")
+	if suburb != null:
+		var cds: Vector3 = suburb.centre
+		var meshes_hidden: bool = get_tree().get_nodes_in_group("suburb_paving").size() > 0 and get_tree().get_nodes_in_group("suburb_paving").all(func(n): return not (n as Node3D).visible)
+		var before: String = god.road_at(cds.x, cds.z)
+		var drives: Array = suburb.paving.filter(func(sh): return str(sh["kind"]) == "sidewalk" and sh.has("quad") and float(sh["quad"][2]) > 1.0)
+		var drive: Dictionary = drives[0] if not drives.is_empty() else {}
+		var dmid: Vector2 = (Vector2(drive["quad"][0]) + Vector2(drive["quad"][1])) * 0.5 if not drive.is_empty() else Vector2.ZERO
+		var drive_on: String = god.road_at(dmid.x, dmid.y) if not drive.is_empty() else "none"
+		await _god_look(cds, 18.0)
+		god.set_tool("grass")
+		var grass_tool: String = god.tool
+		god.press(cam.unproject_position(cds))
+		god.release()
+		await _shot("60_god_cul_de_sac_grass.png")
+		var grassed: String = god.road_at(cds.x, cds.z)
+		god.undo()
+		_check("god mode: the cul-de-sac is painted pavement (driveway %s) with its own meshes hidden, and the Grass brush rubs it out and Undo brings it back (before %s, hidden %s, tool %s, after grass '%s', after Undo %s)" % [drive_on, before, meshes_hidden, grass_tool, grassed, god.road_at(cds.x, cds.z)],
+			before == "pavement" and drive_on == "sidewalk" and meshes_hidden and grass_tool == "grass" and grassed == "" and god.road_at(cds.x, cds.z) == "pavement")
+
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()
 	var ids: Array = options.map(func(o): return o[0])

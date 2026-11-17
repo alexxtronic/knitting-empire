@@ -60,9 +60,9 @@ const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
 const ROAD_PX := 8 # pixels of the painted road map per metre
 ## Each surface's colour on the road map (shaders/painted_roads.gdshaderinc reads it the same way)
-const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1), "pavement": Color(1, 1, 0), "sidewalk": Color(0, 1, 1)}
+const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1), "pavement": Color(1, 1, 0), "sidewalk": Color(0, 1, 1), "grass": Color(0, 0, 0)}
 ## The road brush's surfaces, in its dropdown (Alex, 2026-11-17: pavement and sidewalk added)
-const ROADS := [["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["pavement", "Pavement"], ["sidewalk", "Sidewalk"]]
+const ROADS := [["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["pavement", "Pavement"], ["sidewalk", "Sidewalk"], ["grass", "Grass"]]
 const TOOLS := [["select", "Select & move"], ["place", "Place"], ["road", "Paint road"], ["erase", "Erase road"]]
 ## Where roads can be painted: the whole map (main.gd's walking grid, x -96..144, z -100..62;
 ## Alex, 2026-11-17: "god mode should apply to the entire game space"). The map was Grass.REGION
@@ -159,6 +159,7 @@ var place_id := "" # what the Place tool sets down: "scenery:<model>", "scenery:
 var place_size := 1.0 # how big the Place tool sets things down (+ and - change it)
 var _size_for := "" # the place_id that place_size was last reset for
 var small_on := true
+var suburb_painted := false # Bretton Oaks' paving is on the road map (and its meshes hidden)
 var roads_on := false # the layout has painted roads: the code's own paths and cobbles are replaced by the map
 var road_img: Image
 var road_tex: ImageTexture
@@ -1025,6 +1026,8 @@ func layout() -> Dictionary:
 	if roads_on:
 		var r := ROAD_RECT
 		d["roads"] = {"px": ROAD_PX, "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "png": Marshalls.raw_to_base64(road_img.save_png_to_buffer())}
+		if suburb_painted:
+			d["roads"]["suburb"] = true
 	return d
 
 
@@ -1862,6 +1865,7 @@ func _enable_roads(seed: bool) -> void:
 		for i in Town.COBBLE_PATHS:
 			road_img.fill_rect(_px_rect(Town.PATHS[i]), ROAD_COLOURS["cobble"])
 		road_img.fill_rect(_px_rect(Town.PLAZA), ROAD_COLOURS["cobble"])
+		_paint_suburb()
 	_show_roads()
 
 
@@ -1911,6 +1915,51 @@ func _show_roads() -> void:
 				m.set_shader_parameter("roads_rect", rect)
 	_tiles.clear()
 	_retile(ROAD_RECT)
+	if suburb_painted: # the map draws the cul-de-sac now, so its own meshes give way
+		for n in get_tree().get_nodes_in_group("suburb_paving"):
+			(n as Node3D).visible = false
+
+
+## Paints Bretton Oaks' turning circle and road (pavement), its kerbs and driveways (sidewalk) into
+## the map (Alex, 2026-11-17: "can't delete original cul-de-sac pavement"), so they can be rubbed
+## out or painted over like any road. Its shapes are `suburb.paving`.
+func _paint_suburb() -> void:
+	if main.suburb == null or not "paving" in main.suburb:
+		return
+	var shapes: Array = main.suburb.paving
+	if shapes.is_empty():
+		return
+	for kind in ["pavement", "sidewalk"]: # the kerbs and driveways over the asphalt's edge
+		var col: Color = ROAD_COLOURS[kind]
+		for sh in shapes:
+			if str(sh.get("kind", "")) != kind:
+				continue
+			var circle: Array = sh.get("circle", [])
+			var quad: Array = sh.get("quad", [])
+			var px: Rect2i
+			if not circle.is_empty():
+				var rad := float(circle[1])
+				px = _px_in(Rect2(Vector2(circle[0]) - Vector2(rad, rad), Vector2(rad, rad) * 2.0).grow(0.2))
+			else:
+				px = _px_in(Rect2(Vector2(quad[0]), Vector2.ZERO).expand(Vector2(quad[1])).grow(float(quad[2]) * 0.5 + 0.2))
+			for y in range(px.position.y, px.end.y):
+				for x in range(px.position.x, px.end.x):
+					var q := ROAD_RECT.position + (Vector2(x, y) + Vector2(0.5, 0.5)) / ROAD_PX
+					if _in_shape(q, circle, quad):
+						road_img.set_pixel(x, y, col)
+	suburb_painted = true
+
+
+## Whether `q` lies in one of suburb.paving's shapes: a circle [centre, radius] or a quad [a, b, width].
+static func _in_shape(q: Vector2, circle: Array, quad: Array) -> bool:
+	if not circle.is_empty():
+		return q.distance_to(Vector2(circle[0])) <= float(circle[1])
+	var a: Vector2 = quad[0]
+	var b: Vector2 = quad[1]
+	var ln := a.distance_to(b)
+	var d := (b - a) / maxf(ln, 0.001)
+	var t := (q - a).dot(d)
+	return t >= 0.0 and t <= ln and absf((q - a).dot(Vector2(-d.y, d.x))) <= float(quad[2]) * 0.5
 
 
 func _load_roads(d: Dictionary) -> void:
@@ -1929,6 +1978,10 @@ func _load_roads(d: Dictionary) -> void:
 	else: # a map saved when roads covered less of the world: it goes where it lay
 		road_img = Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
 		road_img.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), _px_rect(at).position)
+	if d.get("suburb", false) == true:
+		suburb_painted = true
+	else: # a map saved before the cul-de-sac went onto it
+		_paint_suburb()
 	_show_roads()
 
 
@@ -2054,7 +2107,7 @@ func _end_stroke() -> void:
 	_line_base = null
 	# a new road clears the grass tufts, flowers and clover it was painted over
 	var cleared: Array = []
-	if tool != "erase":
+	if tool != "erase" and tool != "grass": # painting grass puts lawn back, it clears nothing
 		for el in els:
 			if not el.deleted and SMALL.has(el.kind) and _stroke_rect.has_point(Vector2(el.xf.origin.x, el.xf.origin.z)) and road_at(el.xf.origin.x, el.xf.origin.z) != "":
 				el.deleted = true
