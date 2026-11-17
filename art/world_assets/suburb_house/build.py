@@ -20,7 +20,8 @@ cut down like theirs and it can be walked into later:
 Three blocks, each a front-facing gable (its ridge front to back):
     L  the entry wing on the left: lower (eave 2.45 m), its front set back behind the right wing's
     R  the right wing: forward, eave 2.7 m, one window in a cream strip
-    M  the cream centre gable behind and above both (eave 3.6 m, apex about 5 m)
+    M  the cream upper wing over the right wing, just behind its gable and above both (eave 4 m,
+       apex about 5.5 m); the right wing's roof shows as its front gable and a skirt round the sides
 Front faces -Y (+Z in Godot); the origin is on the ground in the middle of the footprint.
 The material names choose what scripts/building_skin.gd does with each surface: brick -> the house's
 brick map, roof_shake -> its shingles (grey here), trim -> painted wood; vinyl, pane, door, floor,
@@ -53,9 +54,16 @@ OV = 0.4         # the roof's overhang at the eaves
 OVE = 0.3        # ... and past the gable ends
 PORCH = 1.1      # the entry wing's gable reaches out over a covered porch (the photo's bench sits under it)
 # the blocks: (x0, x1, y0 (front), y1 (back), eave, pitch in degrees)
-L = (-6.6, 2.4, -3.0, 4.2, 2.4, 10.0)   # its right half runs on under the right wing
 R = (-1.44, 6.54, -4.4, 4.2, 2.6, 17.0)
-M = (-1.87, 4.28, -1.4, 4.0, 3.4, 22.0)
+# the upper wing (Alex, 2026-11-17: "the top floor needs more square footage ... extended a bit more
+# into the air"): over the whole right wing, front to back, standing just behind its brick gable, so
+# Marcus's bedroom floor (data/split_house.json) has full-height walls everywhere under it
+M = (-1.44, 6.54, -4.3, 4.2, 4.0, 20.0)
+# the entry wing: its ridge on the upper wing's left wall, the rake rising to meet the upper wing's
+# eave there, as in the photo (Alex, 2026-11-17: "increase tilt of bottom roof to be flush with top
+# wing"); its right half runs on under the other two, clipped at that wall
+L_EAVE = 2.4
+L = (-6.6, 2 * M[0] + 6.6, -3.0, 4.2, L_EAVE, math.degrees(math.atan((M[4] - L_EAVE) / (M[0] + 6.6))))
 MB = 2.42        # the centre block's walls start here, at the ceiling, under the low roofs
 CEIL = 2.42      # the flat ceiling over the rooms
 DOOR = (-2.5, 1.0, 2.05)              # the front door: centre x, width, height (in the entry wing)
@@ -286,7 +294,6 @@ def wall_front(Mt, low):
         return
     gable(Mt, L, yL, "brick", 1, upto=R[0])
     gable(Mt, R, yR, "brick", 1)
-    valley_fill(Mt, yL, 1)
     # the cream strip round the right window, from the ground up under the rake
     s0, s1 = STRIP
     flat("vinyl_strip", [(s0, 0.12), (s1, 0.12), (s1, rake(R, s1) - 0.02), (RWIN[0], rake(R, RWIN[0]) - 0.02),
@@ -332,8 +339,7 @@ def wall_back(Mt, low):
     if low:
         return
     gable(Mt, L, L[3], "brick", -1, upto=R[0])
-    gable(Mt, R, R[3], "brick", -1)
-    valley_fill(Mt, L[3], -1)
+    # (the right wing's back gable is inside the upper wing's back wall)
     for blk, side, c, w, zb, zt in SIDE_WINDOWS:
         if side == "back":
             window(Mt, "back", L[3], c, w, zb, zt)
@@ -354,14 +360,14 @@ def wall_side(Mt, side, low):
         window(Mt, side, plane, c, w, zb, zt)
 
 
-def slab(Mt, b, ends=(True, True), clip=None, front=OVE):
+def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE):
     """A block's roof: two slopes, the ridge, white fascia and gutters along the eaves, rake boards
     and soffits. clip: the right slope stops at this x, inside the right wing's roof, untrimmed."""
     x0, x1, y0, y1, eave, p = b
     cx, hw = (x0 + x1) / 2, (x1 - x0) / 2
     t = tan(p)
     c = math.cos(math.radians(p))
-    ya, yb = y0 - front, y1 + OVE
+    ya, yb = y0 - front, y1 + back
     ze = eave - OV * t  # the underside at the eave's edge
     top = RT / c
     for s in (-1, 1):
@@ -404,8 +410,8 @@ def centre_block(Mt):
 
 
 def roof(Mt):
-    slab(Mt, L, clip=valley_x() + 0.1, front=PORCH)  # the entry wing's slope ends inside the right wing's roof
-    slab(Mt, R)
+    slab(Mt, L, clip=M[0] + 0.1, front=PORCH)  # the entry wing's right slope ends inside the upper wing
+    slab(Mt, R, ends=(True, False), back=-T - 0.02)  # its back end stops inside the upper wing
     slab(Mt, M)
     centre_block(Mt)
     # the ceiling over the rooms (the entry wing's only as far as the right wing)

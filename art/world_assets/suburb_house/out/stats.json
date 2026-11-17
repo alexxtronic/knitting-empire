@@ -9,7 +9,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 1106,
+      "triangles": 1094,
       "materials": [
         "suburb_brick",
         "suburb_lining",
@@ -23,7 +23,7 @@
       ]
     },
     "wall_back": {
-      "triangles": 944,
+      "triangles": 924,
       "materials": [
         "suburb_brick",
         "suburb_lining",
@@ -91,7 +91,7 @@
       ]
     },
     "roof": {
-      "triangles": 610,
+      "triangles": 566,
       "materials": [
         "suburb_roof_shake",
         "suburb_trim",
@@ -100,6 +100,6 @@
       ]
     }
   },
-  "triangles": 5186,
-  "glb_bytes": 582652
+  "triangles": 5110,
+  "glb_bytes": 577408
 }
