@@ -69,7 +69,14 @@
   "_about_building": "Walls she builds in build mode (scripts/house_builder.gd; Alex, 2026-11-15): 'wall' and 'door' (a doorway) are coins a 2 m length, paid as each goes up. A room is about three days of sweater sales: a 4 x 4 m room against the house takes six walls (480c), the old 8 x 4 'Expand House' about 640c. Taking one down gives 'refund' of its price back. 'plots' are building plots Gary sells at Willow Homes ([x, z, width, depth], on the even grid), a little cheaper for each of his hearts; the first wall of a new house on one also pays 'new_house_fee' for the foundations. 'plot_sold' are Gary's lines. 'recolor' is what a new colour for a piece of furniture costs (data/furniture.json 'palettes'). Every number and line is a draft for Alex.",
   "building": {
     "wall": 80,
-    "door": 90,
+    "wall_wood": 10,
+    "_about_openings": "Build mode's openings (house_builder.gd; Alex, 2026-11-17: every house's walls take doors and windows, for wood or coins), drafts: what each costs on top of a wall (a new wall with one pays both), in wood when she has enough for the whole thing, else coins. Taken out, half comes back in what was paid. 'door' is a plain doorway (its saved name).",
+    "openings": {
+      "door": {"coins": 10, "wood": 1},
+      "hdoor": {"coins": 40, "wood": 4},
+      "slide": {"coins": 90, "wood": 4},
+      "window": {"coins": 30, "wood": 2}
+    },
     "recolor": 15,
     "refund": 0.5,
     "new_house_fee": 600,

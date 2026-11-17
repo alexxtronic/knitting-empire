@@ -918,6 +918,7 @@ func _rebuild_house() -> void:
 		c.free()
 	walls.clear()
 	roofs.clear()
+	builder.doors.clear()
 	builder.compute() # the rooms her walls close (house_builder.gd)
 	_rebuild_grass()
 	wall_rects.clear()
@@ -936,11 +937,13 @@ func _rebuild_house() -> void:
 		right_windows.append(-4.0 * k + 2.0)
 	# where a room she built joins the house, its wall opens in a doorway (house_builder.gd)
 	var sp := builder.house_spans()
-	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9)
-	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"])
-	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"])
-	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"])
-	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"])
+	# and where she put a door, sliding doors, a window or a doorway in one of its own walls
+	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9, builder.line_edits("back"))
+	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"], INF, builder.line_edits("front"))
+	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"], INF, builder.line_edits("left"))
+	var right := builder.line_edits("right")
+	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"], INF, right)
+	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"], INF, right)
 	_door_lintel()
 	for k in range(1, lvl + 1):
 		var z := -4.0 * (k - 1)
@@ -971,10 +974,11 @@ func _banner(tall: Node3D, bx: float) -> void:
 
 ## A wall line of the house, from a to b, with doorways where a room she built joins it: `spans`
 ## are the stretches (along x or z) a room shares, each a divider with a doorway in its middle
-## (house_builder.gd). Windows go only where the wall still stands outdoors. With no spans it's
-## one plain wall. Returns the piece that stands at least 0.4 m either side of `keep_at` (along
-## the line), or {}.
-func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF) -> Dictionary:
+## (house_builder.gd). `edits` are the 2 m edges she put an opening in ({metres along the line where
+## the edge starts: kind}, builder.line_edits()), each drawn by _edge_piece(). Windows go only where
+## the wall still stands outdoors. With no spans or edits it's one plain wall. Returns the piece that
+## stands at least 0.4 m either side of `keep_at` (along the line), or {}.
+func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF, edits := {}) -> Dictionary:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var t0 := a.x if horizontal else a.y
 	var t1 := b.x if horizontal else b.y
@@ -995,6 +999,27 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		cur = s1
 	if cur < t1:
 		pieces.append([cur, t1, "wall"])
+	if not edits.is_empty():
+		var ts: Array = edits.keys()
+		ts.sort()
+		var split: Array = []
+		for p in pieces:
+			if p[2] != "wall":
+				split.append(p)
+				continue
+			var at := float(p[0])
+			for t in ts:
+				var e0 := float(t)
+				var e1 := e0 + HouseBuilder.STEP
+				if e0 < float(p[0]) - 0.01 or e1 > float(p[1]) + 0.01:
+					continue
+				if e0 > at:
+					split.append([at, e0, "wall"])
+				split.append([e0, e1, "edit", str(edits[t])])
+				at = e1
+			if at < float(p[1]):
+				split.append([at, p[1], "wall"])
+		pieces = split
 	var keep := {}
 	for p in pieces:
 		var p0: float = p[0]
@@ -1006,6 +1031,9 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		if p[2] == "gap":
 			_lintel(pa, pb, normal)
 			continue
+		if p[2] == "edit":
+			_edge_piece(pa, pb, normal, str(p[3]), [], false)
+			continue
 		var wins := windows.filter(func(w): return p[2] == "wall" and float(w) - 0.62 >= p0 and float(w) + 0.62 <= p1)
 		var w := _wall(pa, pb, normal, wins, WALL_H, true, p[2] == "divider")
 		if keep_at - 0.4 >= p0 and keep_at + 0.4 <= p1:
@@ -1013,9 +1041,32 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 	return keep
 
 
+## One grid edge of wall from a to b with what's in it (house_builder.gd's kinds): a plain wall with
+## `windows` (positions along the line), a window in its middle, or a gap for a doorway, a door or
+## sliding doors, the wall standing either side and a lintel over it. Her walls and the house's own
+## both use it, so every house takes the same openings.
+func _edge_piece(a: Vector2, b: Vector2, normal: Vector3, kind: String, windows: Array, divider: bool, parent: Node3D = null) -> void:
+	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
+	var mid := (a + b) * 0.5
+	if kind == "window":
+		_wall(a, b, normal, [mid.x if horizontal else mid.y], WALL_H, true, divider, parent)
+		return
+	if not HouseBuilder.GAPS.has(kind):
+		_wall(a, b, normal, windows, WALL_H, true, divider, parent)
+		return
+	var along := (b - a).normalized()
+	var side := (a.distance_to(b) - float(HouseBuilder.GAPS[kind])) * 0.5
+	_wall(a, a + along * side, normal, [], WALL_H, true, divider, parent)
+	_wall(b - along * side, b, normal, [], WALL_H, true, divider, parent)
+	var tall := _lintel(a + along * side, b - along * side, normal, parent)
+	if kind != "door":
+		builder.hang_door(tall, kind, a + along * side, b - along * side)
+
+
 ## The plaster and beam over a doorway from a to b (no door leaf): a room she built joined to the
-## house, or a doorway she put in a wall of her own.
-func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> void:
+## house, or a doorway she put in a wall. Returns the node that stands with the wall (hidden when
+## it's cut down), for a door to hang in.
+func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> Node3D:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var gap := a.distance_to(b)
 	var mid := (a + b) * 0.5
@@ -1035,6 +1086,7 @@ func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> 
 	for d in [-1.0, 1.0]: # the jambs
 		Catalog.box(tall, _sz(horizontal, 0.08, 2.15, WALL_T + 0.08), _at(horizontal, d * (gap * 0.5 - 0.04), 1.075), Catalog.WOOD_DARK)
 	walls.append({"tall": tall, "short": short, "normal": normal, "cut": true})
+	return tall
 
 
 func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WALL_H, cut := true, divider := false, parent: Node3D = null) -> Dictionary:
@@ -1306,6 +1358,7 @@ func _expand_house() -> void:
 	if not Game.spend(Game.EXPAND_COSTS[Game.house_level]):
 		return
 	Game.house_level += 1
+	builder.prune_house() # openings in the old back wall come out, paid back
 	_rebuild_house()
 	_rebuild_grid()
 	_update_expand_button()
@@ -11521,9 +11574,13 @@ func _town_checks() -> void:
 ## takes one down; all of it survives a save. It leaves the farm as it found it.
 func _build_checks() -> void:
 	var coins0 := Game.coins
+	var wood0 := Game.count("wood")
+	Game.take_item("wood", wood0) # walls are paid in wood when she has it: these checks count coins
 	var hour0 := Game.hour
 	Game.hour = 11.0
 	Game.flags.erase("built_walls")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
 	Game.flags.erase("plots_owned")
 	builder.refresh_world()
 	set_mode(Mode.LIVE)
@@ -11597,6 +11654,7 @@ func _build_checks() -> void:
 	player.position = Vector3(10.5, 0, 7.5)
 	await _wait(0.6)
 	_check("build: from outside, the room keeps its roof on with the house (%s)" % _roof_visible_at(c), _roof_visible_at(c))
+	await _opening_checks(room, c)
 	# a new house: only on a plot bought from Gary
 	var plot: Dictionary = HouseBuilder.plot_def("lane_end")
 	var pr := HouseBuilder.plot_rect(plot)
@@ -11687,13 +11745,115 @@ func _build_checks() -> void:
 	# put the farm back as it was for the rest of the autotest
 	Game.flags.erase("built_walls")
 	Game.flags.erase("plots_owned")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
 	builder.refresh_world()
 	Game.coins = coins0
+	Game.take_item("wood", Game.count("wood"))
+	Game.add_item("wood", wood0)
 	Game.hour = hour0
 	_set_cam_lock(true)
 	cam_dist = 23.0
 	player.position = Vector3(10.5, 0, 6.5)
 	await _wait(0.3)
+
+
+## Openings (Alex, 2026-11-17): a window and then a door in a wall of the room just built, paid in
+## coins and then in wood, the door walkable and swinging open for her, the window not walkable,
+## each taken out for half back in what paid for it; sliding doors in one of the house's own walls,
+## kept by a save; and a doorway from a save made before payments were kept, paid back in coins.
+func _opening_checks(room: Array, c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var wk: String = room[1]
+	var mid := _edge_mid(wk)
+	var cell := _cell(mid)
+	# a window, in coins (she has no wood)
+	builder.set_tool("window")
+	var c0 := Game.coins
+	builder.click(mid)
+	var win_cost := c0 - Game.coins
+	_check("build: the Window tool puts a window in her wall for coins (%s, %dc), and it doesn't let her through (%s)" % [builder.edges().get(wk), win_cost, not _walkable(cell)],
+		builder.edges().get(wk) == "window" and win_cost == int(HouseBuilder.opening_cost("window")[0]) and not _walkable(cell))
+	# swapped for a door, in wood: the window comes out with half its coins back
+	Game.add_item("wood", 10)
+	builder.set_tool("hdoor")
+	c0 = Game.coins
+	builder.click(mid)
+	var back_c := Game.coins - c0
+	var wood_used := 10 - Game.count("wood")
+	var leaf := house_root.find_children("Door", "Node3D", true, false).size()
+	_check("build: the Door tool swaps it for a door paid in wood (%s, %d wood, +%dc for the window), hung in the gap (%d), and she can walk through (%s)" % [builder.edges().get(wk), wood_used, back_c, leaf, _walkable(cell)],
+		builder.edges().get(wk) == "hdoor" and wood_used == int(HouseBuilder.opening_cost("hdoor")[1]) and back_c == int(round(win_cost * 0.5)) and leaf >= 1 and _walkable(cell))
+	set_mode(Mode.LIVE)
+	player.position = Vector3(mid.x, 0, mid.z) + (Vector3(0, 0, 1.0) if wk.ends_with("h") else Vector3(1.0, 0, 0))
+	await _wait(1.2)
+	var opened := 0.0
+	for dr in builder.doors:
+		opened = maxf(opened, float(dr["open"]))
+	_check("build: the door swings open as she comes up (%.2f)" % opened, opened > 0.9)
+	_set_cam_lock(false)
+	cam_target = mid
+	cam_dist = 9.0
+	await _wait(0.8)
+	await _shot("62_build_door.png")
+	set_mode(Mode.BUILD)
+	builder.set_tool("hdoor")
+	var w0 := Game.count("wood")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: clicked again, the door comes out with half its wood back, not coins (%s, +%d wood, +%dc)" % [builder.edges().get(wk), Game.count("wood") - w0, Game.coins - c0],
+		builder.edges().get(wk) == "wall" and Game.count("wood") - w0 == int(HouseBuilder.opening_cost("hdoor")[1]) / 2 and Game.coins == c0)
+	Game.take_item("wood", Game.count("wood"))
+	# sliding doors in one of the house's own walls
+	builder.set_tool("slide")
+	var hk := ""
+	for k in ["0,0,v", "0,2,v", "0,4,v", "0,-2,v", "8,4,v", "8,0,v"]:
+		var oc := builder.opening_check(k, "slide")
+		if not oc.is_empty() and bool(oc["ok"]):
+			hk = k
+			break
+	var hmid := _edge_mid(hk) if hk != "" else Vector3.ZERO
+	var front := builder.opening_check(HouseBuilder.FRONT_DOOR, "slide")
+	c0 = Game.coins
+	if hk != "":
+		builder.click(hmid)
+	var slide_cost := c0 - Game.coins
+	var sliders := house_root.find_children("SlidingDoor", "Node3D", true, false).size()
+	_check("build: sliding doors go in the house's own wall (%s: %s, %dc, %d hung, walkable %s), but not in its front door ('%s')" % [hk, builder.house_openings().get(hk), slide_cost, sliders, _walkable(_cell(hmid)), front.get("why", "")],
+		hk != "" and builder.house_openings().get(hk) == "slide" and slide_cost == int(HouseBuilder.opening_cost("slide")[0]) and sliders >= 1 and _walkable(_cell(hmid)) and not bool(front.get("ok", true)))
+	_set_cam_lock(false)
+	cam_target = hmid
+	cam_dist = 10.0
+	await _wait(0.8)
+	await _shot("62_build_house_slide.png")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("house_openings")
+	Game.flags.erase("built_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	_check("build: the house's sliding doors and what paid for them survive a save (%s, %s)" % [builder.house_openings().get(hk), str(Game.flag("built_paid", {}).get(hk, {}))],
+		builder.house_openings().get(hk) == "slide" and (Game.flag("built_paid", {}) as Dictionary).has(hk))
+	c0 = Game.coins
+	builder.click(hmid)
+	_check("build: taken out again, half the coins come back (+%dc) and the wall is whole (%s)" % [Game.coins - c0, not builder.house_openings().has(hk)],
+		Game.coins - c0 == int(round(slide_cost * 0.5)) and not builder.house_openings().has(hk))
+	# a doorway from an older save, with nothing kept of what paid for it
+	var d: Dictionary = builder.edges().duplicate()
+	d[wk] = "door"
+	Game.set_flag("built_walls", d)
+	builder.refresh_world()
+	builder.set_tool("wall")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: a doorway from an older save comes down for half its price in coins (+%dc of %dc)" % [Game.coins - c0, HouseBuilder.price("door")],
+		Game.coins - c0 == int(round(HouseBuilder.price("door") * 0.5)) and not builder.edges().has(wk))
+	builder.set_tool("wall")
+	builder.click(mid) # back up as the plain wall it was
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+	cam_target = Vector3(c.x, 0, c.y)
 
 
 ## The middle of a grid edge, on the ground (house_builder.gd keys).
