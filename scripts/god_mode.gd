@@ -2281,7 +2281,7 @@ func _build_ui() -> void:
 		# Marcus's house: its walls, doors, sliding doors, windows and floors
 		var hrow := HBoxContainer.new()
 		hrow.add_theme_constant_override("separation", 8)
-		hrow.add_child(hud._label("Marcus's house", 14, hud.GOLD))
+		hrow.add_child(hud._label("House edits", 14, hud.GOLD))
 		for t in HouseEdit.TOOLS:
 			var id: String = t[0]
 			var b: Button = hud._button(t[1], func(): set_tool(id))

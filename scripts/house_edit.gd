@@ -85,6 +85,54 @@ func _at(mpos: Vector2) -> Dictionary:
 	return {"q": q, "lv": h.level_name_at(q)}
 
 
+## The wall the pointer is on, as drawn: a click from above lands on a wall's top or face, 2.5 to
+## 3.5 m above its foot, so its point on the floor (_at) can be a metre or more off the wall's line
+## (Alex, 2026-11-17: the editor only let him add walls, not change the ones there).
+## {"i": index into cfg "walls", "q": the spot hit in the house's space (x, z)}, or {}.
+func _wall_under(mpos: Vector2) -> Dictionary:
+	var h = house()
+	if h == null:
+		return {}
+	var from: Vector3 = main.cam.project_ray_origin(mpos)
+	var dir: Vector3 = main.cam.project_ray_normal(mpos)
+	var best := {}
+	var best_d := INF
+	for w in h.walls:
+		for part in ["full", "low"]: # the walls toward the camera stand cut down low
+			var hit_at := _ray_box(w.get(part), from, dir)
+			if hit_at.is_empty():
+				continue
+			var world: Vector3 = hit_at["at"]
+			var dist: float = from.distance_to(world)
+			if dist < best_d and int(w.get("i", -1)) >= 0:
+				best_d = dist
+				var lq: Vector3 = h.local(world)
+				best = {"i": int(w["i"]), "q": Vector2(lq.x, lq.z)}
+	return best
+
+
+## Where a ray meets a shown wall piece (a box, or a window's or door frame's meshes): the nearest
+## {"at": world point}, or {}.
+static func _ray_box(node, from: Vector3, dir: Vector3) -> Dictionary:
+	if node == null or not is_instance_valid(node) or not (node is Node3D) or not (node as Node3D).is_visible_in_tree():
+		return {}
+	var meshes: Array = [node] if node is MeshInstance3D else (node as Node).find_children("*", "MeshInstance3D", true, false)
+	var best := {}
+	var best_d := INF
+	for mi in meshes:
+		if not (mi as MeshInstance3D).is_visible_in_tree():
+			continue
+		var inv: Transform3D = (mi as MeshInstance3D).global_transform.affine_inverse()
+		var hit = (mi as MeshInstance3D).get_aabb().grow(0.05).intersects_ray(inv * from, (inv.basis * dir).normalized())
+		if hit == null:
+			continue
+		var at: Vector3 = (mi as MeshInstance3D).global_transform * (hit as Vector3)
+		if from.distance_to(at) < best_d:
+			best_d = from.distance_to(at)
+			best = {"at": at}
+	return best
+
+
 static func _snap(v: Vector2) -> Vector2:
 	return Vector2(snappedf(v.x, SNAP), snappedf(v.y, SNAP))
 
@@ -93,15 +141,21 @@ func press(tool: String, mpos: Vector2) -> void:
 	_drag = {}
 	var h = house()
 	var at := _at(mpos)
+	var hit_wall := _wall_under(mpos) if tool != "h_floor" else {}
+	var under: int = int(hit_wall.get("i", -1))
+	if h != null and at.is_empty() and under >= 0:
+		# on a wall's top with no floor behind it (an outside wall seen from above)
+		var wq: Vector2 = hit_wall["q"]
+		at = {"q": Vector3(wq.x, 0, wq.y), "lv": str(h.cfg["walls"][under]["level"])}
 	if h == null or at.is_empty():
-		main.hud.show_toast("That's not inside Marcus's house.")
+		main.hud.show_toast("That's not inside the house.")
 		return
 	var q: Vector3 = at["q"]
 	var q2 := Vector2(q.x, q.z)
 	var lv: String = at["lv"]
 	match tool:
 		"h_wall":
-			var i: int = h.wall_near(q2, lv, 0.25)
+			var i: int = under if under >= 0 else h.wall_near(q2, lv, 0.25)
 			if i >= 0:
 				h.selected_wall = i
 				h.rebuild()
@@ -114,7 +168,8 @@ func press(tool: String, mpos: Vector2) -> void:
 				h.selected_wall = walls.size() - 1
 				_drag = {"mode": "draw", "i": walls.size() - 1, "a": a, "before": before}
 		"h_door", "h_slide", "h_window", "h_open":
-			_opening(tool, q2, lv)
+			# along the wall, where the pointer is on it (its top or face), not where the floor is behind it
+			_opening(tool, hit_wall.get("q", q2), lv, under)
 		"h_floor":
 			var before := snapshot()
 			var a := _snap(q2)
@@ -198,9 +253,9 @@ func release() -> void:
 
 
 ## A door, sliding doors, window or plain opening in the wall under the pointer, or that one taken out.
-func _opening(tool: String, q: Vector2, lv: String) -> void:
+func _opening(tool: String, q: Vector2, lv: String, under := -1) -> void:
 	var h = house()
-	var i: int = h.wall_near(q, lv, 0.4)
+	var i: int = under if under >= 0 else h.wall_near(q, lv, 0.4)
 	if i < 0:
 		main.hud.show_toast("Click on a wall.")
 		return
