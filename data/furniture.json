@@ -905,6 +905,14 @@
     {"name": "Painting: Melting Desert", "price": 340, "size": [1.09, 0.1], "where": "in", "height": 0.82, "hang": 1.15, "id": "painting_surreal", "shop": "indoors", "model": "res://assets/props/painting_surreal.glb", "cat": "Living", "flat": true},
     {"name": "Painting: Mountain Lake", "price": 280, "size": [1.06, 0.1], "where": "in", "height": 0.78, "hang": 1.15, "id": "painting_nature", "shop": "indoors", "model": "res://assets/props/painting_nature.glb", "cat": "Living", "flat": true},
     {"name": "Painting: Harbour Sails", "price": 240, "size": [0.9, 0.1], "where": "in", "height": 0.66, "hang": 1.2, "id": "painting_harbour", "shop": "indoors", "model": "res://assets/props/painting_harbour.glb", "cat": "Living", "flat": true},
-    {"name": "Toy Train", "price": 30, "size": [0.52, 0.11], "where": "in", "height": 0.21, "id": "toy_train", "shop": "indoors", "model": "res://assets/props/toy_train.glb", "cat": "Living", "wood": 8, "flat": true}
+    {"name": "Toy Train", "price": 30, "size": [0.52, 0.11], "where": "in", "height": 0.21, "id": "toy_train", "shop": "indoors", "model": "res://assets/props/toy_train.glb", "cat": "Living", "wood": 8, "flat": true},
+    {"name": "Single Bed", "price": 260, "size": [1.0, 2.0], "where": "in", "height": 1.1, "id": "single_bed", "shop": "indoors", "model": "res://assets/props/single_bed.glb", "cat": "Bed & Study", "wood": 65},
+    {"name": "Patchwork Double Bed", "price": 480, "size": [1.6, 2.1], "where": "in", "height": 1.3, "id": "double_bed", "shop": "indoors", "model": "res://assets/props/double_bed.glb", "cat": "Bed & Study", "wood": 120},
+    {"name": "Chest of Drawers", "price": 220, "size": [1.2, 0.5], "where": "in", "height": 1.3, "id": "dresser", "shop": "indoors", "model": "res://assets/props/dresser.glb", "cat": "Bed & Study", "wood": 55},
+    {"name": "Nightstand", "price": 90, "size": [0.5, 0.5], "where": "in", "height": 1.0, "id": "nightstand", "shop": "indoors", "model": "res://assets/props/nightstand.glb", "cat": "Bed & Study", "wood": 22},
+    {"name": "Clawfoot Bath", "price": 520, "size": [1.7, 0.9], "where": "in", "height": 0.9, "id": "clawfoot_bath", "shop": "indoors", "model": "res://assets/props/clawfoot_bath.glb", "cat": "Bed & Study"},
+    {"name": "Ladder-back Chair", "price": 60, "size": [0.5, 0.5], "where": "in", "height": 1.05, "id": "dining_chair", "shop": "indoors", "model": "res://assets/props/dining_chair.glb", "cat": "Kitchen", "wood": 15},
+    {"name": "Kitchen Dresser", "price": 340, "size": [1.5, 0.5], "where": "in", "height": 2.05, "id": "kitchen_dresser", "shop": "indoors", "model": "res://assets/props/kitchen_dresser.glb", "cat": "Kitchen", "wood": 85},
+    {"name": "Coat Stand", "price": 70, "size": [0.5, 0.5], "where": "in", "height": 1.95, "id": "coat_rack", "shop": "indoors", "model": "res://assets/props/coat_rack.glb", "cat": "Living", "wood": 18}
   ]
 }

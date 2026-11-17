@@ -6297,7 +6297,87 @@ func _house_checks(showcase: bool) -> void:
 	cam_dist = 7.5
 	await _wait(3.0)
 	await _shot("46_hearth_kitchen.png")
+	await _house_batch2_checks()
 	_set_cam_lock(true)
+
+
+## The second batch of house furniture (art/world_assets/house_furniture, 2026-11-14): each piece is
+## its model, has a catalogue picture, and with the house cleared Build mode finds it a spot inside.
+const HOUSE_BATCH2 := ["double_bed", "single_bed", "kitchen_dresser", "clawfoot_bath", "dresser", "nightstand", "dining_chair", "coat_rack"]
+
+func _house_batch2_checks() -> void:
+	var modelled: Array = []
+	for id in HOUSE_BATCH2:
+		var f := Furniture.new()
+		add_child(f)
+		f.setup(id, 0)
+		if f.find_children("model", "MeshInstance3D", true, false).size() == 1:
+			modelled.append(id)
+		f.queue_free()
+	var t := 0.0
+	while HOUSE_BATCH2.any(func(id): return not hud.thumbs.done.has(id)) and t < 60.0:
+		await _wait(0.5)
+		t += 0.5
+	var pictured: Array = HOUSE_BATCH2.filter(func(id): return hud.thumbs.done.has(id))
+	_check("the new house furniture is its models (%d of %d) with catalogue pictures (%d)" % [modelled.size(), HOUSE_BATCH2.size(), pictured.size()],
+		modelled.size() == HOUSE_BATCH2.size() and pictured.size() == HOUSE_BATCH2.size())
+	set_mode(Mode.BUILD)
+	await _wait(0.6)
+	var cat := str(Catalog.ITEMS[HOUSE_BATCH2[0]].get("cat", "")) # open its room's tab
+	for tab in hud.catalog_panel.find_children("*", "Button", true, false):
+		if (tab as Button).text == cat:
+			(tab as Button).button_pressed = true
+			(tab as Button).pressed.emit()
+	var card = hud.item_buttons.get(HOUSE_BATCH2[0])
+	var sc = card.get_parent() if card != null else null
+	while sc != null and not (sc is ScrollContainer):
+		sc = sc.get_parent()
+	if sc != null:
+		(sc as ScrollContainer).ensure_control_visible(card)
+	await _wait(0.6)
+	await _shot("46_catalog_batch2.png")
+	set_mode(Mode.LIVE)
+	# clear the house, then put each piece where Build mode would let her: the first free spot, back wall first
+	for f in furniture.duplicate():
+		if interior_rect().grow(0.3).has_point(Vector2(f.position.x, f.position.z)):
+			furniture.erase(f)
+			f.queue_free()
+	var ir := interior_rect()
+	player.position = Vector3(ir.end.x - 0.4, 0, ir.end.y - 0.4)
+	var placed: Array = []
+	for id in HOUSE_BATCH2:
+		var g := Furniture.new()
+		add_child(g)
+		g.setup(id, 0)
+		var spot = null
+		var z := ir.position.y
+		while spot == null and z < ir.end.y:
+			var x := ir.position.x
+			while x < ir.end.x:
+				var p := Vector3(x + g.size_rotated().x * 0.5, 0, z + g.size_rotated().y * 0.5)
+				if _placement_valid(g, p):
+					spot = p
+					break
+				x += 0.25
+			z += 0.25
+		g.queue_free()
+		if spot != null:
+			_spawn_furniture(id, spot, 0)
+			placed.append(id)
+	_check("Build mode finds a spot in her house for each new piece (%d of %d: %s)" % [placed.size(), HOUSE_BATCH2.size(), str(placed)], placed.size() == HOUSE_BATCH2.size())
+	_rebuild_grid()
+	cam_target = Vector3(ir.get_center().x, 0.5, ir.get_center().y)
+	cam_dist = 15.0
+	await _wait(2.0)
+	await _shot("46_house_batch2.png")
+	for pair in [["double_bed", "46_batch2_bedroom.png"], ["kitchen_dresser", "46_batch2_kitchen.png"]]:
+		var f = furniture.filter(func(o): return o.item_id == pair[0])
+		if f.is_empty():
+			continue
+		cam_target = f[0].global_position + Vector3(0, 0.6, 0)
+		cam_dist = 6.5
+		await _wait(1.8)
+		await _shot(pair[1])
 
 
 ## The barn (art/world_assets/barn): the model stands where the box barn stood, she can walk in

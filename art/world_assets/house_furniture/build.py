@@ -3,6 +3,10 @@
 spinning wheel, dining table, bookshelf, wardrobe, floor lamp, potted fern and knitted rug. Each stands in for a
 box model in scripts/catalog.gd, on the same footprint (data/furniture.json), facing the same way.
 
+The second batch (2026-11-14) fills out Builder's Delight's catalogue with no reference image, in the
+first batch's style: single and double beds, a chest of drawers, a nightstand, a ladder-back chair, a
+kitchen dresser, a clawfoot bath and a coat stand. Each has a kiln log, <id>/<id>_log.md.
+
 The references (ref/<id>.png) were made in ChatGPT, one per piece, on white. Wood, cloth and
 straw-like textures are the small painterly maps of craftlib; iron, brass, glass and flames are flat colours.
 The tartan's wool (fibre speckle and woven relief) comes from two Poly Haven fabric scans (CC0, in
@@ -243,6 +247,8 @@ def drape(name, size, centre, yaw, mat, cell=0.025, frames=90, tris=900, uv_scal
     bm.to_mesh(me)
     bm.free()
 
+    if not fringe:   # a quilt, a towel: hemmed all round, no fringe
+        return ob
     # fringe: flat strands in the plane of the cloth (the material is two-sided), every other one
     # cream, taken from the tartan's cream crossing. They carry on the way the cloth runs, stand a
     # little proud of it, and stop short of `floor` (a seat they would otherwise sink into).
@@ -993,9 +999,542 @@ def plant():
         ob.location.z += 0.24
 
 
+# --- the second batch (2026-11-14): bedroom, kitchen and bath pieces for Builder's Delight's catalogue --
+
+def uv_rest(scale=1.5):
+    """Box-projects UVs onto every part built without any (balls, tori), so a ball finial in wood
+    shows the grain instead of one texel of it (kiln's UV check counts those as collapsed)."""
+    for o in K.COLL.objects:
+        if o.type == "MESH" and not o.data.uv_layers:
+            K.uv_box(o, scale)
+
+
+def knit_cloth(key, base, band, rows=24, cols=24, stripes=((3, 5), (8, 9)), px=10, stitch=0.017):
+    """A knitted wool fabric that tiles: stockinette in `base` with colour stripes of `band` across
+    it (rows given as (from, to) in a repeat of `rows`). Returns the material; its texture repeats
+    every cols * stitch metres, so use uv scale 1 / (cols * stitch)."""
+    if key not in M:
+        pat = np.zeros((rows, cols), dtype=bool)
+        for a, b in stripes:
+            pat[a:b, :] = True
+        fibre = web_map("knitted_fleece/knitted_fleece_diff_1k.jpg", 256).mean(axis=2)
+        fibre = np.clip(1.0 + (fibre / fibre.mean() - 1.0) * 2.5, 0.8, 1.2)
+        rgb, hgt = knit.stitch_maps(pat, (CL.C(base), CL.C(band)), px=px, fibre=fibre)
+        i = K.save_image(ITEM + "_" + key, rgb, TEX)
+        n = K.save_image(ITEM + "_" + key + "_n", K.normal_from_height(hgt, 2.0), TEX)
+        M[key] = K.textured(ITEM + "_" + key, i, rough=1.0, normal=n, normal_strength=1.0)
+    return M[key]
+
+
+def patchwork(key, seed, px=4, py=4, n=512, ids=("plaid", "cream", "denim", "rug_oat", "clay", "sage", "rug_wine", "sunflower")):
+    """A patchwork quilt as Gran's bed has: px by py printed cotton patches (plain, stripes, checks,
+    dots) with a running stitch inside each edge. The image is one repeat; it tiles."""
+    if key not in M:
+        rng = np.random.default_rng(seed)
+        cols = [np.array(K.pal_srgb(i)) for i in ids]
+        cream = np.array(K.pal_srgb("milk"))
+        rgb = np.zeros((n, n, 3))
+        pw, ph = n / px, n / py
+        yy, xx = np.mgrid[0:n, 0:n]
+        grid = np.zeros((py, px), dtype=int)
+        for j in range(py):
+            for i in range(px):
+                ban = {grid[j - 1, i] if j else -1, grid[j, i - 1] if i else -1,
+                       grid[py - 1, i] if j == py - 1 else -1, grid[j, 0] if i == px - 1 else -1}
+                grid[j, i] = rng.choice([k for k in range(len(cols)) if k not in ban])
+                x0, x1, y0, y1 = int(i * pw), int((i + 1) * pw), int(j * ph), int((j + 1) * ph)
+                lx, ly = xx[y0:y1, x0:x1] - x0, yy[y0:y1, x0:x1] - y0
+                patch = np.broadcast_to(cols[grid[j, i]], (y1 - y0, x1 - x0, 3)).copy()
+                other = cream if ids[grid[j, i]] != "cream" else cols[0]
+                kind = rng.integers(0, 4)
+                if kind == 1:
+                    m = ((lx + ly) // 10) % 2 == 0
+                    patch[m] = patch[m] * 0.72 + other * 0.28
+                elif kind == 2:
+                    m = ((lx // 16) % 2 == 0) ^ ((ly // 16) % 2 == 0)
+                    patch[m] = patch[m] * 0.8 + other * 0.2
+                elif kind == 3:
+                    m = ((lx % 26 - 13) ** 2 + (ly % 26 - 13) ** 2) < 20
+                    patch[m] = other
+                d = np.minimum(np.minimum(lx, (x1 - x0 - 1) - lx), np.minimum(ly, (y1 - y0 - 1) - ly))
+                st = (np.abs(d - 7) < 1.4) & (((lx + ly) // 7) % 2 == 0)
+                patch[st] = cream
+                patch = patch * (1 - 0.45 * np.clip(1 - d / 3.0, 0, 1)[..., None])
+                rgb[y0:y1, x0:x1] = patch
+        rgb *= (0.9 + 0.2 * K.tile_noise(n, 0.9, seed))[..., None]
+        i = K.save_image(ITEM + "_" + key, rgb, TEX)
+        M[key] = K.textured(ITEM + "_" + key, i, rough=0.95)
+    return M[key]
+
+
+def painting(key, n=256):
+    """A little oil painting for a frame: the farm's hills under an evening sky, a sheep and the
+    sun going down (no text, no likeness)."""
+    if key not in M:
+        yy, xx = np.mgrid[0:n, 0:n] / n
+        rgb = CL.mix(CL.C("#f2cc75"), CL.C("#8fb3c7"), np.clip(1.0 - yy * 1.8, 0, 1)[..., None])
+        sun = ((xx - 0.7) ** 2 + (yy - 0.42) ** 2) < 0.012
+        rgb[sun] = CL.C("#f4efe4")
+        far = yy > 0.52 + 0.06 * np.sin(xx * 7.0 + 1.0)
+        rgb[far] = CL.C("#9eae8f")
+        near = yy > 0.66 + 0.08 * np.sin(xx * 4.3 + 2.4)
+        rgb[near] = CL.C("#548540")
+        sheep = ((xx - 0.32) / 0.07) ** 2 + ((yy - 0.75) / 0.045) ** 2 < 1.0
+        rgb[sheep] = CL.C("#edddbd")
+        head = ((xx - 0.395) ** 2 + (yy - 0.74) ** 2) < 0.0006
+        rgb[head] = CL.C("#2b2826")
+        rgb *= (0.92 + 0.16 * K.tile_noise(n, 1.2, 77))[..., None]   # brushwork
+        i = K.save_image(ITEM + "_" + key, rgb, TEX)
+        M[key] = K.textured(ITEM + "_" + key, i, rough=0.6)
+    return M[key]
+
+
+def turned(name, x, y, h, mat, r=0.045, top=0.0):
+    """A turned bed or table post from the floor to h: a foot, a bead, a long shaft and a collar,
+    with a ball finial on top if `top` is its radius."""
+    prof = [(0.0, 0.0), (r * 0.95, 0.0), (r * 1.1, 0.04), (r * 0.85, 0.09), (r * 0.8, 0.26), (r * 1.15, 0.30),
+            (r * 1.15, 0.36), (r * 0.8, 0.40), (r * 0.78, h - 0.12), (r * 1.1, h - 0.08), (r * 1.15, h - 0.03), (r * 0.6, h), (0.0, h)]
+    lathe(name, prof, (x, y, 0.0), mat, steps=12)
+    if top:
+        ball(name + "_finial", top, (x, y, h + top * 0.8), mat)
+
+
+def bed_frame(width, length, head_h, foot_h, mattress_top, w, panel):
+    """Four turned posts, side rails, a slatted base and a mattress. The headboard is at +Y."""
+    hx, hy = width / 2 - 0.05, length / 2 - 0.05
+    for sx in (-1, 1):
+        turned("head_post", sx * hx, hy, head_h, w, top=0.055)
+        turned("foot_post", sx * hx, -hy, foot_h, w, top=0.05)
+        bx("side_rail", (0.06, length - 0.16, 0.17), (sx * hx, 0.0, 0.27), w, grain="y", bevel=0.02)
+    bx("slats", (width - 0.16, length - 0.16, 0.04), (0, 0, 0.31), panel, grain="x", bevel=0.01, seg=1)
+    tick = cloth("ticking", "#efe3c8")
+    m_h = mattress_top - 0.33
+    bx("mattress", (width - 0.12, length - 0.13, m_h), (0, -0.005, 0.33 + m_h / 2), tick, bevel=0.06, seg=3, scale=2.2)
+    return hx, hy
+
+
+def single_bed():
+    """A single bed: turned posts, a spindle headboard and a panelled footboard, a ticking
+    mattress, a pillow, a turned-down sheet and a striped knitted blanket draped over it."""
+    w = wood(knots=2)
+    panel = wood("panel", "#d98438", "#f0a558", "#ab5c22", seed=9)
+    width, length, top = 1.0, 2.0, 0.53
+    hx, hy = bed_frame(width, length, 1.05, 0.74, top, w, panel)
+    for z, hh in ((0.98, 0.10), (0.52, 0.08)):
+        beam("head_rail", [(-hx, hy, z), (hx, hy, z)], 0.07, hh, w)
+    for x in lin(-hx + 0.13, hx - 0.13, 6):
+        tube("spindle", [(x, hy, 0.55), (x, hy, 0.70), (x, hy, 0.82), (x, hy, 0.95)], [0.018, 0.026, 0.018, 0.018], w, sides=8)
+    for z, hh in ((0.68, 0.09), (0.36, 0.07)):
+        beam("foot_rail", [(-hx, -hy, z), (hx, -hy, z)], 0.07, hh, w)
+    bx("foot_panel", (2 * hx - 0.06, 0.03, 0.26), (0, -hy, 0.52), panel, bevel=0.012)
+    sheet = cloth("sheet", "#f4efe4")
+    pillow("pillow", (0.66, 0.38, 0.15), (0, hy - 0.26, top + 0.06), sheet, rot=(-8, 0, 0))
+    bx("sheet_fold", (width - 0.1, 0.20, 0.03), (0, 0.33, top + 0.012), sheet, bevel=0.012, scale=2.2)
+    blanket = knit_cloth("blanket", "#596b8c", "#edddbd", stripes=((2, 4), (13, 14)))
+    drape("blanket", (1.26, 1.14), (0, -0.29, top + 0.25), 0.0, blanket, uv_scale=1 / (24 * 0.017), fringe=0, tris=1100)
+    uv_rest()
+
+
+def double_bed():
+    """A double bed: square posts with ball finials, an arched panel headboard, a patchwork quilt
+    draped over it, two pillows, a tartan cushion and a folded tartan throw at the foot."""
+    w = wood(knots=2)
+    panel = wood("panel", "#d98438", "#f0a558", "#ab5c22", seed=9)
+    width, length, top = 1.6, 2.1, 0.55
+    hx, hy = bed_frame(width, length, 1.18, 0.78, top, w, panel)
+    # the headboard: an arched raised panel between two rails
+    beam("head_rail", [(-hx, hy, 0.56), (hx, hy, 0.56)], 0.08, 0.09, w)
+    pts = [(-hx + 0.03, 0.58), (hx - 0.03, 0.58)] + [(math.cos(t) * (hx - 0.03), 0.92 + 0.22 * max(0.0, math.sin(t)) ** 0.8) for t in lin(0, math.pi, 13)]
+    ob = K.extrude_xz("head_panel", pts, hy - 0.025, hy + 0.025, panel, bevel=0.012)
+    K.uv_box(ob, 1.5)
+    arch = [(math.cos(t) * (hx - 0.02), hy, 0.92 + 0.24 * max(0.0, math.sin(t)) ** 0.8) for t in lin(0, math.pi, 13)]
+    beam("head_crest", arch, 0.08, 0.075, w)
+    for z, hh in ((0.72, 0.10), (0.38, 0.08)):
+        beam("foot_rail", [(-hx, -hy, z), (hx, -hy, z)], 0.075, hh, w)
+    for x in (-0.36, 0.36):
+        bx("foot_panel", (0.62, 0.03, 0.26), (x, -hy, 0.55), panel, bevel=0.012)
+    bx("foot_muntin", (0.07, 0.05, 0.28), (0, -hy, 0.55), w, bevel=0.015)
+    sheet = cloth("sheet", "#f4efe4")
+    for x in (-0.36, 0.36):
+        pillow("pillow", (0.62, 0.38, 0.16), (x, hy - 0.28, top + 0.07), sheet, rot=(-10, 0, 0))
+    quilt = patchwork("quilt", 23)
+    drape("quilt", (1.88, 1.36), (0, -0.26, top + 0.28), 0.0, quilt, uv_scale=1 / 0.62, fringe=0, tris=1300)
+    p = plaid()
+    pillow("cushion", (0.38, 0.13, 0.36), (0.05, hy - 0.50, top + 0.20), p, rot=(-62, 0, 6))
+    pillow("throw", (1.30, 0.36, 0.07), (0, -0.70, top + 0.085), p, boxy=0.25)
+    uv_rest()
+
+
+def dresser():
+    """A chest of drawers: two small drawers over two wide ones, brass knobs, bun feet, and on top
+    a lace mat, a framed painting, a jug of lavender and a dish."""
+    w = wood(knots=2)
+    front = wood("panel", "#d98438", "#f0a558", "#ab5c22", seed=9)
+    brass = flat("brass", "#c98a2e", 0.45)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            lathe("foot", [(0.0, 0.0), (0.04, 0.0), (0.065, 0.035), (0.06, 0.08), (0.04, 0.11)], (sx * 0.49, sy * 0.17, 0.0), w, steps=10)
+    bx("body", (1.10, 0.44, 0.78), (0, 0.01, 0.51), w, bevel=0.015, seg=1)
+    bx("skirt", (1.14, 0.46, 0.06), (0, 0.0, 0.14), w, grain="x", bevel=0.02)
+    bx("top", (1.20, 0.50, 0.05), (0, 0.0, 0.925), w, grain="x", bevel=0.022)
+    rows = [(0.80, 0.17, ((-0.27, 0.50), (0.27, 0.50))), (0.575, 0.23, ((0.0, 1.04),)), (0.315, 0.23, ((0.0, 1.04),))]
+    for z, h, drawers in rows:
+        for x, dw in drawers:
+            bx("drawer", (dw, 0.03, h), (x, -0.22, z), front, grain="x", bevel=0.014)
+            knobs = (x,) if dw < 0.6 else (x - 0.28, x + 0.28)
+            for kx in knobs:
+                ball("knob", 0.026, (kx, -0.245, z), brass)
+                cyl("knob_rose", 0.03, 0.03, 0.008, (kx, -0.238, z), brass, verts=10, rot=(90, 0, 0))
+    lace = flat("lace", "#f4efe4", 0.95)
+    cyl("lace_mat", 0.20, 0.20, 0.006, (-0.18, -0.02, 0.953), lace, verts=20)
+    for i in range(20):
+        a = math.pi * 2 * i / 20
+        cyl("lace_scallop", 0.03, 0.03, 0.006, (-0.18 + 0.20 * math.cos(a), -0.02 + 0.20 * math.sin(a), 0.953), lace, verts=8)
+    # the framed painting, standing on its strut, leaning back a little
+    frame = wood("frame", "#8a4a20", "#a65f2c", "#5e3214", seed=12)
+    fx, fy, fz, fw, fh = 0.26, 0.10, 0.955, 0.36, 0.30
+    tilt = math.radians(10)
+    def lean(x, z):
+        return (fx + x, fy + math.sin(tilt) * z, fz + math.cos(tilt) * z)
+    for (a, b) in (((-fw / 2, 0.02), (fw / 2, 0.02)), ((-fw / 2, fh - 0.02), (fw / 2, fh - 0.02)), ((-fw / 2 + 0.02, 0.0), (-fw / 2 + 0.02, fh)), ((fw / 2 - 0.02, 0.0), (fw / 2 - 0.02, fh))):
+        beam("frame", [lean(*a), lean(*b)], 0.045, 0.045, frame)
+    pa, pb = Vector(lean(-fw / 2 + 0.035, 0.035)), Vector(lean(fw / 2 - 0.035, fh - 0.035))
+    _picture("painting", pa, pb, tilt, painting("painting"))
+    bx("frame_back", (fw - 0.03, 0.012, fh - 0.03), (fx, fy + math.sin(tilt) * fh / 2 + 0.014, fz + math.cos(tilt) * fh / 2), frame, bevel=0.004, rot=(-10, 0, 0))
+    beam("strut", [(fx, fy + 0.03, fz + 0.2), (fx, fy + 0.13, fz + 0.01)], 0.02, 0.03, frame)
+    # a cream jug of lavender and a little blue dish
+    ce = flat("ceramic", "#efe6d2", 0.4)
+    jx, jy = -0.18, -0.02
+    lathe("jug", [(0.0, 0.0), (0.05, 0.0), (0.07, 0.04), (0.066, 0.10), (0.042, 0.14), (0.052, 0.165), (0.038, 0.165), (0.034, 0.14), (0.0, 0.14)], (jx, jy, 0.957), ce, steps=14)
+    K.torus("jug_band", 0.069, 0.007, (jx, jy, 1.01), flat("band", "#6f93b5", 0.5), major=14, minor=4)
+    rng = random.Random(5)
+    stem, bloom = flat("stem", "#5d8a35", 0.8), flat("lavender", "#8a6fb0", 0.8)
+    for i in range(11):
+        a = rng.uniform(0, 6.283)
+        r = rng.uniform(0.01, 0.07)
+        tip = Vector((jx + math.cos(a) * r * 1.6, jy + math.sin(a) * r * 1.6, 1.25 + rng.uniform(-0.05, 0.07)))
+        tube("stem", [(jx, jy, 1.08), ((jx + tip.x) / 2, (jy + tip.y) / 2, 1.16), tuple(tip)], 0.004, stem, sides=4)
+        for k in range(5):
+            q = Vector((jx, jy, 1.08)).lerp(tip, 0.78 + k * 0.06)
+            ball("bud", 0.011, tuple(q), bloom, scale=(1, 1, 1.4), u=6, v=4)
+    lathe("dish", [(0.0, 0.0), (0.05, 0.0), (0.075, 0.02), (0.08, 0.026), (0.07, 0.026), (0.045, 0.012), (0.0, 0.01)], (0.02, -0.12, 0.951), flat("dish", "#6f93b5", 0.4), steps=14)
+    uv_rest()
+
+
+def _picture(name, a, b, tilt, mat):
+    """The painted canvas of a frame: a quad from corner a (bottom left) to b (top right), leaning
+    back by `tilt`, the whole image across it once, facing the front."""
+    up = Vector((0, math.sin(tilt), math.cos(tilt)))
+    height = (b - a).dot(up)
+    along = Vector((b.x - a.x, 0, 0))
+    a = a - Vector((0, 0.004, 0))
+    verts = [a, a + along, a + along + up * height, a + up * height]
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([tuple(v) for v in verts], [], [(0, 1, 2, 3)])
+    me.uv_layers.new(name="UVMap").data.foreach_set("uv", [0, 0, 1, 0, 1, 1, 0, 1])
+    return K._obj(name, me, mat)
+
+
+def nightstand():
+    """A bedside table: tapered legs, a drawer, a shelf with two books under it, and a little
+    lamp with a glowing shade beside a cup."""
+    w = wood(knots=1)
+    front = wood("panel", "#d98438", "#f0a558", "#ab5c22", seed=9)
+    brass = flat("brass", "#c98a2e", 0.45)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            beam("leg", [(sx * 0.195, sy * 0.165, 0.0), (sx * 0.185, sy * 0.16, 0.58)], 0.06, 0.06, w, square=0.6)
+    bx("apron", (0.42, 0.36, 0.15), (0, 0.0, 0.50), w, bevel=0.012, seg=1)
+    bx("top", (0.50, 0.44, 0.04), (0, 0.0, 0.60), w, grain="x", bevel=0.016)
+    bx("shelf", (0.42, 0.36, 0.03), (0, 0.0, 0.16), w, grain="x", bevel=0.01)
+    bx("drawer", (0.34, 0.025, 0.11), (0, -0.183, 0.50), front, grain="x", bevel=0.01)
+    ball("knob", 0.022, (0, -0.205, 0.50), brass)
+    for (x, c, rz, h) in ((-0.09, "#a8342c", 3, 0.05), (-0.07, "#3f5c86", -5, 0.045)):
+        bx("book_flat", (0.20, 0.25, h), (x, -0.01, 0.175 + h / 2 + (0.05 if c == "#3f5c86" else 0.0)), flat("book" + c, c, 0.75), bevel=0.008, seg=1, rot=(0, 0, rz))
+    # the lamp
+    sage = flat("lamp_base", "#9eae8f", 0.45)
+    lx, ly = 0.08, 0.04
+    lathe("lamp_base", [(0.0, 0.0), (0.075, 0.0), (0.08, 0.015), (0.065, 0.04), (0.085, 0.10), (0.07, 0.16), (0.03, 0.19), (0.02, 0.21), (0.0, 0.21)], (lx, ly, 0.62), sage, steps=14)
+    tube("lamp_stem", [(lx, ly, 0.82), (lx, ly, 0.92)], 0.008, brass, sides=6)
+    shade = flat("shade", "#f6d58a", 0.6, emit=0.9)
+    lathe("shade", [(0.12, 0.86), (0.075, 1.0), (0.07, 1.0), (0.113, 0.86)], (lx, ly, 0.0), shade, steps=16, sharp=80)
+    K.torus("shade_rim", 0.118, 0.007, (lx, ly, 0.862), flat("trim", "#d8a54e", 0.5), major=16, minor=4)
+    ball("bulb", 0.03, (lx, ly, 0.92), flat("bulb", "#fff0c0", 0.4, emit=3.0), scale=(1, 1, 1.3))
+    # a cup of tea
+    ce = flat("ceramic", "#efe6d2", 0.4)
+    lathe("cup", [(0.0, 0.0), (0.03, 0.0), (0.042, 0.03), (0.045, 0.07), (0.039, 0.07), (0.035, 0.035), (0.0, 0.03)], (-0.12, -0.08, 0.62), ce, steps=12)
+    cyl("tea", 0.036, 0.036, 0.004, (-0.12, -0.08, 0.68), flat("tea", "#8a4a26", 0.3), verts=12)
+    tube("cup_handle", [(-0.08, -0.08, 0.675), (-0.06, -0.08, 0.66), (-0.065, -0.08, 0.635), (-0.08, -0.08, 0.63)], 0.007, ce, sides=6)
+    lathe("saucer", [(0.0, 0.0), (0.06, 0.0), (0.07, 0.012), (0.06, 0.012), (0.0, 0.006)], (-0.12, -0.08, 0.618), ce, steps=14)
+    uv_rest()
+
+
+def dining_chair():
+    """A ladder-back kitchen chair: turned front legs, back posts that lean back, three arched
+    slats, stretchers, and a tartan seat pad."""
+    w = wood()
+    seat = 0.45
+    for sx in (-1, 1):
+        x = sx * 0.20
+        turned("front_leg", x, -0.18, seat - 0.03, w, r=0.03)
+        beam("back_post", [(x, 0.18, 0.0), (x, 0.185, seat - 0.02), (x, 0.21, 0.72), (x, 0.245, 0.98)], 0.05, 0.05, w)
+        ball("post_knob", 0.03, (x, 0.247, 1.0), w)
+        beam("side_rail", [(x, -0.18, 0.17), (x, 0.18, 0.19)], 0.03, 0.03, w)
+    beam("front_rail", [(-0.20, -0.18, 0.13), (0.20, -0.18, 0.13)], 0.03, 0.03, w)
+    beam("middle_rail", [(-0.20, 0.0, 0.18), (0.20, 0.0, 0.18)], 0.028, 0.028, w)
+    bx("seat", (0.48, 0.44, 0.05), (0, 0.0, seat - 0.025), w, grain="y", bevel=0.02)
+    for z, hh in ((0.62, 0.06), (0.76, 0.065), (0.91, 0.085)):
+        y = 0.185 + (z - seat) * 0.12
+        beam("slat", [(-0.20, y, z), (-0.10, y + 0.022, z + 0.01), (0, y + 0.03, z + 0.012), (0.10, y + 0.022, z + 0.01), (0.20, y, z)], 0.022, hh, w)
+    pillow("seat_pad", (0.42, 0.38, 0.06), (0, -0.02, seat + 0.025), plaid(), boxy=0.35)
+    uv_rest()
+    for o in K.COLL.objects:   # the back posts lean back: centre it on its footprint
+        o.location.y -= 0.03
+
+
+def kitchen_dresser():
+    """A painted kitchen dresser (a sage cupboard as the kitchen counter is): two drawers and two
+    panelled doors below a wooden worktop, and above it an open rack of plates, bowls, hanging
+    cups and a jug."""
+    cab = wood("cabinet", "#7b8a4d", "#93a161", "#556230", seams=4, knots=0, seed=4)
+    w = wood()
+    back = wood("back", "#edddbd", "#f4e8cc", "#d9c7a0", seams=6, knots=0, seed=14)
+    brass = flat("brass", "#c98a2e", 0.45)
+    # the cupboard
+    bx("body", (1.32, 0.44, 0.80), (0, 0.02, 0.48), cab, bevel=0.012, seg=1)
+    bx("plinth", (1.38, 0.48, 0.08), (0, 0.0, 0.04), cab, grain="x", bevel=0.02)
+    bx("worktop", (1.42, 0.50, 0.05), (0, 0.0, 0.905), w, grain="x", bevel=0.02)
+    for x in (-0.33, 0.33):
+        bx("drawer", (0.60, 0.03, 0.13), (x, -0.205, 0.79), cab, grain="x", bevel=0.012)
+        cyl("pull", 0.012, 0.012, 0.12, (x, -0.235, 0.79), brass, verts=8, rot=(0, 90, 0))
+        bx("door", (0.60, 0.03, 0.52), (x, -0.205, 0.40), cab, bevel=0.012)
+        for d in (-1, 1):
+            bx("door_stile", (0.07, 0.025, 0.52), (x + d * 0.265, -0.225, 0.40), cab, bevel=0.012)
+        for z in (0.175, 0.625):
+            bx("door_rail", (0.46, 0.025, 0.07), (x, -0.225, z), cab, grain="x", bevel=0.012)
+        ball("knob", 0.026, (x + (0.22 if x < 0 else -0.22), -0.25, 0.44), brass)
+    # the rack
+    y0, depth = 0.115, 0.25
+    for sx in (-1, 1):
+        bx("rack_side", (0.05, depth, 1.04), (sx * 0.665, y0, 1.45), cab, bevel=0.012)
+    bx("rack_back", (1.28, 0.025, 1.04), (0, y0 + depth / 2 - 0.01, 1.45), back, grain="z", bevel=0.0)
+    shelves = (1.28, 1.62)
+    for z in shelves:
+        bx("shelf", (1.28, depth, 0.035), (0, y0, z), cab, grain="x", bevel=0.01)
+        bx("plate_rail", (1.28, 0.02, 0.025), (0, y0 - 0.07, z + 0.06), cab, grain="x", bevel=0.006)
+    bx("cornice", (1.44, depth + 0.08, 0.07), (0, y0 - 0.02, 2.00), cab, grain="x", bevel=0.02)
+    bx("cornice_step", (1.38, depth + 0.04, 0.04), (0, y0 - 0.01, 1.95), cab, grain="x", bevel=0.012)
+    # plates standing on both shelves, leaning back on the rail
+    plate = flat("plate", "#f4efe4", 0.35)
+    rim = flat("plate_rim", "#596b8c", 0.4)
+    for z in shelves:
+        for i, x in enumerate(lin(-0.52, 0.52, 5)):
+            r = 0.115 if i % 2 == 0 else 0.10
+            yc, zc = y0 + 0.02, z + 0.02 + r
+            cyl("plate_back", r, r, 0.012, (x, yc + 0.006, zc), rim, verts=16, rot=(78, 0, 0))
+            cyl("plate", r * 0.8, r * 0.8, 0.012, (x, yc - 0.003, zc - 0.002), plate, verts=16, rot=(78, 0, 0))
+    # bowls on top of the rack, cups on hooks under the lower shelf, a jug and a crock on the worktop
+    for j in range(3):
+        lathe("bowl", [(0.0, 0.0), (0.05, 0.0), (0.085, 0.035), (0.095, 0.06), (0.085, 0.06), (0.04, 0.012), (0.0, 0.012)],
+              (-0.02, 0.0, 0.93 + j * 0.03), plate if j % 2 else rim, steps=14)
+    cupc = [flat("cup_red", "#9e2b24", 0.4), plate, rim, flat("cup_mustard", "#e8b23a", 0.45)]
+    bx("cup_rail", (1.28, 0.03, 0.05), (0, y0 - 0.085, 1.235), cab, grain="x", bevel=0.01)
+    for i, x in enumerate(lin(-0.27, 0.27, 4)):
+        tube("hook", [(x, y0 - 0.1, 1.235), (x, y0 - 0.115, 1.215), (x, y0 - 0.11, 1.19)], 0.007, brass, sides=6)
+        c = cupc[i % 4]
+        lathe("cup", [(0.0, 0.0), (0.03, 0.0), (0.04, 0.03), (0.042, 0.075), (0.036, 0.075), (0.032, 0.035), (0.0, 0.03)], (x, y0 - 0.11, 1.08), c, steps=12)
+        tube("cup_handle", [(x, y0 - 0.11, 1.15), (x, y0 - 0.115, 1.185), (x, y0 - 0.112, 1.20), (x, y0 - 0.11, 1.17)], 0.008, c, sides=6)
+    ce = flat("ceramic", "#efe6d2", 0.4)
+    lathe("jug", [(0.0, 0.0), (0.06, 0.0), (0.085, 0.05), (0.08, 0.12), (0.05, 0.17), (0.062, 0.20), (0.045, 0.20), (0.04, 0.17), (0.0, 0.17)], (-0.45, 0.06, 0.93), ce, steps=14)
+    K.torus("jug_band", 0.084, 0.008, (-0.45, 0.06, 0.995), rim, major=14, minor=4)
+    tube("jug_handle", [(-0.38, 0.06, 1.08), (-0.325, 0.06, 1.06), (-0.325, 0.06, 1.0), (-0.37, 0.06, 0.975)], 0.012, ce)
+    crock = flat("crock", "#b8663f", 0.6)
+    lathe("crock", [(0.0, 0.0), (0.09, 0.0), (0.1, 0.03), (0.1, 0.16), (0.085, 0.19), (0.0, 0.19)], (0.40, 0.05, 0.93), crock, steps=14)
+    lathe("crock_lid", [(0.088, 0.0), (0.088, 0.015), (0.04, 0.035), (0.0, 0.035)], (0.40, 0.05, 1.12), wood(), steps=14)
+    ball("crock_knob", 0.022, (0.40, 0.05, 1.17), wood())
+    uv_rest()
+
+
+def _superellipse(a, b, z, n=40, p=2.6, dx=0.0):
+    """n points round an oval of half-widths a (x) and b (y) at height z, anticlockwise from above:
+    a rounded rectangle for p above 2. dx moves the oval along x."""
+    pts = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        c, s = math.cos(t), math.sin(t)
+        pts.append(Vector((dx + a * math.copysign(abs(c) ** (2 / p), c), b * math.copysign(abs(s) ** (2 / p), s), z)))
+    return pts
+
+
+def clawfoot_bath():
+    """A roll-top clawfoot bath: a deep rounded tub painted outside and enamelled inside, a rolled
+    rim, four brass claw feet, a brass tap at one end, a wooden tray across with soap and a little
+    yellow duck, and a towel hung over the side."""
+    paint = flat("tub_paint", "#9eae8f", 0.6)
+    enamel = flat("enamel_white", "#f4efe4", 0.3)
+    brass = flat("brass", "#c98a2e", 0.45)
+    n = 44
+    # outer shell from the bottom to under the rim, inner shell from the rim down to the floor
+    outer = [_superellipse(0.66 + 0.16 * t ** 0.8, 0.28 + 0.095 * t ** 0.8, 0.16 + 0.50 * t, n) for t in lin(0, 1, 7)]
+    inner = [_superellipse(0.60 + 0.17 * t ** 0.6, 0.22 + 0.10 * t ** 0.6, 0.23 + 0.43 * t, n) for t in lin(0, 1, 6)]
+    verts, faces = [], []
+
+    def rings(rs):
+        base = len(verts)
+        for r in rs:
+            verts.extend(r)
+        return base
+    o = rings(outer)
+    for k in range(len(outer) - 1):
+        for i in range(n):
+            j = (i + 1) % n
+            faces.append((o + k * n + i, o + k * n + j, o + (k + 1) * n + j, o + (k + 1) * n + i))
+    faces.append(tuple(o + i for i in range(n - 1, -1, -1)))
+    ob = CL._finish_mesh("tub_outer", verts, faces, [(0, 0)] * sum(len(f) for f in faces), paint, recalc=False)
+    K.uv_box(ob, 1.5)
+    verts, faces = [], []
+    t_in = rings(inner)
+    t_out = rings([outer[-1]])
+    for k in range(len(inner) - 1):
+        for i in range(n):
+            j = (i + 1) % n
+            faces.append((t_in + k * n + j, t_in + k * n + i, t_in + (k + 1) * n + i, t_in + (k + 1) * n + j))
+    faces.append(tuple(t_in + i for i in range(n)))
+    top = t_in + (len(inner) - 1) * n
+    for i in range(n):
+        j = (i + 1) % n
+        faces.append((t_out + i, t_out + j, top + j, top + i))
+    ob = CL._finish_mesh("tub_inner", verts, faces, [(0, 0)] * sum(len(f) for f in faces), enamel, recalc=False)
+    K.uv_box(ob, 1.5)
+    roll = _superellipse(0.80, 0.355, 0.675, n)
+    roll.append(roll[0])
+    CL.tube("tub_roll", roll, [0.03] * len(roll), enamel, sides=8, caps=False)
+    # claw feet: a leg flaring into a ball held by three toes
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            fx, fy = sx * 0.56, sy * 0.21
+            out = Vector((sx * 0.04, sy * 0.03, 0))
+            tube("foot_leg", [(fx, fy, 0.20), (fx + out.x * 0.5, fy + out.y * 0.5, 0.12), (fx + out.x, fy + out.y, 0.06)], [0.05, 0.034, 0.04], brass, sides=10)
+            ball("foot_ball", 0.042, (fx + out.x, fy + out.y, 0.042), brass)
+            for k in range(3):
+                a = math.atan2(sy * 0.3, sx) + (k - 1) * 0.7
+                tube("foot_toe", [(fx + out.x, fy + out.y, 0.07), (fx + out.x + math.cos(a) * 0.05, fy + out.y + math.sin(a) * 0.05, 0.04),
+                                  (fx + out.x + math.cos(a) * 0.055, fy + out.y + math.sin(a) * 0.055, 0.008)], [0.016, 0.014, 0.008], brass, sides=6)
+    # the tap: two pillars on the rim at the -x end, a spout over the water line
+    tx = -0.80
+    for y in (-0.09, 0.09):
+        cyl("tap_pillar", 0.02, 0.024, 0.16, (tx, y, 0.785), brass, verts=10)
+        K.torus("tap_wheel", 0.03, 0.008, (tx, y, 0.87), brass, major=10, minor=4)
+        ball("tap_cap", 0.012, (tx, y, 0.875), brass)
+    tube("tap_spout", [(tx, -0.09, 0.82), (tx, 0.0, 0.845), (tx, 0.09, 0.82)], 0.016, brass)
+    tube("tap_nose", [(tx, 0.0, 0.845), (tx + 0.05, 0.0, 0.875), (tx + 0.12, 0.0, 0.85), (tx + 0.14, 0.0, 0.80)], 0.016, brass)
+    # a wooden tray across the middle with a bar of soap and a duck
+    w = wood()
+    bx("tray", (0.20, 0.86, 0.025), (0.22, 0.0, 0.715), w, grain="y", bevel=0.008)
+    for y in (-0.38, 0.38):
+        bx("tray_lip", (0.20, 0.02, 0.03), (0.22, y, 0.735), w, grain="x", bevel=0.006)
+    pillow("soap", (0.09, 0.06, 0.03), (0.22, -0.18, 0.742), flat("soap", "#f2cc75", 0.5), boxy=0.4)
+    duck = flat("duck", "#e8b23a", 0.4)
+    ball("duck_body", 0.05, (0.22, 0.12, 0.765), duck, scale=(1.2, 0.9, 0.8))
+    ball("duck_head", 0.03, (0.19, 0.12, 0.82), duck)
+    cyl("duck_beak", 0.012, 0.004, 0.03, (0.16, 0.12, 0.815), flat("beak", "#b8663f", 0.5), verts=8, rot=(0, -90, 0))
+    for y in (0.104, 0.136):
+        ball("duck_eye", 0.006, (0.168, y, 0.83), flat("eye", "#2b2826", 0.6))
+    # the towel hung over the front of the rim (made by hand: dropped as cloth, it slid off the roll)
+    towel = knit_cloth("towel", "#9a2a44", "#edddbd", rows=20, cols=20, stripes=((2, 3), (16, 17)), stitch=0.012)
+    path = [(-0.312, 0.585), (-0.31, 0.675)]
+    path += [(-0.355 - 0.046 * math.cos(math.radians(a)), 0.675 + 0.046 * math.sin(math.radians(a))) for a in lin(170, 10, 7)]
+    path += [(-0.401, 0.66), (-0.404, 0.52), (-0.407, 0.38), (-0.405, 0.35)]
+    hung("towel", -0.30, 0.32, path, towel, 1 / (20 * 0.012))
+    uv_rest()
+
+
+def hung(name, x0, width, path, mat, uv_scale, th=0.012):
+    """A cloth hung over something: a strip `width` wide across x, centred on x0, following `path`
+    [(y, z), ...] in the YZ plane, `th` thick, its two long edges gently wavy."""
+    verts, faces, uv_v = [], [], []
+    s_len = [0.0]
+    for a, b in zip(path, path[1:]):
+        s_len.append(s_len[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    n = len(path)
+    for i, (y, z) in enumerate(path):
+        a, b = path[max(0, i - 1)], path[min(n - 1, i + 1)]
+        ty, tz = b[0] - a[0], b[1] - a[1]
+        ln = math.hypot(ty, tz) or 1.0
+        ny, nz = -tz / ln, ty / ln
+        wob = 0.006 * math.sin(s_len[i] * 23.0)
+        for (xs, side) in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            x = x0 + xs * (width / 2 + 0.004 * math.sin(s_len[i] * 31.0 + xs))
+            verts.append((x, y + ny * (side * th / 2 + wob), z + nz * (side * th / 2 + wob)))
+            uv_v.append(((x - x0 + width / 2) * uv_scale, s_len[i] * uv_scale))
+    for i in range(n - 1):
+        for k in range(4):
+            a, b = i * 4 + k, i * 4 + (k + 1) % 4
+            faces.append((a, b, b + 4, a + 4))
+    faces.append((0, 1, 2, 3))
+    faces.append(tuple((n - 1) * 4 + k for k in (3, 2, 1, 0)))
+    return CL._finish_mesh(name, verts, faces, [uv_v[k] for f in faces for k in f], mat, recalc=True)
+
+
+def coat_rack():
+    """A turned coat stand on three splayed feet with pegs at two heights, a felt hat on top, a
+    knitted scarf over one peg and a knitted bag on another."""
+    w = wood()
+    for k in range(3):
+        a = math.radians(90 + k * 120)
+        c, s = math.cos(a), math.sin(a)
+        beam("foot", [(c * 0.05, s * 0.05, 0.17), (c * 0.15, s * 0.15, 0.10), (c * 0.23, s * 0.23, 0.03)], 0.065, 0.065, w)
+        ball("foot_pad", 0.04, (c * 0.235, s * 0.235, 0.03), w, scale=(1, 1, 0.7))
+    lathe("pole", [(0.0, 0.05), (0.065, 0.05), (0.07, 0.12), (0.055, 0.20), (0.044, 0.30), (0.04, 1.40), (0.052, 1.45), (0.052, 1.50),
+                   (0.04, 1.55), (0.04, 1.70), (0.05, 1.73), (0.034, 1.76), (0.0, 1.76)], (0, 0, 0), w, steps=14)
+    ball("finial", 0.045, (0, 0, 1.79), w)
+    pegs = []
+    for level, z in enumerate((1.62, 1.48)):
+        for k in range(3):
+            a = math.radians(90 + k * 120 + level * 60)
+            c, s = math.cos(a), math.sin(a)
+            tube("peg", [(c * 0.02, s * 0.02, z), (c * 0.12, s * 0.12, z + 0.04), (c * 0.16, s * 0.16, z + 0.10)], [0.018, 0.015, 0.014], w, sides=8)
+            ball("peg_knob", 0.024, (c * 0.165, s * 0.165, z + 0.11), w)
+            pegs.append((c, s, z))
+    # the hat on the top, tipped forward
+    felt = flat("hat", "#596b8c", 0.95)
+    hat = lathe("hat", [(0.0, -0.005), (0.17, -0.005), (0.175, 0.008), (0.10, 0.012), (0.095, 0.11), (0.06, 0.14), (0.0, 0.145)], (0, 0, 1.80), felt, steps=18)
+    band = lathe("hat_band", [(0.101, 0.012), (0.098, 0.045), (0.0, 0.045)], (0, 0, 1.80), flat("hat_band", "#9a2a44", 0.8), steps=18)
+    for ob in (hat, band):
+        ob.rotation_euler = (math.radians(-10), 0, 0)
+    # a knitted bag on the back-right peg of the lower ring
+    c, s, z = pegs[5]
+    bag = knit_cloth("bag", "#e0cc9e", "#9e5940", rows=16, cols=16, stripes=((5, 7),), stitch=0.014)
+    hx, hy = c * 0.13, s * 0.13
+    tube("bag_handle", [(hx - s * 0.06, hy + c * 0.06, z - 0.12), (hx - s * 0.02, hy + c * 0.02, z + 0.085), (hx + s * 0.02, hy - c * 0.02, z + 0.085),
+                        (hx + s * 0.06, hy - c * 0.06, z - 0.12)], 0.01, bag, sides=6)
+    pillow("bag", (0.26, 0.08, 0.26), (hx, hy, z - 0.24), bag, rot=(0, 0, math.degrees(math.atan2(s, c)) - 90), boxy=0.45, scale=1 / (16 * 0.014))
+    # the scarf hangs over the front peg of the lower ring, made by hand (dropped as cloth, its
+    # fringe broke into shards): a strip over the peg, one end a little longer, fringed
+    c, s, z = pegs[4]
+    scarf = knit_cloth("scarf", "#9e2b24", "#edddbd", rows=16, cols=12, stripes=((0, 3), (8, 11)), stitch=0.016)
+    top, r = z + 0.09, 0.035
+    path = [(-r - 0.01, top - 0.50), (-r - 0.004, top - 0.25), (-r, top)]
+    path += [(-r * math.cos(math.radians(a)), top + r * math.sin(math.radians(a))) for a in lin(20, 160, 6)]
+    path += [(r, top), (r + 0.006, top - 0.25), (r + 0.012, top - 0.40)]
+    ob = hung("scarf", s * 0.11, 0.17, path, scarf, 1 / (12 * 0.016), th=0.02)
+    ob.rotation_euler = (0, 0, math.radians(90))
+    rng = random.Random(3)
+    for end, zb in ((-r - 0.01, top - 0.50), (r + 0.012, top - 0.40)):
+        for k in range(6):
+            y = s * 0.11 + (k / 5 - 0.5) * 0.15
+            t = tube("tassel", [(y, end, zb + 0.005), (y + rng.uniform(-0.01, 0.01), end, zb - 0.06)], 0.008,
+                     scarf if k % 2 else flat("fringe", "#edddbd", 0.95), sides=5)
+            t.location = (0, 0, 0)
+            t.rotation_euler = (0, 0, math.radians(90))
+    uv_rest()
+
+
 BUILDERS = {"rocking_chair": rocking_chair, "fireplace": fireplace, "kitchen": kitchen, "sofa": sofa, "armchair": armchair,
             "spinning_wheel": spinning_wheel, "dining_table": dining_table, "bookshelf": bookshelf, "wardrobe": wardrobe,
-            "lamp": lamp, "plant": plant, "rug_red": rug_red}
+            "lamp": lamp, "plant": plant, "rug_red": rug_red,
+            "single_bed": single_bed, "double_bed": double_bed, "dresser": dresser, "nightstand": nightstand,
+            "dining_chair": dining_chair, "kitchen_dresser": kitchen_dresser, "clawfoot_bath": clawfoot_bath, "coat_rack": coat_rack}
 
 
 # Parts the game moves, joined into meshes of their own with their origin on the pivot.
