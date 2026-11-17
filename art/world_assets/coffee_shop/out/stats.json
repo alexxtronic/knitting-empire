@@ -2,7 +2,7 @@
   "name": "building_cafe",
   "parts": {
     "base": {
-      "triangles": 15572,
+      "triangles": 18748,
       "materials": [
         "cafe_floor",
         "cafe_stone",
@@ -21,11 +21,20 @@
         "cafe_chalkframe",
         "cafe_chalk",
         "cafe_leaf_o",
-        "cafe_leaf_y"
+        "cafe_leaf_y",
+        "cafe_lining"
+      ]
+    },
+    "loft": {
+      "triangles": 4572,
+      "materials": [
+        "cafe_lining",
+        "cafe_wood",
+        "cafe_stone"
       ]
     },
     "wall_front": {
-      "triangles": 26716,
+      "triangles": 30684,
       "materials": [
         "cafe_wall",
         "cafe_trim",
@@ -122,23 +131,21 @@
       ]
     },
     "roof": {
-      "triangles": 10740,
+      "triangles": 8632,
       "materials": [
         "cafe_trim",
-        "cafe_lining",
-        "cafe_wood",
         "cafe_roof",
-        "cafe_wall",
         "cafe_glow",
-        "cafe_leaf",
-        "cafe_bloom",
+        "cafe_wood",
+        "cafe_lining",
         "cafe_roof_arch",
         "cafe_stone",
+        "cafe_leaf",
         "cafe_leaf_y",
         "cafe_leaf_o"
       ]
     }
   },
-  "triangles": 63898,
-  "glb_bytes": 6291900
+  "triangles": 73506,
+  "glb_bytes": 6771832
 }
