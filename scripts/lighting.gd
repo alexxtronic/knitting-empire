@@ -96,7 +96,13 @@ func apply_graphics(level: int) -> void:
 	env.sdfgi_enabled = level >= 2
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_read_sky_light = true
-	env.sdfgi_cascades = 4
+	# High keeps Ultra's effects at a lower cost: three SDFGI cascades (the bounce reaches less far
+	# out), SSIL at low quality and a coarser haze volume. These setters are global, so Ultra sets its
+	# own values (Godot's defaults, the High of before 2026-11-17) back every time.
+	var ultra := level >= 3
+	env.sdfgi_cascades = 4 if ultra else 3
+	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_MEDIUM if ultra else RenderingServer.ENV_SSIL_QUALITY_LOW, true, 0.5, 4, 50.0, 300.0)
+	RenderingServer.environment_set_volumetric_fog_volume_size(64 if ultra else 48, 64 if ultra else 48)
 	env.sdfgi_min_cell_size = 0.25
 	env.sdfgi_bounce_feedback = 0.4
 	env.sdfgi_energy = 0.9

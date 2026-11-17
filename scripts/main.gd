@@ -3588,8 +3588,8 @@ func _graphics_checks() -> void:
 	var shut := _shut_shops()
 	_cycle_graphics() # High
 	await _wait(0.3)
-	_check("High graphics: Ultra's look (light bounce, reflections, haze, the sun's shadow in 4 splits) for less: %d lamp shadows at most, grass to %d m, 3D at %d%% (Ultra %d%%), and %d shut shops keep their lights with their furnishings casting nothing under the roof" % [LAMP_SHADOWS[GFX_HIGH], int(GRASS_RANGE[GFX_HIGH]), roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100), shut.size()],
-		gfx == GFX_HIGH and env.sdfgi_enabled and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled
+	_check("High graphics: Ultra's look (light bounce in 3 cascades, reflections, haze, the sun's shadow in 4 splits) for less: %d lamp shadows at most, grass to %d m, 3D at %d%% (Ultra %d%%), and %d shut shops keep their lights with their furnishings casting nothing under the roof" % [LAMP_SHADOWS[GFX_HIGH], int(GRASS_RANGE[GFX_HIGH]), roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100), shut.size()],
+		gfx == GFX_HIGH and env.sdfgi_enabled and env.sdfgi_cascades == 3 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled
 		and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[GFX_HIGH] and get_viewport().scaling_3d_scale <= scale_ultra
 		and not shut.is_empty() and shut.all(func(sh) -> bool: return _shop_state(sh, true, false))
@@ -3620,6 +3620,7 @@ func _graphics_checks() -> void:
 		and hud.graphics_btn.text == "Graphics: Ultra")
 	_check("Ultra as High was: the sun's shadow in 4 splits, and every shop's lights on and furnishings casting their shadows again",
 		sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS and not Interiors.no_casters and not Interiors.lights_off
+		and env.sdfgi_cascades == 4
 		and shut.all(func(sh) -> bool: return _shop_state(sh, true, true)))
 
 
