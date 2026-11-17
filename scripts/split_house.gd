@@ -23,6 +23,7 @@ extends Node3D
 const Catalog = preload("res://scripts/catalog.gd")
 const Data = preload("res://scripts/data.gd")
 const FurnitureScript = preload("res://scripts/furniture.gd")
+const Interiors = preload("res://scripts/interiors.gd")
 
 const UPPER := 0 # she is on the main floor or the bedroom floor (or outside)
 const BASEMENT := 1 # she is in the basement
@@ -705,6 +706,15 @@ static func y_at(p: Vector3) -> float:
 ## own code sets that height) keeps it; outside the house nothing changes.
 static func follow(n: Node3D, prev: float) -> float:
 	var f := y_at(n.position)
+	if f == 0.0 and not Interiors.lofts.is_empty(): # the café's stairs and loft (interiors.gd)
+		var xz := Vector2(n.position.x, n.position.z)
+		var last: Vector2 = n.get_meta("_floor_xz", xz)
+		n.set_meta("_floor_xz", xz)
+		if last.distance_to(xz) > 2.0: # put somewhere else (a scene, waking up): not still upstairs
+			prev = 0.0
+		var lf: Variant = Interiors.floor_for(n.position, prev)
+		if lf != null:
+			f = lf
 	if f == 0.0 and prev == 0.0:
 		return 0.0
 	# what's above the floor: the walk puts her back on the ground (0) each step, so a floor below the

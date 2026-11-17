@@ -365,7 +365,9 @@ func _ready() -> void:
 	store.main = self
 	add_child(store)
 	Interiors.WorkSpot.main = self
-	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
+	player.steer_ok = func(q: Vector3) -> bool:
+		var lo: Variant = Interiors.steer_ok(player.position, q) # in the café: its stairs and loft
+		return lo if lo != null else _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -1413,6 +1415,14 @@ func _nearest_walkable(c: Vector2i, target: Vector3) -> Variant:
 
 
 func _find_path(from: Vector3, to: Vector3) -> Array:
+	# a walk up or down the café's stairs: its loft has a grid of its own (interiors.gd)
+	var loft: Variant = Interiors.loft_route(from, to, _find_path_ground)
+	if loft != null:
+		return loft
+	return _find_path_ground(from, to)
+
+
+func _find_path_ground(from: Vector3, to: Vector3) -> Array:
 	var a = _nearest_walkable(_cell(from), from)
 	var b = _nearest_walkable(_cell(to), to)
 	if a == null or b == null:
@@ -1881,6 +1891,9 @@ func _ray_target(mpos: Vector2) -> Variant:
 
 
 func _ground_point(mpos: Vector2) -> Variant:
+	var lp: Variant = Interiors.loft_pick(player.position, cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
+	if lp != null: # upstairs in the café: its floor
+		return lp
 	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
 		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
 	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
@@ -2708,7 +2721,8 @@ func reading_seat_near(p: Vector3):
 	var shop := Interiors.inside_of(p)
 	var seats: Array = []
 	if shop != "":
-		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken())
+		var up := Interiors.upstairs(p) # a seat on the floor she's on: upstairs in the café, or down
+		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken() and r.upstairs == up)
 	else:
 		seats = furniture.filter(func(f): return is_instance_valid(f) and f.item_id in ["armchair", "rocking_chair", "sofa"])
 	for st in seats:
@@ -6342,6 +6356,68 @@ func _barn_checks() -> void:
 ## the bookmark, choosing one from the shelf and carrying it to a seat, reading to the end; and the
 ## candles in Nora's house. Saves 56_cafe.png, 56_cafe_inside.png, 56_cafe_reading.png,
 ## 56_book_open.png, 56_cafe_shelf.png, 56_cafe_night.png and 56_house_candles.png.
+## The café's upstairs (interiors.gd, data/interiors.json "cafe" "loft"): its seats and shelves, the
+## walk from the door up the stairs to a sofa and back down, the loft shown only while she's up.
+func _cafe_loft_checks(s, door_in: Vector3) -> void:
+	var by: float = s.node.global_position.y
+	var up_spots: Array = Interiors.read_spots("cafe").filter(func(r): return r.upstairs)
+	var up_seats: Array = up_spots.filter(func(r): return r.kind == "seat")
+	var open_cells := 0
+	if s.loft_grid != null:
+		for x in s.loft_grid.region.size.x:
+			for z in s.loft_grid.region.size.y:
+				if not s.loft_grid.is_point_solid(Vector2i(x, z)):
+					open_cells += 1
+	_check("the café has an upstairs: its floor part, %d pieces up there, %d reading seats and %d shelves, %.1f m² to walk on, and none of its seats offered to the regulars (%d downstairs)" % [s.loft_root.get_child_count() if s.loft_root else 0, up_seats.size(), up_spots.size() - up_seats.size(), open_cells * Interiors.LOFT_CELL * Interiors.LOFT_CELL, cafe_visits.free_seats().size()],
+		s.parts.has("loft") and s.loft_root != null and s.loft_root.get_child_count() >= 20 and up_seats.size() >= 3 and up_spots.size() - up_seats.size() >= 2 and open_cells * 0.0625 > 25.0
+		and cafe_visits.free_seats().all(func(r): return not r.upstairs))
+	var sofa = up_seats.filter(func(r): return r.label.contains("Sofa"))
+	if sofa.is_empty():
+		return
+	sofa = sofa[0]
+	var sp: Vector3 = sofa.stand_point()
+	player.walk([])
+	player.position = Vector3(door_in.x, 0, door_in.z)
+	await _wait(0.3)
+	_check("she's downstairs in the café and the loft is out of the way from above (loft %s)" % ("shown" if (s.parts["loft"] as Node3D).visible else "hidden"),
+		s.inside and not s.up and not (s.parts["loft"] as Node3D).visible and not s.loft_root.visible)
+	cam_target = s.node.global_transform * Vector3(3.0, 1.5, 0.0)
+	cam_dist = 13.0
+	player.walk(_find_path(player.position, sp))
+	var t := 0.0
+	var top_y := 0.0
+	var mid_shot := false
+	while not player.path.is_empty() and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+		top_y = maxf(top_y, player.position.y - by)
+		if not mid_shot and player.position.y - by > 1.5:
+			mid_shot = true
+			await _shot("56_cafe_stairs.png")
+	await _wait(0.4)
+	var dy: float = player.position.y - by - s.loft_y
+	var d: float = Vector2(player.position.x - sp.x, player.position.z - sp.z).length()
+	_check("she walks from the door up the stairs to a sofa upstairs (%.1f s, %.2f m from its spot, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [t, d, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
+		t < 40.0 and d < 0.6 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	cam_target = player.position + Vector3(0, 0.5, 0)
+	cam_dist = 11.0
+	await _wait(1.2)
+	await _shot("56_cafe_loft.png")
+	# a click on the loft's floor lands up there
+	var mid: Vector3 = s.node.global_transform * Vector3(-1.0, s.loft_y, -2.0)
+	var hit: Variant = _ground_point(cam.unproject_position(mid))
+	_check("a click upstairs lands on the loft's floor (%s)" % str(hit), hit != null and absf((hit as Vector3).y - (by + s.loft_y)) < 0.01 and (hit as Vector3).distance_to(mid) < 0.2)
+	# and back down to the door
+	player.walk(_find_path(player.position, door_in))
+	t = 0.0
+	while not player.path.is_empty() and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	await _wait(0.4)
+	_check("and back down the stairs to the door (%.1f s, %.2f m up, upstairs %s, %.2f m from the door)" % [t, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
+		t < 40.0 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+
+
 func _cafe_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -6415,6 +6491,7 @@ func _cafe_checks() -> void:
 			if not solid2:
 				leaks.append("z%.1f@%.1f" % [zz, x])
 	_check("she can't walk through the Coffee Shop's walls %s" % str(leaks), leaks.is_empty())
+	await _cafe_loft_checks(s, door_in)
 	# outside, shut; then in through the door to the armchair by the fire
 	var out_front: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.2)
 	out_front.y = 0.0
