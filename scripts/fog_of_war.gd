@@ -29,7 +29,7 @@ const LAYER := 1 << 19 # render layer 20: only the game's camera draws the fog q
 const MARGIN := 20.0 # metres past the map's bounds the grid reaches
 const EVERY := 0.2 # s between looks at where she is
 const DAY_COLOR := Color(0.84, 0.87, 0.91)
-const NIGHT_COLOR := Color(0.1, 0.12, 0.17)
+const NIGHT_COLOR := Color(0.17, 0.2, 0.27)
 
 var main # main.gd
 var enabled := true
@@ -231,7 +231,7 @@ func draw_on_map(ci: CanvasItem, map_centre: Vector3, yaw: float, span: float, p
 	var zc := Vector2(-k * sin(yaw), k * cos(yaw)) # world z -> map pixels
 	var o := Vector2(px * 0.5, px * 0.5) - xc * map_centre.x - zc * map_centre.z
 	ci.draw_set_transform_matrix(Transform2D(xc, zc, o))
-	ci.draw_texture_rect(tex, Rect2(origin, Vector2(cells) * cell), false, Color(0.88, 0.9, 0.95, 0.82))
+	ci.draw_texture_rect(tex, Rect2(origin, Vector2(cells) * cell), false, Color(0.88, 0.9, 0.95, 0.62))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
@@ -258,7 +258,7 @@ func checks() -> void:
 	for p in clear:
 		worst = maxf(worst, fog_at(p))
 	m._check("the farm and all of Maple Grove are clear of fog (worst corner %.2f)" % worst, worst < 0.01)
-	var lands := {"swamp": Vector3(-60, 0, -6), "foothills": Vector3(30, 0, -75), "beach": Vector3(40, 0, 50), "meadows": Vector3(115, 0, -5)}
+	var lands := {"swamp": Vector3(-60, 0, -6), "foothills": Vector3(30, 0, -75), "beach": Vector3(80, 0, 48), "meadows": Vector3(115, 0, -5)}
 	var fogged := true
 	var says := []
 	for id in lands:

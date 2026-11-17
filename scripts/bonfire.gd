@@ -347,8 +347,8 @@ class Fire extends Node3D:
 		Catalog._sparks(self, Vector3(0, 0.3, 0))
 		var sp := find_child("Sparks", false, false) as GPUParticles3D
 		if sp:
-			sp.amount = 28
-			sp.lifetime = 1.8
+			sp.amount = 18
+			sp.lifetime = 1.3
 			sp.visibility_aabb = AABB(Vector3(-1.5, -0.3, -1.5), Vector3(3.0, 4.0, 3.0))
 		light = Catalog.omni(self, Vector3(0, 0.9, 0), Color(1.0, 0.58, 0.28), rng, energy, energy)
 		light.set_meta("fire", true)
