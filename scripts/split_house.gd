@@ -172,7 +172,9 @@ func _walls() -> void:
 			var low := _wall_box(roots[lv], p0, p1, y0, maxf(y0 + 0.05, _level_y(lv) + LOW), col.darkened(0.08))
 			low.visible = false
 			_built.append_array([full, low])
-			walls.append({"full": full, "low": low, "level": lv, "c": p0.lerp(p1, 0.5), "a": p0, "b": p1, "i": wi})
+			# "block": false for a wall that only closes off a view (the ensuite's over the stairwell): the
+			# flight under it stays open on the walking grid
+			walls.append({"full": full, "low": low, "level": lv, "c": p0.lerp(p1, 0.5), "a": p0, "b": p1, "i": wi, "block": bool(w.get("block", true))})
 		for d in w.get("doors", []):
 			_opening(lv, a, b, d, y0, y1, col, wi)
 	_outside_doors()
@@ -488,6 +490,8 @@ func _furniture() -> void:
 		n.name = str(f["id"])
 		n.set_meta("item_id", str(f["id"]))
 		n.set_meta("furnishing", true) # the world editor moves each piece on its own (god_mode.gd)
+		if bool(f.get("over", false)):
+			n.set_meta("over_stairs", true) # stands on a floor over the stairs: mark_grid() leaves the flight open
 		n.position = Vector3(at.x, _level_y(lv) + 0.045 + float(f.get("y", 0.0)), at.y)
 		n.rotation.y = deg_to_rad(float(f.get("turn", 0.0)))
 		roots[lv].add_child(n)
@@ -765,7 +769,7 @@ func mark_grid() -> void:
 		if not n.visible: # deleted in the world editor
 			continue
 		var item: Dictionary = Catalog.ITEMS.get(str(n.get_meta("item_id", "")), {})
-		if item.is_empty() or bool(item.get("flat", false)):
+		if item.is_empty() or bool(item.get("flat", false)) or n.has_meta("over_stairs"):
 			continue
 		var fs: Vector2 = Data.vec2(item.get("size", [1.0, 1.0]))
 		if absi(int(roundf(rad_to_deg(n.rotation.y) / 90.0))) % 2 == 1:

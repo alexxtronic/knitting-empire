@@ -59,6 +59,9 @@ func run(m: Node) -> void:
 				print("WALKIN grid z %.2f %s" % [1.5 + zi * 0.2, line])
 		if not got:
 			print("WALKIN couldn't reach the ", r[0])
+		if got and r[0] == "ensuite":
+			# the ensuite runs on over the basement stairs, its tub on the floor laid over the flight
+			await _picture(Vector3(2.0, 0.85, 3.0), 6.5, 82.0, "67_walkin_ensuite.png")
 		rooms_ok = rooms_ok and got
 	main._check("the baby's room and the master are each through their own door off the hall, and the ensuite (with its bathtub) through the master's", rooms_ok)
 	# first person upstairs: the roof off, the bedroom floor's ceiling on
