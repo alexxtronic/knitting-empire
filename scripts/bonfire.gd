@@ -235,6 +235,20 @@ func warm_up(f) -> void:
 		Game.add_need("happiness", 2.0))
 
 
+## Half a night's rest (Alex, 2026-11-17): she curls up by the fire and sleeps till 6:00 like bed
+## (main._go_to_sleep), but wakes with only `sleep_rest` energy more than she lay down with, so she
+## can stay out herding without walking home to bed.
+func sleep_rest() -> float:
+	return float(econ("sleep_rest", 50.0))
+
+
+func sleep_by(f) -> void:
+	var p: Vector3 = f.stand_point()
+	var yaw := atan2(f.global_position.x - p.x, f.global_position.z - p.z)
+	main.player.start_activity("Zzz", 1.8, func(): pass, p, yaw)
+	main._go_to_sleep(false, sleep_rest())
+
+
 ## One bonfire: a ring of stones, a tepee of logs, the fireplace's shader flames scaled up, coals,
 ## sparks and a warm flickering light. Click it for its menu.
 class Fire extends Node3D:
@@ -251,6 +265,7 @@ class Fire extends Node3D:
 		var left := maxf(0.0, until - home.now_h())
 		return [
 			{"id": "warm_up", "label": "Warm up by the fire", "enabled": true},
+			{"id": "sleep_fire", "label": "Sleep by the fire  (+%d energy, till morning)" % int(home.sleep_rest()), "enabled": true},
 			{"id": "noop", "label": "Burns till dawn  (%d hr%s left)" % [ceili(left), "" if ceili(left) == 1 else "s"], "enabled": false},
 			{"id": "put_out", "label": "Put it out", "enabled": true},
 		]
@@ -259,6 +274,8 @@ class Fire extends Node3D:
 		match id:
 			"warm_up":
 				home.warm_up(self)
+			"sleep_fire":
+				home.sleep_by(self)
 			"put_out":
 				home.put_out(self)
 
@@ -443,7 +460,7 @@ func checks() -> void:
 	var dawn := dawn_after(float(keep["day"] - 1) * 24.0 + 21.0)
 	m._check("it burns till dawn (out at hour %.1f, day %d 6:00)" % [f.until, int(f.until / 24.0) + 1], is_equal_approx(f.until, float(Game.day) * 24.0 + 6.0) or is_equal_approx(f.until, dawn))
 	var acts: Array = m._actions_for(f).map(func(a): return a["label"])
-	m._check("its menu: %s" % str(acts), acts.size() == 3 and str(acts[0]).begins_with("Warm up") and str(acts[2]) == "Put it out")
+	m._check("its menu: %s" % str(acts), acts.size() == 4 and str(acts[0]).begins_with("Warm up") and str(acts[1]).begins_with("Sleep by the fire") and str(acts[3]) == "Put it out")
 	# pictures at night
 	m.cam_glide = {"pos": f.position, "dist": 8.0, "pitch": 26.0}
 	Game.hour = 22.5
@@ -490,6 +507,24 @@ func checks() -> void:
 	m._check("bed in the small hours: still day %d (was %d), 6:00, and the fire is out at dawn" % [Game.day, day1],
 		Game.day == day1 and is_equal_approx(Game.hour, 6.0) and fires.is_empty() and not Game.flags.has("bonfires") and not Game.flags.has("stayed_up"))
 	m._check("with no fire burning, midnight still means bed", not keeps_her_up())
+	# sleeping by a fire: till morning, half a night's rest, no walk home
+	Game.hour = 1.5
+	Game.flags["stayed_up"] = Game.day # up past midnight by it, as above
+	var g = light(spot)
+	var gp: Vector3 = g.position
+	Game.energy = 20.0
+	var day2 := Game.day
+	var bed_dist: float = m.player.position.distance_to(Vector3(hc.x, 0, hc.y))
+	m._do_action(g, "sleep_fire")
+	waited = 0.0
+	await m._wait(0.3)
+	while m.sleeping and waited < 8.0:
+		await m._wait(0.25)
+		waited += 0.25
+	m._check("'Sleep by the fire' sleeps her there till 6:00 (day %d, %.1fh) with half a night's rest (energy 20 -> %.0f), not walking home (%.0f m from the house)" % [Game.day, Game.hour, Game.energy, bed_dist],
+		not m.sleeping and Game.day == day2 and is_equal_approx(Game.hour, 6.0) and is_equal_approx(Game.energy, 20.0 + sleep_rest())
+		and m.player.position.distance_to(gp) < 3.0)
+	m.player.cancel_activity()
 	_restore(keep)
 
 

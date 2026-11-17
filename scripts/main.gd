@@ -2869,7 +2869,7 @@ func _ship(kind: String) -> void:
 		hud.show_toast("Shipped! +%dc" % earned)
 
 
-func _go_to_sleep(passed_out: bool) -> void:
+func _go_to_sleep(passed_out: bool, rest := -1.0) -> void: # rest >= 0: only that much energy back (a bonfire)
 	if sleeping:
 		return
 	sleeping = true
@@ -2879,7 +2879,10 @@ func _go_to_sleep(passed_out: bool) -> void:
 	hud.hide_menu()
 	hud.fade_sleep()
 	await get_tree().create_timer(0.9).timeout
+	var tired := Game.energy
 	Game.sleep()
+	if rest >= 0.0:
+		Game.energy = minf(100.0, tired + rest)
 	if passed_out:
 		Game.energy = 60.0
 	if _autotest_dir == "":
