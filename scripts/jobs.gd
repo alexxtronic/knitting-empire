@@ -231,7 +231,7 @@ func _arrived(i: int) -> void:
 	var d := def(str(shift["id"]))
 	var n: float = float(shift["stops"].size())
 	var drain: Dictionary = d.get("drain", {})
-	var e := float(drain.get("energy", 0.0)) / n
+	var e := float(drain.get("energy", 0.0)) / n * Game.ENERGY_DRAIN
 	if Game.energy < e:
 		main.hud.show_toast("You're too tired to carry on.")
 		finish()

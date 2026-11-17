@@ -153,6 +153,12 @@ func reset() -> void:
 	flags = {}
 
 
+## Every drain on her energy is scaled by this (Alex, 2026-11-17: "make the energy meter more
+## forgiving, takes 50% more to empty it"): tools, chores, jobs, hunger and the cold all cost 1/1.5
+## of what they're written as. Rest and sleep give back as before.
+const ENERGY_DRAIN := 1.0 / 1.5
+
+
 func _process(delta: float) -> void:
 	if not time_running:
 		return
@@ -160,10 +166,10 @@ func _process(delta: float) -> void:
 		hour += delta / hour_seconds()
 	fullness = maxf(0.0, fullness - delta * HUNGER) # about one full bar over a 14-minute day
 	if fullness <= 0.0:
-		energy = maxf(0.0, energy - delta * 0.4)
+		energy = maxf(0.0, energy - delta * 0.4 * ENERGY_DRAIN)
 	warmth = move_toward(warmth, warmth_target, delta * 1.2)
 	if warmth < 25.0:
-		energy = maxf(0.0, energy - delta * 0.08) # shivering is tiring
+		energy = maxf(0.0, energy - delta * 0.08 * ENERGY_DRAIN) # shivering is tiring
 	# happiness slips slowly, faster when she's hungry, cold, exhausted or lonely
 	var low := 0.0
 	for v in [fullness, warmth, energy, love]:
@@ -412,6 +418,7 @@ func take_item(id: String, n: int = 1) -> bool:
 
 
 func use_energy(amount: float) -> bool:
+	amount *= ENERGY_DRAIN
 	if energy < amount:
 		toast.emit("You're too tired. Rest in a chair or sleep in your bed.")
 		return false
