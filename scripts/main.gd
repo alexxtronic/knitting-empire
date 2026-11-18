@@ -6575,6 +6575,8 @@ func _cafe_checks() -> void:
 	out_front.y = 0.0
 	player.walk([])
 	player.position = out_front
+	if dog != null: # the dog by her side, not still walking out through the door behind her
+		dog.position = out_front + xf.basis.x.normalized() * 1.5
 	_set_cam_lock(false)
 	cam_target = xf * Vector3(0, 2.0, 1.0)
 	cam_dist = 30.0
