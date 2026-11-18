@@ -1,0 +1,14 @@
+{
+  "id": "kitchen_dresser",
+  "atlas": 512,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.383,
+  "light_p05": 0.0,
+  "seconds": 8.5,
+  "glb_bytes": 682744,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}
