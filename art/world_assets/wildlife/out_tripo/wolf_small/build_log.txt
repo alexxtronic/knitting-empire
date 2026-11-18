@@ -1,0 +1,7 @@
+THINNED wolf_small: 262394 -> 30000 triangles
+MEASURE wolf_small: height 0.550, paws fore y -0.129 x +-0.074, hind y 0.093 x +-0.103
+HEAD nose at y -0.352 z 0.385; head 0.187 m long; tail 4 points
+BAKED wolf_small colour and normal at 2048 px
+SKIN 15000 vertices on 19 bones, 1534 rigid on the head
+STRIDE {'Walk': 0.535, 'Run': 1.773}
+EXPORTED wolf_small: 30000 triangles, 19 bones -> assets/wildlife/wolf_small.glb

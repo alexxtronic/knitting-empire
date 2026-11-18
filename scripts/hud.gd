@@ -5,11 +5,13 @@ extends CanvasLayer
 signal mode_selected(build: bool)
 signal expand_pressed
 signal color_chosen(cid: String) # a colour for the piece in her hands (furniture.gd set_color)
-signal wall_tool_chosen(kind: String) # "wall", "door" or "" (house_builder.gd)
+signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", or ""
+signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
 signal graphics_pressed
+signal render_scale_changed(v: float)
 signal title_continue
 signal title_new_game
 signal title_quit
@@ -21,6 +23,7 @@ signal god_freeze(on: bool) # stop the clock
 signal god_edit(on: bool) # the world editor (scripts/god_mode.gd), admin only
 signal cinematic_pressed # Menu > Cinematic camera (cinematic.gd)
 signal first_person_pressed # Menu > First person (first_person.gd)
+signal eat_pressed(item: String) # a food in her hand clicked (or its number key pressed) again: main.gd eat_item()
 signal wardrobe_pressed # Menu > Wardrobe (main.gd's wardrobe_panel.gd)
 signal hud_option(option: String, on: bool) # "fps" or "camera_pad": shown or hidden (settings)
 signal item_chosen(id: String)
@@ -221,8 +224,12 @@ var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it w
 var expand_btn: Button
 var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
+var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
+var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
 var graphics_btn: Button
+var render_scale_slider: HSlider
+var _render_scale_label: Label
 var settings_panel: PanelContainer
 var keys_panel: PanelContainer # Settings > Key bindings (built the first time it opens)
 var key_btns := {} # action id -> its key's button on that page
@@ -502,6 +509,11 @@ func _label(text: String, size := 15, color := TEXT) -> Label:
 	return l
 
 
+func set_render_scale(v: float) -> void:
+	render_scale_slider.set_value_no_signal(v)
+	_render_scale_label.text = "%d%%" % roundi(v * 100.0)
+
+
 func set_graphics_label(level: String) -> void:
 	graphics_btn.text = "Graphics: " + level
 
@@ -634,6 +646,7 @@ class Slot extends Button:
 		"lantern": ["Lantern", Color(0.98, 0.76, 0.36)],
 		"turnip_seeds": ["Turnip seeds", Color(0.78, 0.66, 0.86)],
 		"pumpkin_seeds": ["Pumpkin seeds", Color(0.95, 0.8, 0.55)],
+		"pastry": ["Pastry", Color(0.93, 0.7, 0.38)], # from Heart Bakery, eaten from her hand (EDIBLE)
 		# tools: a third entry says what a click does with it in her hand
 		"hoe": ["Hoe", Color(0.6, 0.45, 0.3), "right-click open ground on the farm and pick Dig bed"],
 		"watering_can": ["Watering can", Color(0.45, 0.5, 0.6), "click a growing crop to water it"],
@@ -642,6 +655,8 @@ class Slot extends Button:
 		"axe": ["Axe", Color(0.55, 0.4, 0.3), "click a tree on the farm to fell it for wood"],
 		"scythe": ["Scythe", Color(0.5, 0.55, 0.5), "click long grass to cut hay"],
 	}
+	## What she can eat straight from her hand, and how she's told so.
+	const EDIBLE := {"pastry": "click it again in your hand (or press its key again) to eat it"}
 	static var _icons := {}
 	## More things she can carry, added as the game loads their data: id -> [name, colour] (the wild
 	## fibres, scripts/wildlife.gd).
@@ -683,6 +698,8 @@ class Slot extends Button:
 			tooltip_text = ""
 		elif holds_tool(id):
 			tooltip_text = "%s: %s" % [item_name(id), tool_hint(id)]
+		elif EDIBLE.has(id):
+			tooltip_text = "%s × %d: %s" % [item_name(id), n, EDIBLE[id]]
 		else:
 			tooltip_text = "%s × %d" % [item_name(id), n]
 		queue_redraw()
@@ -773,6 +790,9 @@ func toggle_bag() -> void:
 
 func _slot_clicked(i: int) -> void:
 	if not bag_panel.visible:
+		if i == hot_sel and Slot.EDIBLE.has(selected_item()):
+			eat_pressed.emit(selected_item()) # a second click on the food in her hand eats it
+			return
 		hot_sel = i # only the hotbar can be clicked with the bag shut
 		_announce_tool()
 		return
@@ -786,7 +806,11 @@ func _slot_clicked(i: int) -> void:
 
 ## Number keys 1 to 9 (main.gd): puts that hotbar slot in her hand.
 func hotbar_key(n: int) -> void:
-	hot_sel = clampi(n - 1, 0, HOTBAR - 1)
+	var slot := clampi(n - 1, 0, HOTBAR - 1)
+	if slot == hot_sel and Slot.EDIBLE.has(selected_item()):
+		eat_pressed.emit(selected_item())
+		return
+	hot_sel = slot
 	click()
 	_announce_tool()
 
@@ -796,6 +820,8 @@ func _announce_tool() -> void:
 	var id := selected_item()
 	if Slot.holds_tool(id):
 		show_toast("%s: %s." % [Slot.item_name(id), Slot.tool_hint(id)])
+	elif Slot.EDIBLE.has(id):
+		show_toast("%s: %s." % [Slot.item_name(id), Slot.EDIBLE[id]])
 
 
 ## The id of the thing in her hand ("" for an empty slot).
@@ -1055,16 +1081,44 @@ func _build_catalog() -> void:
 	vb.add_child(head)
 	# walls: build onto the house a wall at a time, or a new house on a plot from Gary
 	var HB := preload("res://scripts/house_builder.gd")
-	var wrow := HBoxContainer.new()
-	wrow.add_theme_constant_override("separation", 6)
+	# and doors, sliding doors, windows and doorways in any wall, her house's own too (Alex, 2026-11-17)
+	var wrow := HFlowContainer.new()
+	wrow.add_theme_constant_override("h_separation", 6)
+	wrow.add_theme_constant_override("v_separation", 4)
+	wrow.custom_minimum_size = Vector2(408, 0)
 	wrow.add_child(_label("Walls", 15, GOLD))
-	wall_btn = _button("Wall · %dc" % HB.price("wall"), func(): wall_tool_chosen.emit("wall" if wall_btn.button_pressed else ""))
-	door_btn = _button("Doorway · %dc" % HB.price("door"), func(): wall_tool_chosen.emit("door" if door_btn.button_pressed else ""))
-	for b in [wall_btn, door_btn]:
+	for kind in HB.KINDS:
+		var k: String = kind
+		var b: Button
+		b = _button(HB.label(k), func(): wall_tool_chosen.emit(k if wall_btns[k].button_pressed else ""))
 		b.toggle_mode = true
-		b.tooltip_text = "Build walls one at a time on a 2 m grid, against your house or a wall you've built. Close a room and it gets a floor and roof."
+		b.tooltip_text = "Build walls one at a time on a 2 m grid, against your house or a wall you've built. Close a room and it gets a floor and roof. Click a wall again to take it down." if k == "wall" \
+			else "Click any wall, your house's too, to put a %s in it, or an empty edge for a new wall with one. Click it again to take it out, half back. Paid in wood if you have enough, else coins." % HB.label(k).to_lower()
+		wall_btns[k] = b
 		wrow.add_child(b)
+	wall_btn = wall_btns["wall"]
+	door_btn = wall_btns["door"]
 	vb.add_child(wrow)
+	# floors: carpet, tile or oak boards over a whole room at a click (Alex, 2026-11-17)
+	var frow := HBoxContainer.new()
+	frow.add_theme_constant_override("separation", 6)
+	frow.add_child(_label("Floor", 15, GOLD))
+	var fb: Button
+	fb = _button("Floor", func(): wall_tool_chosen.emit("floor" if wall_btns["floor"].button_pressed else ""))
+	fb.toggle_mode = true
+	fb.tooltip_text = "Pick a floor in the list, then click a room (your house, or one you've built) to lay it over the whole room. Paid per 2 m square, in wood if you have enough, else coins. Plank boards take it up again, half back."
+	wall_btns["floor"] = fb
+	frow.add_child(fb)
+	floor_pick = OptionButton.new()
+	for fk in HB.FLOORS:
+		floor_pick.add_item(HB.floor_label(fk))
+	floor_pick.select(HB.FLOORS.find("carpet_grey"))
+	floor_pick.item_selected.connect(func(i: int):
+		floor_kind_chosen.emit(HB.FLOORS[i])
+		if not wall_btns["floor"].button_pressed:
+			wall_tool_chosen.emit("floor"))
+	frow.add_child(floor_pick)
+	vb.add_child(frow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wall_note.custom_minimum_size = Vector2(408, 0)
@@ -1258,7 +1312,7 @@ func _build_help() -> void:
 [b]Carrying things:[/b] what she carries is in the bar along the bottom. [b]1[/b] to [b]9[/b] pick a slot, [b]I[/b] opens the bag.
 [b]Tools:[/b] with a tool in her hand, a click uses it. To dig a new bed, right-click open ground on her farm and pick Dig bed (never indoors). The watering can waters, the shears shear, the shovel clears a bed you dug, the axe chops wood from a tree and the scythe cuts hay from long grass. Her needs are the bars top left.
 [b]Camera:[/b] WASD / arrow keys, or two-finger swipe on the trackpad to pan · pinch or scroll to zoom · [b]Q[/b]/[b]E[/b] rotate · [b]Space[/b] locks the camera onto your character · [b]C[/b] toggles walls. Settings can show on-screen camera buttons. [b]V[/b] plays in first person, through her eyes: the mouse looks, WASD walks, a click or [b]E[/b] uses what's under the dot, [b]V[/b] or [b]Esc[/b] goes back.
-[b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Ask anyone if they're looking for a sweater and haggle over the price, or sell them to Rosa (the Yarn Barn, or her market stall in the mornings) for today's price and buy wool and sheep from her, croissants from Giorgio, coffee from Sabrina. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
+[b]Maple Grove:[/b] follow the road east (or click the signpost) to town. Ask anyone if they're looking for a sweater and haggle over the price, or sell them to Rosa (the Yarn Barn, or her market stall in the mornings) for today's price and buy wool and sheep from her, pastries from Giorgio (they keep in your bag: click one in your hand again to eat it), coffee from Sabrina. Talk to villagers and bring gifts to earn hearts: more hearts, better deals.
 [b]Sheep pen:[/b] in the story, buy wood from Steve at Builder's Delight. [b]F[/b] builds the pen: click to lay a panel (1 wood), right-click to take one up, [b]T[/b] switches to the gate. [b]G[/b] crafts a gate from 2 wood. Walk up behind sheep and they move away from you.
 [b]People:[/b] talk to villagers every day and bring gifts. Each has a favourite, and things they like. Rowan, up on the hill, opens up slowly, one conversation at a time.
 [b]Journal:[/b] memories that come back while she knits, and the days that matter, are written in the [b]Journal[/b] (Menu, or [b]Esc[/b]).
@@ -1321,8 +1375,8 @@ func set_holding(on: bool, sell_value := 0) -> void:
 
 ## Which wall tool is in hand ("" for none): lights its button.
 func set_wall_tool(t: String) -> void:
-	wall_btn.set_pressed_no_signal(t == "wall")
-	door_btn.set_pressed_no_signal(t == "door")
+	for k in wall_btns:
+		(wall_btns[k] as Button).set_pressed_no_signal(t == k)
 	if t == "":
 		wall_note.text = "Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % preload("res://scripts/house_builder.gd").new_house_fee()
 
@@ -1354,11 +1408,8 @@ func show_toast(text: String, progress := -1.0) -> void:
 	toast_meter.visible = progress >= 0.0
 	if progress >= 0.0:
 		toast_meter.set_value(progress)
-	toast_panel.reset_size()
-	# keep it centred under the goal: resizing alone grows it to the right, under the minimap
-	var half := toast_panel.get_combined_minimum_size().x * 0.5
-	toast_panel.offset_left = -half
-	toast_panel.offset_right = half
+	_fit_toast()
+	_fit_toast.call_deferred() # again once the wrapped text has laid out at its new width
 	toast_panel.visible = true
 	toast_panel.modulate.a = 1.0
 	if toast_tween:
@@ -1366,6 +1417,21 @@ func show_toast(text: String, progress := -1.0) -> void:
 	toast_tween = create_tween()
 	toast_tween.tween_interval(2.6)
 	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, 0.6)
+
+
+## The toast's box hugs its text: as wide as the text (or the wrap width) and as tall as its lines,
+## centred under the goal. A wrapped label reports its height for the width it had before, so a long
+## toast once came out several times too tall; setting the label's width first and sizing from it
+## keeps it a small box (Alex, 2026-11-16).
+func _fit_toast() -> void:
+	var w: float = maxf(toast_label.custom_minimum_size.x, toast_label.get_combined_minimum_size().x)
+	toast_label.size.x = w
+	toast_label.reset_size()
+	toast_panel.reset_size()
+	var sz := toast_panel.get_combined_minimum_size()
+	toast_panel.offset_left = -sz.x * 0.5 # resizing alone grows it to the right, under the minimap
+	toast_panel.offset_right = sz.x * 0.5
+	toast_panel.offset_bottom = toast_panel.offset_top + sz.y
 
 
 ## Coins earned: the coin and "+N" pop up beside the coin chip, rise and fade, with the cha-ching.
@@ -1904,8 +1970,8 @@ func _build_settings() -> void:
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
 	vb.add_child(_label("Settings", 24, GOLD))
-	graphics_btn = _button("Graphics: High", func(): graphics_pressed.emit())
-	graphics_btn.tooltip_text = "High: every effect. Medium: no light bounce or reflections, less grass. Low: for slower computers."
+	graphics_btn = _button("Graphics: Ultra", func(): graphics_pressed.emit())
+	graphics_btn.tooltip_text = "Ultra: every effect at full cost. High: the same look for less. Medium: no light bounce or reflections, less grass. Low: for slower computers."
 	graphics_btn.custom_minimum_size = Vector2(200, 36)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -1914,6 +1980,16 @@ func _build_settings() -> void:
 	row.add_child(gl)
 	row.add_child(graphics_btn)
 	vb.add_child(row)
+	render_scale_slider = _slider_row(vb, "3D detail", 1.0)
+	render_scale_slider.min_value = 0.5
+	render_scale_slider.max_value = 1.5
+	render_scale_slider.tooltip_text = "How sharp the 3D picture is drawn before it's scaled up to the screen. Lower runs faster."
+	_render_scale_label = _label("100%", 16)
+	_render_scale_label.custom_minimum_size = Vector2(56, 0)
+	render_scale_slider.get_parent().add_child(_render_scale_label)
+	render_scale_slider.value_changed.connect(func(v: float):
+		_render_scale_label.text = "%d%%" % roundi(v * 100.0)
+		render_scale_changed.emit(v))
 	music_slider = _slider_row(vb, "Music", 0.7)
 	sound_slider = _slider_row(vb, "Sound", 0.8)
 	for s in [music_slider, sound_slider]:

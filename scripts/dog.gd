@@ -20,6 +20,7 @@ extends Node3D
 ## its own; shaders/dog_scarf.gdshader), speeds his trot and gallop, makes each bark frighten more
 ## (bark_power(), read by wildlife.barked) and keeps its warmth for cold lands (warmth()).
 
+const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const SCARF_SHADER := preload("res://shaders/dog_scarf.gdshader")
 const MODEL := "res://assets/props/dog.glb"
@@ -213,7 +214,17 @@ func bark() -> bool:
 	return true
 
 
+var _floor_y := 0.0 # the floor of Marcus's house under him last frame (split_house.gd)
+
+
+## Every frame: the step, then up or down to the floor under him (split_house.gd: the floors of
+## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
+	_step(delta)
+	_floor_y = SplitHouse.follow(self, _floor_y)
+
+
+func _step(delta: float) -> void:
 	if _bark_t > 0.0:
 		_bark_t -= delta
 	if _woof and _woof.visible: # the "Woof!" rises and fades in the time between barks

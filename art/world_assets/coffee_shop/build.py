@@ -59,7 +59,7 @@ def Z(py):
 # façade now, with a wing either side (two more shop windows, two more dormers); the height is the concept's.
 W = 11.8  # the front wall (the concept's was 5.9)
 D = 10.0  # its depth (the concept's, inferred, was 5.0)
-TERRACE = 4.0  # cobbles in front of the wall
+TERRACE = 4.0  # the terrace in front of the wall (the town's ground, no floor of its own)
 DT = D + TERRACE
 BACK = DT / 2
 FRONT = BACK - D  # the front wall's face; -Y is the front
@@ -85,6 +85,19 @@ STRIPE = (X(1092) - X(232)) / 14  # the concept's stripe: fourteen across its aw
 ROOF_EDGE = Z(480)  # the front slope's lower edge, just over the fascia
 SLOPE = (RIDGE - ROOF_EDGE) / (D / 2 + 0.4)
 ROOF_WALL = ROOF_EDGE + 0.4 * SLOPE  # where the slope passes over the wall
+
+# The loft (Alex, 2026-11-17: "add an upstairs to the cafe with cozy circle windows looking out to the
+# main square and more couches with books"): a floor over the whole room at the eaves, under the roof's
+# slopes, reached by a straight flight up the right wall that climbs toward the back (his screenshot of
+# where the steps go). The dormers and the front gable open into it, each with a round window.
+LOFT_Y = EAVE + 0.04  # the loft floor's top (3.57); the plank ceiling below it is unchanged
+STAIR_X = (4.8, W / 2 - T - 0.03)  # the flight's width, against the right wall's lining
+STAIR_Y = (-1.9, 2.6)  # its foot (Godot z 1.9, near the front) and its top (Godot z -2.6)
+STAIR_N = 18  # risers; the 18th is the loft floor
+HOLE = (4.72, W / 2 - T, 0.0, STAIR_Y[1])  # the stairwell in the loft floor: x0, x1, y0, y1
+RAIL_FROM = -1.2  # the stair's handrail starts here: the bottom steps are open on the room side
+DORMERS = (-4.7, X(350), X(1045), 4.7)
+GW_Z, GW_R = 4.75, 0.58  # the front gable's round window: its centre and radius
 
 GREEN, CREAM, TILE, STONE_C = "#4f6a3c", "#f0dfc0", "#b0562e", "#b9ab98"
 WOOD, GLOW, AWN_G = "#a8612e", "#f0a548", "#55703f"
@@ -270,6 +283,74 @@ def leaf_spray(M, pts, seed, size=0.16, density=3):
 
 # --- the building --------------------------------------------------------------------------------
 
+def prism_yz(name, pts, x0, x1, mat):
+    """A flat shape drawn in YZ (as (y, z) points), given thickness from x0 to x1."""
+    n = len(pts)
+    verts = [(x0, y, z) for y, z in pts] + [(x1, y, z) for y, z in pts]
+    faces = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))]
+    for i in range(n):
+        j = (i + 1) % n
+        faces.append((i, j, j + n, i + n))
+    return _mesh(name, verts, faces, mat)
+
+
+def _mesh(name, verts, faces, mat):
+    import bmesh
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return K._obj(name, me, mat)
+
+
+def ring_y(name, cx, cz, y0, y1, r_in, r_out, mat, n=32):
+    """A round frame (an annulus) facing along Y, from y0 to y1."""
+    verts, faces = [], []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        c, s = math.cos(a), math.sin(a)
+        verts += [(cx + r_out * c, y0, cz + r_out * s), (cx + r_in * c, y0, cz + r_in * s),
+                  (cx + r_out * c, y1, cz + r_out * s), (cx + r_in * c, y1, cz + r_in * s)]
+    for i in range(n):
+        a, b = 4 * i, 4 * ((i + 1) % n)
+        faces += [(a, b, b + 1, a + 1), (a + 2, a + 3, b + 3, b + 2), (a, a + 2, b + 2, b), (a + 1, b + 1, b + 3, a + 3)]
+    ob = _mesh(name, verts, faces, mat)
+    K.smooth(ob)
+    return ob
+
+
+def round_window(name, M, cx, cz, y, r, inside=None):
+    """A round window facing the front (-Y), its outer face at y: a cream frame, glass, a cross of
+    glazing bars; `inside` (a y) adds the frame's inner face on the room side."""
+    ring_y(name + "_frame", cx, cz, y - 0.07, y + 0.01, r, r + 0.1, M["trim"])
+    K.cyl(name + "_glass", r + 0.01, r + 0.01, 0.012, (cx, y - 0.02, cz), M["glass"], verts=32, rot=(90, 0, 0))
+    K.box(name + "_bar", (2 * r, 0.03, 0.045), (cx, y - 0.045, cz), M["wood"], bevel=0.006)
+    K.box(name + "_bar", (0.045, 0.03, 2 * r), (cx, y - 0.045, cz), M["wood"], bevel=0.006)
+    if inside is not None:
+        ring_y(name + "_iframe", cx, cz, inside - 0.005, inside + 0.04, r, r + 0.08, M["trim"])
+
+
+def round_hole(ob, cx, cz, y, r):
+    """Cuts a round hole through `ob` along Y at (cx, cz)."""
+    c = K.cyl("cut", r, r, 2.0, (cx, y, cz), M_CUT[0], verts=32, rot=(90, 0, 0))
+    m = ob.modifiers.new("hole", "BOOLEAN")
+    m.operation = "DIFFERENCE"
+    m.solver = "EXACT"
+    m.object = c
+    K.apply_mods(ob)
+    bpy.data.objects.remove(c)
+
+
+def slope_z(y):
+    """The top of the main roof's slopes over y (Blender), and how far above that the tiles' shell is."""
+    return RIDGE - SLOPE * abs(y - (FRONT + D / 2))
+
+
+M_CUT = [None]
 PARTS = {}
 HINGES = {}  # part name -> where its origin goes, so the game can swing it
 CUTTERS = []
@@ -400,6 +481,7 @@ def wall_front(M, low):
         inner_window(M, "front", c, WIN_Z[0] + 0.03, WIN_Z[1] - 0.03, WIN_W - 0.06)
     front(M)
     ivy(M)
+    front_gable(M)
 
 
 def wall_back(M, low):
@@ -437,17 +519,114 @@ def wall_side(M, side, low):
 
 
 def ceiling(M):
-    """The fascia round the top of the walls, and inside a plank ceiling on three beams (seen in first person)."""
+    """The fascia round the top of the walls (the plank ceiling inside is the loft's floor now: loft())."""
     cy = FRONT + D / 2
     for y, sx_, sy_ in ((FRONT - 0.04, W + 0.2, 0.12), (BACK + 0.04, W + 0.2, 0.12)):
         K.box("fascia", (sx_, sy_, 0.24), (0, y, EAVE + 0.06), M["trim"], bevel=0.02)
     for sx in (-1, 1):
         K.box("fascia", (0.12, D + 0.2, 0.24), (sx * (W / 2 + 0.04), cy, EAVE + 0.06), M["trim"], bevel=0.02)
-    c = K.box("ceiling", (W - 2 * T, D - 2 * T, 0.04), (0, cy, EAVE - 0.02), M["lining"], bevel=0.0)
-    K.uv_box(c, 0.6, grain="y")
-    for x in np.linspace(-W / 2 + 1.1, W / 2 - 1.1, 6):
+
+
+def loft(M):
+    """The loft's floor: the plank ceiling of the room below (on its beams, seen in first person) and the
+    boards over it (the game lays its own planks on top, scripts/interiors.gd), with the stairwell cut
+    out over the flight; a railing round the stairwell, and the chimney's breast rising through it."""
+    cy = FRONT + D / 2
+    x0, x1 = -W / 2 + T, W / 2 - T
+    y0, y1 = FRONT + T, BACK - T
+    hx0, hx1, hy0, hy1 = HOLE
+    z0, z1 = EAVE - 0.04, LOFT_Y
+    for name, a, b, c, d in (("ceiling", x0, hx0, y0, y1), ("ceiling", hx0, x1, y0, hy0), ("ceiling", hx0, x1, hy1, y1)):
+        sl = K.box(name, (b - a, d - c, z1 - z0), ((a + b) / 2, (c + d) / 2, (z0 + z1) / 2), M["lining"], bevel=0.0)
+        K.uv_box(sl, 0.6, grain="y")
+    for x in np.linspace(-W / 2 + 1.1, hx0 - 0.12, 6):  # the last beam frames the stairwell's side
         b = K.box("beam", (0.16, D - 2 * T, 0.2), (x, cy, EAVE - 0.14), M["wood"], bevel=0.015)
         K.uv_box(b, 0.8, grain="y")
+    for y in (hy0, hy1):  # trimmers across the stairwell's ends
+        b = K.box("beam", (x1 - hx0, 0.16, 0.2), ((hx0 + x1) / 2, y + (0.08 if y == hy0 else -0.08), EAVE - 0.14), M["wood"], bevel=0.015)
+        K.uv_box(b, 0.8, grain="x")
+    # the railing: along the stairwell's room side and across its front end (the top end is open: the flight lands there)
+    rh = 0.95
+    for (ax, ay), (bx, by) in (((hx0, hy1), (hx0, hy0)), ((hx0, hy0), (x1, hy0))):
+        L = math.hypot(bx - ax, by - ay)
+        along_x = abs(bx - ax) > abs(by - ay)
+        mx, my = (ax + bx) / 2, (ay + by) / 2
+        size = (L + 0.06, 0.07, 0.06) if along_x else (0.07, L + 0.06, 0.06)
+        K.box("loft_rail", size, (mx, my, z1 + rh), M["wood"], bevel=0.012)
+        size = (L, 0.05, 0.04) if along_x else (0.05, L, 0.04)
+        K.box("loft_rail", size, (mx, my, z1 + 0.12), M["wood"], bevel=0.008)
+        for t in np.linspace(0, 1, max(2, int(L / 0.13) + 1)):
+            px, py = ax + (bx - ax) * t, ay + (by - ay) * t
+            post = t in (0.0, 1.0)
+            w = 0.08 if post else 0.032
+            K.box("loft_post" if post else "loft_spindle", (w, w, rh + (0.06 if post else -0.12)), (px, py, z1 + (rh + 0.06) / 2 if post else z1 + 0.14 + (rh - 0.14) / 2), M["wood"], bevel=0.01 if post else 0.004)
+    # the chimney's breast: the fireplace's flue rising through the loft to the stack (roof())
+    bx0, bx1, by0, by1 = x0 + 0.03, -W / 2 + T + 0.75, 2.65, 3.55
+    K.uv_box(K.box("chimney_breast", (bx1 - bx0, by1 - by0, 5.45 - z1), ((bx0 + bx1) / 2, (by0 + by1) / 2, (z1 + 5.45) / 2), M["stone"], bevel=0.02), 1.2)
+
+
+def stairs(M):
+    """The flight up the right wall: open treads with risers on a stringer each side, the bottom steps
+    open on the room side and a handrail with spindles from RAIL_FROM up to the loft's railing."""
+    xa, xb = STAIR_X
+    ya, yb = STAIR_Y
+    n = STAIR_N
+    g = (yb - ya) / (n - 1)  # the going: n - 1 treads, then the loft floor
+    rise = (LOFT_Y - FLOOR) / n
+    for k in range(1, n):
+        top = FLOOR + k * rise
+        t = K.box("tread", (xb - xa, g + 0.03, 0.05), ((xa + xb) / 2, ya + (k - 0.5) * g - 0.015, top - 0.025), M["wood"], bevel=0.01)
+        K.uv_box(t, 0.8, grain="x")
+        K.box("riser", (xb - xa - 0.02, 0.02, rise - 0.05), ((xa + xb) / 2, ya + (k - 1) * g + 0.01, top - rise / 2 - 0.025), M["lining"], bevel=0.0)
+    K.box("riser", (xb - xa - 0.02, 0.02, rise - 0.03), ((xa + xb) / 2, yb + 0.01, LOFT_Y - rise / 2 - 0.02), M["lining"], bevel=0.0)
+
+    def line(y):  # the nosings' line
+        return FLOOR + rise * ((y - ya) / g + 1.0)
+    for x0_, x1_ in ((xa - 0.05, xa + 0.01), (xb - 0.04, xb + 0.01)):
+        pts = [(ya - 0.03, 0.0), (ya - 0.03, line(ya) + 0.06), (yb, LOFT_Y + 0.02), (yb, LOFT_Y - 0.36), (ya + 0.45, 0.0)]
+        st = prism_yz("stringer", pts, x0_, x1_, M["wood"])
+        K.uv_box(st, 0.8, grain="y")
+    # the handrail: a newel at RAIL_FROM, spindles on every other tread, the rail sloping up to the loft
+    ang = math.atan2(rise, g)
+    rh = 0.92
+    ra, rb = RAIL_FROM, yb + 0.02
+    za, zb = line(ra) + rh, LOFT_Y + 0.95
+    L = math.hypot(rb - ra, zb - za)
+    K.box("stair_rail", (0.07, L + 0.05, 0.06), (xa - 0.02, (ra + rb) / 2, (za + zb) / 2), M["wood"], bevel=0.012, rot=(math.degrees(math.atan2(zb - za, rb - ra)), 0, 0))
+    K.box("newel", (0.1, 0.1, za + 0.05 - line(ra) + 0.05), (xa - 0.02, ra, (line(ra) - 0.05 + za + 0.05) / 2), M["wood"], bevel=0.015)
+    K.ball("newel_cap", 0.065, (xa - 0.02, ra, za + 0.1), M["wood"], u=10, v=7)
+    k0 = int(math.ceil((ra - ya) / g)) + 1
+    for k in range(k0, n, 2):
+        y = ya + (k - 0.5) * g
+        base = FLOOR + k * rise
+        top = za + (zb - za) * (y - ra) / (rb - ra)
+        K.box("spindle", (0.032, 0.032, top - base), (xa - 0.02, y, (top + base) / 2), M["wood"], bevel=0.004)
+    del ang
+
+
+def front_gable(M):
+    """The front cross-gable's wall, flush with the front, with the big round window that lights the
+    loft's middle bay (it was an arched window into the roof space), a flower box under it, and the
+    little truss in its peak. Built with the front wall, so it cuts down with it, not with the roof."""
+    yf = FRONT
+    tri = [(G_CX - G_HALF + 0.12, EAVE - 0.1), (G_CX + G_HALF - 0.12, EAVE - 0.1), (G_CX, G_APEX - 0.25)]
+    g = flat("front_gable", tri, yf + 0.02, 0.08, M["wall"], bevel=0.0)
+    round_hole(g, G_CX, GW_Z, yf, GW_R)
+    K.uv_box(g, 0.55, grain="z")
+    round_window("gwin", M, G_CX, GW_Z, yf - 0.06, GW_R, inside=yf + 0.02)
+    # the little truss in the gable's peak (y 120..170)
+    tz = Z(165)
+    K.box("truss_tie", (0.95, 0.08, 0.1), (G_CX, yf - 0.06, tz), M["trim"], bevel=0.01)
+    K.box("truss_post", (0.1, 0.08, G_APEX - 0.35 - tz), (G_CX, yf - 0.06, (tz + G_APEX - 0.35) / 2), M["trim"], bevel=0.01)
+    for sx in (-1, 1):
+        K.box("truss_brace", (0.5, 0.07, 0.08), (G_CX + sx * 0.22, yf - 0.06, tz + 0.18), M["trim"], bevel=0.01, rot=(0, sx * 40, 0))
+    # the flower box, under the window now
+    box_z = GW_Z - GW_R - 0.1
+    K.box("gbox", (1.75, 0.34, 0.28), (G_CX, yf - 0.24, box_z - 0.12), M["wood"], bevel=0.02)
+    blooms(M, (G_CX - 0.45, yf - 0.3, box_z + 0.05), 0.22, 7, 11)
+    blooms(M, (G_CX + 0.45, yf - 0.3, box_z + 0.05), 0.22, 7, 12)
+    for sx in (-1, 1):
+        K.box("gbox_brace", (0.06, 0.25, 0.25), (G_CX + sx * 0.7, yf - 0.12, box_z - 0.35), M["wood"], bevel=0.01, rot=(45, 0, 0))
 
 
 def roof(M):
@@ -456,7 +635,8 @@ def roof(M):
     hd = D / 2 + OVER
     hw = W / 2 + GABLE_OVER
     z0 = ROOF_EDGE  # the roof's front edge, just over the fascia (y 480)
-    # two slopes, front and back, thick enough to show an edge
+    # two slopes, front and back, thick enough to show an edge; planks under them inside (the loft's ceiling)
+    slopes = {}
     for sy in (-1, 1):
         v = [(-hw, cy + sy * hd, z0), (hw, cy + sy * hd, z0), (hw, cy, RIDGE), (-hw, cy, RIDGE)]
         me = bpy.data.meshes.new("roof")
@@ -466,12 +646,10 @@ def roof(M):
         s.thickness = 0.16
         K.apply_mods(ob)
         uv_slope(ob, cy, sy)
+        slopes[sy] = ob
     K.cyl("ridge", 0.13, 0.13, 2 * hw + 0.1, (0, cy, RIDGE + 0.06), M["roof"], verts=12, rot=(0, 90, 0))
-    # the front cross-gable: its wall flush with the front, a roof back to the main ridge
+    # the front cross-gable's roof, back to the main ridge (its wall goes with the front: front_gable())
     yf = FRONT
-    tri = [(G_CX - G_HALF + 0.12, EAVE - 0.1), (G_CX + G_HALF - 0.12, EAVE - 0.1), (G_CX, G_APEX - 0.25)]
-    g = flat("front_gable", tri, yf + 0.02, 0.08, M["wall"], bevel=0.0)
-    K.uv_box(g, 0.55, grain="z")
     ga = math.atan2(G_APEX - ROOF_EDGE, G_HALF + 0.15)
     for sx in (-1, 1):
         # the cross-gable's roof slopes, over its wall and back into the main roof
@@ -485,36 +663,107 @@ def roof(M):
         s.thickness = 0.16
         K.apply_mods(ob)
         uv_gable(ob, sx)
+        # only what stands above the main roof: under it, these slopes would cut through the loft
+        under = prism_yz("cut", [(cy - hd - 1.0, ROOF_EDGE - SLOPE), (cy, RIDGE - 0.02), (cy + hd + 1.0, ROOF_EDGE - SLOPE), (cy + hd + 1.0, 0.5), (cy - hd - 1.0, 0.5)],
+                         G_CX - G_HALF - 1.0, G_CX + G_HALF + 1.0, M["roof"])
+        m = ob.modifiers.new("under", "BOOLEAN")
+        m.operation = "DIFFERENCE"
+        m.solver = "EXACT"
+        m.object = under
+        K.apply_mods(ob)
+        bpy.data.objects.remove(under)
         # the cream bargeboard along its edge
         run = math.hypot(G_HALF + 0.15, G_APEX - ez)
         K.box("barge", (run + 0.1, 0.12, 0.2), (G_CX + sx * (G_HALF + 0.15) / 2, yf - 0.38, (G_APEX + ez) / 2 - 0.08), M["trim"], bevel=0.02, rot=(0, sx * math.degrees(ga), 0))
     K.cyl("gable_ridge", 0.13, 0.13, cy + 0.2 - yf + 0.45, (G_CX, (yf - 0.4 + cy + 0.2) / 2, G_APEX + 0.05), M["roof"], verts=12, rot=(90, 0, 0))
     K.ball("gable_finial", 0.17, (G_CX, yf - 0.42, G_APEX + 0.05), M["roof"], u=12, v=8)
-    # the little truss in the gable's peak (y 120..170)
-    tz = Z(165)
-    K.box("truss_tie", (0.95, 0.08, 0.1), (G_CX, yf - 0.06, tz), M["trim"], bevel=0.01)
-    K.box("truss_post", (0.1, 0.08, G_APEX - 0.35 - tz), (G_CX, yf - 0.06, (tz + G_APEX - 0.35) / 2), M["trim"], bevel=0.01)
-    for sx in (-1, 1):
-        K.box("truss_brace", (0.5, 0.07, 0.08), (G_CX + sx * 0.22, yf - 0.06, tz + 0.18), M["trim"], bevel=0.01, rot=(0, sx * 40, 0))
-    # the gable's big arched window and its flower box (x 595..770, y 210..330)
-    arched_window("gwin", M, G_CX, Z(330), Z(210), yf - 0.06, w=1.25)
-    box_z = Z(345)
-    K.box("gbox", (1.75, 0.34, 0.28), (G_CX, yf - 0.24, box_z - 0.12), M["wood"], bevel=0.02)
-    blooms(M, (G_CX - 0.45, yf - 0.3, box_z + 0.05), 0.22, 7, 11)
-    blooms(M, (G_CX + 0.45, yf - 0.3, box_z + 0.05), 0.22, 7, 12)
-    for sx in (-1, 1):
-        K.box("gbox_brace", (0.06, 0.25, 0.25), (G_CX + sx * 0.7, yf - 0.12, box_z - 0.35), M["wood"], bevel=0.01, rot=(45, 0, 0))
-    # dormers (x 350 and 1045), on the front slope
+    # dormers (x 350 and 1045), on the front slope: hollow, so each is a nook of the loft with a round window
     slope = SLOPE
-    for x in (-4.7, X(350), X(1045), 4.7):
-        zb, zt = Z(410), Z(232)
+    holes = []
+    zb, zt = Z(410), Z(232)
+    spring = zt - 0.3  # where the arched hood springs: the nook's ceiling
+    for x in DORMERS:
         yd = FRONT + (zb - ROOF_WALL) / slope + 0.05
-        dd = (zt + 0.4 - zb) / slope + 0.3  # deep enough to reach back into the roof
-        K.box("dormer", (1.15, dd, zt - zb), (x, yd + dd / 2 - 0.05, (zb + zt) / 2 - 0.08), M["trim"], bevel=0.03)
-        arched_window("dwin", M, x, zb + 0.08, zt - 0.32, yd, w=0.62)
+        ys = yd + (spring - zb) / slope  # where the slope meets the nook's ceiling
+        dd = (zt + 0.4 - zb) / slope + 0.3  # the hood reaches back into the roof
+        face = K.box("dormer", (1.15, 0.08, spring + 0.02 - (zb - 0.08)), (x, yd - 0.01, (spring + 0.02 + zb - 0.08) / 2), M["trim"], bevel=0.02)
+        wz = (zb + spring) / 2
+        round_hole(face, x, wz, yd, 0.36)
+        round_window("dwin", M, x, wz, yd - 0.05, 0.36, inside=yd + 0.03)
+        for sx in (-1, 1):  # the cheeks, down to the slope
+            pts = [(yd - 0.05, zb - 0.1), (yd - 0.05, spring + 0.02), (ys + 0.12, spring + 0.02), (ys + 0.12, spring - 0.06)]
+            prism_yz("dormer_cheek", pts, x + sx * 0.495, x + sx * 0.575, M["trim"])
+        cl = K.box("dormer_ceiling", (1.0, ys + 0.1 - yd, 0.03), (x, (yd + ys + 0.1) / 2, spring - 0.015), M["lining"], bevel=0.0)
+        K.uv_box(cl, 0.6, grain="y")
         # an arched (barrel) roof, tiled along it, with a trim board round its front (Alex,
         # 2026-11-16: the rounded hoods with a ball on top "look ugly fix them to be arches")
-        K.arch_hood("dormer_hood", 0.7, 0.42, dd + 0.05, yd - 0.12, zt - 0.3, x, M["roof_arch"], M["trim"])
+        hood = K.arch_hood("dormer_hood", 0.7, 0.42, dd + 0.05, yd - 0.12, zt - 0.3, x, M["roof_arch"], M["trim"])
+        # each line of the barrel ends where it meets the main slope, so its back never hangs into the loft
+        for vt in hood.data.vertices:
+            if vt.co.y > yd:
+                vt.co.y = min(vt.co.y, cy - (RIDGE - (spring + vt.co.z)) / slope + 0.06)
+        hood.data.update()
+        holes.append(K.box("cut", (0.99, ys + 0.02 - (yd - 0.3), spring - (zb - 0.45)), (x, (yd - 0.3 + ys + 0.02) / 2, (spring + zb - 0.45) / 2), M["trim"], bevel=0))
+    # the cross-gable's space opens into the loft too: a nook as wide as its round window, walled on
+    # each side and ceiled in two slopes just under its roof, back until it meets the loft's ceiling
+    gw, gc = 0.9, 5.0  # the nook's half width, and its walls' height there
+    # its ceiling's ridge, under the cross-gable's own and just under the loft's (higher, the nook's
+    # ceiling ran on past the main ridge and hung down through the back slope's planks)
+    ga_ = min(G_APEX - 0.32, RIDGE - 0.24 - 0.05)
+    gy0 = FRONT + 0.02
+
+    def meet(h):  # where the loft's ceiling planks (0.24 under the slope) reach height h
+        return FRONT + (h + 0.24 - ROOF_WALL) / slope
+    sec = [(G_CX - gw, ROOF_EDGE - 0.6), (G_CX + gw, ROOF_EDGE - 0.6), (G_CX + gw, gc), (G_CX, ga_), (G_CX - gw, gc)]
+    gy1 = cy - 0.02
+
+    def prism5(sec_):
+        return _mesh("cut", [(x_, gy0, z_) for x_, z_ in sec_] + [(x_, gy1, z_) for x_, z_ in sec_],
+                     [(0, 1, 2, 3, 4), (9, 8, 7, 6, 5)] + [(k, (k + 1) % 5, (k + 1) % 5 + 5, k + 5) for k in range(5)], M["trim"])
+    lining_holes = [prism5(sec)]
+    # the main slope opens only under the cross-gable's own roof (just inside its underside), so the
+    # gap between the nook and that roof is never open to the sky
+    ge = G_HALF + 0.15 - 0.3
+    slope_holes = [prism5([(G_CX - ge, ROOF_EDGE - 0.6), (G_CX + ge, ROOF_EDGE - 0.6), (G_CX + ge, ROOF_EDGE + 0.1),
+                           (G_CX, G_APEX - 0.22), (G_CX - ge, ROOF_EDGE + 0.1)])]
+    for sx in (-1, 1):
+        xw = G_CX + sx * gw
+        wall = prism_yz("gable_nook_wall", [(gy0, ROOF_WALL - 0.3), (gy0, gc + 0.02), (meet(gc) + 0.05, gc + 0.02)], xw, xw + sx * 0.06, M["lining"])
+        K.uv_box(wall, 0.6, grain="z")
+        v = [(xw, gy0, gc), (G_CX, gy0, ga_), (G_CX, meet(ga_), ga_), (xw, meet(gc), gc)]
+        me = bpy.data.meshes.new("gable_lining")
+        me.from_pydata(v, [], [(0, 1, 2, 3)])
+        ln = K._obj("gable_lining", me, M["lining"])
+        s_ = ln.modifiers.new("solid", "SOLIDIFY")
+        s_.thickness = 0.03
+        s_.offset = 1.0
+        K.apply_mods(ln)
+        K.uv_box(ln, 0.6, grain="y")
+    # the loft's ceiling: planks under both slopes, from the walls' inner faces up to the ridge
+    for sy in (-1, 1):
+        ya_ = cy + sy * (D / 2 - T)
+        za_ = slope_z(ya_) - 0.24
+        zr = RIDGE - 0.24
+        v = [(-W / 2 + T, ya_, za_), (W / 2 - T, ya_, za_), (W / 2 - T, cy, zr), (-W / 2 + T, cy, zr)]
+        me = bpy.data.meshes.new("loft_lining")
+        me.from_pydata(v, [], [(0, 1, 2, 3)])
+        ln = K._obj("loft_lining", me, M["lining"])
+        s_ = ln.modifiers.new("solid", "SOLIDIFY")
+        s_.thickness = 0.025
+        K.apply_mods(ln)
+        K.uv_box(ln, 0.6, grain="y")
+        if sy < 0:
+            slopes["lining"] = ln
+    for target, extra in ((slopes[-1], slope_holes), (slopes["lining"], lining_holes)):
+        for c in holes + extra:
+            m = target.modifiers.new("hole", "BOOLEAN")
+            m.operation = "DIFFERENCE"
+            m.solver = "EXACT"
+            m.material_mode = "TRANSFER"
+            m.object = c
+        K.apply_mods(target)
+    for c in holes + slope_holes + lining_holes:
+        bpy.data.objects.remove(c)
     # the chimney (x 985..1135), stone with a cream brick top
     # over the fireplace inside, on the left wall (data/interiors.json "cafe": Godot x -4.9, z -3.1)
     cx_, cy_, top = -W / 2 + 0.8, 3.1, Z(18)
@@ -737,18 +986,9 @@ CHALK = (1.7, FRONT - 3.2)  # the A-frame menu, out by the path
 
 
 def terrace(M):
-    """Cobbles in front, the bistro tables, pots, the barrel, the chalkboard, fallen leaves."""
+    """The bistro tables in front, pots, the barrel, the chalkboard, fallen leaves."""
     yf = FRONT
-    # the cobbled terrace: half an oval out from the wall, 10 m across
-    pts = [(7.0 * math.cos(a), yf - (TERRACE - 0.05) * math.sin(a)) for a in np.linspace(0, math.pi, 36)]
-    verts = [(x, y, 0.035) for x, y in pts] + [(x, y, 0.0) for x, y in pts]
-    n = len(pts)
-    faces = [tuple(range(n))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
-    me = bpy.data.meshes.new("terrace")
-    me.from_pydata(verts, [], faces)
-    me.update()
-    ob = K._obj("terrace", me, M["cobble"])
-    K.uv_box(ob, 0.55)
+    # no cobbled floor (Alex, 2026-11-17: it fought the town's own ground, which shows through now)
     for k, (x, d) in enumerate(BISTROS):
         bistro(M, x, yf - d, 41 + k, 1 if k % 2 else -1)
     # a barrel of hydrangeas at the left
@@ -783,12 +1023,12 @@ def terrace(M):
         for li in poly.loop_indices:
             co = face.data.vertices[face.data.loops[li].vertex_index].co
             lay[li].uv = (co.x / fw + 0.5, co.z / fh + 0.5)
-    # fallen maple leaves on the cobbles
+    # fallen maple leaves on the ground
     rng = np.random.default_rng(71)
     for k in range(26):
         a = rng.uniform(0.1, math.pi - 0.1)
         r = rng.uniform(1.0, 6.6)
-        p = (r * math.cos(a), yf - min(TERRACE - 0.2, 0.4 + r * 0.5 * math.sin(a)), 0.045)
+        p = (r * math.cos(a), yf - min(TERRACE - 0.2, 0.4 + r * 0.5 * math.sin(a)), 0.015)
         K.star("fallen_leaf", 0.08, p, [M["leaf_o"], M["leaf_y"], M["leaf_o"]][k % 3], points=5, inner=0.5, turn=rng.uniform(0, 6))
 
 
@@ -821,9 +1061,13 @@ def build():
     K.reset(NAME)
     M = materials()
     CUT_MAT[0] = M["trim"]
+    M_CUT[0] = M["trim"]
     with part("base"):
         floor_and_step(M)
         terrace(M)
+        stairs(M)
+    with part("loft"):
+        loft(M)
     with part("wall_front"):
         wall_front(M, False)
     with part("wall_front_low"):

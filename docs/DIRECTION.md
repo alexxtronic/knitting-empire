@@ -87,7 +87,9 @@ The game teaches knitting, selling and spending, and then lets go:
   - She is alerted when wolves come and has a short window to scare them off herself.
   - Animals in rented barn stalls are safe.
   - The wolves are three assets in our style: small, medium and large-and-scary. They are drawn in ChatGPT, rendered in Tripo and rigged like the dog.
+  - Built (2026-11-16): `scripts/wolves.gd`, numbers in `data/wolves.json`. About one night in eight, at 21:00, she hears a howl and one to three wolves walk in to the pen. She has 45 seconds to see them off, by running at them as Nora or barking as the dog; the bigger the wolf, the more it takes. Miss the window and one animal is lost, which the morning note names. Sheep in their barn stalls are safe, and so are as many animals as the rented stalls hold. A night she sleeps through is rolled in the morning.
 - **Later she can tame the wolves,** and they round up animals for her automatically.
+  - Not built yet. The hook is `wolves.tamed()`: once `Game.flags["wolves_tamed"]` is true, wild wolves stop coming. Since 2026-11-16 herding belongs to the player, so a tamed pack that collects animals "automatically" needs Alex's decision first: either it's another animal the player plays, or it's an exception he approves.
 - **Her house,** with no limits on customising it:
   - expand it;
   - buy land and build entirely new houses;
@@ -115,6 +117,44 @@ The game teaches knitting, selling and spending, and then lets go:
 ### Later: remind Alex
 
 - **Non-story townspeople.** Fill the town with people who aren't in the story, so it feels more alive. Alex asked to be reminded of this (2026-11-16).
+
+## Rarity, quality and the rest (Alex, 2026-11-18)
+
+Alex's answers to the review of 16 November (`docs/REVIEW_2026-11-16.md`). Where this differs from anything above, this wins.
+
+### A sweater has two separate grades
+
+- **Rarity comes from the fibre, always.** Plain wool makes a Common sweater. Each wild fibre makes its own rarity (its `knit_floor` in `data/wildlife.json`), however the knitting goes. The rarity also picks the design's stars.
+- **Quality comes from the knitting game:** 1 to 5 stars, from how well she plays. The names of the grades are drafts.
+- **Both set the price.** A rare fibre is worth much more than wool on its own, and a well-knitted sweater is worth more than a sloppy one of the same fibre.
+- **Better needles from Rosa raise the lowest quality** a sweater can come out as. They no longer touch rarity.
+
+### What the bars do
+
+- **Love** lets Nora form connections with individual townspeople. The more she's in love, the quicker every interaction builds a friendship.
+- **Happiness** makes her a charmer: up to 20% more money from sweater sales, scaled by how happy she is.
+
+### Selling
+
+- **Three channels:**
+  - face to face, haggled, for the best price;
+  - Rosa, instant and low;
+  - orders: the mail orders now, the computer's store later, with locals' requests as the special orders.
+- **The mailbox keeps "Ship sweaters"** as the lazy option, but it pays less than Rosa.
+
+### After Act 1
+
+- An **Empire goal list** leads her through the loop: catch a wild animal, pen it, comb it, knit with its fibre, sell a sweater face to face, fill a request, buy better needles.
+- The bakery job's nudge goes. Jobs, like the barista counter, are side mini-games with no influence on the loop; they stay as they are.
+
+### Collecting
+
+- **A Field Guide** of the wild animals (seen, caught, combed) and **a Lookbook** of the fifty designs (knitted or not).
+- **Each species escapes the dog in its own way**: a rabbit zigzags, a fox doubles back, and so on.
+
+### Wolves
+
+- They never come while she's asleep. A night slept through costs nothing; they only come when she's awake to see them off. Barn stalls stay safe as before.
 
 ## Advice given with this direction
 

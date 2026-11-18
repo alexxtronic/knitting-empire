@@ -132,3 +132,36 @@ made in one large sheet to save Tripo credits. Wild sheep reuse `sheep_sheared.g
 - In the game: `wild_animal.gd` loads both models, shows one and stops the other's loops, and swaps
   on a comb, on being penned, on coming into view and every couple of seconds (the day turning over
   grows the coat back). The shorn model plays its own strides (`shorn_stride`).
+
+## Wolves (2026-11-16)
+Alex: "generate 3 wolf assets (one small, one medium and one large and scary) in chatgpt in our style
+and render in tripo, rig like the dog". For the night wolves (docs/DIRECTION.md: a small chance each
+night that a wolf kills one of her animals; she can scare them off, and later tame them to round up
+animals for her).
+
+- Picture: `tripo/ref/lineup_4.png`, one ChatGPT lineup (lineup_1 attached for the style): a grey and
+  cream pup, a grey timber wolf, and a charcoal alpha with a bristling mane, head lowered, snarling,
+  amber eyes. All facing left on white.
+- Tripo Studio: H3.1 Best Quality, Ultra mesh, 4K PBR, one generation (55 credits): 1.95M faces.
+  The export (`wolf pack 3d model.glb`, 67 MB) stays in Alex's Downloads.
+- `tripo_split.py -- <export> wolf_small wolf_medium wolf_large`: three clean pieces (262k, 583k, 1.1M
+  faces), turned 59, 42 and 37 degrees to face -Y. Heights to the top of the head (the large one's
+  mane): 0.55, 0.92 and 1.25 m; lengths nose to tail 0.69, 1.29 and 2.24 m.
+- `tripo_build.py -- wolf_small wolf_medium wolf_large --render`: dog gait, three tail bones, `HAND`
+  joints read off each side view on its 5 cm grid (`--bones` checked before the bake). The large wolf's
+  nose hangs below its neck; the nose search found it (y -1.325, z 0.699), so no `FIX` was needed.
+  30k triangles, 2048 px colour and normal, 19 bones each.
+- Review sheets: `review/<id>/tripo_sheet.png`, laid out by the new `tripo_sheet.py` (Idle, Walk and
+  Run, side and three-quarter, four frames each). Every paw planted (0.00 mm), legs at most 95%
+  straight, the heads turn in one piece and the large wolf's mane and snarl hold together.
+
+STRIDE (m/s) for the wolves session (data/wildlife.json `stride`, if they go in there):
+
+| Wolf | Walk | Run | Height | Walk / Run crouch |
+|---|---|---|---|---|
+| wolf_small | 0.535 | 1.773 | 0.55 m | 0.034 / 0.041 m |
+| wolf_medium | 0.764 | 2.532 | 0.92 m | 0.059 / 0.075 m |
+| wolf_large | 0.843 | 2.792 | 1.25 m | 0.058 / 0.065 m |
+
+- Not added to `data/wildlife.json`: that file places the wild animals and the autotest checks its tiers
+  and counts; the wolves session wires them in.

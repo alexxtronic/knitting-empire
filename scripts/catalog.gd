@@ -73,7 +73,7 @@ static func affordable(id: String, coins: int, wood: int) -> bool:
 ## Ids that have a builder in build(). A furniture.json entry without one shows a magenta box.
 const BUILDERS := ["rocking_chair", "armchair", "sofa", "bed", "kitchen", "coffee_table", "dining_table",
 	"bookshelf", "wardrobe", "fireplace", "spinning_wheel", "lamp", "yarn_basket", "rug_red", "rug_round",
-	"plant", "flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale"]
+	"plant", "flower_pot", "sunflowers", "fence", "bench", "scarecrow", "lantern", "hay_bale", "computer"]
 
 static var _mats := {}
 
@@ -202,6 +202,7 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	# real shadows from the fire and lamps (furniture, people), cheap two-sided maps that fade
 	# out with distance so a whole street of lamps doesn't cost much
 	l.shadow_enabled = lamp_shadows
+	l.add_to_group("lamp_shadow", true) # light_budget.gd: only the nearest few keep their shadows (persistent: the world editor's copies too)
 	l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	l.shadow_blur = 1.5
 	l.light_size = 0.12
@@ -214,6 +215,16 @@ static func omni(p: Node3D, pos: Vector3, c: Color, rng: float, day_e: float, ni
 	l.set_meta("night_energy", night_e)
 	p.add_child(l)
 	return l
+
+
+## Candles and the café's pendant lamps light a room without mirroring themselves in every pane
+## and polished top (Alex, 2026-11-17: "too much glare and blurred light" on the café's glass,
+## counters and jars): a faint highlight, from a point rather than a 12 cm ball, which glow had
+## smeared into big soft discs.
+const GLINT := 0.12
+static func soft_glint(l: Light3D) -> void:
+	l.light_specular = GLINT
+	l.light_size = 0.0
 
 
 # --- imported models (tools/import_asset.py) ----------------------------------------
@@ -340,22 +351,28 @@ static func build(id: String, r: Node3D) -> void:
 	var path := str(ITEMS.get(id, {}).get("model", ""))
 	var inst := model(path, r) if path != "" else null
 	if inst != null:
+		if ITEMS.get(id, {}).has("hang"): # a painting: hung on the wall at this height, wherever it's placed
+			inst.position.y += float(ITEMS[id]["hang"])
 		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here
 			_lantern_candle(r, inst)
 		elif id == "bakery_stall": # its lantern hangs off the right front post (art/world_assets/bakery_stall)
 			var l := omni(r, Vector3(1.1, 1.52, 0.38), Color(1.0, 0.7, 0.38), 4.5, 0.1, 1.4)
 			l.shadow_enabled = false # it sits inside the lantern's glass
+			l.set_meta("no_shadow", true)
 			l.set_meta("candle", true)
 		elif id == "fireplace": # the model has the hearth, grate and logs; the flames and firelight are live
 			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
 		elif id == "lamp": # the model's shade glows; this is the light it throws
 			omni(r, Vector3(0, 1.3, 0), Color(1.0, 0.78, 0.5), 5.0, 0.3, 1.6)
+		elif id == "floor_lamp_gold": # Marcus's floor lamps: the linen shade glows, the bulb sits under it
+			omni(r, Vector3(0, 1.36, 0), Color(1.0, 0.8, 0.56), 5.0, 0.3, 1.6)
 		elif id == "candle":
 			_candle_flame(r, Vector3.ZERO, inst)
 		elif id == "pendant_lamp": # the café's dome lamps (art/world_assets/cafe_props): the bulb hangs at 2.4 m
 			var pl := omni(r, Vector3(0, PENDANT_BULB - 0.08, 0), Color(1.0, 0.74, 0.44), 4.8, 0.25, 1.3)
 			pl.shadow_enabled = false
 			pl.set_meta("no_shadow", true) # main.gd's graphics setting leaves it off
+			soft_glint(pl)
 		for at in ITEMS.get(id, {}).get("candles", []):
 			lit_candle(r, Data.vec3(at))
 		return
@@ -383,7 +400,29 @@ static func build(id: String, r: Node3D) -> void:
 		"scarecrow": _scarecrow(r)
 		"lantern": _lantern(r)
 		"hay_bale": _hay_bale(r)
+		"computer": _computer(r)
 		_: box(r, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), Color.MAGENTA)
+
+
+## A stand-in for the computer (scripts/online_store.gd) until its Tripo model lands as
+## assets/props/computer.glb: a desk, a monitor whose glass is the node "screen" (facing +Z, the front,
+## like every model), a keyboard and a tower. The store reads the view from "screen", so the real model
+## only needs a part of that name.
+static func _computer(r: Node3D) -> void:
+	for x in [-0.55, 0.55]:
+		for z in [-0.25, 0.25]:
+			box(r, Vector3(0.05, 0.72, 0.05), Vector3(x, 0.36, z), WOOD_DARK)
+	box(r, Vector3(1.24, 0.05, 0.62), Vector3(0, 0.745, 0), WOOD)
+	var shell := Color(0.86, 0.84, 0.78)
+	box(r, Vector3(0.24, 0.02, 0.18), Vector3(0, 0.78, -0.12), shell)
+	box(r, Vector3(0.06, 0.16, 0.05), Vector3(0, 0.87, -0.14), shell)
+	box(r, Vector3(0.62, 0.42, 0.06), Vector3(0, 1.15, -0.13), shell)
+	var scr := box(r, Vector3(0.56, 0.35, 0.01), Vector3(0, 1.155, -0.098), Color(0.35, 0.55, 0.62))
+	scr.name = "screen"
+	glow(scr, Color(0.55, 0.78, 0.86), 0.9)
+	box(r, Vector3(0.44, 0.025, 0.15), Vector3(-0.02, 0.785, 0.12), shell)
+	box(r, Vector3(0.07, 0.025, 0.1), Vector3(0.3, 0.783, 0.13), shell)
+	box(r, Vector3(0.2, 0.44, 0.45), Vector3(0.42, 0.22, -0.02), shell.darkened(0.08))
 
 
 static func _rocking_chair(r: Node3D) -> void:
@@ -574,6 +613,38 @@ static func _fireplace_fire(r: Node3D, at: Vector3) -> void:
 	_sparks(r, root + Vector3(0, 0.12, 0))
 	var l := omni(r, at + Vector3(0, 0.22, 0.65), Color(1.0, 0.55, 0.25), 7.0, 1.2, 2.6)
 	l.set_meta("fire", true)
+	fire_sound(r, root + Vector3(0, 0.2, 0.1))
+
+
+const FIRE_SOUND := "res://assets/audio/fire.ogg" # "The Fireplace 3" by NoOneIsReal, Freesound 387128, CC0; looped
+static var _fire_stream: AudioStream
+
+
+## The crackle of a fire (Alex, 2026-11-17: "realistic fire sound ... for fireplace and bonfire and
+## any time we have fire"): a looping 3D sound at `pos` under `r`, heard within about `reach`
+## metres and loudest close by, each fire starting at its own place in the loop so two never
+## crackle in step. On the Ambience bus, so the Settings' Sound slider sets it and the autotest's
+## mute silences it. Use it for any new fire (the bonfire).
+static func fire_sound(r: Node3D, pos: Vector3, reach := 14.0, db := -3.0) -> AudioStreamPlayer3D:
+	if _fire_stream == null:
+		_fire_stream = load(FIRE_SOUND) if ResourceLoader.exists(FIRE_SOUND) else null
+		if _fire_stream is AudioStreamOggVorbis:
+			(_fire_stream as AudioStreamOggVorbis).loop = true
+	var p := AudioStreamPlayer3D.new()
+	p.name = "FireSound"
+	p.stream = _fire_stream
+	p.position = pos
+	p.bus = "Ambience"
+	p.volume_db = db
+	p.unit_size = 2.5
+	p.max_distance = reach
+	p.attenuation_filter_cutoff_hz = 6000.0 # duller from across the room
+	p.set_meta("fire_sound", true)
+	if _fire_stream != null:
+		var start := randf() * maxf(_fire_stream.get_length() - 1.0, 0.0)
+		p.ready.connect(func(): p.play(start))
+	r.add_child(p)
+	return p
 
 
 const FIRE_SHADER := preload("res://shaders/fire.gdshader")
@@ -860,6 +931,7 @@ static func _lantern_candle(r: Node3D, inst: Node3D) -> void:
 	candle_flame_quad(r, c + Vector3(0, 1.377, 0), 0.9)
 	var l := omni(r, c + Vector3(0, 1.41, 0), Color(1.0, 0.66, 0.34), 5.5, 0.15, 1.6)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 
 
@@ -926,6 +998,7 @@ static func _candle_flame(r: Node3D, at: Vector3, inst: Node3D) -> void:
 	l.shadow_enabled = false # a few dozen of them in the café: their glow, not their shadows
 	l.set_meta("no_shadow", true) # and the graphics setting leaves them off (main.gd)
 	l.light_cull_mask = 0xFFFFF & ~CANDLE_LAYER
+	soft_glint(l)
 	l.set_meta("candle", true)
 	l.set_meta("phase", phase)
 

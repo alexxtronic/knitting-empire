@@ -23,8 +23,19 @@ uniform vec3 dry : source_color = vec3(0.44, 0.47, 0.21);
 // blades sink into the turf over the last few metres before the chunks stop drawing (grass.gd's range),
 // so the edge of the grass doesn't pop
 uniform float fade_end = 46.0;
+// far grass is thinned (grass.gd _keep_at): out from thin_near fewer blades are drawn, down to
+// thin_keep of them at fade_end, each widened so the turf looks as full
+uniform float thin_near = 16.0;
+uniform float thin_keep = 1.0;
+// the patches baked once over grass.gd's REGION (grass_patch_bake.gdshader); until the bake has drawn,
+// each blade works its patch out itself
+uniform sampler2D patch_tex : filter_linear, repeat_disable;
+uniform vec4 patch_rect = vec4(0.0, 0.0, 1.0, 1.0);
+uniform bool patch_baked = false;
 
 #include "res://shaders/grass_patches.gdshaderinc"
+
+#include "res://shaders/ground_hole.gdshaderinc"
 
 varying float h;
 varying float tint;
@@ -36,12 +47,18 @@ void vertex() {
 	float height = INSTANCE_CUSTOM.r;
 	rnd = INSTANCE_CUSTOM.g;
 	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-	gpatch = grass_patches(root.xz);
+	if (patch_baked) {
+		gpatch = textureLod(patch_tex, (root.xz - patch_rect.xy) / patch_rect.zw, 0.0).rg * 2.0 - 1.0;
+	} else {
+		gpatch = grass_patches(root.xz);
+	}
 	float far = length(root - INV_VIEW_MATRIX[3].xyz);
 	height *= 1.0 - smoothstep(fade_end - 14.0, fade_end - 2.0, far);
 	vec3 v = VERTEX;
 	v.y *= height;
 	v.xz *= 0.9 + height * 0.6;
+	float keep = mix(1.0, thin_keep, smoothstep(thin_near, fade_end, far));
+	v.x *= inversesqrt(keep); // fewer blades, each a little wider
 	// wind: a per-blade flutter plus broad gusts travelling along wind_dir
 	float t = TIME;
 	float gust = sin(dot(root.xz, wind_dir) * 0.28 - t * 1.25);
@@ -58,7 +75,7 @@ void vertex() {
 	vec3 off = vec3(bend.x, 0.0, bend.y) * k * height;
 	off.y = -length(off.xz) * 0.55; // a bent blade gets shorter
 	v += transpose(mat3(MODEL_MATRIX)) * off;
-	VERTEX = v;
+	VERTEX = in_ground_hole(root.xz) ? vec3(0.0) : v; // none over the basement while she's down there
 	tint = gust;
 }
 

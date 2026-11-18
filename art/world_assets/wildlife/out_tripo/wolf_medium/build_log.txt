@@ -1,0 +1,7 @@
+THINNED wolf_medium: 582932 -> 30000 triangles
+MEASURE wolf_medium: height 0.920, paws fore y -0.399 x +-0.119, hind y 0.063 x +-0.169
+HEAD nose at y -0.741 z 0.674; head 0.259 m long; tail 4 points
+BAKED wolf_medium colour and normal at 2048 px
+SKIN 15000 vertices on 19 bones, 1411 rigid on the head
+STRIDE {'Walk': 0.764, 'Run': 2.532}
+EXPORTED wolf_medium: 30000 triangles, 19 bones -> assets/wildlife/wolf_medium.glb

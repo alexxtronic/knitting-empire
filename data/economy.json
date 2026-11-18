@@ -69,7 +69,24 @@
   "_about_building": "Walls she builds in build mode (scripts/house_builder.gd; Alex, 2026-11-15): 'wall' and 'door' (a doorway) are coins a 2 m length, paid as each goes up. A room is about three days of sweater sales: a 4 x 4 m room against the house takes six walls (480c), the old 8 x 4 'Expand House' about 640c. Taking one down gives 'refund' of its price back. 'plots' are building plots Gary sells at Willow Homes ([x, z, width, depth], on the even grid), a little cheaper for each of his hearts; the first wall of a new house on one also pays 'new_house_fee' for the foundations. 'plot_sold' are Gary's lines. 'recolor' is what a new colour for a piece of furniture costs (data/furniture.json 'palettes'). Every number and line is a draft for Alex.",
   "building": {
     "wall": 80,
-    "door": 90,
+    "wall_wood": 10,
+    "_about_openings": "Build mode's openings (house_builder.gd; Alex, 2026-11-17: every house's walls take doors and windows, for wood or coins), drafts: what each costs on top of a wall (a new wall with one pays both), in wood when she has enough for the whole thing, else coins. Taken out, half comes back in what was paid. 'door' is a plain doorway (its saved name).",
+    "openings": {
+      "door": {"coins": 10, "wood": 1},
+      "hdoor": {"coins": 40, "wood": 4},
+      "slide": {"coins": 90, "wood": 4},
+      "window": {"coins": 30, "wood": 2}
+    },
+    "_about_floors": "Build mode's Floor tool (house_builder.gd; Alex, 2026-11-17), drafts: what one 2 m square of each floor costs, laid over a whole room at a click; wood when she has enough for the room, else coins; taken up (plank boards again), half back in what paid.",
+    "floors": {
+      "carpet_grey": {"coins": 12},
+      "carpet_blue": {"coins": 12},
+      "carpet_cream": {"coins": 14},
+      "tile_beige": {"coins": 16},
+      "tile_white": {"coins": 16},
+      "tile_black": {"coins": 18},
+      "wood_oak": {"coins": 14, "wood": 2}
+    },
     "recolor": 15,
     "refund": 0.5,
     "new_house_fee": 600,
@@ -165,6 +182,8 @@
     "wool_packs_a_day": 2,
     "seed_tin": {"turnip": 6, "pumpkin": 2}
   },
+  "_about_pastry": "Heart Bakery's pastries (Giorgio; Alex, 2026-11-17): she buys them over his counter into her bag and eats one whenever she likes (click it on the hotbar when it's already in her hand, or press its number key again). Each gives 'energy', 'food' (her Hunger bar) and 'happiness' points out of 100. 'price' is before Giorgio's friendship discount (5% a heart). 'max' is how many her bag holds. The price is a draft.",
+  "pastry": {"price": 20, "energy": 30, "food": 30, "happiness": 40, "max": 6},
   "_about_gear": "What her money buys to knit better and go further (scripts/empire.gd; Alex, 2026-11-15). 'lantern': Steve's price for the lantern that lights her way at night. 'needles': better pairs, in order, sold by Rosa one step at a time; 'floor' is the least a sweater knitted with them can be (1 Common .. 5 Legendary). 'first_needles' is what she starts with. Names, prices and lines are drafts.",
   "gear": {
     "lantern": 45,

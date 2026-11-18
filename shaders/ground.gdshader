@@ -11,14 +11,15 @@ uniform sampler2D mask : filter_linear, repeat_disable;
 uniform vec4 mask_rect = vec4(0.0, 0.0, 1.0, 1.0);
 uniform float season_dry : hint_range(0.0, 1.0) = 0.35;
 uniform float wet : hint_range(0.0, 1.0) = 0.0;
-// God mode's painted roads (scripts/god_mode.gd), covering roads_rect like the mask: G = gravel,
-// B = cobblestones (the stones are models; the ground under them is their cement). Black = none.
-uniform sampler2D roads : filter_linear, repeat_disable, hint_default_black;
-uniform vec4 roads_rect = vec4(0.0, 0.0, 1.0, 1.0);
 
 uniform float patch_strength : hint_range(0.0, 1.0) = 1.0;
 
 #include "res://shaders/grass_patches.gdshaderinc"
+
+#include "res://shaders/ground_hole.gdshaderinc"
+
+// god mode's painted roads: dirt, gravel, cobbles, pavement and sidewalk (roads, roads_rect)
+#include "res://shaders/painted_roads.gdshaderinc"
 
 varying vec3 wpos;
 
@@ -37,6 +38,20 @@ float vnoise(vec2 p) {
 	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
+// vnoise with its slope: (value, d/dx, d/dy) from the same four corners
+vec3 vnoise_d(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	vec2 du = 6.0 * f * (1.0 - f);
+	float a = hash(i);
+	float b = hash(i + vec2(1.0, 0.0));
+	float c = hash(i + vec2(0.0, 1.0));
+	float d = hash(i + vec2(1.0, 1.0));
+	float k = a - b - c + d;
+	return vec3(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du.x * (b - a + k * u.y), du.y * (c - a + k * u.x));
+}
+
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
@@ -48,36 +63,11 @@ float fbm(vec2 p) {
 	return v;
 }
 
-// Loose gravel: pebbles a few centimetres across, each its own shade of grey, dark in the gaps.
-vec3 gravel(vec2 p, float soften) {
-	vec2 q = p * 10.0;
-	vec2 i = floor(q);
-	vec2 f = fract(q);
-	float d1 = 8.0;
-	float d2 = 8.0;
-	float id = 0.0;
-	for (int y = -1; y <= 1; y++) {
-		for (int x = -1; x <= 1; x++) {
-			vec2 g = vec2(float(x), float(y));
-			vec2 o = vec2(hash(i + g), hash(i + g + vec2(17.3, 4.1)));
-			float d = length(g + o - f);
-			if (d < d1) {
-				d2 = d1;
-				d1 = d;
-				id = hash(i + g + vec2(5.1, 9.7));
-			} else if (d < d2) {
-				d2 = d;
-			}
-		}
-	}
-	vec3 stone = mix(vec3(0.27, 0.25, 0.23), vec3(0.5, 0.47, 0.42), id);
-	stone = mix(stone, vec3(0.42, 0.33, 0.25), step(0.84, id) * 0.8); // the odd brown one
-	vec3 col = mix(vec3(0.15, 0.13, 0.11), stone, smoothstep(0.03, 0.22, d2 - d1));
-	return mix(col, vec3(0.35, 0.33, 0.3), soften); // far away the pebbles blur into one grey
-}
-
 void fragment() {
 	vec2 p = wpos.xz;
+	if (in_ground_hole(p)) {
+		discard;
+	}
 	float big = fbm(p * 0.045);
 	float mid = fbm(p * 0.35);
 	float fine = vnoise(p * 9.0);
@@ -110,32 +100,25 @@ void fragment() {
 	m = smoothstep(0.25, 0.75, m + (mid - 0.5) * 0.45 + (speck - 0.5) * 0.12);
 	vec3 col = mix(e, g, m);
 	float px_m = fwidth(p.x) + fwidth(p.y); // metres of ground one screen pixel covers
-	vec2 ru = (p - roads_rect.xy) / roads_rect.zw;
-	if (ru.x >= 0.0 && ru.y >= 0.0 && ru.x <= 1.0 && ru.y <= 1.0) {
-		vec3 road = texture(roads, ru).rgb;
-		if (road.g > 0.02) {
-			float soften = clamp((px_m * 10.0 - 0.45) * 1.4, 0.0, 0.85);
-			float edge = smoothstep(0.35, 0.65, road.g + (speck - 0.5) * 0.3);
-			col = mix(col, gravel(p, soften) * (0.75 + 0.5 * mid) * (0.9 + 0.2 * speck), edge);
-			m *= 1.0 - edge;
-		}
-		if (road.b > 0.02) {
-			float edge = smoothstep(0.25, 0.5, road.b);
-			col = mix(col, vec3(0.6, 0.58, 0.54) * (0.9 + 0.15 * speck), edge);
-			m *= 1.0 - edge;
-		}
-	}
+	// inside the mask its own earth already shows the painted dirt (grass.gd), so only out past it
+	// does the dirt come from the road map
+	bool in_mask = mu.x >= 0.0 && mu.y >= 0.0 && mu.x <= 1.0 && mu.y <= 1.0;
+	float bare;
+	col = painted_roads(p, col, in_mask ? col : e, speck, mid, px_m, bare);
+	m *= 1.0 - bare;
 	col *= 1.0 - wet * 0.28;
 	ALBEDO = col;
 	ROUGHNESS = mix(0.92, 0.82, m) * (1.0 - wet * 0.55);
 	SPECULAR = 0.3 + wet * 0.25;
 	// a little surface relief so light catches the clumps: two octaves are all that shows at this
-	// scale (it was four five-octave fbm calls a pixel; this is a fifth of the work)
+	// scale. Their slopes come straight from the noise (it was eight lookups for finite differences;
+	// the same relief for a quarter of the work, which mattered: the ground fills most of the screen)
 	vec2 rp = p * 0.9;
-	float hx = (vnoise(rp + vec2(0.045, 0.0)) - vnoise(rp - vec2(0.045, 0.0))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.193, 7.7)) - vnoise(rp * 2.07 + vec2(13.007, 7.7)));
-	float hz = (vnoise(rp + vec2(0.0, 0.045)) - vnoise(rp - vec2(0.0, 0.045))) + 0.5 * (vnoise(rp * 2.07 + vec2(13.1, 7.793)) - vnoise(rp * 2.07 + vec2(13.1, 7.607)));
-	hx *= 0.5;
-	hz *= 0.5;
+	vec2 s1 = vnoise_d(rp).yz;
+	vec2 s2 = vnoise_d(rp * 2.07 + vec2(13.1, 7.7)).yz;
+	vec2 hs = 0.5 * (0.09 * s1 + 0.093 * s2);
+	float hx = hs.x;
+	float hz = hs.y;
 	vec3 n_world = normalize(vec3(-hx * 1.6, 1.0, -hz * 1.6));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 	AO = mix(0.85, 1.0, mid);

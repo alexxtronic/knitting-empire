@@ -1,7 +1,7 @@
 // Cobblestone tiles laid by god mode's road painting (scripts/god_mode.gd): the tile models
 // cover whole 4 x 2 m squares, and this draws only the part of each that was painted, so paving
-// can have any outline (a round cul-de-sac, a curved lane). The painted map's blue channel is
-// the cobbles; it covers roads_rect (x, z, width, depth) in world metres.
+// can have any outline (a round cul-de-sac, a curved lane). The painted map's blue alone (not
+// with green: that is sidewalk) is the cobbles; it covers roads_rect (x, z, width, depth) in world metres.
 shader_type spatial;
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -17,13 +17,19 @@ uniform int hole_count = 0;
 
 varying vec3 wpos;
 
+// blue alone is cobbles; green with blue is sidewalk (painted_roads.gdshaderinc)
+float cobble_at(vec2 ru) {
+	vec3 c = texture(roads, ru).rgb;
+	return c.b - min(c.g, c.b);
+}
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
 	vec2 ru = (wpos.xz - roads_rect.xy) / roads_rect.zw;
-	if (ru.x < 0.0 || ru.y < 0.0 || ru.x > 1.0 || ru.y > 1.0 || texture(roads, ru).b < 0.5) {
+	if (ru.x < 0.0 || ru.y < 0.0 || ru.x > 1.0 || ru.y > 1.0 || cobble_at(ru) < 0.5) {
 		discard;
 	}
 	for (int i = 0; i < hole_count; i++) {

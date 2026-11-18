@@ -1,0 +1,14 @@
+{
+  "id": "clawfoot_bath",
+  "atlas": 512,
+  "reach": 0.7,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.489,
+  "light_p05": 0.0,
+  "seconds": 33.7,
+  "glb_bytes": 566972,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

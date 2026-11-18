@@ -4,6 +4,7 @@ extends Node3D
 ## With look.model set (a character id from data/characters.json) they wear that skinned
 ## body and share the player's animations; otherwise they get a simple shape model.
 
+const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const Body = preload("res://scripts/body.gd")
 const WALK_SPEED := 1.0
@@ -19,6 +20,7 @@ var romance := false # gifts can grow romance with them
 var home := Vector3.ZERO
 var roam := Vector2(0.8, 0.4) # how far they wander from home in x / z
 var hold_time := 0.0
+var walk_speed := WALK_SPEED # a child strolls slower (data/townsfolk.json "walk_speed")
 var talk_spot = null # where you stand to talk to them (e.g. in front of a counter); null = beside them
 var rest_yaw = null # the way they face while standing at their post (a shopkeeper faces the counter); null = any
 var _via: Array = [] # the rest of the route they are walking (walk_to)
@@ -125,6 +127,9 @@ func _build(look: Dictionary) -> void:
 		_model.add_child(body)
 		if body.load_character(model_id):
 			tag_y = body.label_height + 0.12
+			# a child is rigged at a grown-up's height and shrunk here (data/townsfolk.json "scale"); its
+			# anim speeds and label height in the data are already the shrunk ones
+			_model.scale = Vector3.ONE * float(look.get("scale", 1.0))
 		else:
 			body.queue_free()
 			body = null
@@ -187,7 +192,17 @@ func _add_tag_and_collider(tag_y: float) -> void:
 	add_child(body)
 
 
+var _floor_y := 0.0 # the floor of Marcus's house under them last frame (split_house.gd)
+
+
+## Every frame: the step, then up or down to the floor under them (split_house.gd: the floors of
+## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
+	_step(delta)
+	_floor_y = SplitHouse.follow(self, _floor_y)
+
+
+func _step(delta: float) -> void:
 	_t += delta
 	if body:
 		_process_body(delta)
@@ -249,7 +264,7 @@ func _process_body(delta: float) -> void:
 	var d := to.length()
 	# ease up to a stroll and slow into the last step, turning toward the way they're going first
 	var off := absf(angle_difference(rotation.y, atan2(to.x, to.z))) if d > 0.01 else 0.0
-	var want := minf(WALK_SPEED * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
+	var want := minf(walk_speed * clampf(1.15 - off / 1.4, 0.3, 1.0), maxf(0.35, sqrt(2.0 * 2.5 * d)))
 	_speed = move_toward(_speed, want, 2.5 * delta)
 	var step := _speed * delta
 	if d <= step and not _via.is_empty():

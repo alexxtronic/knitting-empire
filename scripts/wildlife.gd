@@ -308,7 +308,7 @@ func barked(at: Vector3) -> int:
 			var power: float = main.dog.bark_power() if main and main.dog else 1.0 # his knitted scarf (scarves.gd)
 			if a.frighten(near * power / barks_for(a) + 0.0001):
 				frightened(a)
-	if blocked != "" and _said_t <= 0.0:
+	if blocked != "" and _said_t <= 0.0 and not (main.wolves and main.wolves.active()): # not over the wolves' warning
 		_said_t = 6.0
 		main.hud.show_toast(blocked)
 	return reached

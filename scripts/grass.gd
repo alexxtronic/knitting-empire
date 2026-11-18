@@ -10,6 +10,7 @@ const PX_PER_M := 2.0
 const CHUNK := 8.0
 const DENSITY := 34.0 # blades per square metre on full grass
 const VIEW_RANGE := 46.0 # chunks further than this from the camera aren't drawn
+const PATCH_PX := 4.0 # the baked patch texture's pixels per metre (_bake_patches)
 
 var ground_mat: ShaderMaterial
 var blade_mat: ShaderMaterial
@@ -21,6 +22,13 @@ var _blade_mesh: ArrayMesh
 var blade_count := 0
 var _frac := 1.0 # share of blades drawn (graphics setting)
 var _range := VIEW_RANGE
+## Far grass is thinned: every blade out to THIN_NEAR metres from the camera, then fewer and a
+## little wider toward the end of the range, down to THIN_KEEP of them, so the turf looks as full.
+## A blade 30 m off is a pixel wide, and drawing tens of thousands of them was 6 to 10 ms a frame
+## on a MacBook Air (--only=perf). The shader widens each blade to match (grass_blade.gdshader).
+const THIN_NEAR := 16.0
+var thin_keep := 0.4 # share of blades kept at the end of the range (1: no thinning)
+var _cam := Vector3(INF, 0, INF) # where the camera was when the chunks were last thinned
 
 
 func _ready() -> void:
@@ -39,6 +47,36 @@ func _ready() -> void:
 	_ground.position = Vector3(25, -0.01, 55.0 - 197.5)
 	add_child(_ground)
 	_blade_mesh = _make_blade()
+	blade_mat.set_shader_parameter("thin_near", THIN_NEAR)
+	blade_mat.set_shader_parameter("thin_keep", thin_keep)
+	_bake_patches()
+
+
+## The light and dark patches (grass_patches.gdshaderinc) cost each blade's vertices sixteen hashes;
+## they depend only on where the blade stands, so draw them once over REGION into a texture on the
+## GPU (the CPU can't repeat the shader's sin hash exactly, and the blades must match the ground's
+## patches, which keeps working them out itself). The blades read it once it has drawn.
+var patch_vp: SubViewport
+
+func _bake_patches() -> void:
+	patch_vp = SubViewport.new()
+	patch_vp.size = Vector2i(int(REGION.size.x * PATCH_PX), int(REGION.size.y * PATCH_PX))
+	patch_vp.disable_3d = true
+	patch_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var rect := ColorRect.new()
+	rect.size = Vector2(patch_vp.size)
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://shaders/grass_patch_bake.gdshader")
+	var r := Vector4(REGION.position.x, REGION.position.y, REGION.size.x, REGION.size.y)
+	m.set_shader_parameter("rect", r)
+	rect.material = m
+	patch_vp.add_child(rect)
+	add_child(patch_vp)
+	blade_mat.set_shader_parameter("patch_tex", patch_vp.get_texture())
+	blade_mat.set_shader_parameter("patch_rect", r)
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	blade_mat.set_shader_parameter("patch_baked", true)
 
 
 ## Bare-earth areas: `dirt` rects (paths, beds: worn earth, wide soft edges), `clear` rects and
@@ -162,7 +200,7 @@ func _plant_chunk(cx: int, cz: int) -> void:
 	mmi.multimesh = mm
 	mmi.material_override = blade_mat
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mm.visible_instance_count = _visible(n)
+	mm.visible_instance_count = _visible(n, _keep_at(mmi_centre_dist(mm)))
 	mmi.visibility_range_end = _range
 	mmi.visibility_range_end_margin = 6.0
 	add_child(mmi)
@@ -213,19 +251,49 @@ func _make_blade() -> ArrayMesh:
 		tri.call(a, a + 1, a + 2)
 		if i < 2:
 			tri.call(a + 1, a + 3, a + 2)
+	st.index() # 7 shared points rather than 15: the vertex shader runs once per point
 	return st.commit()
 
 
 ## Weather and season, from main.gd: rain (0..1), how dry the season is (0 spring .. 1 winter).
 ## Graphics setting: draw this share of the blades (they're planted in random order, so the
 ## first N are an even thinning) out to this distance from the camera.
-func set_quality(frac: float, view_range: float) -> void:
+func set_quality(frac: float, view_range: float, keep_far := 0.4) -> void:
 	_frac = clampf(frac, 0.05, 1.0)
 	_range = view_range
+	thin_keep = clampf(keep_far, 0.05, 1.0)
 	blade_mat.set_shader_parameter("fade_end", _range)
+	blade_mat.set_shader_parameter("thin_keep", thin_keep)
 	for c in _chunks:
-		c.multimesh.visible_instance_count = _visible(c.multimesh.instance_count)
 		c.visibility_range_end = _range
+	_thin()
+
+
+## Every frame from main.gd: thins the chunks again once the camera has moved a metre.
+func follow(cam_pos: Vector3) -> void:
+	if cam_pos.distance_to(_cam) < 1.0:
+		return
+	_cam = cam_pos
+	_thin()
+
+
+func _thin() -> void:
+	for c in _chunks:
+		c.multimesh.visible_instance_count = _visible(c.multimesh.instance_count, _keep_at(mmi_centre_dist(c.multimesh)))
+
+
+func mmi_centre_dist(mm: MultiMesh) -> float:
+	if not is_finite(_cam.x):
+		return 0.0
+	return mm.custom_aabb.get_center().distance_to(_cam)
+
+
+## The share of blades drawn at distance d from the camera (the shader's keep() is the same curve).
+func _keep_at(d: float) -> float:
+	# a chunk is 8 m across: count it by its nearest blades so the shader never widens a blade that
+	# the chunk still draws at full density
+	var near := maxf(d - CHUNK * 0.7, 0.0)
+	return lerpf(1.0, thin_keep, smoothstep(THIN_NEAR, _range, near))
 
 
 func drawn_blades() -> int:
@@ -235,8 +303,9 @@ func drawn_blades() -> int:
 	return n
 
 
-func _visible(n: int) -> int:
-	return -1 if _frac >= 0.999 else maxi(1, int(n * _frac))
+func _visible(n: int, keep := 1.0) -> int:
+	var f := _frac * keep
+	return -1 if f >= 0.999 else maxi(1, int(n * f))
 
 
 func set_conditions(rain: float, season_dry: float) -> void:

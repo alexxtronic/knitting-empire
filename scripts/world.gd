@@ -283,6 +283,7 @@ static func build_barn(root: Node3D, pos: Vector3) -> Array:
 	# the lantern on the end wall lights the inside after dark (update_barn sets how bright)
 	_barn_light = Catalog.omni(b, Vector3(0, 2.0, -1.9), Color(1.0, 0.74, 0.42), 6.5, 0.0, 1.3)
 	_barn_light.shadow_enabled = false
+	_barn_light.set_meta("no_shadow", true)
 	return barn_blocks(pos)
 
 

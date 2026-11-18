@@ -5,6 +5,11 @@ extends Node3D
 const Catalog = preload("res://scripts/catalog.gd")
 const World = preload("res://scripts/world.gd")
 const Furniture = preload("res://scripts/furniture.gd")
+const PerfCheck = preload("res://scripts/perf_check.gd")
+const SuburbCheck = preload("res://scripts/suburb_check.gd")
+const WalkinCheck = preload("res://scripts/walkin_check.gd")
+const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
+const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
 const Player = preload("res://scripts/player.gd")
@@ -24,6 +29,7 @@ const Nature = preload("res://scripts/nature.gd")
 const Fireflies = preload("res://scripts/fireflies.gd")
 const Lighting = preload("res://scripts/lighting.gd")
 const Regions = preload("res://scripts/regions.gd")
+const Suburb = preload("res://scripts/suburb.gd")
 const GodMode = preload("res://scripts/god_mode.gd")
 const Planks = preload("res://scripts/planks.gd")
 const HouseSkin = preload("res://scripts/house_skin.gd")
@@ -43,10 +49,13 @@ const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const Scarves = preload("res://scripts/scarves.gd")
+const Wolves = preload("res://scripts/wolves.gd")
+const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
 const ReadingPose = preload("res://scripts/reading_pose.gd")
 const Barista = preload("res://scripts/barista.gd")
+const OnlineStore = preload("res://scripts/online_store.gd")
 const HouseBuilder = preload("res://scripts/house_builder.gd")
 
 const CELL := 0.5
@@ -112,6 +121,7 @@ var _flock_t := 0.0
 var _flock_seen := false
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var barista: Barista # working the Coffee Shop's counter in first person (barista.gd)
+var store: OnlineStore # the online sweater store on her computer (online_store.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
 var books_ui: BookPanel # the books she reads (book_panel.gd, data/books.json)
@@ -130,6 +140,8 @@ var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the c
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
+var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
+var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -148,9 +160,10 @@ var minimap: Minimap # the map under the coins (minimap.gd): click it to walk th
 var see_through: SeeThrough # scenery between the camera and the people fades (see_through.gd)
 var decor: Array = [] # town lanterns/benches: furniture you can use but not pick up
 var fireflies # fireflies.gd: glowing orbs round things near her at night
-var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High
+var lighting # lighting.gd: morning mist and its light shafts, SDFGI on High and Ultra
 var regions # regions.gd: the swamp, the foothills and mountains, the beach and the sea, the east meadows
 var decor_root: Node3D
+var suburb # suburb.gd: Bretton Oaks, the cul-de-sac where the town sleeps
 var sign_to_town: Landmark
 var sign_to_farm: Landmark
 var price_board: Label3D
@@ -249,6 +262,9 @@ func _ready() -> void:
 	decor_root = Node3D.new()
 	add_child(decor_root)
 	_build_town_decor()
+	suburb = Suburb.new()
+	add_child(suburb)
+	grid_blockers.append_array(suburb.build(self))
 	grid_blockers.append_array(World.build_barn(self, Vector3(21.5, 0, -9.5)))
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
@@ -348,8 +364,14 @@ func _ready() -> void:
 	barista = Barista.new() # after first person too: it turns her view every frame
 	barista.main = self
 	add_child(barista)
+	store = OnlineStore.new() # after first person too: it steers her view to the screen
+	store.main = self
+	add_child(store)
 	Interiors.WorkSpot.main = self
-	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
+	Interiors.StairSpot.main = self
+	player.steer_ok = func(q: Vector3) -> bool:
+		var lo: Variant = Interiors.steer_ok(player.position, q) # in the café: its stairs and loft
+		return lo if lo != null else _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -367,6 +389,7 @@ func _ready() -> void:
 	cafe_visits = CafeVisits.new()
 	cafe_visits.main = self
 	story.scene_started.connect(func(_id): cafe_visits.end_all()) # before the scene places anyone
+	story.scene_started.connect(func(_id): suburb.wake_all()) # everyone out of bed for it
 	jobs = Jobs.new()
 	jobs.main = self
 	add_child(jobs)
@@ -405,6 +428,11 @@ func _ready() -> void:
 	add_child(wildlife)
 	if _autotest_dir == "": # the autotest places them only for its own check (_wildlife_checks)
 		wildlife.build()
+	townsfolk = Townsfolk.new() # Maple Grove's passers-by (townsfolk.gd); like the wildlife, only outside the autotest
+	townsfolk.main = self
+	add_child(townsfolk)
+	if _autotest_dir == "":
+		townsfolk.build()
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
@@ -412,6 +440,9 @@ func _ready() -> void:
 	scarves.main = self
 	add_child(scarves)
 	scarves.update()
+	wolves = Wolves.new()
+	wolves.main = self
+	add_child(wolves)
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -419,7 +450,9 @@ func _ready() -> void:
 	hints_enabled = _autotest_dir == "" # Act 1's checks turn the control hints on for themselves
 	flock_bedtime = _autotest_dir == "" # and the flock stays in the pen but for its own check
 	town_rounds = _autotest_dir == "" # and the town keeps still (Rosa's stall, the post, Gary's visits)
+	suburb.on = _autotest_dir == "" # and nobody goes home to Bretton Oaks at night but in its own check
 	jobs.nudge = _autotest_dir == "" # and no goal sends her to Giorgio after Act 1
+	Wolves.on = _autotest_dir == "" # and no wolves come but in their own check (_wolf_checks)
 	Jobs.on = _autotest_dir == "" # and no boss offers a job but in the jobs check, which turns them on
 	Game.fast_clock = _autotest_dir != "" # the checks were timed on the old 4-minute day; --only=empire checks the real one
 	# the title screen greets a normal launch; "New Game" from it reloads the scene and skips it
@@ -457,6 +490,7 @@ func _connect_hud() -> void:
 	hud.expand_pressed.connect(_expand_house)
 	hud.walls_pressed.connect(func(): walls_up = not walls_up)
 	hud.graphics_pressed.connect(_cycle_graphics)
+	hud.render_scale_changed.connect(set_render_scale)
 	hud.save_pressed.connect(func():
 		_save_game()
 		hud.show_toast("Game saved."))
@@ -470,6 +504,7 @@ func _connect_hud() -> void:
 	hud.hud_option.connect(_save_hud_option)
 	hud.cinematic_pressed.connect(func(): cinema.enter())
 	hud.first_person_pressed.connect(func(): fps.enter())
+	hud.eat_pressed.connect(func(item: String): eat_item(item))
 	hud.settings_panel.visibility_changed.connect(func():
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
@@ -493,6 +528,7 @@ func _connect_hud() -> void:
 		if mode != Mode.BUILD and k != "":
 			set_mode(Mode.BUILD)
 		builder.set_tool(k))
+	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -598,41 +634,106 @@ func _setup_environment() -> void:
 ## The 3D scene is drawn at about 1.6 million pixels whatever the window size, then upscaled
 ## (MetalFX on Macs, FSR elsewhere); the menus stay at full resolution. A full-screen Retina
 ## window is 4 to 7 million pixels, which a laptop GPU can't fill at 60 fps with these effects.
-## Per graphics level (Low, Medium, High): 3D pixels to aim for and the lowest scale allowed.
-const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.6e6]
-const MIN_3D_SCALE := [0.25, 0.3, 0.35]
+## Per graphics level (Low, Medium, High, Ultra): 3D pixels to aim for and the lowest scale allowed.
+const TARGET_3D_PIXELS := [0.7e6, 1.1e6, 1.35e6, 1.6e6]
+const MIN_3D_SCALE := [0.25, 0.3, 0.33, 0.35]
 const METALFX_MIN_SCALE := 0.34 # MetalFX temporal upscales at most 3x
 
 # --- graphics setting ----------------------------------------------------------------
-## Low / Medium / High, set in Settings and kept in user://settings.cfg (not the
-## save file: it belongs to the computer, not the farm). The autotest always runs on High.
-const GFX_NAMES := ["Low", "Medium", "High"]
+## Low / Medium / High / Ultra, set in Settings and kept in user://settings.cfg (not the
+## save file: it belongs to the computer, not the farm). Ultra is everything (the High of before
+## 2026-11-17); High keeps Ultra's look (light bounce, reflections, haze) at a lower cost. The
+## autotest always runs on Ultra.
+const GFX_NAMES := ["Low", "Medium", "High", "Ultra"]
+const GFX_HIGH := 2
+const GFX_ULTRA := 3
 const SETTINGS_PATH := "user://settings.cfg"
-var gfx := 2
+var gfx := GFX_ULTRA
+var light_budget := LightBudget.new() # which lamps cast shadows (light_budget.gd)
+## Per graphics level: how many of the nearest lit lamps cast real shadows.
+const LAMP_SHADOWS := [0, 1, 2, 4]
+## Per graphics level: how far from the camera a lamp's shadow fades out (Catalog.omni's 40 m on Ultra).
+## Measured from the camera, which sits about 23 m from Nora: 30 keeps the shadow of a lamp beside her
+## at the usual zoom and drops it sooner when zoomed out.
+const LAMP_SHADOW_FADE := [20.0, 30.0, 35.0, 40.0]
+## grass.gd per level: the share of blades drawn, how far from the camera they go, and the share
+## left at the end of that range
+const GRASS_FRAC := [0.45, 0.75, 1.0, 1.0]
+const GRASS_RANGE := [30.0, 32.0, 40.0, 46.0]
+const GRASS_THIN := [0.4, 0.4, 0.4, 0.45]
+## How far the sun's shadow reaches at most, per level (it follows the zoom below that).
+const SUN_SHADOW_REACH := [40.0, 55.0, 62.0, 70.0]
+const RECOMMENDED_APPLE := 1 # Medium: on an M4 MacBook Air at 2560x1378 High runs 19-29 fps, Medium 30-50 (--only=perf)
+
+
+## The Settings slider "3D detail": how many 3D pixels to draw, as a share of the level's own
+## (TARGET_3D_PIXELS), from RENDER_SCALE_MIN to RENDER_SCALE_MAX. Kept in user://settings.cfg.
+var render_scale := 1.0
+const RENDER_SCALE_MIN := 0.5
+const RENDER_SCALE_MAX := 1.5
+## Settings saved before the graphics pass of 2026-11-16 (version 1) start once on the computer's
+## recommended level, since High then cost three times what it does now. Version 2 had three levels:
+## its High (2) is read as the new High, the lighter one; Ultra has to be picked.
+const GFX_SETTINGS_VERSION := 3
+
+
+## The level a computer starts on before the player picks one: what --only=perf shows holds
+## 30 fps or more everywhere on that kind of graphics chip.
+func default_graphics() -> int:
+	return recommended_graphics(RenderingServer.get_video_adapter_name(), OS.get_processor_count())
+
+
+static func recommended_graphics(gpu: String, cores: int) -> int:
+	var g := gpu.to_lower()
+	if g.contains("apple"): # M-series: one chip for CPU and GPU, a MacBook Air has no fan
+		return RECOMMENDED_APPLE
+	if g.contains("intel") or g.contains("llvmpipe") or g.contains("swiftshader"):
+		return 0
+	if cores <= 4:
+		return 1
+	return GFX_HIGH
 
 
 func _load_graphics() -> void:
+	gfx = default_graphics() if _autotest_dir == "" else GFX_ULTRA # the autotest always runs on Ultra
 	if _autotest_dir == "":
 		var cfg := ConfigFile.new()
 		if cfg.load(SETTINGS_PATH) == OK:
-			gfx = clampi(int(cfg.get_value("graphics", "quality", 2)), 0, 2)
+			if int(cfg.get_value("graphics", "version", 1)) >= 2:
+				gfx = clampi(int(cfg.get_value("graphics", "quality", gfx)), 0, GFX_NAMES.size() - 1)
+			render_scale = clampf(float(cfg.get_value("graphics", "render_scale", 1.0)), RENDER_SCALE_MIN, RENDER_SCALE_MAX)
+	hud.set_render_scale(render_scale)
 	apply_graphics()
+
+
+func _save_graphics() -> void:
+	if _autotest_dir != "":
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("graphics", "quality", gfx)
+	cfg.set_value("graphics", "render_scale", render_scale)
+	cfg.set_value("graphics", "version", GFX_SETTINGS_VERSION)
+	cfg.save(SETTINGS_PATH)
 
 
 func _cycle_graphics() -> void:
-	gfx = (gfx + 2) % 3 # High → Medium → Low → High
+	gfx = (gfx + GFX_NAMES.size() - 1) % GFX_NAMES.size() # Ultra → High → Medium → Low → Ultra
 	apply_graphics()
-	if _autotest_dir == "":
-		var cfg := ConfigFile.new()
-		cfg.load(SETTINGS_PATH)
-		cfg.set_value("graphics", "quality", gfx)
-		cfg.save(SETTINGS_PATH)
+	_save_graphics()
 	hud.show_toast("Graphics: %s" % GFX_NAMES[gfx])
+
+
+func set_render_scale(v: float) -> void:
+	render_scale = clampf(v, RENDER_SCALE_MIN, RENDER_SCALE_MAX)
+	_fit_3d_resolution()
+	_save_graphics()
 
 
 func apply_graphics() -> void:
 	var med := gfx >= 1
-	var hi := gfx == 2
+	var hi := gfx >= GFX_HIGH # High and Ultra: the full look
+	var ultra := gfx == GFX_ULTRA # everything at full cost
 	env.ssao_enabled = med # contact shading
 	env.ssil_enabled = hi # light bouncing off nearby surfaces
 	env.ssr_enabled = hi # reflections in the pond and wet ground
@@ -640,12 +741,22 @@ func apply_graphics() -> void:
 	# samples each frame for the upscaler to average out, and with fewer samples the soft edges
 	# (the long end of a shadow most of all) visibly vibrate. Rendering at a third of the screen
 	# keeps the extra samples cheap.
-	RenderingServer.directional_soft_shadow_filter_set_quality([4, 4, 5][gfx])
-	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3][gfx])
+	# (High had the ultra filter, 5: 4-5 ms a frame on a MacBook Air for edges you can't tell apart)
+	RenderingServer.directional_soft_shadow_filter_set_quality(4)
+	RenderingServer.positional_soft_shadow_filter_set_quality([1, 2, 3, 3][gfx])
 	Catalog.lamp_shadows = med
-	for l in find_children("*", "OmniLight3D", true, false):
-		(l as OmniLight3D).shadow_enabled = med and not l.has_meta("no_shadow") # candles: dozens of them, glow only
-	grass.set_quality([0.45, 0.75, 1.0][gfx], [30.0, 40.0, 46.0][gfx])
+	light_budget.max_shadows = LAMP_SHADOWS[gfx] # only the nearest lit lamps cast shadows (candles never)
+	light_budget.fade = LAMP_SHADOW_FADE[gfx]
+	# the sun's shadow on Low and Medium (Alex, 2026-11-17: "keep high as it is", now Ultra): two splits
+	# and a 2048 map instead of four and 4096, and shut shops' lights left off (interiors.gd). High
+	# keeps four splits and the big map but reaches less far (SUN_SHADOW_REACH). Below Ultra a shop's
+	# furnishings cast no shadow while its roof is on.
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if hi else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	RenderingServer.directional_shadow_atlas_set_size(4096 if hi else 2048, true)
+	Interiors.no_casters = not ultra
+	Interiors.lights_off = not hi
+	light_budget.update(get_tree(), cam_target, 0.0, true)
+	grass.set_quality(GRASS_FRAC[gfx], GRASS_RANGE[gfx], GRASS_THIN[gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
@@ -658,7 +769,7 @@ func _fit_3d_resolution() -> void:
 	# 1440p monitor would otherwise hand the game a 5120x2880 frame that macOS then shrinks back to
 	# 2560x1440: four times the upscaling, post-processing and HUD work for nothing on screen.
 	# Below about a third of the width, fine detail and thin edges break up when upscaled.
-	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
+	var scale := clampf(sqrt(float(TARGET_3D_PIXELS[gfx]) * render_scale / maxf(px.x * px.y, 1.0)), float(MIN_3D_SCALE[gfx]), 1.0)
 	if scale > 0.95:
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		vp.scaling_3d_scale = 1.0
@@ -805,7 +916,7 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
-	var roads: Image = god.road_img if painted else null
+	var roads: Image = god.roads_over(Grass.REGION) if painted else null # the grass's mask covers less than the road map
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
 	if replant:
 		grass.build(dirt, clear, pond, roads)
@@ -818,6 +929,7 @@ func _rebuild_house() -> void:
 		c.free()
 	walls.clear()
 	roofs.clear()
+	builder.doors.clear()
 	builder.compute() # the rooms her walls close (house_builder.gd)
 	_rebuild_grass()
 	wall_rects.clear()
@@ -836,11 +948,13 @@ func _rebuild_house() -> void:
 		right_windows.append(-4.0 * k + 2.0)
 	# where a room she built joins the house, its wall opens in a doorway (house_builder.gd)
 	var sp := builder.house_spans()
-	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9)
-	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"])
-	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"])
-	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"])
-	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"])
+	# and where she put a door, sliding doors, a window or a doorway in one of its own walls
+	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9, builder.line_edits("back"))
+	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"], INF, builder.line_edits("front"))
+	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"], INF, builder.line_edits("left"))
+	var right := builder.line_edits("right")
+	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"], INF, right)
+	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"], INF, right)
 	_door_lintel()
 	for k in range(1, lvl + 1):
 		var z := -4.0 * (k - 1)
@@ -871,10 +985,11 @@ func _banner(tall: Node3D, bx: float) -> void:
 
 ## A wall line of the house, from a to b, with doorways where a room she built joins it: `spans`
 ## are the stretches (along x or z) a room shares, each a divider with a doorway in its middle
-## (house_builder.gd). Windows go only where the wall still stands outdoors. With no spans it's
-## one plain wall. Returns the piece that stands at least 0.4 m either side of `keep_at` (along
-## the line), or {}.
-func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF) -> Dictionary:
+## (house_builder.gd). `edits` are the 2 m edges she put an opening in ({metres along the line where
+## the edge starts: kind}, builder.line_edits()), each drawn by _edge_piece(). Windows go only where
+## the wall still stands outdoors. With no spans or edits it's one plain wall. Returns the piece that
+## stands at least 0.4 m either side of `keep_at` (along the line), or {}.
+func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF, edits := {}) -> Dictionary:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var t0 := a.x if horizontal else a.y
 	var t1 := b.x if horizontal else b.y
@@ -895,6 +1010,27 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		cur = s1
 	if cur < t1:
 		pieces.append([cur, t1, "wall"])
+	if not edits.is_empty():
+		var ts: Array = edits.keys()
+		ts.sort()
+		var split: Array = []
+		for p in pieces:
+			if p[2] != "wall":
+				split.append(p)
+				continue
+			var at := float(p[0])
+			for t in ts:
+				var e0 := float(t)
+				var e1 := e0 + HouseBuilder.STEP
+				if e0 < float(p[0]) - 0.01 or e1 > float(p[1]) + 0.01:
+					continue
+				if e0 > at:
+					split.append([at, e0, "wall"])
+				split.append([e0, e1, "edit", str(edits[t])])
+				at = e1
+			if at < float(p[1]):
+				split.append([at, p[1], "wall"])
+		pieces = split
 	var keep := {}
 	for p in pieces:
 		var p0: float = p[0]
@@ -906,6 +1042,9 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		if p[2] == "gap":
 			_lintel(pa, pb, normal)
 			continue
+		if p[2] == "edit":
+			_edge_piece(pa, pb, normal, str(p[3]), [], false)
+			continue
 		var wins := windows.filter(func(w): return p[2] == "wall" and float(w) - 0.62 >= p0 and float(w) + 0.62 <= p1)
 		var w := _wall(pa, pb, normal, wins, WALL_H, true, p[2] == "divider")
 		if keep_at - 0.4 >= p0 and keep_at + 0.4 <= p1:
@@ -913,9 +1052,32 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 	return keep
 
 
+## One grid edge of wall from a to b with what's in it (house_builder.gd's kinds): a plain wall with
+## `windows` (positions along the line), a window in its middle, or a gap for a doorway, a door or
+## sliding doors, the wall standing either side and a lintel over it. Her walls and the house's own
+## both use it, so every house takes the same openings.
+func _edge_piece(a: Vector2, b: Vector2, normal: Vector3, kind: String, windows: Array, divider: bool, parent: Node3D = null) -> void:
+	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
+	var mid := (a + b) * 0.5
+	if kind == "window":
+		_wall(a, b, normal, [mid.x if horizontal else mid.y], WALL_H, true, divider, parent)
+		return
+	if not HouseBuilder.GAPS.has(kind):
+		_wall(a, b, normal, windows, WALL_H, true, divider, parent)
+		return
+	var along := (b - a).normalized()
+	var side := (a.distance_to(b) - float(HouseBuilder.GAPS[kind])) * 0.5
+	_wall(a, a + along * side, normal, [], WALL_H, true, divider, parent)
+	_wall(b - along * side, b, normal, [], WALL_H, true, divider, parent)
+	var tall := _lintel(a + along * side, b - along * side, normal, parent)
+	if kind != "door":
+		builder.hang_door(tall, kind, a + along * side, b - along * side)
+
+
 ## The plaster and beam over a doorway from a to b (no door leaf): a room she built joined to the
-## house, or a doorway she put in a wall of her own.
-func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> void:
+## house, or a doorway she put in a wall. Returns the node that stands with the wall (hidden when
+## it's cut down), for a door to hang in.
+func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> Node3D:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var gap := a.distance_to(b)
 	var mid := (a + b) * 0.5
@@ -935,6 +1097,7 @@ func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> 
 	for d in [-1.0, 1.0]: # the jambs
 		Catalog.box(tall, _sz(horizontal, 0.08, 2.15, WALL_T + 0.08), _at(horizontal, d * (gap * 0.5 - 0.04), 1.075), Catalog.WOOD_DARK)
 	walls.append({"tall": tall, "short": short, "normal": normal, "cut": true})
+	return tall
 
 
 func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WALL_H, cut := true, divider := false, parent: Node3D = null) -> Dictionary:
@@ -1206,6 +1369,7 @@ func _expand_house() -> void:
 	if not Game.spend(Game.EXPAND_COSTS[Game.house_level]):
 		return
 	Game.house_level += 1
+	builder.prune_house() # openings in the old back wall come out, paid back
 	_rebuild_house()
 	_rebuild_grid()
 	_update_expand_button()
@@ -1249,6 +1413,8 @@ func _rebuild_grid() -> void:
 			rects.append(f.footprint())
 	for r in rects:
 		_mark_rect((r as Rect2).grow(0.2))
+	if suburb != null and suburb.walk_in != null:
+		suburb.walk_in.mark_grid() # Marcus's house: its own walls, on the floor she's on (split_house.gd)
 
 
 ## Where she may walk: the whole map (Alex, 2026-11-14: she, and the dog, can go anywhere until the
@@ -1311,6 +1477,14 @@ func _nearest_walkable(c: Vector2i, target: Vector3) -> Variant:
 
 
 func _find_path(from: Vector3, to: Vector3) -> Array:
+	# a walk up or down the café's stairs: its loft has a grid of its own (interiors.gd)
+	var loft: Variant = Interiors.loft_route(from, to, _find_path_ground)
+	if loft != null:
+		return loft
+	return _find_path_ground(from, to)
+
+
+func _find_path_ground(from: Vector3, to: Vector3) -> Array:
 	var a = _nearest_walkable(_cell(from), from)
 	var b = _nearest_walkable(_cell(to), to)
 	if a == null or b == null:
@@ -1371,6 +1545,7 @@ func _process(delta: float) -> void:
 		sheep_list.filter(func(s): return not s.route.is_empty()).map(func(s): return s.position))
 	Interiors.update(player.position, cam_yaw, walls_up, delta, villagers.map(func(v): return v.position), fps.active)
 	_update_lighting()
+	light_budget.update(get_tree(), cam.global_position if fps.active or cinema.active else cam_target, delta)
 	_update_story_staging(delta)
 	_update_needs(delta)
 	_update_gaze()
@@ -1399,6 +1574,7 @@ var hide_activity_bar := false # the style frames keep the screen clean
 func _update_needs(delta: float) -> void:
 	Game.warmth_target = warmth_target()
 	grass.set_pusher(player.global_position)
+	grass.follow(cam.global_position)
 	if player.walked > 0.0:
 		if Game.time_running:
 			Game.add_need("fitness", player.walked * 0.06)
@@ -1480,7 +1656,7 @@ func _update_camera(delta: float) -> void:
 	if _photo_dof.is_empty():
 		cam_attr.dof_blur_far_enabled = near
 	# spend the shadow map on what's on screen: sharper shadows the closer the camera is
-	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, [40.0, 55.0, 70.0][gfx])
+	sun.directional_shadow_max_distance = clampf(cam_dist * 2.4 + 8.0, 20.0, SUN_SHADOW_REACH[gfx])
 	if near and _photo_dof.is_empty():
 		cam_attr.dof_blur_far_distance = cam_dist + 2.5
 		cam_attr.dof_blur_far_transition = 6.0
@@ -1556,6 +1732,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if barista.active:
 		barista.handle_mouse(e)
+		return
+	if store.active:
+		store.handle_mouse(e)
 		return
 	if fps.active:
 		fps.handle_mouse(e)
@@ -1667,6 +1846,9 @@ func _input(e: InputEvent) -> void:
 	if barista.active and barista.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
+	if store.active and store.handle_key(kc):
+		get_viewport().set_input_as_handled()
+		return
 	if fps.active and fps.handle_key(kc):
 		get_viewport().set_input_as_handled()
 		return
@@ -1771,6 +1953,11 @@ func _ray_target(mpos: Vector2) -> Variant:
 
 
 func _ground_point(mpos: Vector2) -> Variant:
+	var lp: Variant = Interiors.loft_pick(player.position, cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
+	if lp != null: # upstairs in the café: its floor
+		return lp
+	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
+		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
 	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
 
 
@@ -1853,6 +2040,8 @@ func dog_bark() -> bool:
 	audio.play("bark", -3.0, 0.12)
 	if wildlife:
 		wildlife.barked(dog.global_position)
+	if wolves:
+		wolves.barked(dog.global_position)
 	return true
 
 
@@ -2368,6 +2557,8 @@ func _actions_for(t) -> Array:
 				return [_act("read", "Read a knitting book"), _act("read_pick", "Choose a book…")]
 			"wardrobe":
 				return [_act("wardrobe", "Choose a sweater…")]
+			"computer":
+				return [_act("computer", "Use the computer…  (%d orders)" % store.orders().size() if store.started() else "Use the computer…")]
 		return []
 	if t is Plot:
 		if t.crop == "":
@@ -2463,7 +2654,7 @@ func _do_action(t, id: String) -> void:
 
 func _perform(t, id: String) -> void:
 	player.face_point(t.global_position)
-	if t is Villager:
+	if t is Villager and not t.has_method("ke_action"): # the townsfolk answer for themselves (townsperson.gd)
 		t.face_point(player.position, 10.0)
 		player.talk(4.0)
 		_villager_action(t, id)
@@ -2524,6 +2715,8 @@ func _perform(t, id: String) -> void:
 				hud.show_toast("The wheel hums. Your wool is nice and even now."))
 		"wardrobe":
 			wview.open(t) # the list (wardrobe_ui) if first person can't start
+		"computer":
+			store.open(t) # the online store's page on its screen (online_store.gd)
 		"read_book", "read_pick":
 			begin_read(t, id)
 		"read":
@@ -2604,7 +2797,8 @@ func reading_seat_near(p: Vector3):
 	var shop := Interiors.inside_of(p)
 	var seats: Array = []
 	if shop != "":
-		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken())
+		var up := Interiors.upstairs(p) # a seat on the floor she's on: upstairs in the café, or down
+		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken() and r.upstairs == up)
 	else:
 		seats = furniture.filter(func(f): return is_instance_valid(f) and f.item_id in ["armchair", "rocking_chair", "sofa"])
 	for st in seats:
@@ -2694,6 +2888,8 @@ func _finish_knit(rarity := 0) -> void:
 	if paid:
 		var worn0 := Game.worn_quality
 		var q := Game.knit_sweater(rarity)
+		if fibre != "": # what it was knitted with: the online store's orders ask for a fibre
+			Game.sweater_fibres[Game.sweater_fibres.size() - 1] = fibre
 		Game.add_need("happiness", 14.0)
 		if fibre != "" and empire.knitted(fibre, q): # the one a local asked for: put by for them
 			var who = _villager(str(empire.request().get("who", "")))
@@ -2836,6 +3032,8 @@ func _on_day_started(_day: int) -> void:
 		forage.apply() # what she cut a while ago grows back
 	if wildlife:
 		wildlife.restock() # another animal turns up where one was caught, once its time is up
+	if wolves:
+		_morning_note += wolves.morning_note(_day) # a night she slept through, and any animal the wolves took
 	for p in plots:
 		p.on_new_day()
 	for s in sheep_list:
@@ -3477,27 +3675,71 @@ func _wait(s: float) -> void:
 
 ## The graphics setting turns the expensive effects off and back on, and the autotest never
 ## writes the player's settings file.
+## The walk-in shops she isn't in whose doors are shut (for the graphics checks).
+func _shut_shops() -> Array:
+	var out := []
+	for sh in Interiors.shops.values():
+		if is_instance_valid(sh.node) and sh.node.visible and not sh.inside and sh.open <= 0.0 and not sh.all_lights.is_empty():
+			out.append(sh)
+	return out
+
+
+## A shut shop's state: its lights on or off, and its furnishings casting their own shadows or none.
+func _shop_state(sh: Interiors.Shop, lights_on: bool, casting: bool) -> bool:
+	for l in sh.all_lights:
+		if is_instance_valid(l) and (l as Light3D).visible != lights_on:
+			return false
+	for e in sh.casters:
+		if not is_instance_valid(e[0]):
+			continue
+		var want: int = e[1] if casting else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (e[0] as GeometryInstance3D).cast_shadow != want:
+			return false
+	return true
+
+
 func _graphics_checks() -> void:
-	var blades_hi: int = grass.drawn_blades()
-	var scale_hi := get_viewport().scaling_3d_scale
+	var blades_ultra: int = grass.drawn_blades()
+	var scale_ultra := get_viewport().scaling_3d_scale
 	var had_cfg := FileAccess.file_exists(SETTINGS_PATH)
+	var lamps: Array = find_children("*", "OmniLight3D", true, false)
+	var shut := _shut_shops()
+	_cycle_graphics() # High
+	await _wait(0.3)
+	_check("High graphics: Ultra's look (light bounce in 3 cascades, reflections, haze, the sun's shadow in 4 splits) for less: %d lamp shadows at most, grass to %d m, 3D at %d%% (Ultra %d%%), and %d shut shops keep their lights with their furnishings casting nothing under the roof" % [LAMP_SHADOWS[GFX_HIGH], int(GRASS_RANGE[GFX_HIGH]), roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100), shut.size()],
+		gfx == GFX_HIGH and env.sdfgi_enabled and env.sdfgi_cascades == 3 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled
+		and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[GFX_HIGH] and get_viewport().scaling_3d_scale <= scale_ultra
+		and not shut.is_empty() and shut.all(func(sh) -> bool: return _shop_state(sh, true, false))
+		and hud.graphics_btn.text == "Graphics: High")
 	_cycle_graphics() # Medium
+	await _wait(0.3)
+	_check("Medium graphics: the sun's shadow in 2 splits, %d lamp shadow at most (fading by %d m), and %d shops she isn't in with their door shut have their lights off and their furnishings casting nothing" % [LAMP_SHADOWS[1], int(LAMP_SHADOW_FADE[1]), shut.size()],
+		gfx == 1 and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS and not env.sdfgi_enabled
+		and light_budget.casting(get_tree()) <= LAMP_SHADOWS[1]
+		and shut.all(func(sh) -> bool: return _shop_state(sh, false, false)))
 	_cycle_graphics() # Low
 	await _wait(0.3)
-	var lamps: Array = find_children("*", "OmniLight3D", true, false)
-	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (High %d%%)" % [grass.drawn_blades(), blades_hi, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_hi * 100)],
+	_check("Low graphics: no light bounce, reflections, haze or lamp shadows; %d of %d grass blades; 3D at %d%% (Ultra %d%%)" % [grass.drawn_blades(), blades_ultra, roundi(get_viewport().scaling_3d_scale * 100), roundi(scale_ultra * 100)],
 		gfx == 0 and not env.ssao_enabled and not env.ssil_enabled and not env.ssr_enabled and not env.volumetric_fog_enabled
-		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_hi * 0.5
-		and get_viewport().scaling_3d_scale <= scale_hi and hud.graphics_btn.text == "Graphics: Low")
-	_cycle_graphics() # High
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.shadow_enabled) and grass.drawn_blades() < blades_ultra * 0.5
+		and get_viewport().scaling_3d_scale <= scale_ultra and hud.graphics_btn.text == "Graphics: Low")
+	_cycle_graphics() # Ultra
 	await _wait(0.3)
 	var flush := coplanar_faces()
 	for f in flush:
 		print("      flush: ", f)
 	_check("no two surfaces sit flush in the same plane (they'd flicker in stripes): %d" % flush.size(), flush.is_empty())
-	_check("back on High: every effect and all the grass return; settings file untouched",
-		gfx == 2 and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and lamps.all(func(l): return not is_instance_valid(l) or l.shadow_enabled or l.has_meta("no_shadow"))
-		and grass.drawn_blades() == blades_hi and FileAccess.file_exists(SETTINGS_PATH) == had_cfg)
+	var casting: int = light_budget.casting(get_tree())
+	_check("back on Ultra: every effect and all the grass return, %d of the nearest lit lamps cast shadows (at most %d, never a candle); settings file untouched" % [casting, LAMP_SHADOWS[GFX_ULTRA]],
+		gfx == GFX_ULTRA and env.ssao_enabled and env.ssil_enabled and env.ssr_enabled and casting <= LAMP_SHADOWS[GFX_ULTRA]
+		and lamps.all(func(l): return not is_instance_valid(l) or not l.has_meta("no_shadow") or not l.shadow_enabled)
+		and grass.drawn_blades() == blades_ultra and FileAccess.file_exists(SETTINGS_PATH) == had_cfg
+		and hud.graphics_btn.text == "Graphics: Ultra")
+	_check("Ultra as High was: the sun's shadow in 4 splits, and every shop's lights on and furnishings casting their shadows again",
+		sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS and not Interiors.no_casters and not Interiors.lights_off
+		and env.sdfgi_cascades == 4
+		and shut.all(func(sh) -> bool: return _shop_state(sh, true, true)))
 
 
 func _shot(fname: String) -> void:
@@ -5466,6 +5708,12 @@ func _check(label: String, ok: bool) -> void:
 
 
 func _autotest() -> void:
+	if "--only=perf" in OS.get_cmdline_user_args(): # just the frame rate at fixed spots, each graphics level (perf_check.gd)
+		await _wait(1.5)
+		await PerfCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=knit" in OS.get_cmdline_user_args(): # just the knitting game's checks and its pictures
 		await _wait(1.5)
 		await _knit_checks()
@@ -5496,6 +5744,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=store" in OS.get_cmdline_user_args(): # just the computer and the online store (about thirty seconds)
+		await _wait(1.5)
+		await _store_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=barista" in OS.get_cmdline_user_args(): # just working the café's counter (about a minute)
 		await _wait(1.5)
 		await _barista_checks()
@@ -5511,6 +5765,12 @@ func _autotest() -> void:
 	if "--only=shops" in OS.get_cmdline_user_args(): # just the walk-in shops and their pictures
 		await _wait(1.5)
 		await _shop_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=townsfolk" in OS.get_cmdline_user_args(): # just the townsfolk: wandering, benches, the café, the red pin
+		await _wait(1.5)
+		await _townsfolk_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -5588,6 +5848,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=wolves" in OS.get_cmdline_user_args(): # just the wolves at night: the roll, the alert, scaring them off, a loss, the barn, a save
+		await _wait(1.5)
+		await _wolf_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=wildlife" in OS.get_cmdline_user_args(): # just the wild animals and birds: placing, combing, fleeing, flushing
 		await _wait(1.5)
 		await _wildlife_checks()
@@ -5603,6 +5869,18 @@ func _autotest() -> void:
 	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
 		await _wait(1.5)
 		await _dog_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=suburb" in OS.get_cmdline_user_args(): # just Bretton Oaks: its houses, its sign, a night there (suburb_check.gd)
+		await _wait(1.5)
+		await SuburbCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=walkin" in OS.get_cmdline_user_args(): # just Marcus's house: in, up, down to the basement, out (walkin_check.gd)
+		await _wait(1.5)
+		await WalkinCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -5854,17 +6132,21 @@ func _autotest() -> void:
 	await _shop_checks()
 	await _cafe_checks()
 	await _barista_checks()
+	await _store_checks()
 	await _cast_checks()
+	await _townsfolk_checks()
 	await _mail_checks()
 	await _max_checks()
 	await _job_checks()
 	await _flock_checks()
 	await _light_checks()
 	await _world_checks()
+	await SuburbCheck.new().run(self)
 	await _dog_checks()
 	await _scarf_checks()
 	await _wildlife_checks()
 	await _empire_checks()
+	await _wolf_checks()
 	await _sale_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
@@ -5947,7 +6229,7 @@ func _light_checks() -> void:
 			missing.append(id)
 		inst.free()
 	_check("the %d baked props carry their Cycles light bake (ambient occlusion on UV2)%s" % [Lighting.BAKED.size(), "" if missing.is_empty() else ": missing " + ", ".join(missing)], missing.is_empty())
-	_check("SDFGI is on at High graphics", gfx == 2 and env.sdfgi_enabled)
+	_check("SDFGI is on at Ultra graphics", gfx == GFX_ULTRA and env.sdfgi_enabled)
 	Lighting.SkyBodies.clouds_override = 0.15 # a fair sky for the pictures, whatever the day's clouds (_sky_checks puts it back)
 	var hours := [["dawn", 6.6], ["noon", 12.5], ["dusk", 18.7]]
 	var mist_at := {}
@@ -6103,7 +6385,87 @@ func _house_checks(showcase: bool) -> void:
 	cam_dist = 7.5
 	await _wait(3.0)
 	await _shot("46_hearth_kitchen.png")
+	await _house_batch2_checks()
 	_set_cam_lock(true)
+
+
+## The second batch of house furniture (art/world_assets/house_furniture, 2026-11-14): each piece is
+## its model, has a catalogue picture, and with the house cleared Build mode finds it a spot inside.
+const HOUSE_BATCH2 := ["double_bed", "single_bed", "kitchen_dresser", "clawfoot_bath", "dresser", "nightstand", "dining_chair", "coat_rack"]
+
+func _house_batch2_checks() -> void:
+	var modelled: Array = []
+	for id in HOUSE_BATCH2:
+		var f := Furniture.new()
+		add_child(f)
+		f.setup(id, 0)
+		if f.find_children("model", "MeshInstance3D", true, false).size() == 1:
+			modelled.append(id)
+		f.queue_free()
+	var t := 0.0
+	while HOUSE_BATCH2.any(func(id): return not hud.thumbs.done.has(id)) and t < 60.0:
+		await _wait(0.5)
+		t += 0.5
+	var pictured: Array = HOUSE_BATCH2.filter(func(id): return hud.thumbs.done.has(id))
+	_check("the new house furniture is its models (%d of %d) with catalogue pictures (%d)" % [modelled.size(), HOUSE_BATCH2.size(), pictured.size()],
+		modelled.size() == HOUSE_BATCH2.size() and pictured.size() == HOUSE_BATCH2.size())
+	set_mode(Mode.BUILD)
+	await _wait(0.6)
+	var cat := str(Catalog.ITEMS[HOUSE_BATCH2[0]].get("cat", "")) # open its room's tab
+	for tab in hud.catalog_panel.find_children("*", "Button", true, false):
+		if (tab as Button).text == cat:
+			(tab as Button).button_pressed = true
+			(tab as Button).pressed.emit()
+	var card = hud.item_buttons.get(HOUSE_BATCH2[0])
+	var sc = card.get_parent() if card != null else null
+	while sc != null and not (sc is ScrollContainer):
+		sc = sc.get_parent()
+	if sc != null:
+		(sc as ScrollContainer).ensure_control_visible(card)
+	await _wait(0.6)
+	await _shot("46_catalog_batch2.png")
+	set_mode(Mode.LIVE)
+	# clear the house, then put each piece where Build mode would let her: the first free spot, back wall first
+	for f in furniture.duplicate():
+		if interior_rect().grow(0.3).has_point(Vector2(f.position.x, f.position.z)):
+			furniture.erase(f)
+			f.queue_free()
+	var ir := interior_rect()
+	player.position = Vector3(ir.end.x - 0.4, 0, ir.end.y - 0.4)
+	var placed: Array = []
+	for id in HOUSE_BATCH2:
+		var g := Furniture.new()
+		add_child(g)
+		g.setup(id, 0)
+		var spot = null
+		var z := ir.position.y
+		while spot == null and z < ir.end.y:
+			var x := ir.position.x
+			while x < ir.end.x:
+				var p := Vector3(x + g.size_rotated().x * 0.5, 0, z + g.size_rotated().y * 0.5)
+				if _placement_valid(g, p):
+					spot = p
+					break
+				x += 0.25
+			z += 0.25
+		g.queue_free()
+		if spot != null:
+			_spawn_furniture(id, spot, 0)
+			placed.append(id)
+	_check("Build mode finds a spot in her house for each new piece (%d of %d: %s)" % [placed.size(), HOUSE_BATCH2.size(), str(placed)], placed.size() == HOUSE_BATCH2.size())
+	_rebuild_grid()
+	cam_target = Vector3(ir.get_center().x, 0.5, ir.get_center().y)
+	cam_dist = 15.0
+	await _wait(2.0)
+	await _shot("46_house_batch2.png")
+	for pair in [["double_bed", "46_batch2_bedroom.png"], ["kitchen_dresser", "46_batch2_kitchen.png"]]:
+		var f = furniture.filter(func(o): return o.item_id == pair[0])
+		if f.is_empty():
+			continue
+		cam_target = f[0].global_position + Vector3(0, 0.6, 0)
+		cam_dist = 6.5
+		await _wait(1.8)
+		await _shot(pair[1])
 
 
 ## The barn (art/world_assets/barn): the model stands where the box barn stood, she can walk in
@@ -6163,6 +6525,91 @@ func _barn_checks() -> void:
 ## the bookmark, choosing one from the shelf and carrying it to a seat, reading to the end; and the
 ## candles in Nora's house. Saves 56_cafe.png, 56_cafe_inside.png, 56_cafe_reading.png,
 ## 56_book_open.png, 56_cafe_shelf.png, 56_cafe_night.png and 56_house_candles.png.
+## The café's upstairs (interiors.gd, data/interiors.json "cafe" "loft"): its seats and shelves, the
+## walk from the door up the stairs to a sofa and back down, the loft shown only while she's up.
+func _cafe_loft_checks(s, door_in: Vector3) -> void:
+	var by: float = s.node.global_position.y
+	var up_spots: Array = Interiors.read_spots("cafe").filter(func(r): return r.upstairs)
+	var up_seats: Array = up_spots.filter(func(r): return r.kind == "seat")
+	var open_cells := 0
+	if s.loft_grid != null:
+		for x in s.loft_grid.region.size.x:
+			for z in s.loft_grid.region.size.y:
+				if not s.loft_grid.is_point_solid(Vector2i(x, z)):
+					open_cells += 1
+	_check("the café has an upstairs: its floor part, %d pieces up there, %d reading seats and %d shelves, %.1f m² to walk on, and none of its seats offered to the regulars (%d downstairs)" % [s.loft_root.get_child_count() if s.loft_root else 0, up_seats.size(), up_spots.size() - up_seats.size(), open_cells * Interiors.LOFT_CELL * Interiors.LOFT_CELL, cafe_visits.free_seats().size()],
+		s.parts.has("loft") and s.loft_root != null and s.loft_root.get_child_count() >= 20 and up_seats.size() >= 3 and up_spots.size() - up_seats.size() >= 2 and open_cells * 0.0625 > 25.0
+		and cafe_visits.free_seats().all(func(r): return not r.upstairs))
+	var sofa = up_seats.filter(func(r): return r.label.contains("Sofa"))
+	if sofa.is_empty():
+		return
+	sofa = sofa[0]
+	player.walk([])
+	player.position = Vector3(door_in.x, 0, door_in.z)
+	await _wait(0.3)
+	_check("she's downstairs in the café and the loft is out of the way from above (loft %s)" % ("shown" if (s.parts["loft"] as Node3D).visible else "hidden"),
+		s.inside and not s.up and not (s.parts["loft"] as Node3D).visible and not s.loft_root.visible)
+	cam_target = s.node.global_transform * Vector3(3.0, 1.5, 0.0)
+	cam_dist = 13.0
+	var stairs: Node = s.node.find_child("StairSpot", false, false)
+	var labels: Array = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_up")
+	var t := 0.0
+	var top_y := 0.0
+	var mid_shot := false
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+		top_y = maxf(top_y, player.position.y - by)
+		if not mid_shot and player.position.y - by > 1.5:
+			mid_shot = true
+			await _shot("56_cafe_stairs.png")
+	await _wait(0.4)
+	var dy: float = player.position.y - by - s.loft_y
+	_check("the stairs say %s from below, and up them she goes (%.1f s, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [str(labels), t, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
+		labels == ["Go upstairs"] and t < 40.0 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	# sits on a sofa up there with a book, and gets up again on the loft's floor
+	_do_action(sofa, "read_book")
+	t = 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.5)
+	var seat_dy: float = player.position.y - (sofa.seat_point() as Vector3).y
+	cam_target = player.position + Vector3(0, 0.5, 0)
+	cam_dist = 11.0
+	await _wait(1.2)
+	await _shot("56_cafe_loft.png")
+	_check("she sits down on a sofa upstairs with a book (%.1f s, %.2f m off its seat, reading %s)" % [t, seat_dy, books_ui.visible], books_ui.visible and player.busy and absf(seat_dy) < 0.05)
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.6)
+	dy = player.position.y - by - s.loft_y
+	_check("and gets up on the loft's floor (%.2f m off it, sitting %s)" % [dy, player.busy], not player.busy and absf(dy) < 0.05)
+	# a click on the loft's floor lands up there
+	var mid: Vector3 = s.node.global_transform * Vector3(-1.0, s.loft_y, -2.0)
+	var hit: Variant = _ground_point(cam.unproject_position(mid))
+	_check("a click upstairs lands on the loft's floor (%s)" % str(hit), hit != null and absf((hit as Vector3).y - (by + s.loft_y)) < 0.01 and (hit as Vector3).distance_to(mid) < 0.2)
+	# down by the stairs, then to the door
+	labels = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_down")
+	t = 0.0
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	await _wait(0.3)
+	var foot_y: float = player.position.y - by
+	player.walk(_find_path(player.position, door_in))
+	var t2 := 0.0
+	while not player.path.is_empty() and t2 < 20.0:
+		await _wait(0.1)
+		t2 += 0.1
+	await _wait(0.4)
+	_check("from above the stairs say %s, and down she goes and out to the door (%.1f + %.1f s, %.2f m up at the foot, %.2f m now, upstairs %s, %.2f m from the door)" % [str(labels), t, t2, foot_y, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
+		labels == ["Go downstairs"] and t < 40.0 and absf(foot_y) < 0.05 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+
+
 func _cafe_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -6236,11 +6683,14 @@ func _cafe_checks() -> void:
 			if not solid2:
 				leaks.append("z%.1f@%.1f" % [zz, x])
 	_check("she can't walk through the Coffee Shop's walls %s" % str(leaks), leaks.is_empty())
+	await _cafe_loft_checks(s, door_in)
 	# outside, shut; then in through the door to the armchair by the fire
 	var out_front: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.2)
 	out_front.y = 0.0
 	player.walk([])
 	player.position = out_front
+	if dog != null: # the dog by her side, not still walking out through the door behind her
+		dog.position = out_front + xf.basis.x.normalized() * 1.5
 	_set_cam_lock(false)
 	cam_target = xf * Vector3(0, 2.0, 1.0)
 	cam_dist = 30.0
@@ -6547,6 +6997,16 @@ func _fire_checks() -> void:
 	var sparks := fp.find_child("Sparks", false, false) as GPUParticles3D
 	_check("the fire is three living sheets of flame over glowing coals with sparks rising, and the mantel's candles burn with real flames (%d sheets, %d candle flames, sparks %s)" % [sheets.size(), candles.size(), sparks != null and sparks.emitting],
 		sheets.size() == 3 and candles.size() == 2 and sparks != null and sparks.emitting)
+	# its crackle (Catalog.fire_sound): a looping 3D sound by the fire, and one in the café's fireplace
+	await _wait(0.2)
+	var snd := fp.find_child("FireSound", false, false) as AudioStreamPlayer3D
+	var cafe_snd := 0
+	var cafe = Interiors.shops.get("cafe")
+	if cafe != null:
+		cafe_snd = cafe.node.find_children("FireSound", "AudioStreamPlayer3D", true, false).size()
+	var looped: bool = snd != null and snd.stream is AudioStreamOggVorbis and (snd.stream as AudioStreamOggVorbis).loop
+	_check("the fire crackles: a looping sound by the hearth, heard within %.0f m on the Ambience bus (playing %s, looped %s), and the café's fireplace too (%d)" % [snd.max_distance if snd else 0.0, snd != null and snd.playing, looped, cafe_snd],
+		snd != null and snd.playing and looped and snd.bus == "Ambience" and cafe_snd >= 1)
 	Game.hour = 21.5
 	player.walk([])
 	player.position = fp.global_transform * Vector3(0, 0, 2.6)
@@ -6618,8 +7078,10 @@ func _shop_checks() -> void:
 		var at_post: bool = v.position.distance_to(k["pos"]) < 0.8 and Interiors.inside_of(v.position) == id
 		var price := _pastry_price()
 		var c0 := Game.coins
+		var pastries0 := Game.count("pastry")
 		if id == "bakery":
-			Game.fullness = 40.0
+			Game.coins = maxi(Game.coins, price + 5)
+			c0 = Game.coins
 			_do_action(v, "buy_pastry")
 		else:
 			_do_action(v, "talk")
@@ -6636,8 +7098,9 @@ func _shop_checks() -> void:
 		_check("%s is behind the counter inside, and talks to her across it (%.1f m from their post)" % [v.title, v.position.distance_to(k["pos"])],
 			at_post and v.position.distance_to(k["pos"]) < 1.0 and hud.dlg_panel.visible)
 		if id == "bakery":
-			_check("Giorgio sells her a warm croissant (%dc, food 40 -> %.0f)" % [c0 - Game.coins, Game.fullness],
-				Game.coins == c0 - price and Game.fullness > 40.0 + PASTRY_FOOD - 3.0) # less what she burned walking over
+			_check("Giorgio sells her a pastry for her bag (%dc, pastries %d -> %d)" % [c0 - Game.coins, pastries0, Game.count("pastry")],
+				Game.coins == c0 - price and Game.count("pastry") == pastries0 + 1)
+			await _pastry_checks(v)
 		await _shot("46_%s_inside.png" % id)
 		hud.hide_dialogue()
 		player.walk(_find_path(player.position, out_front))
@@ -6723,6 +7186,11 @@ func _flock_checks() -> void:
 		sheep_list.all(home))
 	flock_bedtime = false
 	_set_cam_lock(true)
+
+
+## The townsfolk (scripts/townsfolk_check.gd).
+func _townsfolk_checks() -> void:
+	await TownsfolkCheck.new().run(self)
 
 
 ## The park benches (art/world_assets/bench_park): the long bench and the short single seat are
@@ -6825,6 +7293,26 @@ func _flower_checks() -> void:
 	await _shot("62_grass.png")
 	var blades: int = grass.drawn_blades()
 	_check("flowers: the grass still draws the same blades (%d)" % blades, blades > 10000)
+	# the blade is 7 shared points, and the patches come from the bake (grass.gd _bake_patches): the same
+	# view worked out per blade is saved beside it to compare
+	var bm: ArrayMesh = grass._blade_mesh
+	var arrs := bm.surface_get_arrays(0)
+	var pts: int = (arrs[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var idx: int = (arrs[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arrs[Mesh.ARRAY_INDEX] != null else 0
+	var baked: bool = grass.blade_mat.get_shader_parameter("patch_baked") == true
+	var pimg: Image = grass.patch_vp.get_texture().get_image()
+	var lo := 1.0
+	var hi := 0.0
+	for i in 64:
+		var c := pimg.get_pixel(i * 37 % pimg.get_width(), i * 53 % pimg.get_height())
+		lo = minf(lo, c.r)
+		hi = maxf(hi, c.r)
+	grass.blade_mat.set_shader_parameter("patch_baked", false)
+	await _wait(0.3)
+	await _shot("62_grass_unbaked.png")
+	grass.blade_mat.set_shader_parameter("patch_baked", true)
+	_check("grass: each blade is %d shared points (%d indices), and its light and dark patches come from the %dx%d bake (drifts %.2f..%.2f)" % [pts, idx, pimg.get_width(), pimg.get_height(), lo, hi],
+		pts == 7 and idx == 15 and baked and hi - lo > 0.3)
 	for f in set_out:
 		f.queue_free()
 	_set_cam_lock(true)
@@ -7059,6 +7547,53 @@ func _god_checks() -> void:
 	_check("god mode: the square brush fills its corners, and the brush goes up to %.0f m across (corner %s, just outside %s)" % [widest * 2.0, god.road_at(sq.x + 0.9, sq.z + 0.9), god.road_at(sq.x + 1.2, sq.z)],
 		god.road_at(sq.x + 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x - 0.9, sq.z + 0.9) == "gravel" and god.road_at(sq.x + 1.2, sq.z) == "" and absf(widest - 15.0) < 0.001)
 
+	# roads reach the whole map (Alex, 2026-11-17), and the dropdown has pavement and sidewalk:
+	# out in the east meadows, past where the map used to end, on the meadow's own ground
+	var far_pave := Vector3(120.0, 0, -20.0)
+	var far_side := far_pave + Vector3(2.5, 0, 0)
+	await _god_look(far_pave, 18.0)
+	var pave_item := -1
+	for i in god._road_pick.item_count:
+		if str(god._road_pick.get_item_metadata(i)) == "pavement":
+			pave_item = i
+	god._road_pick.select(pave_item)
+	god._road_pick.item_selected.emit(pave_item)
+	var pave_tool: String = god.tool
+	god.press(cam.unproject_position(far_pave))
+	god.release()
+	god.set_tool("sidewalk")
+	god.press(cam.unproject_position(far_side))
+	god.release()
+	await _shot("60_god_pavement.png")
+	var meadow_has: bool = regions.ground_mats.size() > 0 and regions.ground_mats.all(func(m): return (m as ShaderMaterial).get_shader_parameter("roads") == god.road_tex)
+	var both: bool = god.road_at(far_pave.x, far_pave.z) == "pavement" and god.road_at(far_side.x, far_side.z) == "sidewalk"
+	var side_tiles: bool = god._cell_cobbled(Vector2i(((Vector2(far_side.x, far_side.z) - god.TILE_ORIGIN) / god.TILE).floor()))
+	god.undo()
+	_check("god mode: the road dropdown's pavement and sidewalk paint out in the east meadows, on the lands' ground too, and Undo takes the sidewalk back (tool %s, %s, after Undo %s, cobble tiles laid on the sidewalk %s)" % [pave_tool, "pavement and sidewalk" if both else "missing", god.road_at(far_side.x, far_side.z), side_tiles],
+		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
+	god.undo()
+
+	# Bretton Oaks' cul-de-sac is on the road map, its meshes hidden, and "Grass" rubs it out
+	# (Alex, 2026-11-17: "can't delete original cul-de-sac pavement", "add grass as a god mode painting option")
+	if suburb != null:
+		var cds: Vector3 = suburb.centre
+		var meshes_hidden: bool = get_tree().get_nodes_in_group("suburb_paving").size() > 0 and get_tree().get_nodes_in_group("suburb_paving").all(func(n): return not (n as Node3D).visible)
+		var before: String = god.road_at(cds.x, cds.z)
+		var drives: Array = suburb.paving.filter(func(sh): return str(sh["kind"]) == "sidewalk" and sh.has("quad") and float(sh["quad"][2]) > 1.0)
+		var drive: Dictionary = drives[0] if not drives.is_empty() else {}
+		var dmid: Vector2 = (Vector2(drive["quad"][0]) + Vector2(drive["quad"][1])) * 0.5 if not drive.is_empty() else Vector2.ZERO
+		var drive_on: String = god.road_at(dmid.x, dmid.y) if not drive.is_empty() else "none"
+		await _god_look(cds, 18.0)
+		god.set_tool("grass")
+		var grass_tool: String = god.tool
+		god.press(cam.unproject_position(cds))
+		god.release()
+		await _shot("60_god_cul_de_sac_grass.png")
+		var grassed: String = god.road_at(cds.x, cds.z)
+		god.undo()
+		_check("god mode: the cul-de-sac is painted pavement (driveway %s) with its own meshes hidden, and the Grass brush rubs it out and Undo brings it back (before %s, hidden %s, tool %s, after grass '%s', after Undo %s)" % [drive_on, before, meshes_hidden, grass_tool, grassed, god.road_at(cds.x, cds.z)],
+			before == "pavement" and drive_on == "sidewalk" and meshes_hidden and grass_tool == "grass" and grassed == "" and god.road_at(cds.x, cds.z) == "pavement")
+
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()
 	var ids: Array = options.map(func(o): return o[0])
@@ -7174,6 +7709,9 @@ func _god_checks() -> void:
 	await _god_look(lamp.xf.origin, 16.0)
 	await _shot("61_god_editor.png")
 
+	# the furniture inside the walk-in buildings: every piece on its own, the roofs off while editing
+	var furn: Dictionary = await _god_furnishing_checks()
+
 	# Done saves the layout (to the test's own file, never data/world_layout.json)
 	var real_before := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
 	god.set_active(false)
@@ -7181,14 +7719,78 @@ func _god_checks() -> void:
 	var saved = JSON.parse_string(FileAccess.get_file_as_string(GOD_TEST_LAYOUT)) if FileAccess.file_exists(GOD_TEST_LAYOUT) else null
 	var real_after := FileAccess.get_file_as_string(GodMode.LAYOUT_FILE) if FileAccess.file_exists(GodMode.LAYOUT_FILE) else ""
 	var saved_ok: bool = typeof(saved) == TYPE_DICTIONARY and saved["nodes"].has(lamp.key) and saved["nodes"][bale.key].get("del", false) == true \
+		and (furn.is_empty() or (saved["nodes"].has(furn["piece"]) and saved["nodes"][furn["gone"]].get("del", false) == true and saved.get("added_in", []).size() == int(furn["added"]) and saved["nodes"].has(furn["msofa"]))) \
 		and saved["added"].size() >= 1 and saved["scenery"].has(tree_kind) and saved["scenery"].has("rock_single") and saved["scenery"].has("bush_round") and saved.has("roads")
 	_check("god mode: Done closes the editor and saves the layout (lamp, hay bale, copy, trees, rocks, bushes and roads in the file; the real layout file untouched %s)" % (real_before == real_after),
 		not god.active and Game.time_running and saved_ok and real_before == real_after and hud.chrome.any(func(c): return c.visible))
 	# the last step: the whole scene again, built from that layout
 	Engine.set_meta("ke_god_reload", {"lamp": lamp.key, "lamp_at": lamp.xf.origin, "lamp_turn": lamp_turn, "bale": bale.key, "copy_at": copy.xf.origin,
 		"tree_kind": tree_kind, "trees": god.scenery[tree_kind].filter(func(e): return not e.deleted).size(), "tree_at": tree_spot, "rocks": god.scenery["rock_single"].filter(func(e): return not e.deleted).size(), "bushes": bushes0 - 1, "lamp_size": lamp_size, "patch": patch,
-		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1})
+		"tiles": god.painted_tiles(), "pen_at": pen.xf.origin, "spruces": spruces0 + 1, "furn": furn})
 	get_tree().reload_current_scene()
+
+
+## The world editor on the furniture inside the walk-in buildings (god_mode.gd _collect_furnishings):
+## in the café a click picks a piece, not the building, with the roof off; a piece moves, another is
+## deleted (its spot freed), one is copied beside itself and a catalogue pouf is placed in the room;
+## in Marcus's house the grey couch moves on the main floor. Returns what the reload checks look for.
+func _god_furnishing_checks() -> Dictionary:
+	var cafe_b: GodMode.El = null
+	var house_b: GodMode.El = null
+	for e in god.els:
+		if e.kind == "building_cafe":
+			cafe_b = e
+		elif suburb != null and suburb.walk_in != null and e.node == suburb.walk_in.house:
+			house_b = e
+	_check("god mode: the café and Marcus's house have their furniture as pieces of their own (%d in the café, %d in the house)" % [cafe_b.pieces.size() if cafe_b else 0, house_b.pieces.size() if house_b else 0],
+		cafe_b != null and cafe_b.pieces.size() >= 20 and house_b != null and house_b.pieces.size() >= 15)
+	if cafe_b == null or house_b == null:
+		return {}
+	var blocking: Array = cafe_b.pieces.filter(func(e): return not e.block_world.is_empty())
+	var piece: GodMode.El = blocking[0]
+	var gone_el: GodMode.El = blocking[1]
+	await _god_look(piece.xf.origin, 9.0)
+	await _wait(0.3)
+	var roof_off: bool = not (Interiors.shops["cafe"].parts["roof"] as Node3D).visible
+	god.press(cam.unproject_position(piece.xf * piece.bounds.get_center()))
+	god.release()
+	var picked: GodMode.El = god.selected
+	_check("god mode: in the café, with its roof off (%s), a click picks up a piece of furniture, not the building (%s)" % [roof_off, picked.title if picked else "nothing"],
+		roof_off and picked != null and picked.inside == cafe_b)
+	var from := piece.xf
+	var block0: Rect2 = piece.block_world[0]
+	var step: Vector3 = cafe_b.xf.basis.x.normalized() * 0.5
+	piece.xf.origin += step
+	god._edited(piece, from, false)
+	god.select(gone_el)
+	var gone_rect: Rect2 = gone_el.block_world[0]
+	god.delete_selected()
+	god.select(piece)
+	var copy: GodMode.El = god.duplicate_selected()
+	god.place_id = "decor:pouf"
+	god.set_tool("place")
+	var pouf: GodMode.El = god.place(cafe_b.xf * Vector3(0.0, 0, 0.5))
+	god.set_tool("select")
+	var moved_ok: bool = piece.node.global_position.distance_to(from.origin + step) < 0.001 and (piece.block_world[0] as Rect2).get_center().distance_to(block0.get_center() + Vector2(step.x, step.z)) < 0.01 \
+		and grid_blockers.has(piece.block_world[0]) and not grid_blockers.has(block0)
+	_check("god mode: a café piece moves with its obstacle (%s), another is deleted and its spot freed (%s), a copy stands beside it in the same room (%s) and a pouf placed in the café joins its furnishings (%s)" % [moved_ok, not grid_blockers.has(gone_rect), copy != null and copy.inside == cafe_b, pouf != null and pouf.inside == cafe_b],
+		moved_ok and gone_el.deleted and not gone_el.node.visible and not grid_blockers.has(gone_rect) and copy != null and copy.inside == cafe_b and copy.node.get_parent() == piece.node.get_parent()
+		and pouf != null and pouf.inside == cafe_b and pouf.node.get_parent().name == "Furnishings" and grid_blockers.has(pouf.block_world[0]))
+	# Marcus's grey couch, on the main floor
+	var msofa: GodMode.El = null
+	for e in house_b.pieces:
+		if e.kind == "piece_sofa_grey":
+			msofa = e
+	var mfrom := msofa.xf
+	var mstep: Vector3 = house_b.xf.basis.z.normalized() * -0.4
+	msofa.xf.origin += mstep
+	god._edited(msofa, mfrom, false)
+	await _god_look(msofa.xf.origin, 12.0)
+	await _wait(0.3)
+	_check("god mode: in Marcus's house the roof is off and the grey couch moves on the main floor (%.2f m)" % msofa.node.global_position.distance_to(mfrom.origin),
+		not (suburb.walk_in.parts["roof"] as Node3D).visible and msofa.node.global_position.distance_to(mfrom.origin + mstep) < 0.001 and (suburb.walk_in.roots["main"] as Node3D).visible)
+	await _shot("61_god_furnishings.png")
+	return {"piece": piece.key, "piece_at": piece.xf.origin, "gone": gone_el.key, "added": 2, "msofa": msofa.key, "msofa_at": msofa.xf.origin}
 
 
 ## The world built again from the layout _god_checks saved: everything is where it was left.
@@ -7229,6 +7831,16 @@ func _god_reload_checks() -> void:
 	_check("saved layout: the straight gravel line, the square patch, the placed gold leaves, spruce and milk churn, and the moved sheep pen are all back (line %s, square corner %s, %d leaves, %d spruces, pen %.2f m off, sheep inside %s)" % [god.road_at(31.0, 10.0), god.road_at(33.9, 16.9), god.scenery.get("leaf_yellow", []).size(), god.scenery["tree_spruce"].size(), pen.node.global_position.distance_to(pen_at), sheep_in],
 		god.road_at(31.0, 10.0) == "gravel" and god.road_at(33.9, 16.9) == "gravel" and god.scenery.get("leaf_yellow", []).size() == 2 and god.scenery["tree_spruce"].size() == int(want["spruces"])
 		and churns.size() == 1 and pen.node.global_position.distance_to(pen_at) < 0.01 and pen_rect.get_center().distance_to(Vector2(pen_at.x, pen_at.z)) < 0.01 and sheep_in)
+	var furn: Dictionary = want["furn"]
+	if not furn.is_empty():
+		var piece: GodMode.El = god.by_key.get(furn["piece"])
+		var gone: GodMode.El = god.by_key.get(furn["gone"])
+		var msofa: GodMode.El = god.by_key.get(furn["msofa"])
+		var added_in: Array = god.els.filter(func(e): return e.added and e.inside != null and not e.deleted)
+		_check("saved layout: the café's moved piece, its deleted one, the two added inside and Marcus's moved couch are all as they were left (piece %.2f m off, deleted gone %s, %d added, couch %.2f m off)" % [
+			piece.node.global_position.distance_to(furn["piece_at"]) if piece else -1.0, gone != null and not gone.node.visible, added_in.size(), msofa.node.global_position.distance_to(furn["msofa_at"]) if msofa else -1.0],
+			piece != null and piece.node.global_position.distance_to(furn["piece_at"]) < 0.01 and gone != null and not gone.node.visible and added_in.size() == int(furn["added"])
+			and msofa != null and msofa.node.global_position.distance_to(furn["msofa_at"]) < 0.01)
 	cam_follow = false
 	await _god_look(Vector3(17.0, 0, 7.0), 24.0)
 	await _shot("62_god_reloaded.png")
@@ -7471,6 +8083,7 @@ func _dog_checks() -> void:
 	if _find_path(dog.position, goal).is_empty():
 		goal = start + Vector3(-9.0, 0, 0)
 	_live_click(cam.unproject_position(goal))
+	hold_release() # a click, not a held button: the test never lets go, so the hold would steer him at wherever an earlier check left the mouse
 	await _wait(0.9)
 	var rate_trot := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
 	_check("clicked, he trots off with his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s; controlled %s, path %d, reading %s, menu %s)" % [dog.current_loop(), dog.speed, rate_trot, dog.controlled, dog.path.size() if "path" in dog else -1, _reading or books_ui.visible, hud.is_menu_open()],
@@ -7479,6 +8092,7 @@ func _dog_checks() -> void:
 	await _shot("48_dog_trot.png")
 	autotest_jog = true # as if Shift were held
 	_live_click(cam.unproject_position(start - (goal - start)))
+	hold_release()
 	await _wait(1.2)
 	var rate_run := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
 	_check("holding Shift he gallops, his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s)" % [dog.current_loop(), dog.speed, rate_run],
@@ -9435,8 +10049,38 @@ func _building_skin_checks() -> void:
 		cam_yaw_goal = cam_yaw
 		await _wait(2.2)
 		await _shot("63_building_%s.png" % e[1])
-	Game.hour = 22.0
 	var cafe: Array = models.filter(func(e): return e[1] == "cafe")
+	if not cafe.is_empty():
+		# Low graphics (no SDFGI): the café's front in the afternoon must not go black
+		var b := cafe[0][0] as Node3D
+		var g0 := gfx
+		Game.hour = 13.5
+		cam_target = b.global_position + Vector3(0, 1.5, 0)
+		cam_dist = 14.0
+		cam_yaw = b.global_rotation.y + deg_to_rad(-20.0)
+		cam_yaw_goal = cam_yaw
+		var p0 := cam_pitch
+		cam_pitch = 14.0
+		for lv in [0, 3]:
+			gfx = lv
+			apply_graphics()
+			await _wait(2.5)
+			await _shot("63_cafe_gfx%d.png" % lv)
+		cam_pitch = p0
+		gfx = g0
+		apply_graphics()
+	# the light bake reads from UV2 everywhere: Godot's glTF import swaps a mesh's UV sets for a
+	# material whose only texture is the bake, which drew grey zebra stripes (light_bake white_base())
+	var swapped: Array = []
+	for e in models:
+		for mi in (e[0] as Node).find_children("*", "MeshInstance3D", true, false):
+			var mesh := (mi as MeshInstance3D).mesh
+			for i in mesh.get_surface_count():
+				var mat := mesh.surface_get_material(i) as BaseMaterial3D
+				if mat and mat.ao_enabled and not mat.ao_on_uv2:
+					swapped.append("%s:%s" % [e[1], mat.resource_name])
+	_check("every building's light bake is read from UV2, none swapped by the import (%s)" % str(swapped.slice(0, 5)), swapped.is_empty())
+	Game.hour = 22.0
 	if not cafe.is_empty():
 		var b := cafe[0][0] as Node3D
 		cam_target = b.global_position + Vector3(0, 1.5, 0)
@@ -10525,6 +11169,7 @@ func _update_rounds(delta: float) -> void:
 	_update_gary_visit()
 	_update_max_visit()
 	cafe_visits.update()
+	suburb.update() # to bed in Bretton Oaks at night, out in the morning
 
 
 ## Gary from Willow Homes calls at the farm: first on her second day (data/scenes/town.scene
@@ -10785,6 +11430,8 @@ func _villager(id: String) -> Villager:
 		if v.vid == id:
 			return v
 	var w: Variant = visitors.get(id) # someone here for one scene (Max)
+	if (w == null or not is_instance_valid(w)) and townsfolk and id.begins_with("tf_"):
+		w = townsfolk.find(id) # one of the townsfolk (townsfolk.gd), for the café's visits
 	return w as Villager if w != null and is_instance_valid(w) else null
 
 
@@ -10808,14 +11455,69 @@ func _yarn_price(base: int) -> int:
 	return int(round(base * (1.0 - 0.05 * Game.hearts("rosa"))))
 
 
-const PASTRY_PRICE := 12 # Giorgio's croissants, before his friendship discount
-const PASTRY_FOOD := 25.0
 const COFFEE_PRICE := 6 # a coffee from Sabrina: warms her up
 const COFFEE_WARMTH := 15.0
 
 
+## Heart Bakery's pastries: data/economy.json "pastry" (price, energy, food, happiness, max).
+func pastry() -> Dictionary:
+	return Data.economy().get("pastry", {"price": 20, "energy": 30, "food": 30, "happiness": 40, "max": 6})
+
+
 func _pastry_price() -> int:
-	return int(round(PASTRY_PRICE * (1.0 - 0.05 * Game.hearts("giorgio"))))
+	return int(round(float(pastry().get("price", 20)) * (1.0 - 0.05 * Game.hearts("giorgio"))))
+
+
+## Pastries (--only=shops, at Giorgio's counter): one in her bag is eaten by clicking it again in her
+## hand, giving data/economy.json "pastry"'s energy, food and happiness; the bag holds "max" at most.
+func _pastry_checks(giorgio) -> void:
+	var p := pastry()
+	hud.hide_dialogue()
+	await _wait(0.3)
+	var at := Game.slots.find("pastry")
+	_check("the pastry is in her bag (slot %d)" % (at + 1), at >= 0)
+	if at < 0:
+		return
+	if at >= Hud.HOTBAR: # a full hotbar: bring it down from the bag first
+		Game.swap_slots(at, Hud.HOTBAR - 1)
+		at = Hud.HOTBAR - 1
+	Game.energy = 40.0
+	Game.fullness = 40.0
+	Game.happiness = 40.0
+	var n0 := Game.count("pastry")
+	hud.slot_btns[at].pressed.emit() # in her hand
+	var in_hand := hud.selected_item() == "pastry" and Game.count("pastry") == n0
+	hud.slot_btns[at].pressed.emit() # and eaten
+	await _wait(0.2)
+	_check("clicking the pastry in her hand again eats it (held first %s, pastries %d -> %d, energy %.0f, food %.0f, happiness %.0f from 40)" % [in_hand, n0, Game.count("pastry"), Game.energy, Game.fullness, Game.happiness],
+		in_hand and Game.count("pastry") == n0 - 1 and absf(Game.energy - 40.0 - float(p["energy"])) < 1.0 and absf(Game.fullness - 40.0 - float(p["food"])) < 1.0 and absf(Game.happiness - 40.0 - float(p["happiness"])) < 1.0)
+	var mx := int(p.get("max", 6))
+	Game.add_item("pastry", mx - Game.count("pastry"))
+	Game.coins = maxi(Game.coins, 500)
+	var row: Dictionary = {}
+	for a in _villager_actions(giorgio):
+		if str(a.get("id", "")) == "buy_pastry":
+			row = a
+	_check("with %d pastries her bag is full and Giorgio's row says so ('%s')" % [mx, str(row.get("label", ""))],
+		not row.is_empty() and not bool(row.get("enabled", true)))
+	Game.take_item("pastry", Game.count("pastry"))
+	hud.hot_sel = 0
+
+
+## Eats one of a food she carries (hud.eat_pressed: a second click on it in her hand). Returns
+## whether she ate it: not while she's busy, in a story scene or asleep.
+func eat_item(item: String) -> bool:
+	if item != "pastry" or not Game.has_item(item) or player.busy or story.is_playing() or sleeping:
+		return false
+	var p := pastry()
+	if not Game.take_item(item):
+		return false
+	Game.add_need("energy", float(p.get("energy", 30)))
+	Game.add_need("fullness", float(p.get("food", 30)))
+	Game.add_need("happiness", float(p.get("happiness", 40)))
+	hud.click("ui_open")
+	hud.show_toast("A pastry from Heart Bakery. (+%d energy, +%d food, +%d happiness)" % [int(p.get("energy", 30)), int(p.get("food", 30)), int(p.get("happiness", 40))])
+	return true
 
 
 func _cottage_price() -> int:
@@ -10904,7 +11606,8 @@ func _villager_actions(v) -> Array:
 			acts.append_array(empire.lantern_rows())
 		"giorgio":
 			var pp := _pastry_price()
-			acts.append(_act("buy_pastry", "Buy a warm croissant  (%dc)" % pp, Game.coins >= pp and Game.fullness < 99.0))
+			var room: bool = Game.count("pastry") < int(pastry().get("max", 6))
+			acts.append(_act("buy_pastry", "Buy a pastry  (%dc)" % pp if room else "Your bag's full of pastries", Game.coins >= pp and room))
 		"sabrina":
 			acts.append(_act("buy_coffee", "Buy a coffee  (%dc)" % COFFEE_PRICE, Game.coins >= COFFEE_PRICE and Game.warmth < 99.0))
 		"gary":
@@ -11046,12 +11749,11 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "Her name is %s. I'll have her walked over to your pen by teatime. Be nice to her!" % sheep_name)
 				hud.show_toast("%s the sheep joined your flock! (%d sheep)" % [sheep_name, Game.sheep_count])
 		"buy_pastry":
-			if Game.spend(_pastry_price()):
-				Game.fullness = minf(100.0, Game.fullness + PASTRY_FOOD)
-				Game.add_need("happiness", 4.0)
-				var said: Array = ["Still warm. Sit, eat. The world can wait ten minutes.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take the window seat. Nobody rushes in here."]
+			if Game.count("pastry") < int(pastry().get("max", 6)) and Game.spend(_pastry_price()):
+				Game.add_item("pastry")
+				var said: Array = ["Still warm. Wrap it up, eat it when the day gets long.", "Out of the oven at six, like every day. Some things you can count on.", "You're too thin, cara. Take it for later. Take two."]
 				_say(v, said[(Game.day + int(f["n"])) % said.size()])
-				hud.show_toast("A warm croissant. (+%d food)" % int(PASTRY_FOOD))
+				hud.show_toast("A pastry, wrapped for later (%d in your bag). Click it in your hand to eat it." % Game.count("pastry"))
 		"buy_coffee":
 			if Game.spend(COFFEE_PRICE):
 				Game.add_need("warmth", COFFEE_WARMTH)
@@ -11339,9 +12041,15 @@ func _town_checks() -> void:
 ## takes one down; all of it survives a save. It leaves the farm as it found it.
 func _build_checks() -> void:
 	var coins0 := Game.coins
+	var wood0 := Game.count("wood")
+	Game.take_item("wood", wood0) # walls are paid in wood when she has it: these checks count coins
 	var hour0 := Game.hour
 	Game.hour = 11.0
 	Game.flags.erase("built_walls")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	Game.flags.erase("plots_owned")
 	builder.refresh_world()
 	set_mode(Mode.LIVE)
@@ -11415,6 +12123,8 @@ func _build_checks() -> void:
 	player.position = Vector3(10.5, 0, 7.5)
 	await _wait(0.6)
 	_check("build: from outside, the room keeps its roof on with the house (%s)" % _roof_visible_at(c), _roof_visible_at(c))
+	await _opening_checks(room, c)
+	await _floor_checks(c)
 	# a new house: only on a plot bought from Gary
 	var plot: Dictionary = HouseBuilder.plot_def("lane_end")
 	var pr := HouseBuilder.plot_rect(plot)
@@ -11505,13 +12215,195 @@ func _build_checks() -> void:
 	# put the farm back as it was for the rest of the autotest
 	Game.flags.erase("built_walls")
 	Game.flags.erase("plots_owned")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	builder.refresh_world()
 	Game.coins = coins0
+	Game.take_item("wood", Game.count("wood"))
+	Game.add_item("wood", wood0)
 	Game.hour = hour0
 	_set_cam_lock(true)
 	cam_dist = 23.0
 	player.position = Vector3(10.5, 0, 6.5)
 	await _wait(0.3)
+
+
+## Openings (Alex, 2026-11-17): a window and then a door in a wall of the room just built, paid in
+## coins and then in wood, the door walkable and swinging open for her, the window not walkable,
+## each taken out for half back in what paid for it; sliding doors in one of the house's own walls,
+## kept by a save; and a doorway from a save made before payments were kept, paid back in coins.
+func _opening_checks(room: Array, c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var wk: String = room[1]
+	var mid := _edge_mid(wk)
+	var cell := _cell(mid)
+	# a window, in coins (she has no wood)
+	builder.set_tool("window")
+	var c0 := Game.coins
+	builder.click(mid)
+	var win_cost := c0 - Game.coins
+	_check("build: the Window tool puts a window in her wall for coins (%s, %dc), and it doesn't let her through (%s)" % [builder.edges().get(wk), win_cost, not _walkable(cell)],
+		builder.edges().get(wk) == "window" and win_cost == int(HouseBuilder.opening_cost("window")[0]) and not _walkable(cell))
+	# swapped for a door, in wood: the window comes out with half its coins back
+	Game.add_item("wood", 10)
+	builder.set_tool("hdoor")
+	c0 = Game.coins
+	builder.click(mid)
+	var back_c := Game.coins - c0
+	var wood_used := 10 - Game.count("wood")
+	var leaf := house_root.find_children("Door", "Node3D", true, false).size()
+	_check("build: the Door tool swaps it for a door paid in wood (%s, %d wood, +%dc for the window), hung in the gap (%d), and she can walk through (%s)" % [builder.edges().get(wk), wood_used, back_c, leaf, _walkable(cell)],
+		builder.edges().get(wk) == "hdoor" and wood_used == int(HouseBuilder.opening_cost("hdoor")[1]) and back_c == int(round(win_cost * 0.5)) and leaf >= 1 and _walkable(cell))
+	set_mode(Mode.LIVE)
+	player.position = Vector3(mid.x, 0, mid.z) + (Vector3(0, 0, 1.0) if wk.ends_with("h") else Vector3(1.0, 0, 0))
+	await _wait(1.2)
+	var opened := 0.0
+	for dr in builder.doors:
+		opened = maxf(opened, float(dr["open"]))
+	_check("build: the door swings open as she comes up (%.2f)" % opened, opened > 0.9)
+	_set_cam_lock(false)
+	cam_target = mid
+	cam_dist = 9.0
+	await _wait(0.8)
+	await _shot("62_build_door.png")
+	set_mode(Mode.BUILD)
+	builder.set_tool("hdoor")
+	var w0 := Game.count("wood")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: clicked again, the door comes out with half its wood back, not coins (%s, +%d wood, +%dc)" % [builder.edges().get(wk), Game.count("wood") - w0, Game.coins - c0],
+		builder.edges().get(wk) == "wall" and Game.count("wood") - w0 == int(HouseBuilder.opening_cost("hdoor")[1]) / 2 and Game.coins == c0)
+	Game.take_item("wood", Game.count("wood"))
+	# sliding doors in one of the house's own walls
+	builder.set_tool("slide")
+	var hk := ""
+	for k in ["0,0,v", "0,2,v", "0,4,v", "0,-2,v", "8,4,v", "8,0,v"]:
+		var oc := builder.opening_check(k, "slide")
+		if not oc.is_empty() and bool(oc["ok"]):
+			hk = k
+			break
+	var hmid := _edge_mid(hk) if hk != "" else Vector3.ZERO
+	var front := builder.opening_check(HouseBuilder.FRONT_DOOR, "slide")
+	c0 = Game.coins
+	if hk != "":
+		builder.click(hmid)
+	var slide_cost := c0 - Game.coins
+	var sliders := house_root.find_children("SlidingDoor", "Node3D", true, false).size()
+	_check("build: sliding doors go in the house's own wall (%s: %s, %dc, %d hung, walkable %s), but not in its front door ('%s')" % [hk, builder.house_openings().get(hk), slide_cost, sliders, _walkable(_cell(hmid)), front.get("why", "")],
+		hk != "" and builder.house_openings().get(hk) == "slide" and slide_cost == int(HouseBuilder.opening_cost("slide")[0]) and sliders >= 1 and _walkable(_cell(hmid)) and not bool(front.get("ok", true)))
+	_set_cam_lock(false)
+	cam_target = hmid
+	cam_dist = 10.0
+	await _wait(0.8)
+	await _shot("62_build_house_slide.png")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("house_openings")
+	Game.flags.erase("built_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	_check("build: the house's sliding doors and what paid for them survive a save (%s, %s)" % [builder.house_openings().get(hk), str(Game.flag("built_paid", {}).get(hk, {}))],
+		builder.house_openings().get(hk) == "slide" and (Game.flag("built_paid", {}) as Dictionary).has(hk))
+	c0 = Game.coins
+	builder.click(hmid)
+	_check("build: taken out again, half the coins come back (+%dc) and the wall is whole (%s)" % [Game.coins - c0, not builder.house_openings().has(hk)],
+		Game.coins - c0 == int(round(slide_cost * 0.5)) and not builder.house_openings().has(hk))
+	# a doorway from an older save, with nothing kept of what paid for it
+	var d: Dictionary = builder.edges().duplicate()
+	d[wk] = "door"
+	Game.set_flag("built_walls", d)
+	builder.refresh_world()
+	builder.set_tool("wall")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: a doorway from an older save comes down for half its price in coins (+%dc of %dc)" % [Game.coins - c0, HouseBuilder.price("door")],
+		Game.coins - c0 == int(round(HouseBuilder.price("door") * 0.5)) and not builder.edges().has(wk))
+	builder.set_tool("wall")
+	builder.click(mid) # back up as the plain wall it was
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+	cam_target = Vector3(c.x, 0, c.y)
+
+
+## Floors (Alex, 2026-11-17): blue carpet over the room she built for coins, oak boards over it for
+## wood with the carpet's coins half back, white tile over the whole house, all kept by a save, and
+## the planks back with half returned.
+func _floor_checks(c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var g := Vector3(c.x, 0, c.y)
+	var cells := builder.floor_cells_at(c)
+	var n := cells.size()
+	Game.take_item("wood", Game.count("wood"))
+	hud.wall_tool_chosen.emit("floor")
+	hud.floor_pick.select(HouseBuilder.FLOORS.find("carpet_blue"))
+	hud.floor_pick.item_selected.emit(HouseBuilder.FLOORS.find("carpet_blue"))
+	await _wait(0.1)
+	builder.hover_at(g)
+	var ghosts := builder._floor_ghost.get_child_count() if builder._floor_ghost != null else 0
+	var c0 := Game.coins
+	builder.click(g)
+	var laid := _laid_floors()
+	var carpet_cost := c0 - Game.coins
+	_check("build: the Floor tool lays blue carpet over the whole room she built for coins (%d cells, %d shown before the click, %d laid, %dc)" % [n, ghosts, laid.size(), carpet_cost],
+		builder.tool == "floor" and hud.wall_btns["floor"].button_pressed and n >= 2 and ghosts == n and laid.size() == n \
+		and carpet_cost == n * int(HouseBuilder.floor_cost("carpet_blue")[0]) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "carpet_blue")
+	# oak boards over it, paid in wood: the carpet comes up with half its coins back
+	Game.add_item("wood", 40)
+	builder.set_floor_kind("wood_oak")
+	c0 = Game.coins
+	builder.click(g)
+	var wood_used := 40 - Game.count("wood")
+	_check("build: oak boards over it are paid in wood (%d wood) and the carpet comes up for half its coins (+%dc)" % [wood_used, Game.coins - c0],
+		wood_used == n * int(HouseBuilder.floor_cost("wood_oak")[1]) and Game.coins - c0 == int(round(carpet_cost * 0.5)) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "wood_oak")
+	Game.take_item("wood", Game.count("wood"))
+	# white tile through the house
+	var hq := Vector2(HOUSE_W * 0.5, 1.0)
+	var hcells := builder.floor_cells_at(hq)
+	builder.set_floor_kind("tile_white")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var tile_cost := c0 - Game.coins
+	laid = _laid_floors()
+	_check("build: white tile through her house (%d cells, %dc, %d floors laid in all)" % [hcells.size(), tile_cost, laid.size()],
+		hcells.size() == builder.house_cells().size() and tile_cost == hcells.size() * int(HouseBuilder.floor_cost("tile_white")[0]) and laid.size() == n + hcells.size())
+	builder.hover_at(null)
+	_set_cam_lock(false)
+	cam_target = Vector3(HOUSE_W * 0.5, 0, 3.0)
+	cam_dist = 16.0
+	await _wait(0.8)
+	await _shot("62_build_floors.png") # in build mode, the roofs lifted
+	set_mode(Mode.LIVE)
+	# a save keeps them
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	laid = _laid_floors()
+	_check("build: the floors survive a save (%d laid)" % laid.size(), laid.size() == n + hcells.size())
+	# the planks again: the tile comes up, half its coins back
+	set_mode(Mode.BUILD)
+	builder.set_tool("floor")
+	builder.set_floor_kind("planks")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var w0 := Game.count("wood")
+	builder.click(g)
+	_check("build: plank boards take them up again, half back in what paid (+%dc for the tile, +%d wood for the oak, %d left)" % [Game.coins - c0, Game.count("wood") - w0, builder.floors().size()],
+		Game.coins - c0 == int(round(tile_cost * 0.5)) and Game.count("wood") - w0 == n * int(HouseBuilder.floor_cost("wood_oak")[1]) / 2 and builder.floors().is_empty())
+	Game.take_item("wood", Game.count("wood"))
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+
+
+## The laid floors standing now (house_builder.gd _draw_floors()).
+func _laid_floors() -> Array:
+	return house_root.find_children("*", "MeshInstance3D", true, false).filter(func(n: Node): return n.has_meta("floor") and not n.is_queued_for_deletion())
 
 
 ## The middle of a grid edge, on the ground (house_builder.gd keys).
@@ -11579,3 +12471,440 @@ func _recolor_checks() -> void:
 	furniture.erase(spawned)
 	spawned.queue_free()
 	_check("colours: its own colour back costs nothing (%dc), and a sofa takes the fabrics too (%s)" % [c1 - Game.coins, str(e2.get("c", ""))], c1 == Game.coins and str(e2.get("c", "")) == "denim")
+
+
+## The online store (online_store.gd, data/store_orders.json): the computer in the catalogue, no orders
+## until she owns one, then orders for wild-fibre sweaters; "Use the computer…" puts her at its screen in
+## first person; a knitted fox sweater remembers its fibre and fills a fox order, scoring five stars
+## sent at once and fewer sent late; an expired order costs her rating; a better rating brings orders
+## sooner and more at once; the coins come the next morning; the state keeps through a save. Saves
+## 63_store_screen.png, 63_store_sent.png and 63_store_after.png.
+func _store_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	Game.hour = 11.0
+	var keep := {"coins": Game.coins, "s": Game.sweaters.duplicate(), "d": Game.sweater_designs.duplicate(),
+		"f": Game.sweater_fibres.duplicate(), "inv": Game.inv.duplicate(), "store": Game.flags.get("store", null),
+		"request": Game.flags.get("request", null), "day": Game.day, "hour": Game.hour,
+		"wq": Game.worn_quality, "wd": Game.worn_design, "w": Game.wardrobe.duplicate(), "xp": Game.knit_xp}
+	Game.flags.erase("store")
+	Game.flags.erase("request") # a local's fibre request would claim the fox sweater first
+	var info: Dictionary = Catalog.ITEMS.get("computer", {})
+	_check("the computer is a catalogue piece and a big purchase (%s, %dc, needles top out at 1500c)" % [str(info.get("cat", "?")), int(info.get("price", 0))],
+		str(info.get("shop", "")) == "indoors" and int(info.get("price", 0)) >= 2000 and Catalog.has_builder("computer"))
+	for f in furniture.filter(func(x): return is_instance_valid(x) and x.item_id == "computer"):
+		furniture.erase(f)
+		f.queue_free()
+	await _wait(0.2)
+	store.update()
+	_check("no computer, no orders (%s)" % str(Game.flags.get("store", {})), not store.started() and store.orders().is_empty())
+	var comp := _spawn_furniture("computer", Vector3(5.6, 0, 5.3), 2)
+	_rebuild_grid()
+	_check("the computer has a screen to look at", comp.find_child("screen", true, false) != null)
+	store.update()
+	var first: Array = store.orders()
+	var sane := true
+	for o in first:
+		sane = sane and wildlife.is_fibre(str(o["fibre"])) and int(o["pay"]) > 0 \
+			and int(o["stars"]) >= Sweaters.stars_for(wildlife.knit_floor(str(o["fibre"])))
+	_check("once it stands in her house, orders come in, each for a wild fibre's sweater (%s, rating %.1f)" % [str(first.map(func(o): return "%s %d★ %dc" % [o["fibre"], o["stars"], o["pay"]])), store.rating()],
+		store.started() and first.size() == int(store.data.get("seed_orders", 2)) and sane and is_equal_approx(store.rating(), float(store.data.get("start_rating", 3.0))))
+	var acts := _actions_for(comp)
+	_check("its menu says 'Use the computer…' with the orders waiting (%s)" % str(acts.map(func(a): return a["label"])),
+		acts.size() == 1 and str(acts[0]["id"]) == "computer" and str(acts[0]["label"]).begins_with("Use the computer…"))
+	# a fox sweater knitted with its fibre remembers it; a plain one doesn't
+	Game.add_sweater(3, "")
+	Game.add_item("wool", 2)
+	Game.add_item("fox_fibre", 1)
+	_knit_fibre = "fox_fibre"
+	_finish_knit(3)
+	await _wait(1.0) # its knit_done event plays nothing outside Act 1
+	hud.hide_dialogue()
+	var fox_i: int = Game.sweater_fibres.find("fox_fibre")
+	_check("a sweater knitted with fox fluff is kept as a fox sweater in her bag (%s)" % str(Game.sweater_fibres),
+		fox_i >= 0 and Game.sweater_fibres.size() == Game.sweaters.size() and Game.sweater_fibres.count("fox_fibre") == 1)
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	_check("the save keeps which sweater was knitted with what", (saved.get("sweater_fibres", []) as Array).has("fox_fibre"))
+	var fox := store.place_order(-1.0, "fox_fibre", 2)
+	var lynx := store.place_order(-1.0, "lynx_fibre", 4)
+	_check("an order can ask for a fibre and stars (%s %d★, %s %d★)" % [fox["fibre"], fox["stars"], lynx["fibre"], lynx["stars"]],
+		str(fox["fibre"]) == "fox_fibre" and int(fox["stars"]) == 2 and store.sweater_for(fox) == fox_i and store.sweater_for(lynx) < 0)
+	# at the screen
+	player.walk([])
+	player.position = _stand_point(comp)
+	await _wait(0.3)
+	_perform(comp, "computer")
+	await _wait(1.2)
+	var r: Rect2 = store.screen_rect()
+	_check("'Use the computer…' puts her at its screen in first person, the page on it (active %s, first person %s, locked %s, page %s)" % [store.active, fps.active, fps.locked, str(r)],
+		store.active and fps.active and fps.locked and r.size.x >= 480.0 and absf(cam.fov - OnlineStore.FOV) < 0.5)
+	var k: int = store.orders().find(fox)
+	store.select(k)
+	await _wait(0.4)
+	await _shot("63_store_screen.png")
+	var coins0 := Game.coins
+	var n0: int = store.orders().size()
+	var nsw := Game.sweaters.size()
+	var want: int = store.pay_for(fox, int(Game.sweaters[fox_i]))
+	var rate0: float = store.rating()
+	store.handle_key(KEY_ENTER)
+	await _wait(0.4)
+	await _shot("63_store_sent.png")
+	_check("Enter sends the fox sweater for the fox order: gone from her bag and the list, five stars sent at once, %dc to come in the morning, none yet (rating %.2f -> %.2f)" % [store.coming(), rate0, store.rating()],
+		store.orders().size() == n0 - 1 and Game.sweaters.size() == nsw - 1 and Game.sweater_fibres.find("fox_fibre") < 0
+		and is_equal_approx(float(store.state().get("last_score", 0.0)), 5.0) and store.coming() == want and Game.coins == coins0 and store.rating() > rate0)
+	store.select(store.orders().find(lynx))
+	_check("she can't send the lynx order without a lynx sweater", not store.send_selected() and store.orders().find(lynx) >= 0)
+	# a late one scores less
+	Game.add_sweater(3, "")
+	Game.sweater_fibres[Game.sweater_fibres.size() - 1] = "fox_fibre"
+	var late := store.place_order(-1.0, "fox_fibre", 2)
+	late["placed"] = float(late["placed"]) - store.expire_hours(late) * 0.8
+	var late_score: float = store.score_for(late)
+	store.fill(store.orders().find(late))
+	_check("an order sent late scores fewer stars (%.1f after %.0f of %.0f h)" % [late_score, store.age(late), store.expire_hours(late)],
+		late_score < 3.0 and late_score > 1.0 and is_equal_approx(float(store.state().get("last_score", 0.0)), late_score))
+	# one left to expire costs her
+	var rate1: float = store.rating()
+	var exp0 := int(store.state().get("expired", 0))
+	var old := store.place_order(-1.0, "angora", 0)
+	old["placed"] = float(old["placed"]) - store.expire_hours(old) - 0.5
+	store.update()
+	_check("an order left past its time expires and lowers her rating (%.2f -> %.2f)" % [rate1, store.rating()],
+		store.orders().find(old) < 0 and int(store.state().get("expired", 0)) == exp0 + 1 and store.rating() < rate1)
+	# a better rating brings orders sooner and more of them at once
+	var sc0: Array = store.scores().duplicate()
+	store.state()["scores"] = [1.0]
+	var slow: float = store.interval()
+	var few: int = store.max_open()
+	store.state()["scores"] = [5.0]
+	var fast: float = store.interval()
+	var many: int = store.max_open()
+	_check("a five-star shop gets orders every %.0f h, up to %d open; a one-star shop every %.0f h, up to %d" % [fast, many, slow, few],
+		fast < slow and many > few)
+	store.state()["orders"] = []
+	store.state()["next_at"] = OnlineStore.now_h() - 30.0 # a long night: what came in is waiting, up to the cap
+	store.update()
+	var after: int = store.orders().size()
+	store.state()["next_at"] = OnlineStore.now_h() - 0.01
+	store.state()["orders"] = []
+	store.update()
+	_check("orders keep coming: %d after a long night (at most %d), one more when the timer's up (%d)" % [after, many, store.orders().size()],
+		after > 1 and after <= many and store.orders().size() == 1)
+	store.state()["orders"] = []
+	store.state()["next_at"] = OnlineStore.now_h() - 200.0 # the computer gone for days, then back
+	var exp_a := int(store.state().get("expired", 0))
+	store.update()
+	var oldest := 0.0
+	for o in store.orders():
+		oldest = maxf(oldest, store.age(o))
+	_check("back after days away, she finds no pile of old orders: none older than a night, none expired at once (%d orders, oldest %.1f h)" % [store.orders().size(), oldest],
+		store.orders().size() >= 1 and oldest <= float(store.data.get("catch_up_hours", 12.0)) + 0.01 and int(store.state().get("expired", 0)) == exp_a)
+	store.state()["scores"] = sc0
+	# the state keeps through a save: numbers come back from JSON as floats
+	var st: Dictionary = JSON.parse_string(JSON.stringify(store.state()))
+	var rate2: float = store.rating()
+	var due0: int = store.coming()
+	var n2: int = store.orders().size()
+	Game.flags["store"] = st
+	_check("the store keeps through a save (rating %.2f, %d orders, %dc coming)" % [store.rating(), store.orders().size(), store.coming()],
+		is_equal_approx(store.rating(), rate2) and store.coming() == due0 and due0 > want and store.orders().size() == n2)
+	# the morning post
+	var due: int = store.coming()
+	coins0 = Game.coins
+	store._on_day_started(Game.day)
+	_check("the next morning's post brings the coins (+%d)" % (Game.coins - coins0),
+		Game.coins - coins0 == due and store.coming() == 0 and int(store.state().get("earned", 0)) == due)
+	store.handle_key(KEY_ESCAPE)
+	await _wait(0.5)
+	_check("Esc steps her back from the computer, where she can walk, with the overhead camera back (walkable %s)" % _walkable(_cell(player.position)),
+		not store.active and not fps.active and not fps.locked and _walkable(_cell(player.position)))
+	cam_target = player.position + Vector3(0, 0.9, 0)
+	await _wait(0.8)
+	await _shot("63_store_after.png")
+	# put it all back
+	furniture.erase(comp)
+	comp.queue_free()
+	_rebuild_grid()
+	Game.coins = keep["coins"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["d"]
+	Game.sweater_fibres = keep["f"]
+	Game.inv = keep["inv"]
+	Game.worn_quality = keep["wq"]
+	Game.worn_design = keep["wd"]
+	Game.wardrobe = keep["w"]
+	Game.knit_xp = keep["xp"]
+	for key in ["store", "request"]:
+		if keep[key] == null:
+			Game.flags.erase(key)
+		else:
+			Game.flags[key] = keep[key]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	await _wait(0.2)
+
+# --- wolves at night (wolves.gd, data/wolves.json) -------------------------------------------
+
+## Her flock at `n` sheep, in the pen (the wolves check takes them and puts them back).
+func _set_flock(n: int) -> void:
+	while sheep_list.size() > n:
+		var s = sheep_list.pop_back()
+		s.queue_free()
+	Game.sheep_count = n
+	while sheep_list.size() < n:
+		_add_sheep()
+
+
+## Wolves: nothing comes while nothing is at risk; a forced night brings the howl, the toast and the
+## pack walking in; Nora's rush and the dog's barks see them off, the bigger taking more; a missed
+## window costs one animal and the morning says which; a night slept through can cost one too; the
+## barn (housed sheep, rented stalls) keeps them safe; a raid and the tally survive a save.
+func _wolf_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var keep := {"flags": Game.flags.duplicate(true), "day": Game.day, "hour": Game.hour, "sheep": Game.sheep_count, "clock": Game.time_running,
+		"jog": autotest_jog, "cd": cam_dist, "bed": flock_bedtime, "pos": player.position, "follow": cam_follow}
+	player.walk([])
+	autotest_jog = false
+	Game.time_running = false
+	flock_bedtime = false
+	Wolves.on = true
+	wolves.clear()
+	wildlife.clear()
+	for k in ["wolves", "wolf_note", "penned", "wild_gone", "wild", "barn_rent_due", "barn_rent_owed", "wolves_tamed"]:
+		Game.flags.erase(k)
+	Game.flags["act1_done"] = true
+	Game.hour = 20.0
+	var home: Vector3 = wolves.pen_centre()
+	# nothing at risk: the night passes quietly
+	_set_flock(0)
+	wildlife.build()
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	_check("with nothing in the pens the wolves don't come (raid %s, night rolled %s)" % [wolves.active(), int(wolves.state().get("night", -1)) == Game.day],
+		not wolves.active() and int(wolves.state().get("night", -1)) == Game.day)
+	# a forced wolf night: the howl, the toast, the pack walking in from the woods
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_901"}, {"species": "fox", "key": "pen_fox_902"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.3)
+	var risk0: int = wolves.at_risk().size()
+	var howls0 := int(audio.played.get("howl", 0))
+	Game.hour = 20.0
+	var s0: Dictionary = wolves.state()
+	s0.erase("night")
+	Game.set_flag("wolves", s0)
+	wolves.force_next = true
+	Game.hour = 21.5
+	await _wait(0.3)
+	var n0: int = wolves.pack.size()
+	var toast0: String = hud.toast_label.text
+	var models_ok: bool = wolves.pack.all(func(w): return w._model != null and w._anim != null and w._anim.has_animation("Walk"))
+	var d_start: float = wolves.pack[0].position.distance_to(home) if n0 > 0 else 0.0
+	_set_cam_lock(false) # the camera on the pack, not on her
+	cam_dist = 16.0
+	for i in 30: # long enough for the warning to settle
+		cam_target = wolves.pack[0].position if n0 > 0 else home
+		await _wait(0.1)
+	var walking: String = wolves.pack[0].current_loop() if n0 > 0 else ""
+	var toast_box: Vector2 = hud.toast_panel.size
+	await _shot("63_wolves_coming.png")
+	_check("a forced wolf night: %d animals at risk, a howl (%d), the toast ('%s', a small box %.0f x %.0f px), %d wolves (%s) %.0f m off in the woods, walking in (%s), the models loaded %s, %.0f s to see them off" % [
+		risk0, int(audio.played.get("howl", 0)) - howls0, toast0.left(48), toast_box.x, toast_box.y, n0, str(wolves.pack.map(func(w): return w.size_id)), d_start, walking, models_ok, wolves.raid_left],
+		risk0 == 4 and toast_box.y < 110.0 and toast_box.x <= 680.0 and wolves.active() and int(audio.played.get("howl", 0)) == howls0 + 1 and toast0.contains("howl") and n0 >= 1 and n0 <= 3
+		and d_start > 20.0 and walking == "Walk" and models_ok and wolves.raid_left > 40.0)
+	# scaring them off: three of them at the pen; Nora rushes the small one, the dog barks at the rest
+	wolves.clear()
+	wolves.start_raid(3)
+	await _wait(0.1)
+	for w in wolves.pack:
+		w.position = w.goal
+		w._path = []
+	var small = wolves.pack.filter(func(w): return w.size_id == "small")[0]
+	var medium = wolves.pack.filter(func(w): return w.size_id == "medium")[0]
+	var large = wolves.pack.filter(func(w): return w.size_id == "large")[0]
+	var nerves := [small.nerve, medium.nerve, large.nerve]
+	var out_dir: Vector3 = (small.goal - home)
+	out_dir.y = 0.0
+	out_dir = out_dir.normalized()
+	var side := Vector3(-out_dir.z, 0, out_dir.x)
+	for w in [medium, large]: # the other two along the fence, out of her rush at the small one
+		w.goal += side * 12.0
+		w.position = w.goal
+	var start: Vector3 = small.position + out_dir * 11.0
+	var sc = _nearest_walkable(_cell(start), start)
+	player.position = _cell_center(sc) if sc != null else start
+	player.walk([])
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	_set_cam_lock(false)
+	cam_target = small.position + side * 6.0 + out_dir * 3.0
+	cam_dist = 19.0
+	await _wait(0.6)
+	await _shot("63_wolves_at_pen.png")
+	autotest_jog = true
+	var tw := 0.0
+	var closest := INF
+	var top_speed := 0.0
+	while is_instance_valid(small) and not small.fleeing and tw < 12.0:
+		if player.path.is_empty():
+			player.walk(_find_path(player.position, small.position))
+		closest = minf(closest, Vector2(player.position.x - small.position.x, player.position.z - small.position.z).length())
+		top_speed = maxf(top_speed, player.speed)
+		await _wait(0.1)
+		tw += 0.1
+	autotest_jog = false
+	player.walk([])
+	var small_ran: bool = not is_instance_valid(small) or small.fleeing
+	var others_stay: bool = not medium.fleeing and not large.fleeing
+	_check("the wolves have more nerve the bigger they are (%s), and Nora running at the small one sends it off (%s after %.1f s; she came within %.1f m at up to %.1f m/s, walking pace %.1f) while the others hold (%s)" % [
+		str(nerves), small_ran, tw, closest, top_speed, player.walk_speed, others_stay],
+		nerves == [1, 2, 3] and small_ran and others_stay and wolves.active())
+	toggle_dog(true)
+	hud.hide_dialogue()
+	dog.position = (medium.position + large.position) * 0.5 + out_dir * 2.0
+	dog.path = []
+	cam_target = dog.position
+	await _wait(BARK_WAIT)
+	dog_bark()
+	await _wait(0.1)
+	var after1 := [medium.nerve, large.nerve, medium.fleeing, large.fleeing]
+	await _shot("63_wolves_bark.png")
+	for i in 4:
+		if not wolves.active():
+			break
+		await _wait(BARK_WAIT)
+		for w in wolves.pack:
+			if is_instance_valid(w) and not w.fleeing:
+				dog.position = w.position + out_dir * 2.0
+				break
+		dog_bark()
+	await _wait(0.4)
+	await _shot("63_wolves_flee.png")
+	toggle_dog(false)
+	hud.hide_dialogue()
+	var st: Dictionary = wolves.state()
+	_check("as the dog, a bark takes nerve from every wolf near (after one: medium %d, large %d, running %s %s); the big one takes three, and they're seen off ('%s'; seen off %d, raid saved %s, nothing lost %s)" % [
+		after1[0], after1[1], after1[2], after1[3], hud.toast_label.text.left(30), int(st.get("seen_off", 0)), st.has("raid"), wolves.at_risk().size() == 4],
+		after1[0] == 1 and after1[1] == 2 and after1[2] == false and after1[3] == false and not wolves.active() and int(st.get("seen_off", 0)) == 1
+		and not st.has("raid") and wolves.at_risk().size() == 4)
+	# a bark from her side does nothing: only the player herds and scares
+	wolves.start_raid(1)
+	await _wait(0.1)
+	var w1 = wolves.pack[0]
+	w1.position = w1.goal
+	w1._path = []
+	dog.position = w1.position + Vector3(1.0, 0, 0)
+	var reached: int = wolves.barked(dog.position)
+	_check("beside Nora the dog's bark doesn't reach the wolves (%d reached, nerve %d)" % [reached, w1.nerve], reached == 0 and w1.nerve == 2)
+	# missing the window: they take one, and the morning says which
+	wolves.clear()
+	st = wolves.state()
+	st["night"] = Game.day
+	Game.set_flag("wolves", st)
+	var penned0: int = wildlife.penned_list().size()
+	var sheep0 := Game.sheep_count
+	wolves.start_raid(1, 2.5)
+	await _wait(0.1)
+	var w_in = wolves.pack[0] # a few steps out from the pen, coming in
+	w_in.position = w_in.goal + (w_in.den - w_in.goal).normalized() * 3.0
+	w_in.go_to(w_in.goal)
+	_set_cam_lock(false)
+	cam_target = w_in.goal
+	cam_dist = 15.0
+	await _wait(1.6)
+	await _shot("63_wolves_missed.png")
+	await _wait(1.2)
+	var note_now: String = str(Game.flag("wolf_note", ""))
+	var taken := penned0 + sheep0 - wildlife.penned_list().size() - Game.sheep_count
+	var morning: String = wolves.morning_note(Game.day + 1)
+	_check("missing the window loses one animal (%d gone: %d penned, %d sheep left, %d sheep nodes) and the morning says which ('%s')" % [taken, wildlife.penned_list().size(), Game.sheep_count, sheep_list.size(), morning.strip_edges()],
+		taken == 1 and not wolves.active() and sheep_list.size() == Game.sheep_count and note_now != "" and morning.contains(note_now)
+		and (morning.contains("rabbit") or morning.contains("fox") or morning.contains("sheep")) and Game.flag("wolf_note", "") == "" and int(wolves.state().get("lost", 0)) == 1)
+	# a night slept through: rolled in the morning, and a hit costs one while she slept
+	st = wolves.state()
+	st["night"] = Game.day - 2
+	Game.set_flag("wolves", st)
+	var risk1: int = wolves.at_risk().size()
+	wolves.force_next = true
+	Game.hour = 6.0
+	var slept: String = wolves.morning_note(Game.day)
+	_check("a night she slept through is rolled in the morning, and the wolves took one while she slept ('%s', %d -> %d at risk)" % [slept.strip_edges(), risk1, wolves.at_risk().size()],
+		slept.contains("While you slept") and wolves.at_risk().size() == risk1 - 1 and not wolves.active())
+	# the barn: sheep in their stalls and animals in rented stalls are safe
+	Game.hour = 21.5 # bedtime: the flock keeps to its stalls
+	flock_bedtime = true
+	st = wolves.state()
+	st["night"] = Game.day # tonight is rolled only by this check's own calls
+	Game.set_flag("wolves", st)
+	Game.set_flag("penned", [{"species": "rabbit", "key": "pen_rabbit_903"}, {"species": "fox", "key": "pen_fox_904"}])
+	_set_flock(2)
+	wildlife.build()
+	await _wait(0.2)
+	var barn_ok: bool = World.barn_ready()
+	if barn_ok:
+		for i in sheep_list.size():
+			var stall: Dictionary = World.barn_stall(i)
+			sheep_list[i].place(stall["stall"], true, stall["yaw"])
+	var housed_risk: int = wolves.at_risk().size()
+	Game.set_flag("barn_rent_due", Game.day + 10)
+	Game.set_flag("barn_rent_owed", 0)
+	var rented: bool = wildlife.stalls_rented()
+	var risk_rented: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came: bool = wolves.roll(Game.day, false)
+	var safe_all: bool = not came and not wolves.active() and wildlife.penned_list().size() == 2 and Game.sheep_count == 2
+	cam_target = World.barn.global_position if World.barn and is_instance_valid(World.barn) else home
+	await _wait(0.4)
+	await _shot("63_wolves_barn.png")
+	Game.set_flag("barn_rent_owed", 60) # behind with the rent: the stalls aren't hers
+	var risk_owed: int = wolves.at_risk().size()
+	wolves.force_next = true
+	var came_owed: bool = wolves.roll(Game.day, false)
+	_check("the barn keeps them safe: sheep in their stalls (%s) are off the wolves' list (%d at risk, the two wild ones), and with the stalls rented (%s) nobody is (%d), so a forced night brings nothing (%s); behind with the rent the wild ones are at risk again (%d) and the wolves come (%s)" % [
+		barn_ok, housed_risk, rented, risk_rented, safe_all, risk_owed, came_owed],
+		barn_ok and housed_risk == 2 and rented and risk_rented == 0 and safe_all and risk_owed == 2 and came_owed and wolves.active())
+	# a save: the raid in progress, its seconds and the tally come back
+	await _wait(0.2)
+	wolves.raid_left = 30.0
+	wolves._note_raid()
+	var pack_n: int = wolves.pack.size()
+	var saved := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	wolves.clear()
+	Game.flags.erase("wolves")
+	Game.flags = (saved["flags"] as Dictionary).duplicate(true) # as Game.from_dict() reads them, without reloading the rest of the game (the checks after this one count on it)
+	wolves._resumed = false
+	await _wait(0.3)
+	var st2: Dictionary = wolves.state()
+	_check("a save keeps the wolves: the raid comes back with its pack (%d of %d) and about its seconds (%.0f), and the tally (seen off %d, lost %d)" % [wolves.pack.size(), pack_n, wolves.raid_left, int(st2.get("seen_off", 0)), int(st2.get("lost", 0))],
+		wolves.active() and wolves.pack.size() == pack_n and wolves.raid_left > 25.0 and wolves.raid_left <= 30.0 and int(st2.get("seen_off", 0)) == 1 and int(st2.get("lost", 0)) == 2)
+	# taming isn't built: the hook keeps the wild ones away once it is
+	wolves.clear()
+	Game.set_flag("wolves_tamed", true)
+	wolves.force_next = true
+	var came_tamed: bool = wolves.roll(Game.day, false)
+	_check("the taming hook: once tamed (wolves_tamed) no wild wolves come (%s)" % came_tamed, not came_tamed and not wolves.active())
+	# put it all back
+	wolves.clear()
+	wolves.force_next = false
+	Wolves.on = false
+	wildlife.clear()
+	Game.flags = keep["flags"]
+	Game.day = keep["day"]
+	Game.hour = keep["hour"]
+	_set_flock(int(keep["sheep"]))
+	Game.time_running = keep["clock"]
+	autotest_jog = keep["jog"]
+	cam_dist = keep["cd"]
+	flock_bedtime = keep["bed"]
+	player.position = keep["pos"]
+	player.walk([])
+	if dog:
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+	cam_target = player.position
+	_set_cam_lock(keep["follow"])
+	hud.hide_dialogue()

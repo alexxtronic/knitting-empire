@@ -1,0 +1,14 @@
+{
+  "id": "arborvitae",
+  "atlas": 1024,
+  "reach": 0.4,
+  "samples": 128,
+  "device": "METAL",
+  "light_mean": 0.155,
+  "light_p05": 0.0,
+  "seconds": 23.4,
+  "glb_bytes": 853804,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}
