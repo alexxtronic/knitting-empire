@@ -7969,6 +7969,7 @@ func _dog_checks() -> void:
 	if _find_path(dog.position, goal).is_empty():
 		goal = start + Vector3(-9.0, 0, 0)
 	_live_click(cam.unproject_position(goal))
+	hold_release() # a click, not a held button: the test never lets go, so the hold would steer him at wherever an earlier check left the mouse
 	await _wait(0.9)
 	var rate_trot := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
 	_check("clicked, he trots off with his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s; controlled %s, path %d, reading %s, menu %s)" % [dog.current_loop(), dog.speed, rate_trot, dog.controlled, dog.path.size() if "path" in dog else -1, _reading or books_ui.visible, hud.is_menu_open()],
@@ -7977,6 +7978,7 @@ func _dog_checks() -> void:
 	await _shot("48_dog_trot.png")
 	autotest_jog = true # as if Shift were held
 	_live_click(cam.unproject_position(start - (goal - start)))
+	hold_release()
 	await _wait(1.2)
 	var rate_run := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
 	_check("holding Shift he gallops, his stride matching his speed (%s at %.2f m/s, loop covers %.2f m/s)" % [dog.current_loop(), dog.speed, rate_run],
