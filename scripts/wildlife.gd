@@ -305,7 +305,8 @@ func barked(at: Vector3) -> int:
 			blocked = "He can only herd %d at a time. Take these home first." % max_herd()
 		else:
 			var near := lerpf(1.0, BARK_FAR_GAIN, smoothstep(BARK_NEAR, BARK_RANGE, d))
-			if a.frighten(near / barks_for(a)):
+			var power: float = main.dog.bark_power() if main and main.dog else 1.0 # his knitted scarf (scarves.gd)
+			if a.frighten(near * power / barks_for(a) + 0.0001):
 				frightened(a)
 	if blocked != "" and _said_t <= 0.0 and not (main.wolves and main.wolves.active()): # not over the wolves' warning
 		_said_t = 6.0

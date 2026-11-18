@@ -48,6 +48,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
+const Scarves = preload("res://scripts/scarves.gd")
 const Wolves = preload("res://scripts/wolves.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
@@ -142,6 +143,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
+var scarves: Scarves # the dog's knitted scarves (scarves.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
@@ -153,6 +155,7 @@ var forage: Forage # trees she fells with the axe, plants she trims with the she
 var knit: KnitGame # the knitting game (knit_game.gd), a rhythm game played to a song
 var _knit_chair = null
 var _knit_fibre := "" # the wild fibre going into the sweater on the needles ("" for plain wool)
+var _knit_scarf := false # what's on the needles is a scarf for the dog (scarves.gd), not a sweater
 var _knit_clock_was := true
 var audio: GameAudio
 var story: StoryPlayer
@@ -445,6 +448,10 @@ func _ready() -> void:
 	fog.main = self
 	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
 	add_child(fog)
+	scarves = Scarves.new()
+	scarves.main = self
+	add_child(scarves)
+	scarves.update()
 	wolves = Wolves.new()
 	wolves.main = self
 	add_child(wolves)
@@ -2077,6 +2084,8 @@ func _update_dog() -> void:
 	if dog.controlled and (story.is_playing() or sleeping):
 		dog.controlled = false
 	dog.running = dog.controlled and (autotest_jog or _held(KEY_SHIFT))
+	if scarves:
+		scarves.update()
 
 
 func _live_click(mpos: Vector2) -> void:
@@ -2551,7 +2560,7 @@ func _actions_for(t) -> Array:
 	if t is Furniture:
 		match t.item_id:
 			"rocking_chair", "armchair":
-				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3))] + wildlife.knit_rows() + [_act("rest", "Rest  (+energy)"), _act("read_book", "Read a book…")]
+				return [_act("knit", "Knit Sweater…  (3 wool)", Game.has_item("wool", 3))] + wildlife.knit_rows() + scarves.knit_rows() + [_act("rest", "Rest  (+energy)"), _act("read_book", "Read a book…")]
 			"sofa":
 				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)"), _act("read_book", "Read a book…")]
 			"bench", "bench_short":
@@ -2675,6 +2684,16 @@ func _perform(t, id: String) -> void:
 	if t.has_method("ke_action"):
 		t.ke_action(id)
 		return
+	if id == "knit_scarf" or id.begins_with("knit_scarf:"): # a scarf for the dog: less wool, or a little and a wild fibre
+		var sf := id.trim_prefix("knit_scarf").trim_prefix(":")
+		if not scarves.can_knit(sf):
+			hud.show_toast("You need %d wool%s for the dog's scarf." % [scarves.fibre_wool() if sf != "" else scarves.wool(), "" if sf == "" else " and the " + wildlife.item_name(sf)])
+			return
+		if Game.use_energy(6.0):
+			_knit_fibre = sf
+			_knit_scarf = true
+			_begin_knit(t)
+		return
 	if id.begins_with("knit_fibre:"): # two wool and one wild fibre: the sweater is at least that fibre's floor
 		var fibre := id.trim_prefix("knit_fibre:")
 		if not (Game.has_item("wool", 2) and Game.has_item(fibre)):
@@ -2682,6 +2701,7 @@ func _perform(t, id: String) -> void:
 			return
 		if Game.use_energy(10.0):
 			_knit_fibre = fibre
+			_knit_scarf = false
 			_begin_knit(t)
 		return
 	match id:
@@ -2691,6 +2711,7 @@ func _perform(t, id: String) -> void:
 				return
 			if Game.use_energy(10.0):
 				_knit_fibre = ""
+				_knit_scarf = false
 				_begin_knit(t)
 		"rest":
 			var seat = _seat_point(t) if t is Furniture else null
@@ -2857,6 +2878,8 @@ func _on_knit_finished(res: Dictionary) -> void:
 	player.quiet_needles = false
 	player.cancel_activity()
 	if bool(res.get("cancelled", false)):
+		_knit_scarf = false
+		_knit_fibre = ""
 		Game.energy = minf(100.0, Game.energy + 10.0) # she didn't knit after all
 		hud.show_toast("You put the needles down.")
 		return
@@ -2870,6 +2893,10 @@ func _on_knit_finished(res: Dictionary) -> void:
 func _finish_knit(rarity := 0) -> void:
 	var fibre := _knit_fibre
 	_knit_fibre = ""
+	if _knit_scarf: # a scarf for the dog: rated like a sweater (the game, her needles, the fibre), kept by scarves.gd
+		_knit_scarf = false
+		scarves.knitted(maxi(rarity if rarity > 0 else Game.knit_quality(), empire.needle_floor()), fibre)
+		return
 	if fibre != "" and not (Game.has_item("wool", 2) and Game.has_item(fibre)):
 		fibre = ""
 	var paid := false
@@ -5870,6 +5897,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=scarf" in OS.get_cmdline_user_args(): # just the dog's knitted scarves: knitting, wearing, gallop, barks, save
+		await _wait(1.5)
+		await _scarf_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=dog" in OS.get_cmdline_user_args(): # just the dog: his model and loops, playing him, his gaits
 		await _wait(1.5)
 		await _dog_checks()
@@ -6147,6 +6180,7 @@ func _autotest() -> void:
 	await _world_checks()
 	await SuburbCheck.new().run(self)
 	await _dog_checks()
+	await _scarf_checks()
 	await _wildlife_checks()
 	await _empire_checks()
 	await _wolf_checks()
@@ -8133,6 +8167,202 @@ func _dog_checks() -> void:
 	_check("he herds only while you play him: the strays shy from him then, further off than from her, and not once he's back at her side (played %s, now %s)" % [herding_played, homestead.herders.has(dog)],
 		herding_played and not homestead.herders.has(dog) and dog.scare_radius() > Homestead.HERD_RADIUS)
 	cam_dist = cd0
+
+
+## The dog's knitted scarves (scarves.gd, data/scarves.json): not before Act 1 is done; knitted from
+## plain wool and from a wild fibre (rated like a sweater); he wears the better one at once; his
+## menu puts one on and takes it off; his red scarf tinted for each quality (pictures); a measured
+## faster gallop with his stride still matching; fewer barks to catch a fox; kept by a save. It
+## leaves the flags, the bag and the dog as it found them.
+func _scarf_checks() -> void:
+	hud.tip_panel.visible = false
+	hud.hide_dialogue()
+	var keep := {"flags": Game.flags.duplicate(true), "inv": Game.inv.duplicate(true), "energy": Game.energy, "jog": autotest_jog,
+		"cd": cam_dist, "sheep": Game.sheep_count, "sw": Game.sweaters.duplicate(), "sd": Game.sweater_designs.duplicate()}
+	player.walk([])
+	autotest_jog = false
+	toggle_dog(false)
+	Game.energy = 100.0
+	Game.flags.erase("dog_scarf")
+	Game.flags.erase("dog_scarves")
+	scarves.update()
+	var chair = furniture.filter(func(f): return f.item_id == "rocking_chair")
+	if chair.is_empty() or dog == null:
+		_check("the scarf checks have a rocking chair and the dog", false)
+		return
+	chair = chair[0]
+	# knitting: not in Act 1 (Gran's three wool are for the first sweater), then from plain wool
+	Game.inv.erase("wool")
+	Game.add_item("wool", scarves.wool())
+	Game.flags.erase("act1_done")
+	var rows_act1: Array = _actions_for(chair).filter(func(a): return str(a["id"]).begins_with("knit_scarf"))
+	Game.set_flag("act1_done")
+	var rows: Array = _actions_for(chair).filter(func(a): return str(a["id"]).begins_with("knit_scarf"))
+	var plain_row: Array = rows.filter(func(a): return a["id"] == "knit_scarf" and a["enabled"])
+	var sweater_row: Array = _actions_for(chair).filter(func(a): return a["id"] == "knit" and not a["enabled"])
+	_check("the rocking chair has 'Knit a scarf for the dog' once Act 1 is done (%d rows in Act 1, then '%s'), and a scarf takes less wool than a sweater (%d of 3: sweater row off %s)" % [rows_act1.size(), str(plain_row[0]["label"]) if not plain_row.is_empty() else "none", scarves.wool(), not sweater_row.is_empty()],
+		rows_act1.is_empty() and not plain_row.is_empty() and scarves.wool() < 3 and not sweater_row.is_empty())
+	var sw0 := Game.sweaters.size()
+	_do_action(chair, "knit_scarf")
+	var t := 0.0
+	while scarves.owned().is_empty() and t < 60.0:
+		await _wait(0.2)
+		t += 0.2
+	await _wait(0.3)
+	var first: Dictionary = scarves.owned()[0] if not scarves.owned().is_empty() else {}
+	var q1 := int(first.get("q", 0))
+	_check("she knits the dog a scarf from %d wool: a %s one (rated by the knitting game, at least her needles' floor %d), no sweater (%d -> %d), and he wears it at once (scarf %d, warmth %.0f)" % [scarves.wool(), KnitGame.rarity_name(q1), empire.needle_floor(), sw0, Game.sweaters.size(), dog.scarf_q, dog.warmth()],
+		q1 >= empire.needle_floor() and Game.count("wool") == 0 and Game.sweaters.size() == sw0 and dog.scarf_q == q1 and dog.warmth() > 0.0 and not knit.active)
+	# from a wild fibre: a little wool and the fluff, lifted to the fibre's floor
+	Game.add_item("wool", scarves.fibre_wool())
+	Game.add_item("lynx_fibre")
+	var fl: int = wildlife.knit_floor("lynx_fibre")
+	var fib_row: Array = _actions_for(chair).filter(func(a): return a["id"] == "knit_scarf:lynx_fibre" and a["enabled"])
+	var n0 := scarves.owned().size()
+	_do_action(chair, "knit_scarf:lynx_fibre")
+	t = 0.0
+	while scarves.owned().size() == n0 and t < 60.0:
+		await _wait(0.2)
+		t += 0.2
+	await _wait(0.3)
+	var lynx: Array = scarves.owned().filter(func(sc): return str(sc.get("fibre", "")) == "lynx_fibre")
+	var q2 := int(lynx[0]["q"]) if not lynx.is_empty() else 0
+	_check("knitted from lynx fluff ('%s') the scarf is at least the fibre's floor (%s, floor %s), took %d wool and the fluff (left %d wool, %d fluff), and no sweater (%d)" % [str(fib_row[0]["label"]) if not fib_row.is_empty() else "no row", KnitGame.rarity_name(q2), KnitGame.rarity_name(fl), scarves.fibre_wool(), Game.count("wool"), Game.count("lynx_fibre"), Game.sweaters.size() - sw0],
+		not fib_row.is_empty() and q2 >= fl and Game.count("wool") == 0 and Game.count("lynx_fibre") == 0 and Game.sweaters.size() == sw0)
+	# his menu: put one on, take it off
+	player.walk([])
+	player.position = Vector3(9.0, 0, 8.0)
+	dog.position = player.position + Vector3(1.2, 0, 0.8)
+	dog.path = []
+	await _wait(0.3)
+	var drows: Array = _actions_for(dog)
+	var on_rows: Array = drows.filter(func(a): return str(a["id"]).begins_with("scarf_on:"))
+	_perform(dog, "scarf_off")
+	var off_q := dog.scarf_q
+	var off_power := dog.bark_power()
+	var i_plain := -1
+	for i in scarves.owned().size():
+		if str(scarves.owned()[i].get("fibre", "")) == "":
+			i_plain = i
+	_perform(dog, "scarf_on:%d" % i_plain)
+	_check("clicking the dog lists her scarves (%s) and takes his off: his red one back (scarf %d, bark ×%.2f); then puts the wool one on (scarf %d)" % [str(drows.map(func(a): return a["id"])), off_q, off_power, dog.scarf_q],
+		on_rows.size() == 2 and drows.any(func(a): return a["id"] == "scarf_off") and off_q == 0 and is_equal_approx(off_power, 1.0) and dog.scarf_q == q1)
+	# a picture of him in each quality, and his red scarf
+	hud.hide_menu()
+	var cd0 := cam_dist
+	player.position = Vector3(9.0, 0, 8.0)
+	dog.position = _open_near(player.position + Vector3(4.0, 0, 0), 0.5)
+	dog.path = []
+	toggle_dog(true) # the camera follows him
+	cam_dist = 4.0
+	scarves.wear({})
+	await _wait(1.0)
+	hud.toast_panel.visible = false
+	await _shot("64_scarf_red.png")
+	for q in range(1, 6):
+		scarves.wear({"q": q, "fibre": ""})
+		await _wait(0.4)
+		hud.toast_panel.visible = false
+		await _shot("64_scarf_q%d.png" % q)
+	dog.rotation.y += PI # the other side, to see the tint keeps to the scarf
+	await _wait(0.2)
+	await _shot("64_scarf_side.png")
+	toggle_dog(false)
+	var tinted := false
+	for m in dog.find_children("*", "MeshInstance3D", true, false):
+		if (m as MeshInstance3D).get_surface_override_material(0) is ShaderMaterial:
+			tinted = true
+	_check("his scarf takes each quality's colour on the scarf alone (shader on: %s)" % tinted, tinted)
+	cam_dist = cd0
+	# the gallop: measured on the ground, plain and in a Rare scarf, his stride still matching
+	var gal := {}
+	for q in [0, 3]:
+		scarves.wear({} if q == 0 else {"q": q, "fibre": ""})
+		player.position = Vector3(9.0, 0, 8.0)
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+		dog.speed = 0.0
+		toggle_dog(true)
+		autotest_jog = true
+		var goal := dog.position + Vector3(22.0, 0, 0)
+		var path := _find_path(dog.position, goal)
+		if path.is_empty():
+			goal = dog.position + Vector3(-22.0, 0, 0)
+			path = _find_path(dog.position, goal)
+		dog.walk(path)
+		await _wait(1.4) # up to speed
+		var p0 := dog.position
+		var t0 := Time.get_ticks_msec()
+		await _wait(1.0)
+		var dt := (Time.get_ticks_msec() - t0) / 1000.0
+		var moved := Vector2(dog.position.x - p0.x, dog.position.z - p0.z).length() / maxf(dt, 0.01)
+		var covers := dog.loop_rate() * float(dog.STRIDE.get(dog.current_loop(), 1.0))
+		gal[q] = {"m": moved, "loop": dog.current_loop(), "rate": dog.loop_rate(), "covers": covers, "speed": dog.speed}
+		autotest_jog = false
+		toggle_dog(false)
+		dog.walk([])
+		hold_release()
+	var g0: Dictionary = gal[0]
+	var g3: Dictionary = gal[3]
+	var max_rate := float(scarves.data.get("max_rate", 1.5))
+	_check("in a Rare scarf he gallops faster: %.2f m/s measured against %.2f plain (×%.2f), his Run loop at %.2f covering %.2f m/s at %.2f m/s, under the cap of %.2f" % [g3["m"], g0["m"], float(g3["m"]) / maxf(0.01, float(g0["m"])), g3["rate"], g3["covers"], g3["speed"], max_rate],
+		g0["loop"] == "Run" and g3["loop"] == "Run" and float(g3["m"]) > float(g0["m"]) * 1.06 and absf(float(g3["covers"]) - float(g3["speed"])) < 0.15 and float(g3["rate"]) <= max_rate + 0.01)
+	var trot_ok := dog.trot_speed() < Dog.RUN_ABOVE
+	scarves.wear({"q": 5, "fibre": ""})
+	trot_ok = trot_ok and dog.trot_speed() < Dog.RUN_ABOVE and dog.gallop_speed() / float(Dog.STRIDE["Run"]) <= max_rate + 0.01
+	_check("even in a Legendary scarf his trot stays a trot (%.2f m/s) and his gallop plays at %.2f, under %.2f" % [dog.trot_speed(), dog.gallop_speed() / float(Dog.STRIDE["Run"]), max_rate], trot_ok)
+	# a fox: three barks plain, fewer in a Rare scarf
+	Game.sheep_count = 1 # room in the pen
+	Game.flags.erase("penned")
+	Game.flags.erase("wild_gone")
+	wildlife.build()
+	await _wait(0.4)
+	var foxes: Array = wildlife.animals.filter(func(a): return a.species == "fox" and not a.penned)
+	var counts := {}
+	if not foxes.is_empty():
+		var fox = foxes[0]
+		player.position = Vector3(9.0, 0, 8.0)
+		dog.position = player.position + Vector3(1.2, 0, 0.8)
+		dog.path = []
+		for q in [0, 3]:
+			scarves.wear({} if q == 0 else {"q": q, "fibre": ""})
+			fox.caught = false
+			fox.fright = 0.0
+			fox.fleeing = 0.0
+			var n := 0
+			while not fox.caught and n < 10:
+				fox.position = dog.position + Vector3(1.0, 0, 0)
+				fox.visible = true
+				wildlife.barked(dog.global_position)
+				n += 1
+			counts[q] = n
+			fox.caught = false
+			fox.fright = 0.0
+	_check("a fox takes %s barks plain and %s in a Rare scarf (bark ×%.2f)" % [counts.get(0, "?"), counts.get(3, "?"), float(scarves.tier(3).get("bark", 1.0))],
+		int(counts.get(0, 0)) == int(wildlife.barks_for(foxes[0]) if not foxes.is_empty() else -1) and int(counts.get(3, 99)) < int(counts.get(0, 0)))
+	wildlife.clear()
+	Game.sheep_count = int(keep["sheep"])
+	# kept by a save
+	scarves.wear({"q": q2, "fibre": "lynx_fibre"})
+	var d := JSON.parse_string(JSON.stringify(Game.to_dict())) as Dictionary
+	Game.flags.erase("dog_scarf")
+	Game.flags.erase("dog_scarves")
+	await _wait(0.2)
+	var bare := dog.scarf_q
+	Game.from_dict(d)
+	await _wait(0.2)
+	_check("his scarf and her scarves are kept by a save (bare %d, back to %d of %d wearing the %s; %d scarves)" % [bare, dog.scarf_q, q2, scarves.name_of(scarves.worn()), scarves.owned().size()],
+		bare == 0 and dog.scarf_q == q2 and str(scarves.worn().get("fibre", "")) == "lynx_fibre" and scarves.owned().size() == 2)
+	# as it was
+	Game.flags = keep["flags"]
+	Game.inv = keep["inv"]
+	Game.energy = keep["energy"]
+	Game.sweaters = keep["sw"]
+	Game.sweater_designs = keep["sd"]
+	autotest_jog = keep["jog"]
+	cam_dist = keep["cd"]
+	scarves.update()
+	await _wait(0.2)
 
 
 ## A walkable spot about `r` metres from `at` (for the autotest to stand her near something).
