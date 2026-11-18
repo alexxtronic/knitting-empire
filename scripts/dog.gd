@@ -14,9 +14,15 @@ extends Node3D
 ## strays shy from him further off than from Nora; following her he moves nothing. For now he's
 ## with her from the start of every game (main.DOG_FROM_START); in Act 1 he can only herd once the
 ## pen is built (the "pen_done" flag, main.dog_herds()).
+##
+## A knitted scarf (scripts/scarves.gd, data/scarves.json) takes the place of his red one: wear_scarf()
+## tints the scarf's red in his colour map (dog.glb has one material, so the scarf isn't a part of
+## its own; shaders/dog_scarf.gdshader), speeds his trot and gallop, makes each bark frighten more
+## (bark_power(), read by wildlife.barked) and keeps its warmth for cold lands (warmth()).
 
 const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
+const SCARF_SHADER := preload("res://shaders/dog_scarf.gdshader")
 const MODEL := "res://assets/props/dog.glb"
 const LOOPS := ["Idle", "Walk", "Trot", "Run"]
 const STRIDE := {"Walk": 0.669, "Trot": 1.459, "Run": 3.424}
@@ -51,6 +57,12 @@ var _anim: AnimationPlayer
 var _repath := 0.0
 var _look_t := 0.0
 var _giving_way := false # walking round to Nora's far side to make room in a scene
+var scarf_q := 0 # the knitted scarf he wears (1 Common .. 5 Legendary), 0 for his red one
+var _trot_mult := 1.0
+var _run_mult := 1.0
+var _bark_mult := 1.0
+var _warmth := 0.0
+var _scarf_mats := {} # the scarf shader material made for each of the model's own materials
 
 
 func _ready() -> void:
@@ -78,6 +90,72 @@ func _ready() -> void:
 
 func display_name() -> String:
 	return "Dog"
+
+
+## Puts a knitted scarf on him (`tier` a row of data/scarves.json "tiers"; `max_rate` caps his
+## loops' playback), or with an empty `tier` gives him his red one back.
+func wear_scarf(tier: Dictionary, max_rate := 1.5) -> void:
+	scarf_q = int(tier.get("rarity", 0))
+	_trot_mult = minf(float(tier.get("trot", 1.0)), maxf(1.0, max_rate * float(STRIDE["Trot"]) / walk_speed))
+	_trot_mult = minf(_trot_mult, (RUN_ABOVE - 0.1) / walk_speed) # a boosted trot stays a trot
+	_run_mult = minf(float(tier.get("run", 1.0)), maxf(1.0, max_rate * float(STRIDE["Run"]) / run_speed))
+	_bark_mult = maxf(1.0, float(tier.get("bark", 1.0)))
+	_warmth = float(tier.get("warmth", 0.0))
+	var tint: Variant = Color.html(str(tier["color"])) if tier.has("color") else null
+	if _model == null:
+		return
+	for m in _model.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var base := mi.mesh.surface_get_material(i) as BaseMaterial3D
+			if base == null:
+				continue
+			if tint == null:
+				mi.set_surface_override_material(i, null)
+				continue
+			var sm: ShaderMaterial = _scarf_mats.get(base.get_instance_id())
+			if sm == null:
+				sm = ShaderMaterial.new()
+				sm.shader = SCARF_SHADER
+				sm.set_shader_parameter("albedo_tex", base.albedo_texture)
+				sm.set_shader_parameter("normal_tex", base.normal_texture)
+				sm.set_shader_parameter("roughness_v", base.roughness)
+				sm.set_shader_parameter("normal_depth", base.normal_scale)
+				_scarf_mats[base.get_instance_id()] = sm
+			var c: Color = tint
+			sm.set_shader_parameter("tint", Vector3(c.r, c.g, c.b))
+			mi.set_surface_override_material(i, sm)
+
+
+## How much more each bark frightens a wild animal (1 with his red scarf).
+func bark_power() -> float:
+	return _bark_mult
+
+
+## The warmth of the scarf he wears, for cold lands (none yet): 0 with his red one.
+func warmth() -> float:
+	return _warmth
+
+
+## His trot and gallop with the scarf he wears.
+func trot_speed() -> float:
+	return walk_speed * _trot_mult
+
+
+func gallop_speed() -> float:
+	return run_speed * _run_mult
+
+
+## A click on him: the scarf rows (scarves.gd), once she has knitted him one.
+func ke_actions() -> Array:
+	return main.scarves.dog_rows() if main and main.scarves else []
+
+
+func ke_action(id: String) -> void:
+	if main and main.scarves:
+		main.scarves.perform(id)
 
 
 func scare_radius() -> float:
@@ -184,13 +262,13 @@ func _step(delta: float) -> void:
 
 func _top_speed() -> float:
 	if controlled:
-		return run_speed if running else walk_speed
+		return gallop_speed() if running else trot_speed()
 	# keeping up with Nora: a walk beside her, a trot when she's drawn ahead, a gallop to catch up
 	var d := _to_nora().length()
 	if d > 7.0:
-		return run_speed
+		return gallop_speed()
 	if d > 3.0:
-		return walk_speed
+		return trot_speed()
 	return maxf(0.6, main.player.speed if main else 0.6)
 
 
