@@ -1,13 +1,13 @@
 {
   "id": "barn",
-  "atlas": 2048,
+  "atlas": 4096,
   "reach": 1.6,
   "samples": 256,
   "device": "METAL",
-  "light_mean": 0.004,
+  "light_mean": 0.282,
   "light_p05": 0.0,
-  "seconds": 36.0,
-  "glb_bytes": 3308752,
+  "seconds": 191.1,
+  "glb_bytes": 11033160,
   "lost_nodes": [],
   "lost_materials": [],
   "lost_images": []

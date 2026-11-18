@@ -1,7 +1,7 @@
 extends RefCounted
 ## The frame-rate check (--only=perf): stands Nora at fixed spots (her farm by day and night, the
 ## town square by day and night, inside the Cappuccino Cafe by day and night, the swamp at dawn in
-## the mist, the woods by day and in the morning mist), with the world as a player has it (the wild
+## the mist, the woods by day and in the morning mist, Bretton Oaks at night), with the world as a player has it (the wild
 ## animals out, the town on its rounds, vsync off), and prints for each graphics level the median
 ## frame time, the slowest frames (95th percentile), the render thread's CPU time, and the draw
 ## calls, primitives and objects drawn. It saves a picture of each spot at the computer's default
@@ -17,6 +17,7 @@ extends RefCounted
 ## --perfspots=farm_day,town_night,... (default: all), and --perfprobe, which at each spot times
 ## each effect and each of the frame-rate pass's changes by switching it off and on again in turn
 ## (back to back, so the machine's load hits both halves alike); --perftoggles=a,b keeps only those.
+## --notownsfolk leaves the townsfolk (townsfolk.gd) out of the world, to time the town without them.
 ## Every line starts with PERF.
 
 const Interiors = preload("res://scripts/interiors.gd")
@@ -48,6 +49,7 @@ func spots() -> Array:
 		["swamp_dawn", Vector3(-58.0, 0.0, -6.0), 6.4],
 		["woods_day", Lighting.SHOT_TARGET, 12.0],
 		["woods_mist", Lighting.SHOT_TARGET, 6.6],
+		["suburb_night", (main.suburb.centre if main.suburb else Vector3(99.0, 0.0, 8.0)) + Vector3(0.0, 0.0, 4.0), 22.0], # Bretton Oaks, windows and porches lit
 	]
 
 
@@ -59,10 +61,15 @@ func run(m: Node) -> void:
 	# the world as a player has it: the animals out, the town on its rounds, the real clock (stopped)
 	if main.wildlife.get_child_count() == 0:
 		main.wildlife.build()
+	if not main.townsfolk.built and not "--notownsfolk" in OS.get_cmdline_user_args(): # and the townsfolk about town (townsfolk.gd; --notownsfolk leaves them out, to compare)
+		main.townsfolk.build()
+		main.townsfolk.place_all()
 	main.town_rounds = true
 	if main.fog != null: # the fog over unexplored land, as a new game has it (fog_of_war.gd)
 		main.fog.enabled = true
 		main.fog.reset()
+	if main.suburb:
+		main.suburb.on = true # and to bed in Bretton Oaks at night
 	Game.fast_clock = false
 	Game.time_running = false
 	main.hud.visible = true

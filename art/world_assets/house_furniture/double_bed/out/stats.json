@@ -1,0 +1,41 @@
+{
+  "name": "double_bed",
+  "triangles": 5169,
+  "materials": [
+    "double_bed_wood",
+    "double_bed_panel",
+    "double_bed_ticking",
+    "double_bed_sheet",
+    "double_bed_quilt",
+    "double_bed_plaid"
+  ],
+  "size_m": [
+    1.604,
+    2.105,
+    1.279
+  ],
+  "min_m": [
+    -0.802,
+    -1.052,
+    0.0
+  ],
+  "max_m": [
+    0.802,
+    1.054,
+    1.279
+  ],
+  "images": [
+    "double_bed_panel",
+    "double_bed_panel_n",
+    "double_bed_plaid",
+    "double_bed_plaid_n",
+    "double_bed_quilt",
+    "double_bed_sheet",
+    "double_bed_sheet_n",
+    "double_bed_ticking",
+    "double_bed_ticking_n",
+    "double_bed_wood",
+    "double_bed_wood_n"
+  ],
+  "glb_bytes": 1879636
+}

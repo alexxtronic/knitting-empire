@@ -35,6 +35,8 @@ uniform bool patch_baked = false;
 
 #include "res://shaders/grass_patches.gdshaderinc"
 
+#include "res://shaders/ground_hole.gdshaderinc"
+
 varying float h;
 varying float tint;
 varying float rnd;
@@ -73,7 +75,7 @@ void vertex() {
 	vec3 off = vec3(bend.x, 0.0, bend.y) * k * height;
 	off.y = -length(off.xz) * 0.55; // a bent blade gets shorter
 	v += transpose(mat3(MODEL_MATRIX)) * off;
-	VERTEX = v;
+	VERTEX = in_ground_hole(root.xz) ? vec3(0.0) : v; // none over the basement while she's down there
 	tint = gust;
 }
 

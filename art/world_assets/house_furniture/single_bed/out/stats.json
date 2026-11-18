@@ -1,0 +1,39 @@
+{
+  "name": "single_bed",
+  "triangles": 4189,
+  "materials": [
+    "single_bed_wood",
+    "single_bed_panel",
+    "single_bed_ticking",
+    "single_bed_sheet",
+    "single_bed_blanket"
+  ],
+  "size_m": [
+    1.008,
+    2.005,
+    1.149
+  ],
+  "min_m": [
+    -0.504,
+    -1.002,
+    0.0
+  ],
+  "max_m": [
+    0.504,
+    1.004,
+    1.149
+  ],
+  "images": [
+    "single_bed_blanket",
+    "single_bed_blanket_n",
+    "single_bed_panel",
+    "single_bed_panel_n",
+    "single_bed_sheet",
+    "single_bed_sheet_n",
+    "single_bed_ticking",
+    "single_bed_ticking_n",
+    "single_bed_wood",
+    "single_bed_wood_n"
+  ],
+  "glb_bytes": 534400
+}

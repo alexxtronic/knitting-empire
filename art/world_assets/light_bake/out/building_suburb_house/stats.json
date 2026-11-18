@@ -1,0 +1,14 @@
+{
+  "id": "building_suburb_house",
+  "atlas": 4096,
+  "reach": 1.4,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.311,
+  "light_p05": 0.0,
+  "seconds": 166.3,
+  "glb_bytes": 7899200,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

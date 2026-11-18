@@ -1,0 +1,105 @@
+{
+  "name": "building_suburb_house",
+  "parts": {
+    "base": {
+      "triangles": 240,
+      "materials": [
+        "suburb_floor",
+        "suburb_paving"
+      ]
+    },
+    "wall_front": {
+      "triangles": 1094,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining",
+        "suburb_vinyl",
+        "suburb_trim",
+        "suburb_pane",
+        "suburb_curtain_sheer",
+        "suburb_lamp_black",
+        "suburb_bulb",
+        "suburb_paving"
+      ]
+    },
+    "wall_back": {
+      "triangles": 924,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining",
+        "suburb_trim",
+        "suburb_pane",
+        "suburb_curtain_sheer",
+        "suburb_door"
+      ]
+    },
+    "wall_left": {
+      "triangles": 444,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining",
+        "suburb_trim",
+        "suburb_pane",
+        "suburb_curtain_sheer"
+      ]
+    },
+    "wall_right": {
+      "triangles": 448,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining",
+        "suburb_trim",
+        "suburb_pane",
+        "suburb_curtain_sheer"
+      ]
+    },
+    "wall_front_low": {
+      "triangles": 176,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining"
+      ]
+    },
+    "wall_back_low": {
+      "triangles": 206,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining"
+      ]
+    },
+    "wall_left_low": {
+      "triangles": 104,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining"
+      ]
+    },
+    "wall_right_low": {
+      "triangles": 104,
+      "materials": [
+        "suburb_brick",
+        "suburb_lining"
+      ]
+    },
+    "door": {
+      "triangles": 804,
+      "materials": [
+        "suburb_door",
+        "suburb_brass",
+        "suburb_leaf_wreath",
+        "suburb_bow"
+      ]
+    },
+    "roof": {
+      "triangles": 566,
+      "materials": [
+        "suburb_roof_shake",
+        "suburb_trim",
+        "suburb_vinyl",
+        "suburb_lining"
+      ]
+    }
+  },
+  "triangles": 5110,
+  "glb_bytes": 577408
+}

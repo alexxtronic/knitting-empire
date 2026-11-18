@@ -1,0 +1,36 @@
+{
+  "name": "coat_rack",
+  "triangles": 2786,
+  "materials": [
+    "coat_rack_wood",
+    "coat_rack_hat",
+    "coat_rack_hat_band",
+    "coat_rack_bag",
+    "coat_rack_scarf",
+    "coat_rack_fringe"
+  ],
+  "size_m": [
+    0.481,
+    0.476,
+    1.946
+  ],
+  "min_m": [
+    -0.241,
+    -0.202,
+    0.002
+  ],
+  "max_m": [
+    0.241,
+    0.274,
+    1.948
+  ],
+  "images": [
+    "coat_rack_bag",
+    "coat_rack_bag_n",
+    "coat_rack_scarf",
+    "coat_rack_scarf_n",
+    "coat_rack_wood",
+    "coat_rack_wood_n"
+  ],
+  "glb_bytes": 255104
+}

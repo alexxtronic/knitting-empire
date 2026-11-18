@@ -16,6 +16,15 @@ extends Node3D
 ##              is in the file the list replaces what scripts/world.gd and scripts/nature.gd
 ##              scatter, so later changes to their random placement can't undo your arrangement
 ##   "roads"    the painted road map (a PNG, base64): red = dirt, green = gravel, blue = cobbles
+##   the furniture inside the walk-in buildings (the shops, the café, Marcus's house) is picked up
+##              piece by piece: a moved, turned or deleted piece is in "nodes" as
+##              "in:<building's key>:<piece>@x,z", in the building's own space, so it goes with the
+##              building; "added_in" lists pieces copied or placed inside one (its key, the node they
+##              hang from, catalog id, x, y, z, turn and size in the building's space). Every roof
+##              is off while the editor is open; Marcus's basement is edited from down there
+##   "split_house" Marcus's house's walls (with their doors, sliding doors and windows) and floors,
+##              the whole lists, written once the editor's house tools have changed them; they
+##              replace data/split_house.json's "walls" and "rooms" (house_edit.gd)
 ## With no file, or a part missing from it, that part of the world is exactly what the code builds.
 ##
 ## The Place tool shows the chosen thing under the pointer with a green outline (R turns it left,
@@ -45,12 +54,20 @@ const Nature = preload("res://scripts/nature.gd")
 const Regions = preload("res://scripts/regions.gd")
 const Furniture = preload("res://scripts/furniture.gd")
 const Mail = preload("res://scripts/mail.gd")
+const HouseEdit = preload("res://scripts/house_edit.gd")
 
 const LAYOUT_FILE := "res://data/world_layout.json"
 const TURN_STEP := 15.0 # degrees per press of R
 const ROAD_PX := 8 # pixels of the painted road map per metre
-const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1)}
-const TOOLS := [["select", "Select & move"], ["place", "Place"], ["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["erase", "Erase road"]]
+## Each surface's colour on the road map (shaders/painted_roads.gdshaderinc reads it the same way)
+const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble": Color(0, 0, 1), "pavement": Color(1, 1, 0), "sidewalk": Color(0, 1, 1), "grass": Color(0, 0, 0)}
+## The road brush's surfaces, in its dropdown (Alex, 2026-11-17: pavement and sidewalk added)
+const ROADS := [["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["pavement", "Pavement"], ["sidewalk", "Sidewalk"], ["grass", "Grass"]]
+const TOOLS := [["select", "Select & move"], ["place", "Place"], ["road", "Paint road"], ["erase", "Erase road"]]
+## Where roads can be painted: the whole map (main.gd's walking grid, x -96..144, z -100..62;
+## Alex, 2026-11-17: "god mode should apply to the entire game space"). The map was Grass.REGION
+## alone before; a layout saved then is pasted into this one where it lay (_load_roads).
+const ROAD_RECT := Rect2(-96.0, -100.0, 240.0, 162.0)
 const BRUSH_MAX := 15.0 # metres (radius)
 const SIZE_STEP := 1.1 # how much bigger one press of + makes a thing (and - smaller)
 const SIZE_MIN := 0.2
@@ -108,6 +125,9 @@ class El:
 	var block_world: Array = [] # the obstacle rects it has in main.gd's lists now
 	var leaves: Array = [] # trees: fallen leaves, each [Transform3D relative to the tree, Color, Color]
 	var leaf0 := -1
+	var inside: El # a piece of furniture inside a walk-in building (a shop, the café, Marcus's house): that building
+	var local_base := Transform3D.IDENTITY # pieces: where the code put it, in its building's own space
+	var pieces: Array = [] # walk-in buildings: the El of every piece inside
 
 
 var main # main.gd
@@ -120,6 +140,10 @@ var templates := {} # kind -> how its MultiMeshes are made
 var baked := {} # scenery kinds whose full list goes in the layout file
 var orphans := {} # saved node edits that match nothing the code builds now (kept in the file)
 var unknown_scenery := {} # saved scenery lists for kinds the game no longer has (kept in the file)
+var orphan_pieces: Array = [] # saved pieces added inside a building that isn't there now (kept in the file)
+var house_tools # house_edit.gd: Marcus's house's walls, doors, windows and floors
+var house_split_edited := false # they were changed here: the layout gets the whole lists again
+var house_split_saved := {} # the layout's "split_house" entry as read ({} = the data file's own)
 var plots_edited := false
 var home_edited := false # her furniture was arranged here: the layout gets the whole list again
 var house_list: Array = [] # the layout's "house" list, as read ([] = the code's own furnishing)
@@ -135,6 +159,7 @@ var place_id := "" # what the Place tool sets down: "scenery:<model>", "scenery:
 var place_size := 1.0 # how big the Place tool sets things down (+ and - change it)
 var _size_for := "" # the place_id that place_size was last reset for
 var small_on := true
+var suburb_painted := false # Bretton Oaks' paving is on the road map (and its meshes hidden)
 var roads_on := false # the layout has painted roads: the code's own paths and cobbles are replaced by the map
 var road_img: Image
 var road_tex: ImageTexture
@@ -148,15 +173,18 @@ var _tile_mmis: Array[MultiMeshInstance3D] = []
 var _drag := {}
 var _painting := false
 var _stroke_rect := Rect2()
-var _stroke_before := PackedByteArray()
+var _stroke_before: Image # the whole map as it was when the stroke began
 var _last_dab := Vector3.ZERO
 var _line_on := false # Shift held while painting: a straight line from _line_from
 var _line_from := Vector3.ZERO
-var _line_base := PackedByteArray() # the road map as it was when the line began
+var _line_base: Image # the road map over _line_rect as it was when the line began
+var _line_rect := Rect2()
 var _pen_at := Vector3.ZERO
 var _pen_place := Rect2()
 var _pond: El
 var _place_pick: OptionButton
+var _road_pick: OptionButton
+var road_kind := "dirt" # what the Paint road button lays: one of ROADS
 var _ghost: Node3D # the Place tool's preview: the thing itself under the pointer, outlined in green
 var _ghost_yaw := 0.0
 var _ghost_scale := 1.0
@@ -205,6 +233,7 @@ func collect() -> void:
 			_collect_node(c, "decor_" + c.item_id, c.display_name(), [] if c.is_flat() else [c.footprint()])
 	for b in Town.built:
 		_collect_node(b[0], b[1], b[2], b[3])
+	_collect_furnishings()
 	for f in main.decor:
 		_collect_node(f, "decor_" + f.item_id, f.display_name(), [] if f.is_flat() else [f.footprint()])
 	if World.barn != null and is_instance_valid(World.barn):
@@ -344,6 +373,115 @@ func _collect_node(n: Node3D, kind: String, title: String, blocks: Array) -> El:
 	return el
 
 
+## The furniture inside the buildings you can walk into (the shops, the café, Marcus's house; their
+## builders mark each piece "furnishing" and the building "walk_in"): each piece is its own thing
+## here, to move, turn, copy or delete inside its building. It goes with the building when that is
+## moved, and the layout keeps it against the building, in the building's own space
+## ("in:<building's key>:<piece>@x,z").
+func _collect_furnishings() -> void:
+	for b in els.duplicate():
+		if b.scenery or b.node == null or not is_instance_valid(b.node) or not b.node.has_meta("walk_in"):
+			continue
+		for n in b.node.find_children("*", "Node3D", true, false):
+			if n.has_meta("furnishing") and n.has_meta("item_id"):
+				_collect_piece(b, n)
+
+
+func _collect_piece(b: El, n: Node3D) -> El:
+	var id := str(n.get_meta("item_id"))
+	var blocks: Array = []
+	if n.has_meta("block"):
+		# a shop's piece: its obstacle was handed in with the building's; it's the piece's own now
+		var r: Rect2 = n.get_meta("block")
+		for i in b.block_local.size():
+			if (b.block_local[i] as Rect2).is_equal_approx(r):
+				blocks.append(b.block_world[i])
+				b.block_local.remove_at(i)
+				b.block_world.remove_at(i)
+				break
+	elif n.has_meta("god_added") and _piece_blocks_itself(n):
+		blocks = _piece_rect(id, n.global_transform)
+	var el := _collect_node(n, "piece_" + id, str(Catalog.ITEMS.get(id, {}).get("name", id.capitalize())), blocks)
+	by_key.erase(el.key)
+	var lb := b.base.affine_inverse() * n.global_transform
+	el.key = "in:%s:%s@%.2f,%.2f" % [b.key, id, lb.origin.x, lb.origin.z]
+	var n_same := 2
+	while by_key.has(el.key):
+		el.key = "in:%s:%s@%.2f,%.2f#%d" % [b.key, id, lb.origin.x, lb.origin.z, n_same]
+		n_same += 1
+	by_key[el.key] = el
+	el.inside = b
+	el.local_base = lb
+	b.pieces.append(el)
+	return el
+
+
+## A piece set down in a shop blocks the walking grid by itself (the house's split floors keep their
+## own grid from the pieces' nodes: split_house.gd mark_grid()).
+func _piece_blocks_itself(n: Node3D) -> bool:
+	var p := n.get_parent()
+	while p != null:
+		if p.has_meta("walk_in"):
+			return str(p.get_meta("walk_in")) != "split_house"
+		p = p.get_parent()
+	return false
+
+
+## The ground a catalogue piece stands on at `xf`, as the shops' furnishing lays it ([] if it's
+## flat or up on something).
+func _piece_rect(id: String, xf: Transform3D) -> Array:
+	var item: Dictionary = Catalog.ITEMS.get(id, {})
+	if item.is_empty() or bool(item.get("flat", false)):
+		return []
+	var fs: Vector2 = Vector2(1, 1)
+	var sz = item.get("size", [1.0, 1.0])
+	if sz is Array and (sz as Array).size() >= 2:
+		fs = Vector2(float(sz[0]), float(sz[1]))
+	return [_turned(Rect2(-fs * 0.5, fs), _yaw(xf), Vector2(xf.origin.x, xf.origin.z))]
+
+
+## The walk-in building whose room `at` (world) is in, and where a piece set down there goes:
+## {"b": its El, "parent": the node it hangs from, "y": the floor's height}, or {}.
+func _room_at(at: Vector3) -> Dictionary:
+	for b in els:
+		if b.scenery or b.deleted or b.node == null or not is_instance_valid(b.node) or not b.node.has_meta("walk_in"):
+			continue
+		var w := str(b.node.get_meta("walk_in"))
+		if w == "split_house":
+			if main.suburb == null or main.suburb.walk_in == null:
+				continue
+			var r: Array = main.suburb.walk_in.root_at(at)
+			if not r.is_empty():
+				return {"b": b, "parent": r[0], "y": float(r[1])}
+		elif Interiors.shops.has(w):
+			var s = Interiors.shops[w]
+			var q: Vector3 = b.node.global_transform.affine_inverse() * at
+			var room := (s.room as Rect2).grow(-0.2)
+			var f := b.node.get_node_or_null("Furnishings")
+			if f != null and room.has_point(Vector2(q.x, q.z)):
+				return {"b": b, "parent": f, "y": b.node.global_position.y}
+	return {}
+
+
+## One more piece inside building `b`, hung from `parent`, at `xf` (world).
+func _add_piece(b: El, parent: Node3D, id: String, xf: Transform3D) -> El:
+	var n := Node3D.new()
+	n.name = id
+	n.set_meta("item_id", id)
+	n.set_meta("furnishing", true)
+	n.set_meta("god_added", true)
+	parent.add_child(n)
+	Catalog.build(id, n)
+	n.global_transform = xf
+	var el := _collect_piece(b, n)
+	el.added = true
+	el.local_base = b.xf.affine_inverse() * xf
+	el.base = xf
+	_set_state(el, xf, false)
+	_measure(el)
+	return el
+
+
 func _measure(el: El) -> void:
 	var s: Vector3 = el.xf.basis.get_scale()
 	el.radius = (el.bounds.size * 0.5).length() * maxf(s.x, maxf(s.y, s.z)) + 0.05
@@ -407,6 +545,12 @@ func _apply(el: El) -> void:
 	var n := el.node
 	n.global_transform = el.xf
 	n.visible = not el.deleted
+	for p in el.pieces:
+		# the furniture inside goes with the building
+		var pe := p as El
+		pe.base = el.xf * pe.local_base
+		pe.xf = pe.node.global_transform
+		_measure(pe)
 	for b in n.find_children("*", "StaticBody3D", true, false):
 		var body := b as StaticBody3D
 		if not body.has_meta("god_layer"):
@@ -623,6 +767,8 @@ func _reblock(el: El) -> Array:
 			main.grid_blockers.append(r)
 			main.place_blockers.append(r)
 			changed.append(r)
+	for p in el.pieces:
+		changed.append_array(_reblock(p))
 	if el.kind == "pen":
 		main.place_blockers.erase(_pen_place)
 		_pen_place = (main.pen_rect as Rect2).grow(0.3)
@@ -731,11 +877,15 @@ func load_layout() -> void:
 	if trees_changed:
 		_rebuild_litter()
 	var nodes: Dictionary = d.get("nodes", {})
+	var later: Array = []
 	for key in nodes:
 		var el: El = by_key.get(key)
 		var v: Dictionary = nodes[key]
 		if el == null:
 			orphans[key] = v
+			continue
+		if el.inside != null:
+			later.append([el, v]) # after its building has gone where it goes
 			continue
 		if bool(v.get("del", false)):
 			_set_state(el, el.base, true)
@@ -745,12 +895,40 @@ func load_layout() -> void:
 	for a in d.get("added", []):
 		if Catalog.ITEMS.has(str(a.get("id", ""))):
 			_add_decor(str(a["id"]), Vector3(float(a["x"]), 0, float(a["z"])), deg_to_rad(float(a.get("r", 0.0))), float(a.get("s", 1.0)))
+	for pv in later:
+		var el: El = pv[0]
+		var v: Dictionary = pv[1]
+		if bool(v.get("del", false)):
+			_set_state(el, el.base, true)
+		else:
+			_set_state(el, el.inside.xf * _piece_local(el.local_base, v), false)
+	orphan_pieces.clear()
+	for a in d.get("added_in", []):
+		var b: El = by_key.get(str(a.get("in", "")))
+		var parent: Node = b.node.get_node_or_null(NodePath(str(a.get("under", "")))) if b != null else null
+		if b == null or not parent is Node3D or not Catalog.ITEMS.has(str(a.get("id", ""))):
+			orphan_pieces.append(a)
+			continue
+		var lb := Transform3D(Basis(Vector3.UP, deg_to_rad(float(a.get("r", 0.0)))).scaled(Vector3.ONE * float(a.get("s", 1.0))), Vector3(float(a["x"]), float(a.get("y", 0.0)), float(a["z"])))
+		_add_piece(b, parent, str(a["id"]), b.xf * lb)
+	if not orphan_pieces.is_empty():
+		push_warning("world layout: %d pieces added inside buildings match no building now (kept in the file)" % orphan_pieces.size())
 	if not orphans.is_empty() or not unknown_scenery.is_empty():
 		push_warning("world layout: %d saved changes match nothing in the world now (kept in the file): %s" % [orphans.size() + unknown_scenery.size(), ", ".join(orphans.keys() + unknown_scenery.keys())])
 	if d.has("roads"):
 		_load_roads(d["roads"])
 	house_list = d.get("house", [])
+	house_split_saved = d.get("split_house", {})
+	if not house_split_saved.is_empty() and main.suburb != null and main.suburb.walk_in != null:
+		main.suburb.walk_in.set_layout((house_split_saved.get("walls", []) as Array).duplicate(true), (house_split_saved.get("rooms", []) as Array).duplicate(true))
 	unsaved = false
+
+
+## A piece's place in its building from the layout file: where the code put it, moved to x, z,
+## turned by r degrees and sized by s.
+static func _piece_local(lb: Transform3D, v: Dictionary) -> Transform3D:
+	var b := (Basis(Vector3.UP, deg_to_rad(float(v.get("r", 0.0)))) * lb.basis).scaled(Vector3.ONE * float(v.get("s", 1.0)))
+	return Transform3D(b, Vector3(float(v.get("x", lb.origin.x)), lb.origin.y, float(v.get("z", lb.origin.z))))
 
 
 ## Her furniture as it stands now, for the layout's "house" list: what a new game starts with.
@@ -791,10 +969,29 @@ func _item_of(el: El) -> Array:
 func layout() -> Dictionary:
 	var nodes := orphans.duplicate()
 	var added: Array = []
+	var added_in: Array = orphan_pieces.duplicate()
 	for el in els:
 		if el.scenery or el.home or el.built:
 			continue
 		var o := el.xf.origin
+		if el.inside != null:
+			# a piece inside a building: kept in the building's own space
+			var lx := el.inside.xf.affine_inverse() * el.xf
+			var sz := lx.basis.get_scale().x / maxf(el.local_base.basis.get_scale().x, 0.0001)
+			if el.added:
+				if not el.deleted:
+					var a := {"in": el.inside.key, "under": str(el.inside.node.get_path_to(el.node.get_parent())), "id": str(el.node.get_meta("item_id")),
+						"x": snappedf(lx.origin.x, 0.001), "y": snappedf(lx.origin.y, 0.001), "z": snappedf(lx.origin.z, 0.001), "r": snappedf(rad_to_deg(_yaw(lx)), 0.01)}
+					if absf(lx.basis.get_scale().x - 1.0) > 0.0005:
+						a["s"] = snappedf(lx.basis.get_scale().x, 0.001)
+					added_in.append(a)
+			elif el.deleted:
+				nodes[el.key] = {"del": true}
+			elif not lx.is_equal_approx(el.local_base):
+				nodes[el.key] = {"x": snappedf(lx.origin.x, 0.001), "z": snappedf(lx.origin.z, 0.001), "r": snappedf(rad_to_deg(angle_difference(_yaw(el.local_base), _yaw(lx))), 0.01)}
+				if absf(sz - 1.0) > 0.0005:
+					nodes[el.key]["s"] = snappedf(sz, 0.001)
+			continue
 		if el.added:
 			if not el.deleted:
 				var a := {"id": str(el.node.get("item_id")), "x": snappedf(o.x, 0.001), "z": snappedf(o.z, 0.001), "r": snappedf(rad_to_deg(_yaw(el.xf)), 0.01)}
@@ -815,13 +1012,22 @@ func layout() -> Dictionary:
 				list.append(_item_of(el))
 		sc[kind] = list
 	var d := {"version": 1, "nodes": nodes, "added": added, "scenery": sc}
+	if not added_in.is_empty():
+		d["added_in"] = added_in
+	if house_split_edited and house_tools != null and house_tools.house() != null:
+		var snap: Array = house_tools.snapshot()
+		d["split_house"] = {"walls": snap[0], "rooms": snap[1]}
+	elif not house_split_saved.is_empty():
+		d["split_house"] = house_split_saved
 	if home_edited:
 		d["house"] = home_now()
 	elif not house_list.is_empty():
 		d["house"] = house_list
 	if roads_on:
-		var r := Grass.REGION
+		var r := ROAD_RECT
 		d["roads"] = {"px": ROAD_PX, "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "png": Marshalls.raw_to_base64(road_img.save_png_to_buffer())}
+		if suburb_painted:
+			d["roads"]["suburb"] = true
 	return d
 
 
@@ -840,6 +1046,13 @@ func save_layout() -> bool:
 	for a in d["added"]:
 		arows.append("\t\t" + JSON.stringify(a))
 	lines.append('\t"added": [%s]' % ("" if arows.is_empty() else "\n" + ",\n".join(arows) + "\n\t"))
+	if d.has("added_in"):
+		var irows: Array[String] = []
+		for a in d["added_in"]:
+			irows.append("\t\t" + JSON.stringify(a))
+		lines.append('\t"added_in": [\n%s\n\t]' % ",\n".join(irows))
+	if d.has("split_house"):
+		lines.append('\t"split_house": ' + JSON.stringify(d["split_house"]))
 	if d.has("house"):
 		var hrows: Array[String] = []
 		for h in d["house"]:
@@ -874,6 +1087,7 @@ func set_active(on: bool) -> void:
 	if on == active or (on and not is_admin()):
 		return
 	active = on
+	Interiors.editing = on
 	if on:
 		sync_home()
 		sync_built()
@@ -932,9 +1146,21 @@ func cam_bounds() -> Rect2:
 func set_tool(t: String) -> void:
 	_end_stroke()
 	_end_stream()
+	if tool == "h_wall" and t != "h_wall" and house_tools != null:
+		house_tools.deselect()
+	if t == "road":
+		t = road_kind
+	if ROAD_COLOURS.has(t):
+		road_kind = t
+		if _road_pick != null:
+			for i in _road_pick.item_count:
+				if str(_road_pick.get_item_metadata(i)) == t:
+					_road_pick.select(i)
 	tool = t
+	if t.begins_with("h_") and house_tools != null:
+		main.hud.show_toast(house_tools.hint(t))
 	for k in _tool_btns:
-		(_tool_btns[k] as Button).set_pressed_no_signal(k == t)
+		(_tool_btns[k] as Button).set_pressed_no_signal(k == t or (k == "road" and ROAD_COLOURS.has(t)))
 	if t == "place" and place_id == "":
 		place_id = str(place_options()[0][0])
 	if t != "select":
@@ -942,7 +1168,7 @@ func set_tool(t: String) -> void:
 		hover = null
 		_draw_boxes()
 	if _ring != null:
-		_ring.visible = t != "select" and t != "place" # the Place tool shows the thing itself instead
+		_ring.visible = t != "select" and t != "place" and not t.begins_with("h_") # the Place tool shows the thing itself instead
 	_make_ghost()
 	_draw_ring()
 	_show_status()
@@ -987,7 +1213,7 @@ func pick(mpos: Vector2) -> El:
 	var best: El = null
 	var best_t := INF
 	for el in els:
-		if el.deleted or (not small_on and SMALL.has(el.kind)):
+		if el.deleted or (not small_on and SMALL.has(el.kind)) or (not el.scenery and not el.node.is_visible_in_tree()):
 			continue
 		var to_c: Vector3 = el.xf * el.bounds.get_center() - from
 		var along := to_c.dot(dir)
@@ -1030,12 +1256,26 @@ func _triangles(el: El) -> TriangleMesh:
 		var inv: Transform3D = el.node.global_transform.affine_inverse()
 		for mi in el.node.find_children("*", "MeshInstance3D", true, false):
 			var m := mi as MeshInstance3D
-			if m.mesh != null and m.visible:
+			if m.mesh != null and m.visible and not _belongs_to_piece(m, el.node):
 				faces.append_array((inv * m.global_transform) * m.mesh.get_faces())
 		el.tri = TriangleMesh.new()
 		if faces.size() >= 3:
 			el.tri.create_from_faces(faces)
 	return el.tri
+
+
+## A walk-in building's furnishings (and its roof, which is off while the editor is open) are
+## clicked as themselves, not as the building. So is the café's loft (its floor and the model's
+## `loft` part): it lies over the room below, which is edited from downstairs.
+func _belongs_to_piece(m: Node, top: Node) -> bool:
+	if top.has_meta("walk_in") and str(m.name) == "roof":
+		return true
+	var p := m
+	while p != null and p != top:
+		if p.has_meta("furnishing") or (top.has_meta("walk_in") and (str(p.name) == "loft" or str(p.name) == "LoftFurnishings")):
+			return true
+		p = p.get_parent()
+	return false
 
 
 ## Mouse events from main.gd while the editor is on. True = the editor used it.
@@ -1061,6 +1301,9 @@ func press(mpos: Vector2) -> void:
 	_end_stroke()
 	_end_stream()
 	_drag = {}
+	if tool.begins_with("h_"):
+		house_tools.press(tool, mpos)
+		return
 	if tool == "place":
 		var spot = main._ground_point(mpos)
 		if spot != null:
@@ -1083,6 +1326,9 @@ func press(mpos: Vector2) -> void:
 func move(mpos: Vector2, snap := false) -> void:
 	_mouse = mpos
 	_mouse_moved = true
+	if tool.begins_with("h_"):
+		house_tools.move(mpos)
+		return
 	if tool == "place":
 		var g = main._ground_point(mpos)
 		if g != null:
@@ -1113,6 +1359,8 @@ func move(mpos: Vector2, snap := false) -> void:
 
 
 func release() -> void:
+	if house_tools != null:
+		house_tools.release()
 	_end_stream()
 	if _painting:
 		_end_stroke()
@@ -1167,6 +1415,8 @@ func duplicate_selected() -> El:
 	var el: El
 	if src.scenery:
 		el = _add_scenery(src.kind, Transform3D(src.xf.basis, at), src.tint)
+	elif src.inside != null:
+		el = _add_piece(src.inside, src.node.get_parent(), str(src.node.get_meta("item_id")), Transform3D(src.xf.basis, Vector3(at.x, src.xf.origin.y, at.z)))
 	elif src.home:
 		el = _add_home(str(src.node.get("item_id")), at, _yaw(src.xf), src.xf.basis.get_scale().x)
 	elif src.node is Furniture:
@@ -1274,7 +1524,11 @@ func _place_one(at: Vector3, changed: Array) -> El:
 	if place_id.begins_with("decor:"):
 		if not Catalog.ITEMS.has(what):
 			return null
-		if main.interior_rect().has_point(Vector2(at.x, at.z)):
+		var room := _room_at(at)
+		if not room.is_empty():
+			# inside a shop, the café or Marcus's house: it joins that building's furnishings
+			el = _add_piece(room["b"], room["parent"], what, Transform3D(Basis(Vector3.UP, _ghost_yaw).scaled(Vector3.ONE * _ghost_scale), Vector3(at.x, float(room["y"]), at.z)))
+		elif main.interior_rect().has_point(Vector2(at.x, at.z)):
 			el = _add_home(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale) # into her house: it's hers
 		else:
 			el = _add_decor(what, Vector3(at.x, 0, at.z), _ghost_yaw, _ghost_scale)
@@ -1499,12 +1753,17 @@ func undo() -> void:
 					select(null)
 				changed.append_array(_set_state(el, el.xf, true))
 			_refresh(changed)
+		"house":
+			house_tools.restore(u[1])
+			house_split_edited = true
+			_refresh([])
 		"roads":
-			road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, u[1])
+			# only the part the stroke touched was kept: [its pixels, where they go, its area]
+			road_img.blit_rect(u[1], Rect2i(Vector2i.ZERO, (u[1] as Image).get_size()), u[3])
 			for el in u[2]:
 				(el as El).deleted = false
 				_apply(el)
-			_roads_changed(Grass.REGION)
+			_roads_changed(u[4])
 
 
 ## Keys from main.gd while the editor is on. True = the editor used it.
@@ -1524,7 +1783,8 @@ func handle_key(kc: Key, k: InputEventKey) -> bool:
 				return false
 			resize(1.0 / SIZE_STEP)
 		KEY_DELETE, KEY_BACKSPACE, KEY_X:
-			delete_selected()
+			if not (tool == "h_wall" and house_tools.delete_selected()):
+				delete_selected()
 		KEY_Z:
 			if cmd:
 				undo()
@@ -1594,7 +1854,7 @@ func _enable_roads(seed: bool) -> void:
 	if roads_on:
 		return
 	roads_on = true
-	var size := Vector2i(Grass.REGION.size * ROAD_PX)
+	var size := Vector2i(ROAD_RECT.size * ROAD_PX)
 	road_img = Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
 	if seed:
 		for r in World.PATHS:
@@ -1605,15 +1865,20 @@ func _enable_roads(seed: bool) -> void:
 		for i in Town.COBBLE_PATHS:
 			road_img.fill_rect(_px_rect(Town.PATHS[i]), ROAD_COLOURS["cobble"])
 		road_img.fill_rect(_px_rect(Town.PLAZA), ROAD_COLOURS["cobble"])
+		_paint_suburb()
 	_show_roads()
 
 
 func _show_roads() -> void:
 	road_tex = ImageTexture.create_from_image(road_img)
-	var r := Grass.REGION
+	var r := ROAD_RECT
 	var rect := Vector4(r.position.x, r.position.y, r.size.x, r.size.y)
 	main.grass.ground_mat.set_shader_parameter("roads", road_tex)
 	main.grass.ground_mat.set_shader_parameter("roads_rect", rect)
+	if main.regions != null: # the lands' own ground (and their trails) lies over the farm's out there
+		for gm in main.regions.ground_mats:
+			(gm as ShaderMaterial).set_shader_parameter("roads", road_tex)
+			(gm as ShaderMaterial).set_shader_parameter("roads_rect", rect)
 	# the cobbles the code laid give way to tiles that follow the painted map
 	for c in main.get_children():
 		if str(c.name).begins_with("Cobbles_"):
@@ -1649,39 +1914,110 @@ func _show_roads() -> void:
 				m.set_shader_parameter("roads", road_tex)
 				m.set_shader_parameter("roads_rect", rect)
 	_tiles.clear()
-	_retile(Grass.REGION)
+	_retile(ROAD_RECT)
+	if suburb_painted: # the map draws the cul-de-sac now, so its own meshes give way
+		for n in get_tree().get_nodes_in_group("suburb_paving"):
+			(n as Node3D).visible = false
+
+
+## Paints Bretton Oaks' turning circle and road (pavement), its kerbs and driveways (sidewalk) into
+## the map (Alex, 2026-11-17: "can't delete original cul-de-sac pavement"), so they can be rubbed
+## out or painted over like any road. Its shapes are `suburb.paving`.
+func _paint_suburb() -> void:
+	if main.suburb == null or not "paving" in main.suburb:
+		return
+	var shapes: Array = main.suburb.paving
+	if shapes.is_empty():
+		return
+	for kind in ["pavement", "sidewalk"]: # the kerbs and driveways over the asphalt's edge
+		var col: Color = ROAD_COLOURS[kind]
+		for sh in shapes:
+			if str(sh.get("kind", "")) != kind:
+				continue
+			var circle: Array = sh.get("circle", [])
+			var quad: Array = sh.get("quad", [])
+			var px: Rect2i
+			if not circle.is_empty():
+				var rad := float(circle[1])
+				px = _px_in(Rect2(Vector2(circle[0]) - Vector2(rad, rad), Vector2(rad, rad) * 2.0).grow(0.2))
+			else:
+				px = _px_in(Rect2(Vector2(quad[0]), Vector2.ZERO).expand(Vector2(quad[1])).grow(float(quad[2]) * 0.5 + 0.2))
+			for y in range(px.position.y, px.end.y):
+				for x in range(px.position.x, px.end.x):
+					var q := ROAD_RECT.position + (Vector2(x, y) + Vector2(0.5, 0.5)) / ROAD_PX
+					if _in_shape(q, circle, quad):
+						road_img.set_pixel(x, y, col)
+	suburb_painted = true
+
+
+## Whether `q` lies in one of suburb.paving's shapes: a circle [centre, radius] or a quad [a, b, width].
+static func _in_shape(q: Vector2, circle: Array, quad: Array) -> bool:
+	if not circle.is_empty():
+		return q.distance_to(Vector2(circle[0])) <= float(circle[1])
+	var a: Vector2 = quad[0]
+	var b: Vector2 = quad[1]
+	var ln := a.distance_to(b)
+	var d := (b - a) / maxf(ln, 0.001)
+	var t := (q - a).dot(d)
+	return t >= 0.0 and t <= ln and absf((q - a).dot(Vector2(-d.y, d.x))) <= float(quad[2]) * 0.5
 
 
 func _load_roads(d: Dictionary) -> void:
 	var img := Image.new()
-	var size := Vector2i(Grass.REGION.size * ROAD_PX)
-	if img.load_png_from_buffer(Marshalls.base64_to_raw(str(d.get("png", "")))) != OK or img.get_size() != size:
+	var size := Vector2i(ROAD_RECT.size * ROAD_PX)
+	var saved: Array = d.get("rect", [ROAD_RECT.position.x, ROAD_RECT.position.y, ROAD_RECT.size.x, ROAD_RECT.size.y])
+	var at := Rect2(float(saved[0]), float(saved[1]), float(saved[2]), float(saved[3]))
+	var want := Vector2i((at.size * ROAD_PX).round())
+	if img.load_png_from_buffer(Marshalls.base64_to_raw(str(d.get("png", "")))) != OK or int(d.get("px", ROAD_PX)) != ROAD_PX or img.get_size() != want or not ROAD_RECT.encloses(at):
 		push_warning("world layout: the saved roads don't fit this map, so the code's own paths are used")
 		return
 	img.convert(Image.FORMAT_RGB8)
 	_enable_roads(false)
-	road_img = img
+	if img.get_size() == size:
+		road_img = img
+	else: # a map saved when roads covered less of the world: it goes where it lay
+		road_img = Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
+		road_img.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), _px_rect(at).position)
+	if d.get("suburb", false) == true:
+		suburb_painted = true
+	else: # a map saved before the cul-de-sac went onto it
+		_paint_suburb()
 	_show_roads()
 
 
 func _px_rect(r: Rect2) -> Rect2i:
-	return Rect2i(Vector2i(((r.position - Grass.REGION.position) * ROAD_PX).round()), Vector2i((r.size * ROAD_PX).round()))
+	return Rect2i(Vector2i(((r.position - ROAD_RECT.position) * ROAD_PX).round()), Vector2i((r.size * ROAD_PX).round()))
 
 
-## What's painted at a spot: "dirt", "gravel", "cobble" or "".
+## The road map over `r` alone (the grass's mask covers less of the world than the roads do).
+func roads_over(r: Rect2) -> Image:
+	return road_img.get_region(_px_in(r))
+
+
+## _px_rect cut to the map's own pixels.
+func _px_in(r: Rect2) -> Rect2i:
+	return _px_rect(r).intersection(Rect2i(Vector2i.ZERO, road_img.get_size()))
+
+
+## What's painted at a spot: "dirt", "gravel", "cobble", "pavement", "sidewalk" or "".
 func road_at(x: float, z: float) -> String:
 	if not roads_on:
 		return ""
-	var p := Vector2i(((Vector2(x, z) - Grass.REGION.position) * ROAD_PX).floor())
+	var p := Vector2i(((Vector2(x, z) - ROAD_RECT.position) * ROAD_PX).floor())
 	if p.x < 0 or p.y < 0 or p.x >= road_img.get_width() or p.y >= road_img.get_height():
 		return ""
 	var c := road_img.get_pixelv(p)
-	return "cobble" if c.b > 0.5 else ("gravel" if c.g > 0.5 else ("dirt" if c.r > 0.5 else ""))
+	var r := c.r > 0.5
+	var g := c.g > 0.5
+	var b := c.b > 0.5
+	if g:
+		return "pavement" if r else ("sidewalk" if b else "gravel")
+	return "cobble" if b else ("dirt" if r else "")
 
 
 ## One round dab of the brush at a spot on the ground.
 func _dab(p: Vector3) -> void:
-	var c := (Vector2(p.x, p.z) - Grass.REGION.position) * ROAD_PX
+	var c := (Vector2(p.x, p.z) - ROAD_RECT.position) * ROAD_PX
 	var r := brush * ROAD_PX
 	var col: Color = ROAD_COLOURS.get(tool, Color(0, 0, 0))
 	var w := road_img.get_width()
@@ -1711,7 +2047,7 @@ func _begin_stroke(mpos: Vector2) -> void:
 	_enable_roads(true)
 	_painting = true
 	_line_on = false
-	_stroke_before = road_img.get_data()
+	_stroke_before = road_img.duplicate() as Image
 	_stroke_rect = Rect2()
 	_last_dab = g
 	_dab(g)
@@ -1727,13 +2063,17 @@ func _stroke_to(g: Vector3, straight := false) -> void:
 		if not _line_on:
 			_line_on = true
 			_line_from = _last_dab
-			_line_base = road_img.get_data()
+			_line_base = road_img.get_region(_px_in(_stroke_rect))
+			_line_rect = _stroke_rect
 		var d := Vector2(g.x - _line_from.x, g.z - _line_from.z)
 		var end := _line_from
 		if d.length() > 0.05:
 			var dir := Vector2.from_angle(snappedf(d.angle(), PI / 4.0))
 			end = _line_from + Vector3(dir.x, 0, dir.y) * maxf(d.dot(dir), 0.0)
-		road_img.set_data(road_img.get_width(), road_img.get_height(), false, Image.FORMAT_RGB8, _line_base)
+		# back to the map as it was when the line began: only the part this stroke has touched
+		var undone := _px_in(_stroke_rect)
+		road_img.blit_rect(_stroke_before, undone, undone.position)
+		road_img.blit_rect(_line_base, Rect2i(Vector2i.ZERO, _line_base.get_size()), _px_in(_line_rect).position)
 		var count := maxi(1, ceili(_line_from.distance_to(end) / step))
 		for i in range(0, count + 1):
 			_dab(_line_from.lerp(end, float(i) / count))
@@ -1764,20 +2104,22 @@ func _end_stroke() -> void:
 		return
 	_painting = false
 	_line_on = false
-	_line_base = PackedByteArray()
+	_line_base = null
 	# a new road clears the grass tufts, flowers and clover it was painted over
 	var cleared: Array = []
-	if tool != "erase":
+	if tool != "erase" and tool != "grass": # painting grass puts lawn back, it clears nothing
 		for el in els:
 			if not el.deleted and SMALL.has(el.kind) and _stroke_rect.has_point(Vector2(el.xf.origin.x, el.xf.origin.z)) and road_at(el.xf.origin.x, el.xf.origin.z) != "":
 				el.deleted = true
 				baked[el.kind] = true
 				_apply(el)
 				cleared.append(el)
-	undo_stack.append(["roads", _stroke_before, cleared])
+	# keep only the part the stroke touched: the whole map is millions of pixels
+	var px := _px_in(_stroke_rect.grow(0.5))
+	undo_stack.append(["roads", _stroke_before.get_region(px), cleared, px.position, _stroke_rect.grow(0.5)])
 	if undo_stack.size() > 80:
 		undo_stack.pop_front()
-	_stroke_before = PackedByteArray()
+	_stroke_before = null
 	_roads_changed(_stroke_rect)
 
 
@@ -1793,7 +2135,7 @@ func _roads_changed(area: Rect2) -> void:
 
 ## Lays a cobble tile on every 4 x 2 m square of `area` that has cobbles painted in it.
 func _retile(area: Rect2) -> void:
-	var a := area.intersection(Grass.REGION)
+	var a := area.intersection(ROAD_RECT)
 	if a.size.x <= 0.0 or a.size.y <= 0.0:
 		return
 	var c0 := Vector2i(((a.position - TILE_ORIGIN) / TILE).floor())
@@ -1839,7 +2181,8 @@ func _cell_cobbled(cell: Vector2i) -> bool:
 	var px := _px_rect(Rect2(TILE_ORIGIN + Vector2(cell) * TILE, TILE)).intersection(Rect2i(Vector2i.ZERO, road_img.get_size()))
 	for y in range(px.position.y, px.end.y, 2):
 		for x in range(px.position.x, px.end.x, 2):
-			if road_img.get_pixel(x, y).b > 0.5:
+			var c := road_img.get_pixel(x, y)
+			if c.b > 0.5 and c.g < 0.5: # blue with green is sidewalk
 				return true
 	return false
 
@@ -1916,6 +2259,8 @@ func _show_status() -> void:
 			s = "Click anything to select it, then drag it. Right-drag or WASD moves the camera, the wheel zooms."
 	elif tool == "place":
 		s = "Click to set one down; hold and drag for a stream (Shift keeps it straight). R / T turn the preview, + / - resize it (now %d%%). Ctrl/Cmd+Z undoes." % roundi(place_size * 100.0)
+	elif tool.begins_with("h_") and house_tools != null:
+		s = house_tools.hint(tool) + " Ctrl/Cmd+Z undoes. Edit the basement with Nora down there."
 	elif tool == "erase":
 		s = "Drag over a road or the paving to rub it out. Hold Shift for a straight line. [ and ] change the brush size."
 	else:
@@ -1974,7 +2319,39 @@ func _build_ui() -> void:
 				place_id = str(_place_pick.get_item_metadata(i))
 				set_tool("place"))
 			row.add_child(_place_pick)
+		if id == "road":
+			# which surface the brush lays
+			_road_pick = OptionButton.new()
+			_road_pick.focus_mode = Control.FOCUS_NONE
+			for r in ROADS:
+				_road_pick.add_item(str(r[1]))
+				_road_pick.set_item_metadata(_road_pick.item_count - 1, str(r[0]))
+			_road_pick.item_selected.connect(func(i: int): set_tool(str(_road_pick.get_item_metadata(i))))
+			row.add_child(_road_pick)
 	vb.add_child(row)
+	if house_tools == null:
+		house_tools = HouseEdit.new(self)
+	if house_tools.house() != null:
+		# Marcus's house: its walls, doors, sliding doors, windows and floors
+		var hrow := HBoxContainer.new()
+		hrow.add_theme_constant_override("separation", 8)
+		hrow.add_child(hud._label("House edits", 14, hud.GOLD))
+		for t in HouseEdit.TOOLS:
+			var id: String = t[0]
+			var b: Button = hud._button(t[1], func(): set_tool(id))
+			b.toggle_mode = true
+			_tool_btns[id] = b
+			hrow.add_child(b)
+		var fp := OptionButton.new()
+		fp.focus_mode = Control.FOCUS_NONE
+		for f in HouseEdit.FLOORS:
+			fp.add_item(str(f[1]))
+			fp.set_item_metadata(fp.item_count - 1, str(f[0]))
+		fp.item_selected.connect(func(i: int):
+			house_tools.floor_kind = str(fp.get_item_metadata(i))
+			set_tool("h_floor"))
+		hrow.add_child(fp)
+		vb.add_child(hrow)
 	var brush_row := HBoxContainer.new()
 	brush_row.add_theme_constant_override("separation", 8)
 	brush_row.add_child(hud._label("Brush", 14))

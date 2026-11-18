@@ -1,0 +1,42 @@
+{
+  "name": "dresser",
+  "triangles": 5546,
+  "materials": [
+    "dresser_wood",
+    "dresser_panel",
+    "dresser_brass",
+    "dresser_lace",
+    "dresser_frame",
+    "dresser_painting",
+    "dresser_ceramic",
+    "dresser_band",
+    "dresser_stem",
+    "dresser_lavender",
+    "dresser_dish"
+  ],
+  "size_m": [
+    1.2,
+    0.52,
+    1.333
+  ],
+  "min_m": [
+    -0.6,
+    -0.27,
+    0.0
+  ],
+  "max_m": [
+    0.6,
+    0.25,
+    1.333
+  ],
+  "images": [
+    "dresser_frame",
+    "dresser_frame_n",
+    "dresser_painting",
+    "dresser_panel",
+    "dresser_panel_n",
+    "dresser_wood",
+    "dresser_wood_n"
+  ],
+  "glb_bytes": 520752
+}

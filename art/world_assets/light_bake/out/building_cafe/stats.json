@@ -1,13 +1,13 @@
 {
   "id": "building_cafe",
-  "atlas": 2048,
+  "atlas": 4096,
   "reach": 1.4,
   "samples": 256,
   "device": "METAL",
-  "light_mean": 0.0,
+  "light_mean": 0.311,
   "light_p05": 0.0,
-  "seconds": 43.5,
-  "glb_bytes": 8177724,
+  "seconds": 338.2,
+  "glb_bytes": 16002420,
   "lost_nodes": [],
   "lost_materials": [],
   "lost_images": []

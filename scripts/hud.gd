@@ -5,7 +5,8 @@ extends CanvasLayer
 signal mode_selected(build: bool)
 signal expand_pressed
 signal color_chosen(cid: String) # a colour for the piece in her hands (furniture.gd set_color)
-signal wall_tool_chosen(kind: String) # "wall", "door" or "" (house_builder.gd)
+signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", or ""
+signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -223,6 +224,8 @@ var _picked := -1 # a slot clicked in the bag, waiting for the slot to swap it w
 var expand_btn: Button
 var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
+var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
+var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
 var graphics_btn: Button
 var render_scale_slider: HSlider
@@ -1078,16 +1081,44 @@ func _build_catalog() -> void:
 	vb.add_child(head)
 	# walls: build onto the house a wall at a time, or a new house on a plot from Gary
 	var HB := preload("res://scripts/house_builder.gd")
-	var wrow := HBoxContainer.new()
-	wrow.add_theme_constant_override("separation", 6)
+	# and doors, sliding doors, windows and doorways in any wall, her house's own too (Alex, 2026-11-17)
+	var wrow := HFlowContainer.new()
+	wrow.add_theme_constant_override("h_separation", 6)
+	wrow.add_theme_constant_override("v_separation", 4)
+	wrow.custom_minimum_size = Vector2(408, 0)
 	wrow.add_child(_label("Walls", 15, GOLD))
-	wall_btn = _button("Wall · %dc" % HB.price("wall"), func(): wall_tool_chosen.emit("wall" if wall_btn.button_pressed else ""))
-	door_btn = _button("Doorway · %dc" % HB.price("door"), func(): wall_tool_chosen.emit("door" if door_btn.button_pressed else ""))
-	for b in [wall_btn, door_btn]:
+	for kind in HB.KINDS:
+		var k: String = kind
+		var b: Button
+		b = _button(HB.label(k), func(): wall_tool_chosen.emit(k if wall_btns[k].button_pressed else ""))
 		b.toggle_mode = true
-		b.tooltip_text = "Build walls one at a time on a 2 m grid, against your house or a wall you've built. Close a room and it gets a floor and roof."
+		b.tooltip_text = "Build walls one at a time on a 2 m grid, against your house or a wall you've built. Close a room and it gets a floor and roof. Click a wall again to take it down." if k == "wall" \
+			else "Click any wall, your house's too, to put a %s in it, or an empty edge for a new wall with one. Click it again to take it out, half back. Paid in wood if you have enough, else coins." % HB.label(k).to_lower()
+		wall_btns[k] = b
 		wrow.add_child(b)
+	wall_btn = wall_btns["wall"]
+	door_btn = wall_btns["door"]
 	vb.add_child(wrow)
+	# floors: carpet, tile or oak boards over a whole room at a click (Alex, 2026-11-17)
+	var frow := HBoxContainer.new()
+	frow.add_theme_constant_override("separation", 6)
+	frow.add_child(_label("Floor", 15, GOLD))
+	var fb: Button
+	fb = _button("Floor", func(): wall_tool_chosen.emit("floor" if wall_btns["floor"].button_pressed else ""))
+	fb.toggle_mode = true
+	fb.tooltip_text = "Pick a floor in the list, then click a room (your house, or one you've built) to lay it over the whole room. Paid per 2 m square, in wood if you have enough, else coins. Plank boards take it up again, half back."
+	wall_btns["floor"] = fb
+	frow.add_child(fb)
+	floor_pick = OptionButton.new()
+	for fk in HB.FLOORS:
+		floor_pick.add_item(HB.floor_label(fk))
+	floor_pick.select(HB.FLOORS.find("carpet_grey"))
+	floor_pick.item_selected.connect(func(i: int):
+		floor_kind_chosen.emit(HB.FLOORS[i])
+		if not wall_btns["floor"].button_pressed:
+			wall_tool_chosen.emit("floor"))
+	frow.add_child(floor_pick)
+	vb.add_child(frow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wall_note.custom_minimum_size = Vector2(408, 0)
@@ -1344,8 +1375,8 @@ func set_holding(on: bool, sell_value := 0) -> void:
 
 ## Which wall tool is in hand ("" for none): lights its button.
 func set_wall_tool(t: String) -> void:
-	wall_btn.set_pressed_no_signal(t == "wall")
-	door_btn.set_pressed_no_signal(t == "door")
+	for k in wall_btns:
+		(wall_btns[k] as Button).set_pressed_no_signal(t == k)
 	if t == "":
 		wall_note.text = "Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % preload("res://scripts/house_builder.gd").new_house_fee()
 

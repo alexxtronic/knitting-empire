@@ -1,0 +1,40 @@
+{
+  "name": "kitchen_dresser",
+  "triangles": 5946,
+  "materials": [
+    "kitchen_dresser_cabinet",
+    "kitchen_dresser_wood",
+    "kitchen_dresser_brass",
+    "kitchen_dresser_back",
+    "kitchen_dresser_plate_rim",
+    "kitchen_dresser_plate",
+    "kitchen_dresser_cup_red",
+    "kitchen_dresser_cup_mustard",
+    "kitchen_dresser_ceramic",
+    "kitchen_dresser_crock"
+  ],
+  "size_m": [
+    1.44,
+    0.535,
+    2.035
+  ],
+  "min_m": [
+    -0.72,
+    -0.275,
+    0.0
+  ],
+  "max_m": [
+    0.72,
+    0.26,
+    2.035
+  ],
+  "images": [
+    "kitchen_dresser_back",
+    "kitchen_dresser_back_n",
+    "kitchen_dresser_cabinet",
+    "kitchen_dresser_cabinet_n",
+    "kitchen_dresser_wood",
+    "kitchen_dresser_wood_n"
+  ],
+  "glb_bytes": 409644
+}

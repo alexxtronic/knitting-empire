@@ -19,7 +19,7 @@
     "foothills_low": [-16.0, -60.0, 100.0, 11.0],
     "foothills_mid": [-16.0, -82.0, 100.0, 20.0],
     "meadow_far": [114.0, -36.0, 24.0, 66.0],
-    "high_foothills": [62.0, -94.0, 26.0, 11.0]
+    "high_foothills": [70.0, -96.0, 18.0, 8.0]
   },
   "fibres": {
     "angora": {"name": "Angora fluff", "tier": "common", "price": 14, "knit_floor": 2, "color": "#eed8b8"},

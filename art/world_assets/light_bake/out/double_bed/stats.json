@@ -1,0 +1,14 @@
+{
+  "id": "double_bed",
+  "atlas": 1024,
+  "reach": 0.8,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.255,
+  "light_p05": 0.0,
+  "seconds": 58.0,
+  "glb_bytes": 2459332,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

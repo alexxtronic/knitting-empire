@@ -351,6 +351,8 @@ static func build(id: String, r: Node3D) -> void:
 	var path := str(ITEMS.get(id, {}).get("model", ""))
 	var inst := model(path, r) if path != "" else null
 	if inst != null:
+		if ITEMS.get(id, {}).has("hang"): # a painting: hung on the wall at this height, wherever it's placed
+			inst.position.y += float(ITEMS[id]["hang"])
 		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here
 			_lantern_candle(r, inst)
 		elif id == "bakery_stall": # its lantern hangs off the right front post (art/world_assets/bakery_stall)
@@ -362,6 +364,8 @@ static func build(id: String, r: Node3D) -> void:
 			_fireplace_fire(r, Vector3(0, 0.5, 0.0))
 		elif id == "lamp": # the model's shade glows; this is the light it throws
 			omni(r, Vector3(0, 1.3, 0), Color(1.0, 0.78, 0.5), 5.0, 0.3, 1.6)
+		elif id == "floor_lamp_gold": # Marcus's floor lamps: the linen shade glows, the bulb sits under it
+			omni(r, Vector3(0, 1.36, 0), Color(1.0, 0.8, 0.56), 5.0, 0.3, 1.6)
 		elif id == "candle":
 			_candle_flame(r, Vector3.ZERO, inst)
 		elif id == "pendant_lamp": # the café's dome lamps (art/world_assets/cafe_props): the bulb hangs at 2.4 m
