@@ -137,6 +137,8 @@ def materials():
     M_["door"] = K.plain("suburb_door", "#f4f2ec", 0.45)
     M_["floor"] = K.plain("suburb_floor", "#8a6a48", 0.75)
     M_["lining"] = K.plain("suburb_lining", "#e9e2d4", 0.9)
+    # the right wing's ceiling: its own surface, so a walk-in house with an upper floor there can hide it
+    M_["lining_r"] = K.plain("suburb_lining_upper", "#e9e2d4", 0.9)
     M_["paving"] = K.plain("suburb_paving", "#b9b4aa", 0.95)
     M_["lamp"] = K.plain("suburb_lamp_black", "#22201e", 0.5)
     M_["bulb"] = K.plain("suburb_bulb", "#ffd98a", 0.3, emit=2.0)
@@ -410,11 +412,12 @@ def wall_side(Mt, side, low):
         for s in (-1, 1):
             K.box("casing", (0.06, 0.1, 2.1), (plane + 0.03, GSIDE_DOOR + s * 0.5, 1.05), Mt["trim"], bevel=0.0)
 
-def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE, meet=None):
+def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE, meet=None, under=None):
     """A block's roof: two slopes, the ridge, white fascia and gutters along the eaves, rake boards
     and soffits. clip: the right slope stops at this x, inside the upper wing, untrimmed; meet: in
     front of the upper wing's wall (y < M's front) it runs on to this x, where it comes down onto the
-    right wing's roof, its rake board with it."""
+    right wing's roof, its rake board with it. under: past this y (inside the upper wing) only the
+    eaves run on, out from the walls, so no roof hangs through the rooms of a floor up there."""
     x0, x1, y0, y1, eave, p = b
     cx, hw = (x0 + x1) / 2, (x1 - x0) / 2
     t = tan(p)
@@ -439,7 +442,13 @@ def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE, meet=None):
                 flat("rake", band, ye - 0.035, ye + 0.015, Mt["trim"])
             continue
         pts = [(xe, ze), (cx, eave + hw * t), (cx, eave + hw * t + top), (xe, ze + top)]
-        flat("roof", pts, ya, yb, Mt["roof"])
+        if under is None:
+            flat("roof", pts, ya, yb, Mt["roof"])
+        else:
+            flat("roof", pts, ya, under, Mt["roof"])
+            xw = cx + s * (hw - T / 2)  # into the hollow wall, so the joint can't be seen
+            zw = eave + T / 2 * t
+            flat("roof", [(xe, ze), (xw, zw), (xw, zw + top), (xe, ze + top)], under - 0.01, yb, Mt["roof"])
         # fascia and gutter along the eave, the soffit under the overhang
         K.box("fascia", (0.04, yb - ya, 0.24), (xe + s * 0.02, (ya + yb) / 2, ze + top - 0.1), Mt["trim"], bevel=0.0)
         K.box("gutter", (0.12, yb - ya, 0.11), (xe + s * 0.08, (ya + yb) / 2, ze + top - 0.12), Mt["trim"], bevel=0.0)
@@ -453,7 +462,8 @@ def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE, meet=None):
             # the rake's soffit: under the roof past the gable wall
             und = [(xe, ze - 0.005), (cx, eave + hw * t - 0.005), (cx, eave + hw * t - 0.02), (xe, ze - 0.02)]
             flat("rake_soffit", und, min(ye, y0 if ye == ya else y1), max(ye, y0 if ye == ya else y1), Mt["trim"])
-    K.box("ridge", (0.26, yb - ya, 0.07), (cx, (ya + yb) / 2, eave + hw * t + top + 0.01), Mt["roof"], bevel=0.0)
+    yr = yb if under is None else under
+    K.box("ridge", (0.26, yr - ya, 0.07), (cx, (ya + yr) / 2, eave + hw * t + top + 0.01), Mt["roof"], bevel=0.0)
 
 
 def centre_block(Mt):
@@ -470,12 +480,12 @@ def centre_block(Mt):
 
 def roof(Mt):
     slab(Mt, L, clip=M[0] + 0.1, front=PORCH, meet=valley_x() + 0.05)  # its right slope ends inside the upper wing
-    slab(Mt, R, ends=(True, False), back=-T - 0.02)  # its back end stops inside the upper wing
+    slab(Mt, R, ends=(True, False), back=-T - 0.02, under=M[2])  # under the upper wing only its eaves run on
     slab(Mt, M)
     centre_block(Mt)
     # the ceiling over the rooms (the entry wing's only as far as the right wing)
-    for x0, x1, y0, y1 in ((L[0] + T, R[0], L[2] + T, L[3] - T), (R[0] + T, R[1] - T, HOUSE_FRONT + T, R[3] - T)):
-        K.box("ceiling", (x1 - x0, y1 - y0, 0.03), ((x0 + x1) / 2, (y0 + y1) / 2, CEIL + 0.015), Mt["lining"], bevel=0.0)
+    for x0, x1, y0, y1, mat in ((L[0] + T, R[0], L[2] + T, L[3] - T, "lining"), (R[0] + T, R[1] - T, HOUSE_FRONT + T, R[3] - T, "lining_r")):
+        K.box("ceiling", (x1 - x0, y1 - y0, 0.03), ((x0 + x1) / 2, (y0 + y1) / 2, CEIL + 0.015), Mt[mat], bevel=0.0)
 
 
 def base(Mt):

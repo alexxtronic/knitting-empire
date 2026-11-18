@@ -89,6 +89,14 @@ func build(m: Node, node: Node3D) -> void:
 			var mat: Material = b.get_active_material(i)
 			if mat != null and "floor" in str(mat.resource_name).to_lower():
 				_floor_surfaces.append([b, i, b.get_surface_override_material(i)])
+	if parts.has("roof"):
+		# the model's flat ceiling over the right wing hangs at eye height on the bedroom floor:
+		# the house's own ceilings (upper_ceiling) stand in for it
+		var rf: MeshInstance3D = parts["roof"]
+		for i in rf.mesh.get_surface_count():
+			var mat: Material = rf.get_active_material(i)
+			if mat != null and "lining_upper" in str(mat.resource_name).to_lower():
+				rf.set_surface_override_material(i, _invisible())
 	for od in cfg.get("outside_doors", []):
 		for nm in ["wall_%s" % od["side"], "wall_%s_low" % od["side"]]:
 			if parts.has(nm):
@@ -134,7 +142,7 @@ func _floors() -> void:
 		var lv := str(room["level"])
 		var y := _level_y(lv)
 		var mat := _floor_mat(str(room.get("floor", "carpet_grey")))
-		var cm := _flat_mat(Color(str(room.get("wall", "#e4ddd0"))).lightened(0.15))
+		var cm := _ceiling_mat()
 		for r in room["rects"]:
 			var rect := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
 			# a slab: the main floor sits on the shell's planks; the upper floor and the basement
@@ -155,7 +163,7 @@ func _floors() -> void:
 ## The stairwells' ceilings: no room covers them, so from her eyes on the stairs she'd look up into
 ## the roof (`well_ceilings` in the data, [x, z, width, depth], at the bedroom floor's ceiling).
 func _well_ceilings() -> void:
-	var cm := _flat_mat(Color("#e4ddd0").lightened(0.15))
+	var cm := _ceiling_mat()
 	for r in cfg.get("well_ceilings", []):
 		var c := _slab(roots["all"], Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])), _ceiling_y("upper"), _ceiling_y("upper") + 0.04, cm, "Ceiling_well")
 		c.visible = false
@@ -548,6 +556,22 @@ func _flat_mat(c: Color) -> StandardMaterial3D:
 		m.roughness = 0.9
 		_mats[key] = m
 	return _mats[key]
+
+
+## The ceilings' white plaster (`ceiling` in the data). Only the room's own lamps reach a ceiling's
+## underside, so lit like the walls it came out a dark brown from her eyes (Alex, 2026-11-17): a
+## little light of its own (`ceiling_glow`) keeps it reading as a pale ceiling, by day and night.
+func _ceiling_mat() -> StandardMaterial3D:
+	if not _mats.has("ceiling"):
+		var m := StandardMaterial3D.new()
+		var c := Color(str(cfg.get("ceiling", "#f2eee6")))
+		m.albedo_color = c
+		m.roughness = 0.95
+		m.emission_enabled = true
+		m.emission = c
+		m.emission_energy_multiplier = float(cfg.get("ceiling_glow", 0.35))
+		_mats["ceiling"] = m
+	return _mats["ceiling"]
 
 
 ## The floors, drawn here: tiles with grout, carpet and shag from noise, plain cement.
