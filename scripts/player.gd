@@ -206,8 +206,8 @@ func _body_points(bed: Node3D) -> PackedVector3Array:
 	var to_bed := bed.global_transform.affine_inverse() * sk.global_transform
 	for node in body.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		if mi.mesh == null:
-			continue
+		if mi.mesh == null or not mi.is_visible_in_tree():
+			continue # what isn't drawn doesn't hold the quilt up: her knitting needles (KnitProps) stand off her chest when she lies down
 		var skin: Skin = mi.skin
 		var xf: Array[Transform3D] = []
 		if skin != null:

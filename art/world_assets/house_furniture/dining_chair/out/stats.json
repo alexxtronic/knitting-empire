@@ -1,0 +1,30 @@
+{
+  "name": "dining_chair",
+  "triangles": 1692,
+  "materials": [
+    "dining_chair_wood",
+    "dining_chair_plaid"
+  ],
+  "size_m": [
+    0.48,
+    0.501,
+    1.03
+  ],
+  "min_m": [
+    -0.24,
+    -0.25,
+    -0.0
+  ],
+  "max_m": [
+    0.24,
+    0.251,
+    1.03
+  ],
+  "images": [
+    "dining_chair_plaid",
+    "dining_chair_plaid_n",
+    "dining_chair_wood",
+    "dining_chair_wood_n"
+  ],
+  "glb_bytes": 1184384
+}
