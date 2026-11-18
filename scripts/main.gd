@@ -365,7 +365,10 @@ func _ready() -> void:
 	store.main = self
 	add_child(store)
 	Interiors.WorkSpot.main = self
-	player.steer_ok = func(q: Vector3) -> bool: return _walkable(_cell(q))
+	Interiors.StairSpot.main = self
+	player.steer_ok = func(q: Vector3) -> bool:
+		var lo: Variant = Interiors.steer_ok(player.position, q) # in the café: its stairs and loft
+		return lo if lo != null else _walkable(_cell(q))
 	audio = GameAudio.new()
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
@@ -518,6 +521,7 @@ func _connect_hud() -> void:
 		if mode != Mode.BUILD and k != "":
 			set_mode(Mode.BUILD)
 		builder.set_tool(k))
+	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -918,6 +922,7 @@ func _rebuild_house() -> void:
 		c.free()
 	walls.clear()
 	roofs.clear()
+	builder.doors.clear()
 	builder.compute() # the rooms her walls close (house_builder.gd)
 	_rebuild_grass()
 	wall_rects.clear()
@@ -936,11 +941,13 @@ func _rebuild_house() -> void:
 		right_windows.append(-4.0 * k + 2.0)
 	# where a room she built joins the house, its wall opens in a doorway (house_builder.gd)
 	var sp := builder.house_spans()
-	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9)
-	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"])
-	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"])
-	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"])
-	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"])
+	# and where she put a door, sliding doors, a window or a doorway in one of its own walls
+	var back := _wall_line(Vector2(0, z0), Vector2(W, z0), Vector3(0, 0, -1), [2.0, 6.0], sp["back"], 6.9, builder.line_edits("back"))
+	_wall_line(Vector2(0, D), Vector2(W, D), Vector3(0, 0, 1), [2.0, 6.0], sp["front"], INF, builder.line_edits("front"))
+	_wall_line(Vector2(0, z0), Vector2(0, D), Vector3(-1, 0, 0), left_windows, sp["left"], INF, builder.line_edits("left"))
+	var right := builder.line_edits("right")
+	_wall_line(Vector2(W, z0), Vector2(W, DOOR_Z0), Vector3(1, 0, 0), right_windows, sp["right"], INF, right)
+	_wall_line(Vector2(W, DOOR_Z1), Vector2(W, D), Vector3(1, 0, 0), [4.9], sp["right"], INF, right)
 	_door_lintel()
 	for k in range(1, lvl + 1):
 		var z := -4.0 * (k - 1)
@@ -971,10 +978,11 @@ func _banner(tall: Node3D, bx: float) -> void:
 
 ## A wall line of the house, from a to b, with doorways where a room she built joins it: `spans`
 ## are the stretches (along x or z) a room shares, each a divider with a doorway in its middle
-## (house_builder.gd). Windows go only where the wall still stands outdoors. With no spans it's
-## one plain wall. Returns the piece that stands at least 0.4 m either side of `keep_at` (along
-## the line), or {}.
-func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF) -> Dictionary:
+## (house_builder.gd). `edits` are the 2 m edges she put an opening in ({metres along the line where
+## the edge starts: kind}, builder.line_edits()), each drawn by _edge_piece(). Windows go only where
+## the wall still stands outdoors. With no spans or edits it's one plain wall. Returns the piece that
+## stands at least 0.4 m either side of `keep_at` (along the line), or {}.
+func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: Array, keep_at := INF, edits := {}) -> Dictionary:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var t0 := a.x if horizontal else a.y
 	var t1 := b.x if horizontal else b.y
@@ -995,6 +1003,27 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		cur = s1
 	if cur < t1:
 		pieces.append([cur, t1, "wall"])
+	if not edits.is_empty():
+		var ts: Array = edits.keys()
+		ts.sort()
+		var split: Array = []
+		for p in pieces:
+			if p[2] != "wall":
+				split.append(p)
+				continue
+			var at := float(p[0])
+			for t in ts:
+				var e0 := float(t)
+				var e1 := e0 + HouseBuilder.STEP
+				if e0 < float(p[0]) - 0.01 or e1 > float(p[1]) + 0.01:
+					continue
+				if e0 > at:
+					split.append([at, e0, "wall"])
+				split.append([e0, e1, "edit", str(edits[t])])
+				at = e1
+			if at < float(p[1]):
+				split.append([at, p[1], "wall"])
+		pieces = split
 	var keep := {}
 	for p in pieces:
 		var p0: float = p[0]
@@ -1006,6 +1035,9 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 		if p[2] == "gap":
 			_lintel(pa, pb, normal)
 			continue
+		if p[2] == "edit":
+			_edge_piece(pa, pb, normal, str(p[3]), [], false)
+			continue
 		var wins := windows.filter(func(w): return p[2] == "wall" and float(w) - 0.62 >= p0 and float(w) + 0.62 <= p1)
 		var w := _wall(pa, pb, normal, wins, WALL_H, true, p[2] == "divider")
 		if keep_at - 0.4 >= p0 and keep_at + 0.4 <= p1:
@@ -1013,9 +1045,32 @@ func _wall_line(a: Vector2, b: Vector2, normal: Vector3, windows: Array, spans: 
 	return keep
 
 
+## One grid edge of wall from a to b with what's in it (house_builder.gd's kinds): a plain wall with
+## `windows` (positions along the line), a window in its middle, or a gap for a doorway, a door or
+## sliding doors, the wall standing either side and a lintel over it. Her walls and the house's own
+## both use it, so every house takes the same openings.
+func _edge_piece(a: Vector2, b: Vector2, normal: Vector3, kind: String, windows: Array, divider: bool, parent: Node3D = null) -> void:
+	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
+	var mid := (a + b) * 0.5
+	if kind == "window":
+		_wall(a, b, normal, [mid.x if horizontal else mid.y], WALL_H, true, divider, parent)
+		return
+	if not HouseBuilder.GAPS.has(kind):
+		_wall(a, b, normal, windows, WALL_H, true, divider, parent)
+		return
+	var along := (b - a).normalized()
+	var side := (a.distance_to(b) - float(HouseBuilder.GAPS[kind])) * 0.5
+	_wall(a, a + along * side, normal, [], WALL_H, true, divider, parent)
+	_wall(b - along * side, b, normal, [], WALL_H, true, divider, parent)
+	var tall := _lintel(a + along * side, b - along * side, normal, parent)
+	if kind != "door":
+		builder.hang_door(tall, kind, a + along * side, b - along * side)
+
+
 ## The plaster and beam over a doorway from a to b (no door leaf): a room she built joined to the
-## house, or a doorway she put in a wall of her own.
-func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> void:
+## house, or a doorway she put in a wall. Returns the node that stands with the wall (hidden when
+## it's cut down), for a door to hang in.
+func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> Node3D:
 	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
 	var gap := a.distance_to(b)
 	var mid := (a + b) * 0.5
@@ -1035,6 +1090,7 @@ func _lintel(a: Vector2, b: Vector2, normal: Vector3, parent: Node3D = null) -> 
 	for d in [-1.0, 1.0]: # the jambs
 		Catalog.box(tall, _sz(horizontal, 0.08, 2.15, WALL_T + 0.08), _at(horizontal, d * (gap * 0.5 - 0.04), 1.075), Catalog.WOOD_DARK)
 	walls.append({"tall": tall, "short": short, "normal": normal, "cut": true})
+	return tall
 
 
 func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WALL_H, cut := true, divider := false, parent: Node3D = null) -> Dictionary:
@@ -1306,6 +1362,7 @@ func _expand_house() -> void:
 	if not Game.spend(Game.EXPAND_COSTS[Game.house_level]):
 		return
 	Game.house_level += 1
+	builder.prune_house() # openings in the old back wall come out, paid back
 	_rebuild_house()
 	_rebuild_grid()
 	_update_expand_button()
@@ -1413,6 +1470,14 @@ func _nearest_walkable(c: Vector2i, target: Vector3) -> Variant:
 
 
 func _find_path(from: Vector3, to: Vector3) -> Array:
+	# a walk up or down the café's stairs: its loft has a grid of its own (interiors.gd)
+	var loft: Variant = Interiors.loft_route(from, to, _find_path_ground)
+	if loft != null:
+		return loft
+	return _find_path_ground(from, to)
+
+
+func _find_path_ground(from: Vector3, to: Vector3) -> Array:
 	var a = _nearest_walkable(_cell(from), from)
 	var b = _nearest_walkable(_cell(to), to)
 	if a == null or b == null:
@@ -1881,6 +1946,9 @@ func _ray_target(mpos: Vector2) -> Variant:
 
 
 func _ground_point(mpos: Vector2) -> Variant:
+	var lp: Variant = Interiors.loft_pick(player.position, cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
+	if lp != null: # upstairs in the café: its floor
+		return lp
 	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
 		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
 	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
@@ -2708,7 +2776,8 @@ func reading_seat_near(p: Vector3):
 	var shop := Interiors.inside_of(p)
 	var seats: Array = []
 	if shop != "":
-		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken())
+		var up := Interiors.upstairs(p) # a seat on the floor she's on: upstairs in the café, or down
+		seats = Interiors.read_spots(shop).filter(func(r): return r.kind == "seat" and not r.taken() and r.upstairs == up)
 	else:
 		seats = furniture.filter(func(f): return is_instance_valid(f) and f.item_id in ["armchair", "rocking_chair", "sofa"])
 	for st in seats:
@@ -6342,6 +6411,91 @@ func _barn_checks() -> void:
 ## the bookmark, choosing one from the shelf and carrying it to a seat, reading to the end; and the
 ## candles in Nora's house. Saves 56_cafe.png, 56_cafe_inside.png, 56_cafe_reading.png,
 ## 56_book_open.png, 56_cafe_shelf.png, 56_cafe_night.png and 56_house_candles.png.
+## The café's upstairs (interiors.gd, data/interiors.json "cafe" "loft"): its seats and shelves, the
+## walk from the door up the stairs to a sofa and back down, the loft shown only while she's up.
+func _cafe_loft_checks(s, door_in: Vector3) -> void:
+	var by: float = s.node.global_position.y
+	var up_spots: Array = Interiors.read_spots("cafe").filter(func(r): return r.upstairs)
+	var up_seats: Array = up_spots.filter(func(r): return r.kind == "seat")
+	var open_cells := 0
+	if s.loft_grid != null:
+		for x in s.loft_grid.region.size.x:
+			for z in s.loft_grid.region.size.y:
+				if not s.loft_grid.is_point_solid(Vector2i(x, z)):
+					open_cells += 1
+	_check("the café has an upstairs: its floor part, %d pieces up there, %d reading seats and %d shelves, %.1f m² to walk on, and none of its seats offered to the regulars (%d downstairs)" % [s.loft_root.get_child_count() if s.loft_root else 0, up_seats.size(), up_spots.size() - up_seats.size(), open_cells * Interiors.LOFT_CELL * Interiors.LOFT_CELL, cafe_visits.free_seats().size()],
+		s.parts.has("loft") and s.loft_root != null and s.loft_root.get_child_count() >= 20 and up_seats.size() >= 3 and up_spots.size() - up_seats.size() >= 2 and open_cells * 0.0625 > 25.0
+		and cafe_visits.free_seats().all(func(r): return not r.upstairs))
+	var sofa = up_seats.filter(func(r): return r.label.contains("Sofa"))
+	if sofa.is_empty():
+		return
+	sofa = sofa[0]
+	player.walk([])
+	player.position = Vector3(door_in.x, 0, door_in.z)
+	await _wait(0.3)
+	_check("she's downstairs in the café and the loft is out of the way from above (loft %s)" % ("shown" if (s.parts["loft"] as Node3D).visible else "hidden"),
+		s.inside and not s.up and not (s.parts["loft"] as Node3D).visible and not s.loft_root.visible)
+	cam_target = s.node.global_transform * Vector3(3.0, 1.5, 0.0)
+	cam_dist = 13.0
+	var stairs: Node = s.node.find_child("StairSpot", false, false)
+	var labels: Array = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_up")
+	var t := 0.0
+	var top_y := 0.0
+	var mid_shot := false
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+		top_y = maxf(top_y, player.position.y - by)
+		if not mid_shot and player.position.y - by > 1.5:
+			mid_shot = true
+			await _shot("56_cafe_stairs.png")
+	await _wait(0.4)
+	var dy: float = player.position.y - by - s.loft_y
+	_check("the stairs say %s from below, and up them she goes (%.1f s, %.2f m off the loft's floor, upstairs %s, loft %s, roof %s)" % [str(labels), t, dy, s.up, "shown" if (s.parts["loft"] as Node3D).visible else "hidden", "on" if (s.parts["roof"] as Node3D).visible else "off"],
+		labels == ["Go upstairs"] and t < 40.0 and absf(dy) < 0.08 and s.up and (s.parts["loft"] as Node3D).visible and s.loft_root.visible and not (s.parts["roof"] as Node3D).visible)
+	# sits on a sofa up there with a book, and gets up again on the loft's floor
+	_do_action(sofa, "read_book")
+	t = 0.0
+	while not books_ui.visible and t < 30.0:
+		await _wait(0.25)
+		t += 0.25
+	await _wait(0.5)
+	var seat_dy: float = player.position.y - (sofa.seat_point() as Vector3).y
+	cam_target = player.position + Vector3(0, 0.5, 0)
+	cam_dist = 11.0
+	await _wait(1.2)
+	await _shot("56_cafe_loft.png")
+	_check("she sits down on a sofa upstairs with a book (%.1f s, %.2f m off its seat, reading %s)" % [t, seat_dy, books_ui.visible], books_ui.visible and player.busy and absf(seat_dy) < 0.05)
+	await _key_tap(KEY_ESCAPE)
+	await _wait(0.6)
+	dy = player.position.y - by - s.loft_y
+	_check("and gets up on the loft's floor (%.2f m off it, sitting %s)" % [dy, player.busy], not player.busy and absf(dy) < 0.05)
+	# a click on the loft's floor lands up there
+	var mid: Vector3 = s.node.global_transform * Vector3(-1.0, s.loft_y, -2.0)
+	var hit: Variant = _ground_point(cam.unproject_position(mid))
+	_check("a click upstairs lands on the loft's floor (%s)" % str(hit), hit != null and absf((hit as Vector3).y - (by + s.loft_y)) < 0.01 and (hit as Vector3).distance_to(mid) < 0.2)
+	# down by the stairs, then to the door
+	labels = stairs.ke_actions().map(func(a): return a["label"]) if stairs else []
+	if stairs:
+		_do_action(stairs, "stairs_down")
+	t = 0.0
+	while (player.path.is_empty() == false or t < 0.3) and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	await _wait(0.3)
+	var foot_y: float = player.position.y - by
+	player.walk(_find_path(player.position, door_in))
+	var t2 := 0.0
+	while not player.path.is_empty() and t2 < 20.0:
+		await _wait(0.1)
+		t2 += 0.1
+	await _wait(0.4)
+	_check("from above the stairs say %s, and down she goes and out to the door (%.1f + %.1f s, %.2f m up at the foot, %.2f m now, upstairs %s, %.2f m from the door)" % [str(labels), t, t2, foot_y, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
+		labels == ["Go downstairs"] and t < 40.0 and absf(foot_y) < 0.05 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+
+
 func _cafe_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
@@ -6415,11 +6569,14 @@ func _cafe_checks() -> void:
 			if not solid2:
 				leaks.append("z%.1f@%.1f" % [zz, x])
 	_check("she can't walk through the Coffee Shop's walls %s" % str(leaks), leaks.is_empty())
+	await _cafe_loft_checks(s, door_in)
 	# outside, shut; then in through the door to the armchair by the fire
 	var out_front: Vector3 = xf * Vector3(float(s.info.get("door_x", 0.0)), 0, s.room.end.y + 2.2)
 	out_front.y = 0.0
 	player.walk([])
 	player.position = out_front
+	if dog != null: # the dog by her side, not still walking out through the door behind her
+		dog.position = out_front + xf.basis.x.normalized() * 1.5
 	_set_cam_lock(false)
 	cam_target = xf * Vector3(0, 2.0, 1.0)
 	cam_dist = 30.0
@@ -7301,6 +7458,27 @@ func _god_checks() -> void:
 	_check("god mode: the road dropdown's pavement and sidewalk paint out in the east meadows, on the lands' ground too, and Undo takes the sidewalk back (tool %s, %s, after Undo %s, cobble tiles laid on the sidewalk %s)" % [pave_tool, "pavement and sidewalk" if both else "missing", god.road_at(far_side.x, far_side.z), side_tiles],
 		pave_tool == "pavement" and both and meadow_has and not side_tiles and god.road_at(far_side.x, far_side.z) == "" and god.road_at(far_pave.x, far_pave.z) == "pavement")
 	god.undo()
+
+	# Bretton Oaks' cul-de-sac is on the road map, its meshes hidden, and "Grass" rubs it out
+	# (Alex, 2026-11-17: "can't delete original cul-de-sac pavement", "add grass as a god mode painting option")
+	if suburb != null:
+		var cds: Vector3 = suburb.centre
+		var meshes_hidden: bool = get_tree().get_nodes_in_group("suburb_paving").size() > 0 and get_tree().get_nodes_in_group("suburb_paving").all(func(n): return not (n as Node3D).visible)
+		var before: String = god.road_at(cds.x, cds.z)
+		var drives: Array = suburb.paving.filter(func(sh): return str(sh["kind"]) == "sidewalk" and sh.has("quad") and float(sh["quad"][2]) > 1.0)
+		var drive: Dictionary = drives[0] if not drives.is_empty() else {}
+		var dmid: Vector2 = (Vector2(drive["quad"][0]) + Vector2(drive["quad"][1])) * 0.5 if not drive.is_empty() else Vector2.ZERO
+		var drive_on: String = god.road_at(dmid.x, dmid.y) if not drive.is_empty() else "none"
+		await _god_look(cds, 18.0)
+		god.set_tool("grass")
+		var grass_tool: String = god.tool
+		god.press(cam.unproject_position(cds))
+		god.release()
+		await _shot("60_god_cul_de_sac_grass.png")
+		var grassed: String = god.road_at(cds.x, cds.z)
+		god.undo()
+		_check("god mode: the cul-de-sac is painted pavement (driveway %s) with its own meshes hidden, and the Grass brush rubs it out and Undo brings it back (before %s, hidden %s, tool %s, after grass '%s', after Undo %s)" % [drive_on, before, meshes_hidden, grass_tool, grassed, god.road_at(cds.x, cds.z)],
+			before == "pavement" and drive_on == "sidewalk" and meshes_hidden and grass_tool == "grass" and grassed == "" and god.road_at(cds.x, cds.z) == "pavement")
 
 	# the Place tool: pick anything from the list and set it down one at a time
 	var options: Array = god.place_options()
@@ -9559,8 +9737,38 @@ func _building_skin_checks() -> void:
 		cam_yaw_goal = cam_yaw
 		await _wait(2.2)
 		await _shot("63_building_%s.png" % e[1])
-	Game.hour = 22.0
 	var cafe: Array = models.filter(func(e): return e[1] == "cafe")
+	if not cafe.is_empty():
+		# Low graphics (no SDFGI): the café's front in the afternoon must not go black
+		var b := cafe[0][0] as Node3D
+		var g0 := gfx
+		Game.hour = 13.5
+		cam_target = b.global_position + Vector3(0, 1.5, 0)
+		cam_dist = 14.0
+		cam_yaw = b.global_rotation.y + deg_to_rad(-20.0)
+		cam_yaw_goal = cam_yaw
+		var p0 := cam_pitch
+		cam_pitch = 14.0
+		for lv in [0, 3]:
+			gfx = lv
+			apply_graphics()
+			await _wait(2.5)
+			await _shot("63_cafe_gfx%d.png" % lv)
+		cam_pitch = p0
+		gfx = g0
+		apply_graphics()
+	# the light bake reads from UV2 everywhere: Godot's glTF import swaps a mesh's UV sets for a
+	# material whose only texture is the bake, which drew grey zebra stripes (light_bake white_base())
+	var swapped: Array = []
+	for e in models:
+		for mi in (e[0] as Node).find_children("*", "MeshInstance3D", true, false):
+			var mesh := (mi as MeshInstance3D).mesh
+			for i in mesh.get_surface_count():
+				var mat := mesh.surface_get_material(i) as BaseMaterial3D
+				if mat and mat.ao_enabled and not mat.ao_on_uv2:
+					swapped.append("%s:%s" % [e[1], mat.resource_name])
+	_check("every building's light bake is read from UV2, none swapped by the import (%s)" % str(swapped.slice(0, 5)), swapped.is_empty())
+	Game.hour = 22.0
 	if not cafe.is_empty():
 		var b := cafe[0][0] as Node3D
 		cam_target = b.global_position + Vector3(0, 1.5, 0)
@@ -11521,9 +11729,15 @@ func _town_checks() -> void:
 ## takes one down; all of it survives a save. It leaves the farm as it found it.
 func _build_checks() -> void:
 	var coins0 := Game.coins
+	var wood0 := Game.count("wood")
+	Game.take_item("wood", wood0) # walls are paid in wood when she has it: these checks count coins
 	var hour0 := Game.hour
 	Game.hour = 11.0
 	Game.flags.erase("built_walls")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	Game.flags.erase("plots_owned")
 	builder.refresh_world()
 	set_mode(Mode.LIVE)
@@ -11597,6 +11811,8 @@ func _build_checks() -> void:
 	player.position = Vector3(10.5, 0, 7.5)
 	await _wait(0.6)
 	_check("build: from outside, the room keeps its roof on with the house (%s)" % _roof_visible_at(c), _roof_visible_at(c))
+	await _opening_checks(room, c)
+	await _floor_checks(c)
 	# a new house: only on a plot bought from Gary
 	var plot: Dictionary = HouseBuilder.plot_def("lane_end")
 	var pr := HouseBuilder.plot_rect(plot)
@@ -11687,13 +11903,195 @@ func _build_checks() -> void:
 	# put the farm back as it was for the rest of the autotest
 	Game.flags.erase("built_walls")
 	Game.flags.erase("plots_owned")
+	Game.flags.erase("built_paid")
+	Game.flags.erase("house_openings")
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
 	builder.refresh_world()
 	Game.coins = coins0
+	Game.take_item("wood", Game.count("wood"))
+	Game.add_item("wood", wood0)
 	Game.hour = hour0
 	_set_cam_lock(true)
 	cam_dist = 23.0
 	player.position = Vector3(10.5, 0, 6.5)
 	await _wait(0.3)
+
+
+## Openings (Alex, 2026-11-17): a window and then a door in a wall of the room just built, paid in
+## coins and then in wood, the door walkable and swinging open for her, the window not walkable,
+## each taken out for half back in what paid for it; sliding doors in one of the house's own walls,
+## kept by a save; and a doorway from a save made before payments were kept, paid back in coins.
+func _opening_checks(room: Array, c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var wk: String = room[1]
+	var mid := _edge_mid(wk)
+	var cell := _cell(mid)
+	# a window, in coins (she has no wood)
+	builder.set_tool("window")
+	var c0 := Game.coins
+	builder.click(mid)
+	var win_cost := c0 - Game.coins
+	_check("build: the Window tool puts a window in her wall for coins (%s, %dc), and it doesn't let her through (%s)" % [builder.edges().get(wk), win_cost, not _walkable(cell)],
+		builder.edges().get(wk) == "window" and win_cost == int(HouseBuilder.opening_cost("window")[0]) and not _walkable(cell))
+	# swapped for a door, in wood: the window comes out with half its coins back
+	Game.add_item("wood", 10)
+	builder.set_tool("hdoor")
+	c0 = Game.coins
+	builder.click(mid)
+	var back_c := Game.coins - c0
+	var wood_used := 10 - Game.count("wood")
+	var leaf := house_root.find_children("Door", "Node3D", true, false).size()
+	_check("build: the Door tool swaps it for a door paid in wood (%s, %d wood, +%dc for the window), hung in the gap (%d), and she can walk through (%s)" % [builder.edges().get(wk), wood_used, back_c, leaf, _walkable(cell)],
+		builder.edges().get(wk) == "hdoor" and wood_used == int(HouseBuilder.opening_cost("hdoor")[1]) and back_c == int(round(win_cost * 0.5)) and leaf >= 1 and _walkable(cell))
+	set_mode(Mode.LIVE)
+	player.position = Vector3(mid.x, 0, mid.z) + (Vector3(0, 0, 1.0) if wk.ends_with("h") else Vector3(1.0, 0, 0))
+	await _wait(1.2)
+	var opened := 0.0
+	for dr in builder.doors:
+		opened = maxf(opened, float(dr["open"]))
+	_check("build: the door swings open as she comes up (%.2f)" % opened, opened > 0.9)
+	_set_cam_lock(false)
+	cam_target = mid
+	cam_dist = 9.0
+	await _wait(0.8)
+	await _shot("62_build_door.png")
+	set_mode(Mode.BUILD)
+	builder.set_tool("hdoor")
+	var w0 := Game.count("wood")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: clicked again, the door comes out with half its wood back, not coins (%s, +%d wood, +%dc)" % [builder.edges().get(wk), Game.count("wood") - w0, Game.coins - c0],
+		builder.edges().get(wk) == "wall" and Game.count("wood") - w0 == int(HouseBuilder.opening_cost("hdoor")[1]) / 2 and Game.coins == c0)
+	Game.take_item("wood", Game.count("wood"))
+	# sliding doors in one of the house's own walls
+	builder.set_tool("slide")
+	var hk := ""
+	for k in ["0,0,v", "0,2,v", "0,4,v", "0,-2,v", "8,4,v", "8,0,v"]:
+		var oc := builder.opening_check(k, "slide")
+		if not oc.is_empty() and bool(oc["ok"]):
+			hk = k
+			break
+	var hmid := _edge_mid(hk) if hk != "" else Vector3.ZERO
+	var front := builder.opening_check(HouseBuilder.FRONT_DOOR, "slide")
+	c0 = Game.coins
+	if hk != "":
+		builder.click(hmid)
+	var slide_cost := c0 - Game.coins
+	var sliders := house_root.find_children("SlidingDoor", "Node3D", true, false).size()
+	_check("build: sliding doors go in the house's own wall (%s: %s, %dc, %d hung, walkable %s), but not in its front door ('%s')" % [hk, builder.house_openings().get(hk), slide_cost, sliders, _walkable(_cell(hmid)), front.get("why", "")],
+		hk != "" and builder.house_openings().get(hk) == "slide" and slide_cost == int(HouseBuilder.opening_cost("slide")[0]) and sliders >= 1 and _walkable(_cell(hmid)) and not bool(front.get("ok", true)))
+	_set_cam_lock(false)
+	cam_target = hmid
+	cam_dist = 10.0
+	await _wait(0.8)
+	await _shot("62_build_house_slide.png")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("house_openings")
+	Game.flags.erase("built_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	_check("build: the house's sliding doors and what paid for them survive a save (%s, %s)" % [builder.house_openings().get(hk), str(Game.flag("built_paid", {}).get(hk, {}))],
+		builder.house_openings().get(hk) == "slide" and (Game.flag("built_paid", {}) as Dictionary).has(hk))
+	c0 = Game.coins
+	builder.click(hmid)
+	_check("build: taken out again, half the coins come back (+%dc) and the wall is whole (%s)" % [Game.coins - c0, not builder.house_openings().has(hk)],
+		Game.coins - c0 == int(round(slide_cost * 0.5)) and not builder.house_openings().has(hk))
+	# a doorway from an older save, with nothing kept of what paid for it
+	var d: Dictionary = builder.edges().duplicate()
+	d[wk] = "door"
+	Game.set_flag("built_walls", d)
+	builder.refresh_world()
+	builder.set_tool("wall")
+	c0 = Game.coins
+	builder.click(mid)
+	_check("build: a doorway from an older save comes down for half its price in coins (+%dc of %dc)" % [Game.coins - c0, HouseBuilder.price("door")],
+		Game.coins - c0 == int(round(HouseBuilder.price("door") * 0.5)) and not builder.edges().has(wk))
+	builder.set_tool("wall")
+	builder.click(mid) # back up as the plain wall it was
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+	cam_target = Vector3(c.x, 0, c.y)
+
+
+## Floors (Alex, 2026-11-17): blue carpet over the room she built for coins, oak boards over it for
+## wood with the carpet's coins half back, white tile over the whole house, all kept by a save, and
+## the planks back with half returned.
+func _floor_checks(c: Vector2) -> void:
+	set_mode(Mode.BUILD)
+	var g := Vector3(c.x, 0, c.y)
+	var cells := builder.floor_cells_at(c)
+	var n := cells.size()
+	Game.take_item("wood", Game.count("wood"))
+	hud.wall_tool_chosen.emit("floor")
+	hud.floor_pick.select(HouseBuilder.FLOORS.find("carpet_blue"))
+	hud.floor_pick.item_selected.emit(HouseBuilder.FLOORS.find("carpet_blue"))
+	await _wait(0.1)
+	builder.hover_at(g)
+	var ghosts := builder._floor_ghost.get_child_count() if builder._floor_ghost != null else 0
+	var c0 := Game.coins
+	builder.click(g)
+	var laid := _laid_floors()
+	var carpet_cost := c0 - Game.coins
+	_check("build: the Floor tool lays blue carpet over the whole room she built for coins (%d cells, %d shown before the click, %d laid, %dc)" % [n, ghosts, laid.size(), carpet_cost],
+		builder.tool == "floor" and hud.wall_btns["floor"].button_pressed and n >= 2 and ghosts == n and laid.size() == n \
+		and carpet_cost == n * int(HouseBuilder.floor_cost("carpet_blue")[0]) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "carpet_blue")
+	# oak boards over it, paid in wood: the carpet comes up with half its coins back
+	Game.add_item("wood", 40)
+	builder.set_floor_kind("wood_oak")
+	c0 = Game.coins
+	builder.click(g)
+	var wood_used := 40 - Game.count("wood")
+	_check("build: oak boards over it are paid in wood (%d wood) and the carpet comes up for half its coins (+%dc)" % [wood_used, Game.coins - c0],
+		wood_used == n * int(HouseBuilder.floor_cost("wood_oak")[1]) and Game.coins - c0 == int(round(carpet_cost * 0.5)) and builder.floors().get(HouseBuilder.cell_key(cells[0])) == "wood_oak")
+	Game.take_item("wood", Game.count("wood"))
+	# white tile through the house
+	var hq := Vector2(HOUSE_W * 0.5, 1.0)
+	var hcells := builder.floor_cells_at(hq)
+	builder.set_floor_kind("tile_white")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var tile_cost := c0 - Game.coins
+	laid = _laid_floors()
+	_check("build: white tile through her house (%d cells, %dc, %d floors laid in all)" % [hcells.size(), tile_cost, laid.size()],
+		hcells.size() == builder.house_cells().size() and tile_cost == hcells.size() * int(HouseBuilder.floor_cost("tile_white")[0]) and laid.size() == n + hcells.size())
+	builder.hover_at(null)
+	_set_cam_lock(false)
+	cam_target = Vector3(HOUSE_W * 0.5, 0, 3.0)
+	cam_dist = 16.0
+	await _wait(0.8)
+	await _shot("62_build_floors.png") # in build mode, the roofs lifted
+	set_mode(Mode.LIVE)
+	# a save keeps them
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("floors")
+	Game.flags.erase("floors_paid")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	laid = _laid_floors()
+	_check("build: the floors survive a save (%d laid)" % laid.size(), laid.size() == n + hcells.size())
+	# the planks again: the tile comes up, half its coins back
+	set_mode(Mode.BUILD)
+	builder.set_tool("floor")
+	builder.set_floor_kind("planks")
+	c0 = Game.coins
+	builder.click(Vector3(hq.x, 0, hq.y))
+	var w0 := Game.count("wood")
+	builder.click(g)
+	_check("build: plank boards take them up again, half back in what paid (+%dc for the tile, +%d wood for the oak, %d left)" % [Game.coins - c0, Game.count("wood") - w0, builder.floors().size()],
+		Game.coins - c0 == int(round(tile_cost * 0.5)) and Game.count("wood") - w0 == n * int(HouseBuilder.floor_cost("wood_oak")[1]) / 2 and builder.floors().is_empty())
+	Game.take_item("wood", Game.count("wood"))
+	builder.set_tool("")
+	set_mode(Mode.LIVE)
+	player.position = Vector3(10.5, 0, 7.5)
+
+
+## The laid floors standing now (house_builder.gd _draw_floors()).
+func _laid_floors() -> Array:
+	return house_root.find_children("*", "MeshInstance3D", true, false).filter(func(n: Node): return n.has_meta("floor") and not n.is_queued_for_deletion())
 
 
 ## The middle of a grid edge, on the ground (house_builder.gd keys).

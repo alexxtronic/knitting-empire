@@ -54,6 +54,10 @@ var cfg := {}
 var centre := Vector3.ZERO
 var road_dir := Vector2.ZERO
 var drive_angles: Array = [] # where each driveway meets the circle (radians round the centre), for the kerb's gaps
+## The paving as shapes, for the world editor's road map (Alex, 2026-11-17: "can't delete original
+## cul-de-sac pavement"): {"kind": "pavement"|"sidewalk", "circle": [Vector2, r]} or {"kind", "quad": [a, b, w]}.
+## god_mode.gd paints them into its map once and hides the meshes (group "suburb_paving").
+var paving: Array = []
 var house_list: Array = [] # {"i", "node", "model", "door", "inside", "yaw", "mirror", "panes", "light"}
 var sign_node: Node3D
 var lamps: Array = [] # the street lamps (main.decor)
@@ -178,12 +182,16 @@ func _roads() -> void:
 		st.add_vertex(Vector3(cos(a1) * r, 0, sin(a1) * r))
 	var bulb := _flat(st.commit(), asphalt, Y_ROAD, "TurningCircle")
 	bulb.position = Vector3(centre.x, Y_ROAD, centre.z)
+	bulb.add_to_group("suburb_paving")
+	paving.append({"kind": "pavement", "circle": [Vector2(centre.x, centre.z), r]})
 	# the road in, from inside the circle to the trail
 	var rt: Array = cfg.get("road_to", [86.5, 0.7])
 	var a := Vector2(centre.x, centre.z) + road_dir * (r - 1.0)
 	var b := Vector2(float(rt[0]), float(rt[1]))
 	var road := _quad(a, b, w, asphalt, Y_ROAD, "RoadIn")
 	road.name = "RoadIn"
+	road.add_to_group("suburb_paving")
+	paving.append({"kind": "pavement", "quad": [a, b, w]})
 	# curbs: a low concrete kerb round the circle, open where the road comes in, and along the road
 	var open := asin(clampf(w * 0.5 / r, 0.0, 1.0)) + 0.04
 	var a_road := atan2(road_dir.y, road_dir.x)
@@ -236,7 +244,9 @@ func _kerb(a: Vector2, b: Vector2, mat: Material) -> void:
 	mi.position = Vector3(mid.x, 0.05, mid.y)
 	mi.rotation.y = -atan2(b.y - a.y, b.x - a.x)
 	mi.name = "Kerb"
+	mi.add_to_group("suburb_paving")
 	add_child(mi)
+	paving.append({"kind": "sidewalk", "quad": [a, b, 0.3]}) # on the map the kerb is a strip of concrete
 
 
 ## One house round the circle: the model in its colours, its garden, its driveway, its porch light.
@@ -290,7 +300,8 @@ func _house(i: int, d: Dictionary) -> Array:
 	var xc := (x0 + x1) * 0.5
 	var p0 := _to_world(node, Vector3(xc, 0, DRIVE_Z))
 	var p1 := centre + (p0 - centre).normalized() * (bulb - 0.5) # straight at the circle, so neighbours' don't cross
-	_quad(Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), x1 - x0, _paving(Color(0.7, 0.68, 0.64), 2.4), Y_DRIVE, "Driveway%d" % i)
+	_quad(Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), x1 - x0, _paving(Color(0.7, 0.68, 0.64), 2.4), Y_DRIVE, "Driveway%d" % i).add_to_group("suburb_paving")
+	paving.append({"kind": "sidewalk", "quad": [Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), x1 - x0]})
 	drive_angles.append([atan2(p1.z - centre.z, p1.x - centre.x), (x1 - x0) * 0.5 / bulb + 0.06])
 	# the porch light, on while the windows are lit
 	var light := OmniLight3D.new()
@@ -309,7 +320,7 @@ func _house(i: int, d: Dictionary) -> Array:
 	var blocks: Array = []
 	for r in local_blocks:
 		blocks.append_array(_blocks(r, node.position, node.rotation.y))
-	var h := {"i": i, "node": node, "model": model, "mirror": mirror, "panes": panes, "light": light, "yaw": node.rotation.y,
+	var h := {"i": i, "node": node, "model": model, "mirror": mirror, "panes": panes, "light": light, "yaw": node.rotation.y, "at": node.position, # where the code put it, before the world layout
 		"door": _to_world(node, Vector3(DOOR_AT.x * mx, 0, DOOR_AT.z)), "inside": _to_world(node, Vector3(INSIDE_AT.x * mx, 0, INSIDE_AT.z))}
 	house_list.append(h)
 	if walks_in and not mirror:

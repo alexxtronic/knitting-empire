@@ -49,15 +49,20 @@ func run(m: Node) -> void:
 			mirrored += 1
 	main._check("six houses round the cul-de-sac in their parts, the low walls hidden, brick, shingles and painted trim from the house's maps (%s)" % str(kinds), parts_ok and low_hidden)
 	main._check("each house is its own: %d brick colours, %d of six mirrored" % [bricks.size(), mirrored], bricks.size() >= 5 and mirrored == 3)
-	# every house faces the circle
+	# every house the code places faces the circle; one Alex has moved or turned in the world
+	# editor stands where data/world_layout.json puts it, and that's the map
 	var facing := true
-	for h in sb.houses():
+	var moved := 0
+	for h in sb.house_list:
 		var n := h["node"] as Node3D
+		if n.position.distance_to(h["at"]) > 0.05 or absf(angle_difference(n.rotation.y, float(h["yaw"]))) > 0.01:
+			moved += 1
+			continue
 		var front := n.global_transform.basis.z.normalized()
 		var to_c: Vector3 = (sb.centre - n.global_position)
 		to_c.y = 0.0
 		facing = facing and front.dot(to_c.normalized()) > 0.95
-	main._check("every house faces the turning circle", facing)
+	main._check("every house faces the turning circle, but for those the world layout moved (%d moved)" % moved, facing)
 	# the sign
 	var face_ok := false
 	if sb.sign_node:

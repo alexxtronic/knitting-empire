@@ -113,7 +113,7 @@ func can_visit(vid: String) -> bool:
 
 ## The café's reading seats nobody is in, Nora's included.
 func free_seats() -> Array:
-	return Interiors.read_spots("cafe").filter(func(r): return r.kind == "seat" and (r.occupant == null or not is_instance_valid(r.occupant)))
+	return Interiors.read_spots("cafe").filter(func(r): return r.kind == "seat" and not r.upstairs and (r.occupant == null or not is_instance_valid(r.occupant)))
 
 
 ## Sends `vid` in for a coffee and a book now. Returns false if there's no seat or no such person.

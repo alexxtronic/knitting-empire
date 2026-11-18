@@ -5,10 +5,28 @@ extends Node
 ## roof. On a plot bought from Gary at Willow Homes she can start a whole new house; its first wall
 ## pays for the foundations too. Prices and plots are in data/economy.json "building".
 ##
-## What she built is Game.flags["built_walls"]: edge key -> "wall" or "door". An edge key is
+## Openings (Alex, 2026-11-17: "all houses get build mode wall edits for a cost of wood or coin ...
+## I want to be able to fully customize homes we build in the future also can place windows and
+## doors"): the Doorway, Door, Sliding door and Window tools put one in any wall of hers, her house's
+## own walls included (not the front door), or build a new wall with one in it. Each piece is paid in
+## wood when she has enough for it, else coins (data/economy.json "building" "wall_wood" and
+## "openings"), and what it was paid with is kept (Game.flags["built_paid"]: edge -> {"wall": [coins,
+## wood], "open": [coins, wood]}), so taking it out gives half back in the same: wood paid back as
+## wood, never as coins. Her house's own edges with an opening are Game.flags["house_openings"]
+## (edge -> kind). Doors swing and sliding doors slide as she or the dog comes up (_process()).
+##
+## What she built is Game.flags["built_walls"]: edge key -> a kind in KINDS ("wall", "door" a doorway,
+## "hdoor", "slide", "window"). An edge key is
 ## "x,z,h" for the wall from (x, z) to (x + 2, z), or "x,z,v" for (x, z) to (x, z + 2), x and z in
 ## metres on the even grid. The plots she owns are Game.flags["plots_owned"] (their ids). Rooms
 ## aren't saved: they're worked out from the walls (compute()), so a wall taken down opens its room.
+##
+## Floors (Alex, 2026-11-17, "fully customize homes"): the Floor tool lays the floor picked in its
+## list (carpets, tiles, oak boards) over a whole room at a click: her house, or a room she built.
+## Each 2 m cell is paid for ("building" "floors", in wood when she has enough, else coins) and kept
+## in Game.flags["floors"] ("cx,cz" -> kind) with what paid in Game.flags["floors_paid"]; "planks",
+## the floor the house was built with, takes it up again for half back. Drawn over the planks by
+## _draw_floors(), only where the cell is still indoors.
 ##
 ## main.gd draws it all in _rebuild_house() through build_into(), so the walls, floors and roofs
 ## are the house's own (_wall, _plank_floor, _house_roof), cut down and lifted by the same rules.
@@ -18,9 +36,22 @@ const Catalog = preload("res://scripts/catalog.gd")
 
 const STEP := 2 # metres between grid lines
 const DOORWAY := 1.4 # metres across a doorway (her front door's is 1.4)
+const KINDS := ["wall", "door", "hdoor", "slide", "window"]
+const LABELS := {"wall": "Wall", "door": "Doorway", "hdoor": "Door", "slide": "Sliding door", "window": "Window"}
+const GAPS := {"door": DOORWAY, "hdoor": 1.2, "slide": 1.6} # metres across each kind's gap, its jambs inside (over 1.1, or no cell of the walking grid is free in it: walls block 0.2 m past their faces)
+const DOOR_GLB := "res://assets/props/door_interior.glb" # origin at the foot of its hinge edge, slab along +X
+const SLIDE_GLB := "res://assets/props/sliding_door.glb" # "frame" and "slide", glass named glass
+const DOOR_W := 0.85 # the door model's width
+const SLIDE_W := 1.8 # the sliding door model's width
+const SplitHouse = preload("res://scripts/split_house.gd") # its drawn tiles and boards
+const FLOORS := ["planks", "carpet_grey", "carpet_blue", "carpet_cream", "tile_beige", "tile_white", "tile_black", "wood_oak"]
+const FLOOR_LABELS := {"planks": "Plank boards (as built)", "carpet_grey": "Grey carpet", "carpet_blue": "Blue carpet", "carpet_cream": "Cream carpet",
+	"tile_beige": "Beige tile", "tile_white": "White tile", "tile_black": "Black tile", "wood_oak": "Oak boards"}
+const FLOOR_Y := 0.035 # the top of a laid floor, just over the planks (0.02)
 
 var main
-var tool := "" # "" (furniture), "wall" or "door": what a click in build mode lays
+var tool := "" # "" (furniture), or a kind in KINDS: what a click in build mode lays
+var doors: Array = [] # {"node", "part", "kind", "at": Vector2 (world), "rot0", "x0", "w", "open"}: _process() swings them
 var hover := "" # the edge under the pointer
 var hover_ok := false
 var hover_note := ""
@@ -31,6 +62,10 @@ var wall_nodes: Array = [] # Node3D per built edge (meta "edge", "kind"), for th
 var wall_rects: Array = [] # the ground each built wall stands on
 var _ghost: MeshInstance3D
 var _mats := {}
+var floor_kind := "carpet_grey" # what the Floor tool lays
+var hover_cells: Array = [] # the cells the Floor tool would lay (Vector2i)
+var _floor_ghost: Node3D
+var _floor_mats := {}
 var _plot_root: Node3D
 
 
@@ -40,8 +75,24 @@ static func econ() -> Dictionary:
 	return Data.economy().get("building", {})
 
 
+## Coins for a new wall of this kind (the wall and what's in it).
 static func price(kind: String) -> int:
-	return int(econ().get("door" if kind == "door" else "wall", 80))
+	return int(econ().get("wall", 80)) + int(opening_cost(kind)[0])
+
+
+## [coins, wood] for the opening of a kind alone ([0, 0] for a plain wall).
+static func opening_cost(kind: String) -> Array:
+	var o: Dictionary = econ().get("openings", {}).get(kind, {})
+	return [int(o.get("coins", 0)), int(o.get("wood", 0))]
+
+
+## [coins, wood] for the wall alone.
+static func wall_cost() -> Array:
+	return [int(econ().get("wall", 80)), int(econ().get("wall_wood", 10))]
+
+
+static func label(kind: String) -> String:
+	return str(LABELS.get(kind, "Wall"))
 
 
 static func new_house_fee() -> int:
@@ -373,6 +424,7 @@ func build_into() -> void:
 			Catalog.box(main.house_root, Vector3(rr.size.x + 0.3, 0.1, rr.size.y + 0.3), Vector3(rr.get_center().x, -0.04, rr.get_center().y), Catalog.STONE)
 			main._plank_floor(rr, 11 + i * 7 + int(rr.position.x * 3.0 + rr.position.y), "house")
 			main._house_roof(rr, rr.size.y >= rr.size.x, group)
+	_draw_floors()
 	_draw_plots()
 
 
@@ -395,18 +447,11 @@ func _build_wall(k: String, kind: String) -> void:
 	node.set_meta("kind", kind)
 	main.house_root.add_child(node)
 	wall_nodes.append(node)
-	var along := (b - a).normalized()
-	if kind == "door":
-		var side := (STEP - DOORWAY) * 0.5
-		main._wall(a, a + along * side, normal, [], main.WALL_H, true, divider, node)
-		main._wall(b - along * side, b, normal, [], main.WALL_H, true, divider, node)
-		main._lintel(a + along * side, b - along * side, normal, node)
-	else:
-		# an outside wall of a room gets a window on every other grid step, like the house's
-		var wins: Array = []
-		if (in0 != in1) and posmod(int(a.x + a.y) / STEP, 2) == 0:
-			wins.append(mid.x if h else mid.y)
-		main._wall(a, b, normal, wins, main.WALL_H, true, divider, node)
+	# an outside wall of a room gets a window on every other grid step, like the house's
+	var wins: Array = []
+	if kind == "wall" and (in0 != in1) and posmod(int(a.x + a.y) / STEP, 2) == 0:
+		wins.append(mid.x if h else mid.y)
+	main._edge_piece(a, b, normal, kind, wins, divider, node)
 	wall_rects.append(edge_rect(k))
 
 
@@ -460,7 +505,7 @@ func _anchors(on_plot: String) -> Dictionary:
 
 ## Whether a wall can go on this edge now, and what it would cost: {"ok", "why", "cost", "plot", "fee"}.
 func check(k: String, kind := "wall") -> Dictionary:
-	var out := {"ok": false, "why": "", "cost": price(kind), "plot": "", "fee": 0}
+	var out := {"ok": false, "why": "", "cost": price(kind), "plot": "", "fee": 0} # cost: in coins
 	var e := ends(k)
 	var a: Vector2 = e[0]
 	var b: Vector2 = e[1]
@@ -516,27 +561,32 @@ func _blocked(r: Rect2) -> String:
 	return ""
 
 
-## Puts a wall (or doorway) up on an edge and takes its price. False if it can't go there.
+## Puts a wall up on an edge, with an opening of `kind` in it unless it's a plain "wall", and takes
+## its price: in wood if she has enough for it all, else coins. False if it can't go there.
 func place(k: String, kind := "wall") -> bool:
 	var c := check(k, kind)
 	if not c["ok"]:
 		main.hud.show_toast(str(c["why"]))
 		return false
-	if not Game.spend(int(c["cost"])):
+	var parts := _parts(kind)
+	var paid := _pay(parts, int(c["fee"]))
+	if paid.is_empty():
 		return false
 	var rooms_before := rooms.size()
 	var d: Dictionary = edges().duplicate()
 	d[k] = kind
 	_set_edges(d)
+	for part in paid:
+		_set_paid(k, part, paid[part])
 	refresh_world()
-	var what := "doorway" if kind == "door" else "wall"
+	var what := "wall" if kind == "wall" else "wall with a %s" % label(kind).to_lower()
 	if rooms.size() > rooms_before:
 		var joined: bool = _room_by(k).get("joined", false)
 		main.hud.show_toast("The room's closed in! Floor and roof are on%s." % (", and a doorway joins it to the house" if joined else ""))
 	elif int(c["fee"]) > 0:
-		main.hud.show_toast("Foundations laid for a new house, and the first %s is up (%dc)." % [what, int(c["cost"])])
+		main.hud.show_toast("Foundations laid for a new house, and the first %s is up (%s)." % [what, _paid_text(paid, int(c["fee"]))])
 	else:
-		main.hud.show_toast("Built a %s (%dc)." % [what, int(c["cost"])])
+		main.hud.show_toast("Built a %s (%s)." % [what, _paid_text(paid, 0)])
 	return true
 
 
@@ -547,18 +597,264 @@ func _room_by(k: String) -> Dictionary:
 	return {}
 
 
-## Takes a wall she built down again, for part of what it cost.
+## Takes a wall she built down again, with whatever is in it, for half of what it cost, given
+## back in what it was paid with.
 func remove(k: String) -> bool:
 	var d: Dictionary = edges().duplicate()
 	if not d.has(k):
 		return false
-	var back := int(round(price(str(d[k])) * float(econ().get("refund", 0.5))))
+	var kind := str(d[k])
+	var back := [0, 0]
+	for part in ["wall", "open"]:
+		if part == "open" and kind == "wall":
+			continue
+		var b := _refund(_paid_part(k, part, kind))
+		back = [back[0] + b[0], back[1] + b[1]]
 	d.erase(k)
 	_set_edges(d)
-	Game.coins += back
+	_set_paid(k, "wall", null)
+	_set_paid(k, "open", null)
 	refresh_world()
-	main.hud.show_toast("Took the wall down (+%dc)." % back)
+	main.hud.show_toast("Took the wall down (%s back)." % _back_text(back))
 	return true
+
+
+# --- openings ------------------------------------------------------------------------------------
+
+func house_openings() -> Dictionary:
+	return Game.flag("house_openings", {})
+
+
+## The parts a new wall of this kind is paid for: {"wall": [coins, wood], "open": [coins, wood]}.
+static func _parts(kind: String) -> Dictionary:
+	var out := {"wall": wall_cost()}
+	if kind != "wall":
+		out["open"] = opening_cost(kind)
+	return out
+
+
+## Whether an opening of `kind` can go in the standing wall on edge k (hers or the house's):
+## {"ok", "why", "undo" (it's there already: a click takes it out), "house", "now" (what's in it)},
+## or {} if no wall stands there.
+func opening_check(k: String, kind: String) -> Dictionary:
+	var out := {"ok": false, "why": "", "undo": false, "house": false, "now": "wall"}
+	if edges().has(k):
+		out["now"] = str(edges()[k])
+	elif house_edges().has(k):
+		out["house"] = true
+		out["now"] = str(house_openings().get(k, "wall"))
+		if k == FRONT_DOOR:
+			out["why"] = "That's your front door."
+			return out
+		if open_house.has(k):
+			out["why"] = "That wall's open to the room you built."
+			return out
+	else:
+		return {}
+	out["undo"] = str(out["now"]) == kind
+	if not out["undo"] and GAPS.has(kind):
+		var why := _furniture_in_doorway(k)
+		if why != "":
+			out["why"] = why
+			return out
+	out["ok"] = true
+	return out
+
+
+## A piece standing where a doorway on edge k would let her through, or "".
+func _furniture_in_doorway(k: String) -> String:
+	var e := ends(k)
+	var mid: Vector2 = (e[0] + e[1]) * 0.5
+	var r := Rect2(mid - Vector2(0.5, 0.5), Vector2(1.0, 1.0)).grow_individual(0, 0.5, 0, 0.5) if e[2] \
+		else Rect2(mid - Vector2(0.5, 0.5), Vector2(1.0, 1.0)).grow_individual(0.5, 0, 0.5, 0)
+	for f in main.furniture:
+		if not f.is_flat() and f.footprint().intersects(r):
+			return "Move the %s out of the way first." % f.display_name()
+	return ""
+
+
+## Puts an opening of `kind` in the wall on edge k, or takes it out if that's what's there. What
+## was in it before comes out first, half paid back in what it was paid with.
+func set_opening(k: String, kind: String) -> bool:
+	var c := opening_check(k, kind)
+	if c.is_empty():
+		return false
+	if not c["ok"]:
+		main.hud.show_toast(str(c["why"]))
+		return false
+	var now := str(c["now"])
+	var to := "wall" if bool(c["undo"]) else kind
+	if to != "wall" and not _can_pay({"open": opening_cost(to)}, 0):
+		main.hud.show_toast("Not enough: a %s costs %s." % [label(to).to_lower(), _cost_text({"open": opening_cost(to)}, 0)])
+		return false
+	var back := [0, 0]
+	if now != "wall":
+		back = _refund(_paid_part(k, "open", now))
+		_set_paid(k, "open", null)
+	var paid := {}
+	if to != "wall":
+		paid = _pay({"open": opening_cost(to)}, 0)
+		_set_paid(k, "open", paid.get("open", null))
+	if bool(c["house"]):
+		var h: Dictionary = house_openings().duplicate()
+		if to == "wall":
+			h.erase(k)
+		else:
+			h[k] = to
+		if h.is_empty():
+			Game.flags.erase("house_openings")
+		else:
+			Game.set_flag("house_openings", h)
+	else:
+		var d: Dictionary = edges().duplicate()
+		d[k] = to
+		_set_edges(d)
+	refresh_world()
+	if to == "wall":
+		main.hud.show_toast("Took the %s out (%s back)." % [label(now).to_lower(), _back_text(back)])
+	elif now != "wall":
+		main.hud.show_toast("Swapped the %s for a %s (%s, %s back)." % [label(now).to_lower(), label(to).to_lower(), _paid_text(paid, 0), _back_text(back)])
+	else:
+		main.hud.show_toast("Put a %s in (%s)." % [label(to).to_lower(), _paid_text(paid, 0)])
+	return true
+
+
+## The house grew and its back wall moved: openings in house walls that are gone come out, paid back.
+func prune_house() -> void:
+	var h: Dictionary = house_openings().duplicate()
+	var he := house_edges()
+	var back := [0, 0]
+	for k in h.keys():
+		if not he.has(k):
+			var b := _refund(_paid_part(str(k), "open", str(h[k])))
+			back = [back[0] + b[0], back[1] + b[1]]
+			_set_paid(str(k), "open", null)
+			h.erase(k)
+	if h.is_empty():
+		Game.flags.erase("house_openings")
+	else:
+		Game.set_flag("house_openings", h)
+
+
+## The openings in the house's own wall line on `side` ("back", "front", "left", "right"):
+## {metres along the line where the edge starts: kind}, for main._wall_line().
+func line_edits(side: String) -> Dictionary:
+	var out := {}
+	var he := house_edges()
+	var z0: int = int(main._zmin())
+	var h := house_openings()
+	for k in h:
+		if not he.has(k) or str(k) == FRONT_DOOR or open_house.has(k):
+			continue
+		var e := ends(str(k))
+		var a: Vector2 = e[0]
+		var s := ("back" if roundi(a.y) == z0 else "front") if e[2] else ("left" if roundi(a.x) == 0 else "right")
+		if s == side:
+			out[roundi(a.x if e[2] else a.y)] = str(h[k])
+	return out
+
+
+# --- paying ----------------------------------------------------------------------------------------
+
+func _can_pay(parts: Dictionary, fee: int) -> bool:
+	var coins := fee
+	var wood := 0
+	for p in parts:
+		coins += int(parts[p][0])
+		wood += int(parts[p][1])
+	return (wood > 0 and Game.count("wood") >= wood and Game.coins >= fee) or Game.coins >= coins
+
+
+## Takes the parts' price, all in wood when she has enough for them all (the foundations' `fee` is
+## coins either way), else all in coins. What each part was paid with ({part: [coins, wood]}), or
+## {} if she can't pay.
+func _pay(parts: Dictionary, fee: int) -> Dictionary:
+	var coins := fee
+	var wood := 0
+	for p in parts:
+		coins += int(parts[p][0])
+		wood += int(parts[p][1])
+	var out := {}
+	if wood > 0 and Game.count("wood") >= wood and Game.coins >= fee:
+		if fee > 0 and not Game.spend(fee):
+			return {}
+		Game.take_item("wood", wood)
+		for p in parts:
+			out[p] = [0, int(parts[p][1])]
+		return out
+	if not Game.spend(coins):
+		return {}
+	for p in parts:
+		out[p] = [int(parts[p][0]), 0]
+	return out
+
+
+## What a part on edge k was paid with: from the record, or for walls built before it was kept,
+## coins at today's price.
+func _paid_part(k: String, part: String, kind: String) -> Array:
+	var rec: Dictionary = (Game.flag("built_paid", {}) as Dictionary).get(k, {})
+	if rec.has(part):
+		return [int(rec[part][0]), int(rec[part][1])]
+	return [int(wall_cost()[0]) if part == "wall" else int(opening_cost(kind)[0]), 0]
+
+
+func _set_paid(k: String, part: String, v: Variant) -> void:
+	var all: Dictionary = (Game.flag("built_paid", {}) as Dictionary).duplicate(true)
+	var rec: Dictionary = all.get(k, {})
+	if v == null:
+		rec.erase(part)
+	else:
+		rec[part] = [int(v[0]), int(v[1])]
+	if rec.is_empty():
+		all.erase(k)
+	else:
+		all[k] = rec
+	if all.is_empty():
+		Game.flags.erase("built_paid")
+	else:
+		Game.set_flag("built_paid", all)
+
+
+## Gives back the refund share of what was paid, in the same: [coins, wood] given.
+func _refund(paid: Array) -> Array:
+	var share := float(econ().get("refund", 0.5))
+	var c := int(round(int(paid[0]) * share))
+	var w := int(floor(int(paid[1]) * share))
+	Game.coins += c
+	if w > 0:
+		Game.add_item("wood", w)
+	return [c, w]
+
+
+func _cost_text(parts: Dictionary, fee: int) -> String:
+	var coins := fee
+	var wood := 0
+	for p in parts:
+		coins += int(parts[p][0])
+		wood += int(parts[p][1])
+	if wood <= 0:
+		return "%dc" % coins
+	return "%dc or %d wood%s" % [coins, wood, " and %dc" % fee if fee > 0 else ""]
+
+
+func _paid_text(paid: Dictionary, fee: int) -> String:
+	var coins := fee
+	var wood := 0
+	for p in paid:
+		coins += int(paid[p][0])
+		wood += int(paid[p][1])
+	if wood > 0:
+		return "%d wood%s" % [wood, ", %dc" % coins if coins > 0 else ""]
+	return "%dc" % coins
+
+
+func _back_text(back: Array) -> String:
+	var out: Array = []
+	if int(back[0]) > 0:
+		out.append("+%dc" % int(back[0]))
+	if int(back[1]) > 0:
+		out.append("+%d wood" % int(back[1]))
+	return ", ".join(out) if not out.is_empty() else "nothing"
 
 
 ## Rebuilds the house, its rooms and the walking grid after a change.
@@ -572,13 +868,323 @@ func refresh_world() -> void:
 		main.god.sync_built()
 
 
+# --- doors -----------------------------------------------------------------------------------------
+
+## A door or sliding doors in the gap from a to b (world, on the ground), hung under `tall` (the
+## lintel's node, at the gap's middle) so they hide with the wall when it's cut down.
+func hang_door(tall: Node3D, kind: String, a: Vector2, b: Vector2) -> void:
+	var horizontal := absf(b.x - a.x) > absf(b.y - a.y)
+	var along := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
+	var clear := a.distance_to(b) - 0.16 # inside the jambs
+	var pivot := Node3D.new()
+	pivot.name = "Door" if kind == "hdoor" else "SlidingDoor"
+	tall.add_child(pivot)
+	pivot.rotation.y = 0.0 if horizontal else -PI * 0.5 # a model laid along +X turned to lie along the wall
+	var holder := Node3D.new()
+	pivot.add_child(holder)
+	var part: Node3D = pivot
+	if kind == "hdoor":
+		pivot.position = -along * clear * 0.5 # hinged on the gap's low end
+		holder.scale = Vector3(clear / DOOR_W, 1, 1)
+		if ResourceLoader.exists(DOOR_GLB):
+			holder.add_child((load(DOOR_GLB) as PackedScene).instantiate())
+		else:
+			Catalog.box(holder, Vector3(DOOR_W, 2.02, 0.04), Vector3(DOOR_W * 0.5, 1.01, 0), Catalog.WOOD)
+	else:
+		holder.scale = Vector3(clear / SLIDE_W, 1, 1)
+		if ResourceLoader.exists(SLIDE_GLB):
+			var m: Node3D = (load(SLIDE_GLB) as PackedScene).instantiate()
+			holder.add_child(m)
+			for mi in m.find_children("*", "MeshInstance3D", true, false):
+				var mesh: Mesh = (mi as MeshInstance3D).mesh
+				for si in mesh.get_surface_count():
+					var mat := mesh.surface_get_material(si)
+					if mat != null and "glass" in str(mat.resource_name).to_lower():
+						(mi as MeshInstance3D).set_surface_override_material(si, Catalog.window_glass())
+			var sl := m.find_child("slide", true, false)
+			part = sl if sl is Node3D else holder
+		else:
+			var g := Catalog.box(holder, Vector3(SLIDE_W, 2.0, 0.03), Vector3(0, 1.0, 0), Color(0.7, 0.85, 0.95))
+			g.material_override = Catalog.window_glass()
+	var mid := (a + b) * 0.5
+	doors.append({"node": pivot, "part": part, "kind": kind, "at": mid, "rot0": pivot.rotation.y, "x0": part.position.x, "open": 0.0})
+
+
+## Doors swing open and sliding doors slide as Nora or the dog comes up to one, and shut behind.
+func _process(delta: float) -> void:
+	if doors.is_empty() or main == null:
+		return
+	var who: Array = []
+	if main.player != null:
+		who.append((main.player as Node3D).position)
+	if main.dog != null and is_instance_valid(main.dog):
+		who.append((main.dog as Node3D).position)
+	for d in doors:
+		var node: Node3D = d["node"]
+		if not is_instance_valid(node):
+			continue
+		var at: Vector2 = d["at"]
+		var near := false
+		for p in who:
+			if Vector2((p as Vector3).x, (p as Vector3).z).distance_to(at) < 1.5:
+				near = true
+		d["open"] = move_toward(float(d["open"]), 1.0 if near else 0.0, delta * 2.2)
+		var s := smoothstep(0.0, 1.0, float(d["open"]))
+		if str(d["kind"]) == "hdoor":
+			node.rotation.y = float(d["rot0"]) - deg_to_rad(95.0) * s
+		elif is_instance_valid(d["part"]):
+			(d["part"] as Node3D).position.x = float(d["x0"]) - SLIDE_W * 0.47 * s
+
+
+# --- floors ----------------------------------------------------------------------------------------
+
+func floors() -> Dictionary:
+	return Game.flag("floors", {})
+
+
+static func cell_key(c: Vector2i) -> String:
+	return "%d,%d" % [c.x, c.y]
+
+
+static func floor_label(kind: String) -> String:
+	return str(FLOOR_LABELS.get(kind, kind))
+
+
+## [coins, wood] for one 2 m cell of a floor kind ([0, 0] for the planks).
+static func floor_cost(kind: String) -> Array:
+	var f: Dictionary = econ().get("floors", {}).get(kind, {})
+	return [int(f.get("coins", 0)), int(f.get("wood", 0))]
+
+
+## The room the cell under q belongs to: a room she built, or her house. [] outside.
+func floor_cells_at(q: Vector2) -> Array:
+	var c := cell_of(q)
+	if room_cells.has(c):
+		return (rooms[int(room_cells[c])]["cells"] as Array).duplicate()
+	var hc := house_cells()
+	if hc.has(c):
+		return hc.keys()
+	return []
+
+
+func _floor_now(c: Vector2i) -> String:
+	return str(floors().get(cell_key(c), "planks"))
+
+
+## Whether `kind` can go down over these cells: {"ok", "why", "n" (cells it changes), "parts"
+## (what they cost), "back" ([coins, wood] the floors taken up give back)}.
+func floor_check(cells: Array, kind: String) -> Dictionary:
+	var out := {"ok": false, "why": "", "n": 0, "parts": {}, "back": [0, 0]}
+	if cells.is_empty():
+		out["why"] = "Floors go down inside your house or a room you've built."
+		return out
+	var n := 0
+	var back := [0, 0]
+	var share := float(econ().get("refund", 0.5))
+	var paid: Dictionary = Game.flag("floors_paid", {})
+	for c in cells:
+		var now := _floor_now(c)
+		if now == kind:
+			continue
+		n += 1
+		if now != "planks":
+			var p: Array = paid.get(cell_key(c), floor_cost(now))
+			back = [back[0] + int(round(int(p[0]) * share)), back[1] + int(floor(int(p[1]) * share))]
+	out["n"] = n
+	out["back"] = back
+	if n == 0:
+		out["why"] = "This room's floor is %s already." % floor_label(kind).to_lower()
+		return out
+	var one := floor_cost(kind)
+	out["parts"] = {"floor": [int(one[0]) * n, int(one[1]) * n]}
+	if kind != "planks" and not _can_pay(out["parts"], 0):
+		out["why"] = "You need %s for %d m² of %s." % [_cost_text(out["parts"], 0), n * STEP * STEP, floor_label(kind).to_lower()]
+		return out
+	out["ok"] = true
+	return out
+
+
+## Lays `kind` over the cells (a room), paying for each cell it changes; what it covers comes up
+## for half back in what paid for it. "planks" just takes them up.
+func lay_floor(cells: Array, kind: String) -> bool:
+	var chk := floor_check(cells, kind)
+	if not bool(chk["ok"]):
+		main.hud.show_toast(str(chk["why"]))
+		return false
+	var each := [0, 0]
+	if kind != "planks":
+		var got := _pay(chk["parts"], 0)
+		if got.is_empty():
+			main.hud.show_toast(str(chk["why"]) if str(chk["why"]) != "" else "You can't afford that.")
+			return false
+		var one := floor_cost(kind)
+		each = [int(one[0]), 0] if int(got["floor"][0]) > 0 else [0, int(one[1])]
+	var fl: Dictionary = floors().duplicate()
+	var paid: Dictionary = (Game.flag("floors_paid", {}) as Dictionary).duplicate()
+	var back := [0, 0]
+	for c in cells:
+		var k := cell_key(c)
+		var now := _floor_now(c)
+		if now == kind:
+			continue
+		if now != "planks":
+			var b := _refund(paid.get(k, floor_cost(now)))
+			back = [back[0] + b[0], back[1] + b[1]]
+		if kind == "planks":
+			fl.erase(k)
+			paid.erase(k)
+		else:
+			fl[k] = kind
+			paid[k] = each
+	for pair in [["floors", fl], ["floors_paid", paid]]:
+		if (pair[1] as Dictionary).is_empty():
+			Game.flags.erase(pair[0])
+		else:
+			Game.set_flag(pair[0], pair[1])
+	main._rebuild_house()
+	var got_back := "" if back == [0, 0] else " (%s for the old floor)" % _back_text(back)
+	if kind == "planks":
+		main.hud.show_toast("The floor's up: plank boards again%s." % got_back)
+	else:
+		main.hud.show_toast("%s laid: %d m²%s." % [floor_label(kind), int(chk["n"]) * STEP * STEP, got_back])
+	return true
+
+
+## The laid floors, a tile over the planks per cell that's still indoors (a room opened up keeps
+## its floor in the save and gets it back when it's closed again).
+func _draw_floors() -> void:
+	var hc := house_cells()
+	var fl := floors()
+	for k in fl:
+		var p := str(k).split(",")
+		var c := Vector2i(int(p[0]), int(p[1]))
+		if not (hc.has(c) or room_cells.has(c)):
+			continue
+		var mi := MeshInstance3D.new()
+		var m := BoxMesh.new()
+		m.size = Vector3(STEP, 0.012, STEP)
+		mi.mesh = m
+		mi.position = Vector3(c.x * STEP + STEP * 0.5, FLOOR_Y - 0.006, c.y * STEP + STEP * 0.5)
+		mi.material_override = floor_mat(str(fl[k]))
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.name = "LaidFloor"
+		mi.set_meta("floor", str(fl[k]))
+		main.house_root.add_child(mi)
+
+
+## The floor's material: Marcus's house's tiles, boards and carpets (split_house.gd), laid in world
+## space so neighbouring cells meet without a seam.
+func floor_mat(kind: String) -> StandardMaterial3D:
+	if _floor_mats.has(kind):
+		return _floor_mats[kind]
+	var m := StandardMaterial3D.new()
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.roughness = 0.95
+	var img: Image = null
+	var carpet := {"carpet_grey": Color("#9a9a97"), "carpet_blue": Color("#6a8cb6"), "carpet_cream": Color("#f0e6cf")}
+	match kind:
+		"tile_beige":
+			img = SplitHouse._tiles(Color("#d8c7a4"), Color("#b9a988"), 4)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.45
+		"tile_black":
+			img = SplitHouse._tiles(Color("#1d1d20"), Color("#47474a"), 4)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.3
+		"tile_white":
+			img = SplitHouse._tiles(Color("#eceae4"), Color("#c3c0b8"), 8)
+			m.uv1_scale = Vector3.ONE / 1.2
+			m.roughness = 0.35
+		"wood_oak":
+			img = SplitHouse._boards(Color("#b98a55"), 6)
+			m.roughness = 0.55
+		_:
+			var tint: Color = carpet.get(kind, Color("#9a9a97"))
+			var base := "res://assets/textures/carpet/carpet_pile"
+			if ResourceLoader.exists(base + ".png"):
+				m.albedo_texture = load(base + ".png")
+				m.albedo_color = tint
+				if ResourceLoader.exists(base + "_n.png"):
+					m.normal_enabled = true
+					m.normal_texture = load(base + "_n.png")
+					m.normal_scale = 0.8
+				m.uv1_scale = Vector3.ONE / 0.6
+				m.roughness = 0.97
+			else:
+				img = SplitHouse._noise(tint, 0.1, 5)
+	if img != null:
+		img.generate_mipmaps()
+		m.albedo_texture = ImageTexture.create_from_image(img)
+	_floor_mats[kind] = m
+	return m
+
+
+func _show_floor_ghost(cells: Array, mat: String) -> void:
+	if _floor_ghost == null:
+		_floor_ghost = Node3D.new()
+		main.add_child(_floor_ghost)
+	for ch in _floor_ghost.get_children():
+		ch.queue_free()
+	for c in cells:
+		var mi := MeshInstance3D.new()
+		var m := BoxMesh.new()
+		m.size = Vector3(STEP - 0.06, 0.03, STEP - 0.06)
+		mi.mesh = m
+		mi.position = Vector3(c.x * STEP + STEP * 0.5, FLOOR_Y + 0.02, c.y * STEP + STEP * 0.5)
+		mi.material_override = _mats[mat]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_floor_ghost.add_child(mi)
+	_floor_ghost.visible = not cells.is_empty()
+
+
+func set_floor_kind(kind: String) -> void:
+	floor_kind = kind
+	hover_cells = []
+	if main.hud.floor_pick != null and main.hud.floor_pick.selected != FLOORS.find(kind):
+		main.hud.floor_pick.select(FLOORS.find(kind))
+
+
+func _hover_floor(g: Variant) -> void:
+	_ghost.visible = false
+	hover = ""
+	if g == null:
+		if _floor_ghost != null:
+			_floor_ghost.visible = false
+		return
+	var q := Vector2((g as Vector3).x, (g as Vector3).z)
+	var cells := floor_cells_at(q)
+	var chk := floor_check(cells, floor_kind)
+	hover_ok = bool(chk["ok"])
+	var mat := "bad"
+	if not hover_ok:
+		hover_note = str(chk["why"])
+	elif floor_kind == "planks":
+		hover_note = "Click to take this room's floor up (%s back)." % _back_text(chk["back"])
+		mat = "down"
+	else:
+		hover_note = "%s here: %d m², %s%s" % [floor_label(floor_kind), int(chk["n"]) * STEP * STEP, _cost_text(chk["parts"], 0),
+			" (the old floor comes up, %s)" % _back_text(chk["back"]) if chk["back"] != [0, 0] else ""]
+		mat = "ok"
+	if cells != hover_cells or _floor_ghost == null or not _floor_ghost.visible:
+		hover_cells = cells
+		_show_floor_ghost(cells, mat)
+	elif _floor_ghost.get_child_count() > 0:
+		for ch in _floor_ghost.get_children():
+			(ch as MeshInstance3D).material_override = _mats[mat]
+	main.hud.set_wall_note(hover_note)
+
+
 # --- the tool in build mode -------------------------------------------------------------------
 
 func set_tool(t: String) -> void:
 	tool = t
 	hover = ""
+	hover_cells = []
 	if _ghost != null:
 		_ghost.visible = false
+	if _floor_ghost != null:
+		_floor_ghost.visible = false
 	main.hud.set_wall_tool(t)
 
 
@@ -600,6 +1206,11 @@ func _ensure_ghost() -> void:
 ## The pointer moved over the ground at g: show the edge under it.
 func hover_at(g: Variant) -> void:
 	_ensure_ghost()
+	if tool == "floor":
+		_hover_floor(g)
+		return
+	if _floor_ghost != null:
+		_floor_ghost.visible = false
 	if tool == "" or g == null:
 		_ghost.visible = false
 		hover = ""
@@ -613,26 +1224,56 @@ func hover_at(g: Variant) -> void:
 	(_ghost.mesh as BoxMesh).size = Vector3(STEP, main.WALL_H, 0.24) if h else Vector3(0.24, main.WALL_H, STEP)
 	_ghost.position = Vector3(mid.x, main.WALL_H * 0.5, mid.y)
 	_ghost.visible = true
-	if edges().has(hover):
+	var mat := "bad"
+	if tool == "wall" and edges().has(hover):
+		var kind := str(edges()[hover])
+		var back := [0, 0]
+		for part in ["wall", "open"]:
+			if part == "open" and kind == "wall":
+				continue
+			var p := _paid_part(hover, part, kind)
+			var share := float(econ().get("refund", 0.5))
+			back = [back[0] + int(round(int(p[0]) * share)), back[1] + int(floor(int(p[1]) * share))]
 		hover_ok = false
-		var back := int(round(price(str(edges()[hover])) * float(econ().get("refund", 0.5))))
-		hover_note = "Click to take this wall down (+%dc back)." % back
-		_ghost.material_override = _mats["down"]
+		hover_note = "Click to take this wall down (%s back)." % _back_text(back)
+		mat = "down"
+	elif tool != "wall" and (edges().has(hover) or house_edges().has(hover)):
+		var c := opening_check(hover, tool)
+		hover_ok = bool(c["ok"])
+		if not hover_ok:
+			hover_note = str(c["why"])
+		elif bool(c["undo"]):
+			var p := _paid_part(hover, "open", tool)
+			var share := float(econ().get("refund", 0.5))
+			hover_note = "Click to take the %s out (%s back)." % [label(tool).to_lower(), _back_text([int(round(int(p[0]) * share)), int(floor(int(p[1]) * share))])]
+			mat = "down"
+		else:
+			hover_note = "%s here: %s%s" % [label(tool), _cost_text({"open": opening_cost(tool)}, 0), " (the %s comes out, half back)" % label(str(c["now"])).to_lower() if str(c["now"]) != "wall" else ""]
+			mat = "ok"
 	else:
 		var c := check(hover, tool)
 		hover_ok = c["ok"]
-		hover_note = ("%s here: %dc%s" % ["Doorway" if tool == "door" else "Wall", int(c["cost"]), " (with %dc for the foundations)" % int(c["fee"]) if int(c["fee"]) > 0 else ""]) if hover_ok else str(c["why"])
-		_ghost.material_override = _mats["ok" if hover_ok else "bad"]
+		var what := "Wall" if tool == "wall" else "Wall with a %s" % label(tool).to_lower()
+		hover_note = ("%s here: %s%s" % [what, _cost_text(_parts(tool), int(c["fee"])), " (with %dc for the foundations)" % int(c["fee"]) if int(c["fee"]) > 0 else ""]) if hover_ok else str(c["why"])
+		mat = "ok" if hover_ok else "bad"
+	_ghost.material_override = _mats[mat]
 	main.hud.set_wall_note(hover_note)
 
 
-## A click in build mode with the wall tool: build on the edge, or take her own wall down.
+## A click in build mode with a wall tool: the Wall tool builds on the edge or takes one of her walls
+## down; the others put their opening in a standing wall (hers or the house's), take it out again,
+## or build a new wall with it in.
 func click(g: Variant) -> void:
 	if g == null:
 		return
 	hover_at(g)
-	if edges().has(hover):
+	if tool == "floor":
+		lay_floor(floor_cells_at(Vector2((g as Vector3).x, (g as Vector3).z)), floor_kind)
+		hover_cells = []
+	elif tool == "wall" and edges().has(hover):
 		remove(hover)
+	elif tool != "wall" and (edges().has(hover) or house_edges().has(hover)):
+		set_opening(hover, tool)
 	else:
 		place(hover, tool)
 	hover_at(g)

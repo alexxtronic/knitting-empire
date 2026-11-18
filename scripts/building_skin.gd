@@ -9,11 +9,18 @@ extends RefCounted
 ## Doors, awnings, signs, floors, rooms and small props keep their own materials.
 
 const DIR := "res://assets/textures/house/"
-const TILE := {"plaster": 2.0, "brick": 2.0, "boards": 2.0, "timber": 1.0, "stone": 2.0, "paintwood": 1.0, "tiles": 1.0, "shingles": 1.0}
-const ROUGH := {"plaster": 0.92, "brick": 0.9, "boards": 0.85, "timber": 0.8, "stone": 0.9, "paintwood": 0.7, "tiles": 0.82, "shingles": 0.88}
+## The photo-scanned wood (Alex, 2026-11-17: "better wood textures realistic throughout cafe"):
+## kinds named wood_* read assets/textures/wood/<name>.jpg and <name>_n.png, made from CC0 Poly Haven
+## scans by art/world_assets/cafe_wood/build.py. Each tile is the scan's real size in metres.
+const WOOD_DIR := "res://assets/textures/wood/"
+const TILE := {"plaster": 2.0, "brick": 2.0, "boards": 2.0, "timber": 1.0, "stone": 2.0, "paintwood": 1.0, "tiles": 1.0, "shingles": 1.0,
+	"wood_floor": 1.7, "wood_boards": 1.5, "wood_oak": 1.83, "wood_walnut": 1.5}
+const ROUGH := {"plaster": 0.92, "brick": 0.9, "boards": 0.85, "timber": 0.8, "stone": 0.9, "paintwood": 0.7, "tiles": 0.82, "shingles": 0.88,
+	"wood_floor": 0.62, "wood_boards": 0.78, "wood_oak": 0.55, "wood_walnut": 0.5}
 ## how strongly each map's relief shows: beams and painted trim are seen across their grain as
 ## often as along it here, so theirs is kept low
-const RELIEF := {"plaster": 1.0, "brick": 1.0, "boards": 0.8, "timber": 0.45, "stone": 1.0, "paintwood": 0.3}
+const RELIEF := {"plaster": 1.0, "brick": 1.0, "boards": 0.8, "timber": 0.45, "stone": 1.0, "paintwood": 0.3,
+	"wood_floor": 0.7, "wood_boards": 0.8, "wood_oak": 0.35, "wood_walnut": 0.35}
 const ROOF_SHADER := preload("res://shaders/roof_tiles.gdshader")
 
 static var _avg := {} # texture path -> its average colour
@@ -25,6 +32,11 @@ static var _mats := {}
 static func kind_for(mname: String, tex_name: String) -> String:
 	var n := mname.to_lower()
 	var t := tex_name.to_lower()
+	# the Cappuccino Cafe's boards inside (walls, ceilings, the loft), its beams, stairs and rails
+	if n == "cafe_lining":
+		return "wood_boards"
+	if n == "cafe_wood":
+		return "wood_walnut"
 	for skip in ["door", "awning", "floor", "interior", "lining", "paving", "cobble", "glass", "glow", "plaque", "chalk", "flag", "sign", "straw", "sack", "water", "gold", "brass", "iron", "bulb", "leaf", "bloom", "soil", "pot", "lavender", "plaid", "mat", "yarn", "wicker", "loaf", "pretzel", "paper", "postbox", "needle", "handle", "navy", "dark"]:
 		if n.contains(skip):
 			return ""
@@ -60,7 +72,41 @@ static func dress(inst: Node3D) -> int:
 			if old == null:
 				continue
 			var tex_name := old.albedo_texture.resource_path.get_file() if old.albedo_texture else ""
+			if tex_name.contains("light_bake_white"):
+				tex_name = "" # the light bake's plain white stand-in: a plain-coloured surface
 			var kind := kind_for(old.resource_name, tex_name)
+			if kind == "":
+				continue
+			m.set_surface_override_material(i, material(kind, colour_of(old), old))
+			changed += 1
+	return changed
+
+
+## Which photo wood a furnishing's surface takes, from its material's name: "" leaves it.
+static func wood_for(mname: String) -> String:
+	var n := mname.to_lower()
+	if n.contains("walnut"):
+		return "wood_walnut"
+	if n.contains("oak") or n.ends_with("_wood"):
+		return "wood_oak"
+	return ""
+
+
+## Gives a piece of furniture's wooden surfaces the photo wood, each keeping its own colour.
+## Returns how many surfaces it changed.
+static func dress_wood(inst: Node3D) -> int:
+	var changed := 0
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for i in m.mesh.get_surface_count():
+			if m.get_surface_override_material(i) != null:
+				continue
+			var old := m.mesh.surface_get_material(i) as BaseMaterial3D
+			if old == null:
+				continue
+			var kind := wood_for(old.resource_name)
 			if kind == "":
 				continue
 			m.set_surface_override_material(i, material(kind, colour_of(old), old))
@@ -102,11 +148,19 @@ static func material(kind: String, colour: Color, old: BaseMaterial3D = null) ->
 	var ao: Texture2D = old.ao_texture if old and old.ao_enabled else null
 	## an arched dormer roof (kelib.arch_hood) carries its own UVs in metres, laid along the barrel
 	var arched: bool = old != null and old.resource_name.to_lower().contains("arch")
+	## Godot's glTF import swaps a mesh's two UV sets where a material's only texture is the light
+	## bake (TEXCOORD_1), and says so on the material it makes: ao_on_uv2 off. These maps are
+	## projected in world space, so they can't read the bake from UV; leave it off rather than read
+	## it from UV2, which drew grey zebra stripes on the café's trim and dormers and the Bretton Oaks
+	## houses (2026-11-17). The light bake now gives such materials a white texture so it can't happen.
+	if ao != null and not old.ao_on_uv2:
+		ao = null
 	var key := "%s/%s/%s/%s" % [kind, colour.to_html(false), ao.resource_path if ao else "", arched]
 	if _mats.has(key):
 		return _mats[key]
-	var file := kind if kind != "shingles" else "shingles"
-	var albedo: Texture2D = load(DIR + file + ".png")
+	var wood := kind.begins_with("wood_")
+	var base := WOOD_DIR + kind.substr(5) if wood else DIR + kind
+	var albedo: Texture2D = load(base + (".jpg" if wood else ".png"))
 	var a := average(albedo)
 	var tint := Color(clampf(colour.r / maxf(a.r, 0.02), 0.15, 1.7), clampf(colour.g / maxf(a.g, 0.02), 0.15, 1.7), clampf(colour.b / maxf(a.b, 0.02), 0.15, 1.7))
 	var out: Material
@@ -114,7 +168,7 @@ static func material(kind: String, colour: Color, old: BaseMaterial3D = null) ->
 		var sm := ShaderMaterial.new()
 		sm.shader = ROOF_SHADER
 		sm.set_shader_parameter("tex", albedo)
-		sm.set_shader_parameter("nrm", load(DIR + file + "_n.png"))
+		sm.set_shader_parameter("nrm", load(base + "_n.png"))
 		sm.set_shader_parameter("tint", tint)
 		sm.set_shader_parameter("tile", TILE[kind])
 		sm.set_shader_parameter("courses_down_u", kind == "shingles")
@@ -128,7 +182,7 @@ static func material(kind: String, colour: Color, old: BaseMaterial3D = null) ->
 		m.albedo_texture = albedo
 		m.albedo_color = tint
 		m.normal_enabled = true
-		m.normal_texture = load(DIR + file + "_n.png")
+		m.normal_texture = load(base + "_n.png")
 		m.normal_scale = RELIEF.get(kind, 1.0)
 		m.roughness = ROUGH[kind]
 		m.uv1_scale = Vector3.ONE / float(TILE[kind])
