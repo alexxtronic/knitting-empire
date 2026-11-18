@@ -57,6 +57,8 @@ const ReadingPose = preload("res://scripts/reading_pose.gd")
 const Barista = preload("res://scripts/barista.gd")
 const OnlineStore = preload("res://scripts/online_store.gd")
 const HouseBuilder = preload("res://scripts/house_builder.gd")
+const Bonfire = preload("res://scripts/bonfire.gd")
+const FogOfWar = preload("res://scripts/fog_of_war.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
@@ -122,6 +124,8 @@ var _flock_seen := false
 var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wears (wardrobe_panel.gd)
 var barista: Barista # working the Coffee Shop's counter in first person (barista.gd)
 var store: OnlineStore # the online sweater store on her computer (online_store.gd)
+var bonfire: Bonfire # the bonfires she lights after dark, burning till dawn (bonfire.gd)
+var fog: FogOfWar # the fog over land she hasn't explored yet (fog_of_war.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
 var books_ui: BookPanel # the books she reads (book_panel.gd, data/books.json)
@@ -436,6 +440,14 @@ func _ready() -> void:
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
+	bonfire = Bonfire.new()
+	bonfire.main = self
+	add_child(bonfire)
+	bonfire.apply()
+	fog = FogOfWar.new()
+	fog.main = self
+	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
+	add_child(fog)
 	scarves = Scarves.new()
 	scarves.main = self
 	add_child(scarves)
@@ -1558,8 +1570,12 @@ func _process(delta: float) -> void:
 	jobs.update(delta)
 	empire.update(delta)
 	if Game.hour >= 24.0 and not sleeping:
-		hud.show_toast("You stayed up too late and fell asleep where you stood!")
-		_go_to_sleep(true)
+		if bonfire != null and bonfire.keeps_her_up(): # a bonfire burning: the night goes on (bonfire.gd)
+			Game.stay_up()
+			hud.show_toast("Midnight. Your bonfire burns on, and the night is yours until dawn.")
+		else:
+			hud.show_toast("You stayed up too late and fell asleep where you stood!")
+			_go_to_sleep(true)
 	_autosave_t += delta
 	if _autosave_t > 60.0 and _autotest_dir == "":
 		_autosave_t = 0.0
@@ -1643,6 +1659,8 @@ func warmth_target() -> float:
 	t -= 22.0 * (1.0 - Game.daylight())
 	t -= 24.0 * rain
 	t += 8.0 * (Game.worn_quality - 1) # a good hand-knit sweater beats the city coat
+	if bonfire != null and bonfire.warms(player.position): # by a bonfire (bonfire.gd)
+		t = maxf(t, bonfire.warmth())
 	return clampf(t, 0.0, 100.0)
 
 
@@ -2190,6 +2208,8 @@ func _right_click(mpos: Vector2) -> void:
 func _ground_action(id: String, g: Vector3, at: Vector3) -> void:
 	if id == "dig":
 		dig_bed(at)
+	elif id == "bonfire":
+		bonfire.start(g)
 	else:
 		player.walk(_find_path(player.position, g))
 		_click_marker(g)
@@ -2200,6 +2220,8 @@ func ground_actions(g: Vector3) -> Array:
 	var acts := [_act("walk", "Walk here")]
 	if Game.count("hoe") > 0 and LOT.has_point(Vector2(g.x, g.z)) and not building_at(g):
 		acts.append(_act("dig", "Dig bed"))
+	if bonfire != null:
+		acts.append_array(bonfire.rows_for(g)) # from dusk: "Start a bonfire" (bonfire.gd)
 	return acts
 
 
@@ -2998,7 +3020,7 @@ func _ship(kind: String) -> void:
 		hud.show_toast("Shipped! +%dc" % earned)
 
 
-func _go_to_sleep(passed_out: bool) -> void:
+func _go_to_sleep(passed_out: bool, rest := -1.0) -> void: # rest >= 0: only that much energy back (a bonfire)
 	if sleeping:
 		return
 	sleeping = true
@@ -3008,7 +3030,10 @@ func _go_to_sleep(passed_out: bool) -> void:
 	hud.hide_menu()
 	hud.fade_sleep()
 	await get_tree().create_timer(0.9).timeout
+	var tired := Game.energy
 	Game.sleep()
+	if rest >= 0.0:
+		Game.energy = minf(100.0, tired + rest)
 	if passed_out:
 		Game.energy = 60.0
 	if _autotest_dir == "":
@@ -5744,6 +5769,18 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=bonfire" in OS.get_cmdline_user_args(): # just the bonfire (bonfire.gd, about thirty seconds)
+		await _wait(1.5)
+		await _bonfire_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=fog" in OS.get_cmdline_user_args(): # just the fog over unexplored land (fog_of_war.gd, about twenty seconds)
+		await _wait(1.5)
+		await _fog_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=store" in OS.get_cmdline_user_args(): # just the computer and the online store (about thirty seconds)
 		await _wait(1.5)
 		await _store_checks()
@@ -6156,6 +6193,8 @@ func _autotest() -> void:
 	await _see_through_checks()
 	await _early_checks()
 	await _build_checks()
+	await _bonfire_checks()
+	await _fog_checks()
 	await _hud_checks() # these two last: the tool checks walk her round the farm and dig it up
 	await _tool_checks()
 	await _god_checks() # ends by building the world again from the layout it saved, then "AUTOTEST DONE"
@@ -12643,6 +12682,21 @@ func _store_checks() -> void:
 	Game.day = keep["day"]
 	Game.hour = keep["hour"]
 	await _wait(0.2)
+
+
+## The bonfire (bonfire.gd, Bonfire.checks()): half a tree's wood from dusk, its flames, sparks
+## and light, warmth, midnight not putting her to sleep while it burns, the save, out at dawn.
+## Saves 64_bonfire_night.png, 64_bonfire_wide.png and 64_bonfire_midnight.png.
+func _bonfire_checks() -> void:
+	await bonfire.checks()
+
+
+## The fog over unexplored land (fog_of_war.gd, FogOfWar.checks()): the farm and town clear, the
+## lands round them fogged, cleared where she and the dog go, on the minimap too, kept by a save.
+## Saves 65_fog_edge.png, 65_fog_cleared.png, 65_fog_minimap.png and 65_fog_night.png.
+func _fog_checks() -> void:
+	await fog.checks()
+
 
 # --- wolves at night (wolves.gd, data/wolves.json) -------------------------------------------
 
