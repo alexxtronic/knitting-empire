@@ -7597,19 +7597,24 @@ func _scarf_checks() -> void:
 	# a picture of him in each quality, and his red scarf
 	hud.hide_menu()
 	var cd0 := cam_dist
-	cam_dist = 3.2
+	player.position = Vector3(9.0, 0, 8.0)
+	dog.position = _open_near(player.position + Vector3(4.0, 0, 0), 0.5)
+	dog.path = []
+	toggle_dog(true) # the camera follows him
+	cam_dist = 4.0
 	scarves.wear({})
-	cam_target = dog.position + Vector3(0, 0.4, 0)
-	await _wait(0.8)
+	await _wait(1.0)
+	hud.toast_panel.visible = false
 	await _shot("64_scarf_red.png")
 	for q in range(1, 6):
 		scarves.wear({"q": q, "fibre": ""})
-		cam_target = dog.position + Vector3(0, 0.4, 0)
 		await _wait(0.4)
+		hud.toast_panel.visible = false
 		await _shot("64_scarf_q%d.png" % q)
 	dog.rotation.y += PI # the other side, to see the tint keeps to the scarf
-	await _wait(0.1)
+	await _wait(0.2)
 	await _shot("64_scarf_side.png")
+	toggle_dog(false)
 	var tinted := false
 	for m in dog.find_children("*", "MeshInstance3D", true, false):
 		if (m as MeshInstance3D).get_surface_override_material(0) is ShaderMaterial:
