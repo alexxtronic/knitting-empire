@@ -6647,6 +6647,44 @@ func _cafe_loft_checks(s, door_in: Vector3) -> void:
 	await _wait(0.4)
 	_check("from above the stairs say %s, and down she goes and out to the door (%.1f + %.1f s, %.2f m up at the foot, %.2f m now, upstairs %s, %.2f m from the door)" % [str(labels), t, t2, foot_y, player.position.y - by, s.up, Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length()],
 		labels == ["Go downstairs"] and t < 40.0 and absf(foot_y) < 0.05 and absf(player.position.y - by) < 0.05 and not s.up and Vector2(player.position.x - door_in.x, player.position.z - door_in.z).length() < 0.6)
+	# in first person: W up the flight from its foot onto the loft, and W back down it to the floor
+	# (Alex, 2026-11-19: the top 8 cm of the flight had let nobody across, either way)
+	var st: Dictionary = s.loft["stairs"]
+	var sxf: Transform3D = s.node.global_transform
+	var foot_w: Vector3 = sxf * Vector3(float(st["x"]), 0, float(st["low_z"]) + 0.25)
+	player.walk([])
+	player.position = Vector3(foot_w.x, by, foot_w.z)
+	await _wait(0.3)
+	fps.enter()
+	await _wait(0.2)
+	var climbed := [-1.0, -1.0]
+	var reach := [0.0, 0.0]
+	for leg in 2:
+		var d: Vector3 = sxf.basis * (Vector3(0, 0, -1) if leg == 0 else Vector3(0, 0, 1))
+		fps.yaw = atan2(-d.x, -d.z)
+		fps.pitch = 0.0
+		fps.key_down[KEY_W] = true
+		var tl := 0.0
+		while tl < 15.0:
+			await _wait(0.1)
+			tl += 0.1
+			var lq: Vector3 = sxf.affine_inverse() * player.position
+			reach[leg] = lq.z
+			if (leg == 0 and lq.z < float(st["high_z"]) - 0.45) or (leg == 1 and lq.z > float(st["low_z"]) + 0.2):
+				climbed[leg] = tl
+				break
+		fps.key_down.clear()
+		await _wait(0.3)
+		if leg == 0:
+			await _shot("56_cafe_fps_top.png")
+			dy = player.position.y - by - s.loft_y
+			_check("in first person W takes her up the flight and off its top onto the loft (%.1f s, building z %.2f, %.2f m off the loft's floor, upstairs %s)" % [climbed[0], reach[0], dy, s.up],
+				climbed[0] > 0.0 and absf(dy) < 0.08 and s.up)
+	var lq2: Vector3 = sxf.affine_inverse() * player.position
+	_check("and turned round, W takes her back down to the café's floor (%.1f s, building z %.2f, %.2f m up, upstairs %s)" % [climbed[1], lq2.z, player.position.y - by, s.up],
+		climbed[1] > 0.0 and absf(player.position.y - by) < 0.05 and not s.up)
+	fps.leave()
+	await _wait(0.2)
 
 
 func _cafe_checks() -> void:

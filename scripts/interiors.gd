@@ -584,11 +584,14 @@ static func steer_ok(from: Vector3, p: Vector3) -> Variant:
 	var q2 := Vector2(q.x, q.z)
 	var st: Dictionary = s.loft["stairs"]
 	var lane := _rect(st["lane"])
-	if lane.grow(-0.08).has_point(q2):
+	# the flight itself, kept off its side walls but not shortened at either end: shrunk all round,
+	# its last 8 cm at the top (between the stairwell's block and the lane) let nobody across, so first
+	# person could neither climb off the top nor step down onto it
+	if Rect2(lane.position + Vector2(0.08, -0.05), lane.size + Vector2(-0.16, 0.1)).has_point(q2):
 		return true
 	var by := s.node.global_position.y
 	if from.y - by > s.loft_y * 0.5:
-		return _loft_ok(s, _loft_cell(s, q2)) or (q.z < float(st["high_z"]) and lane.grow(0.4).has_point(q2))
+		return _loft_ok(s, _loft_cell(s, q2)) or (q.z < float(st["high_z"]) + 0.1 and lane.grow(0.4).has_point(q2))
 	if q.z > float(st["low_z"]) - 0.1 and lane.grow(0.35).has_point(q2):
 		return true # stepping on at the foot
 	return null
