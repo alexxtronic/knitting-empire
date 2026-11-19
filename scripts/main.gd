@@ -139,6 +139,7 @@ const TOWN_MAILBOXES := [[Vector3(57.0, 0, 6.6), 2], [Vector3(55.6, 0, -12.5), 0
 var grid_blockers: Array = [] # static outdoor obstacles (Rect2)
 var place_blockers: Array = [] # areas furniture can't go (Rect2)
 var astar := AStarGrid2D.new()
+var grid_stamp := 0 # goes up each time the walking grid is built again
 var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
@@ -1427,6 +1428,7 @@ func _rebuild_grid() -> void:
 		_mark_rect((r as Rect2).grow(0.2))
 	if suburb != null and suburb.walk_in != null:
 		suburb.walk_in.mark_grid() # Marcus's house: its own walls, on the floor she's on (split_house.gd)
+	grid_stamp += 1 # reading seats work out again where she can stand (interiors.gd ReadSpot)
 
 
 ## Where she may walk: the whole map (Alex, 2026-11-14: she, and the dog, can go anywhere until the
