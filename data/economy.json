@@ -88,6 +88,8 @@
       "wood_oak": {"coins": 14, "wood": 2}
     },
     "recolor": 15,
+    "_about_paint": "Build mode's Paint tool (house_builder.gd; Alex, 2026-11-20: paint interior and exterior walls for a small coin cost), a draft: coins per 2 m of one side of a wall. Coins only, nothing back; no paint is free.",
+    "paint": 5,
     "refund": 0.5,
     "new_house_fee": 600,
     "plots": [

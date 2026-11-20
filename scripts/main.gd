@@ -542,6 +542,7 @@ func _connect_hud() -> void:
 			set_mode(Mode.BUILD)
 		builder.set_tool(k))
 	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
+	hud.paint_kind_chosen.connect(func(k: String): builder.set_paint_kind(k))
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -1128,9 +1129,12 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 	var pieces: Array = [Rect2(0, 0.07, length, height - 0.15)] # its ends tucked inside the oak rails, never flush with them
 	for wpos in windows:
 		pieces = Planks._cut(pieces, Rect2(float(wpos) - (mid.x if horizontal else mid.y) - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
+	# paint on the outside face (house_builder.gd, "wall_paint"): the plaster takes the colour
+	var out_paint := builder.paint_for(a, b, normal) if not divider else ""
+	var plaster_tint: Color = HouseBuilder.PAINT_COLOURS.get(out_paint, Color.WHITE)
 	for pr in pieces:
 		var q := pr as Rect2
-		HouseSkin.on(Catalog.box(tall, _sz(horizontal, q.size.x, q.size.y, WALL_T), _at(horizontal, q.get_center().x - length * 0.5, q.get_center().y), PLASTER), "plaster")
+		HouseSkin.on(Catalog.box(tall, _sz(horizontal, q.size.x, q.size.y, WALL_T), _at(horizontal, q.get_center().x - length * 0.5, q.get_center().y), PLASTER), "plaster", plaster_tint)
 	HouseSkin.oak(Catalog.box(tall, _sz(horizontal, length + 0.02, 0.16, WALL_T + 0.06), _at(horizontal, 0, height - 0.08), Catalog.WOOD_DARK))
 	HouseSkin.oak(Catalog.box(tall, _sz(horizontal, length, 0.14, WALL_T + 0.04), _at(horizontal, 0, 0.07), Catalog.WOOD_DARK))
 	var posts := maxi(1, int(round(length / 2.0)))
@@ -1148,7 +1152,7 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 		_window(tall, o, horizontal)
 		holes.append(Rect2(o - 0.58 + length * 0.5, 0.99, 1.16, 1.12))
 	for side in ([-1.0, 1.0] if divider else [-1.0]): # a room divider is indoors on both sides
-		_wall_boards(tall, horizontal, length, height, normal * side, holes)
+		_wall_boards(tall, horizontal, length, height, normal * side, holes, builder.paint_for(a, b, normal * side))
 	HouseSkin.on(Catalog.box(short, _sz(horizontal, length, 0.32, WALL_T), _at(horizontal, 0, 0.16), PLASTER), "plaster")
 	HouseSkin.oak(Catalog.box(short, _sz(horizontal, length + 0.02, 0.06, WALL_T + 0.06), _at(horizontal, 0, 0.33), Catalog.WOOD_DARK))
 	short.visible = false
@@ -1163,13 +1167,16 @@ func _wall(a: Vector2, b: Vector2, normal: Vector3, windows: Array, height := WA
 
 ## Pale boards over the face of a wall that looks `into` the room, from floor to top, round its
 ## windows, with a rail along the top and a skirting board along the floor (scripts/planks.gd).
-func _wall_boards(tall: Node3D, horizontal: bool, length: float, height: float, into: Vector3, holes: Array) -> void:
+## `paint` (house_builder.gd PAINTS, "" for none) paints the boards: the painted-wood map in its colour.
+func _wall_boards(tall: Node3D, horizontal: bool, length: float, height: float, into: Vector3, holes: Array, paint := "") -> void:
 	var out := WALL_T * 0.5 + 0.04 # in front of the posts, just behind the window frames
 	var across := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
 	var origin := into * out - across * length * 0.5
 	var seed_from := tall.get_parent() as Node3D
-	Planks.lay(tall, "wall", origin, across, Vector3.UP, Vector2(length, height), into, holes,
+	var boards := Planks.lay(tall, "wall", origin, across, Vector3.UP, Vector2(length, height), into, holes,
 		hash(Vector3i(roundi(seed_from.position.x * 10.0), roundi(seed_from.position.z * 10.0), roundi(into.x + 2.0 * into.z))))
+	if boards != null and paint != "" and HouseBuilder.PAINT_COLOURS.has(paint):
+		boards.material_override = HouseSkin.material("paintwood", HouseBuilder.PAINT_COLOURS[paint])
 	var o := (into.z if horizontal else into.x) * (out + 0.015)
 	Catalog.box(tall, _sz(horizontal, length, 0.14, 0.03), _at(horizontal, 0, height - 0.07, o), Planks.TRIM)
 	Catalog.box(tall, _sz(horizontal, length, 0.13, 0.03), _at(horizontal, 0, 0.065, o), Planks.TRIM)
@@ -1723,7 +1730,7 @@ func fp_blocked() -> bool:
 ## Layout-proof key check: matches the key by its label or by its physical position.
 func _held(k: Key) -> bool:
 	if knit != null and knit.active:
-		return false # the game's keys (D F J K) must not pan the camera
+		return false # the game's keys (D F G H) must not pan the camera
 	k = Keys.key_for(k, ["move"]) # walking and running, wherever the player bound them
 	return Input.is_key_pressed(k) or Input.is_physical_key_pressed(k)
 
@@ -12204,6 +12211,7 @@ func _build_checks() -> void:
 	_check("build: from outside, the room keeps its roof on with the house (%s)" % _roof_visible_at(c), _roof_visible_at(c))
 	await _opening_checks(room, c)
 	await _floor_checks(c)
+	await _paint_checks()
 	# a new house: only on a plot bought from Gary
 	var plot: Dictionary = HouseBuilder.plot_def("lane_end")
 	var pr := HouseBuilder.plot_rect(plot)
@@ -12481,6 +12489,77 @@ func _floor_checks(c: Vector2) -> void:
 
 
 ## The laid floors standing now (house_builder.gd _draw_floors()).
+## Paint (Alex, 2026-11-20): no minimap in build mode; the Paint tool colours the side of a wall run
+## the camera sees, outside on the plaster and inside on the boards, for coins; a save keeps it, and
+## No paint washes it off for nothing.
+func _paint_checks() -> void:
+	Game.flags.erase("wall_paint")
+	set_mode(Mode.BUILD)
+	await _wait(0.1)
+	_check("build: the minimap hides while Build & Buy is open (shown %s)" % hud.minimap.visible, hud.minimap != null and not hud.minimap.visible)
+	hud.wall_tool_chosen.emit("paint")
+	hud.paint_pick.select(HouseBuilder.PAINTS.find("sky"))
+	hud.paint_pick.item_selected.emit(HouseBuilder.PAINTS.find("sky"))
+	await _wait(0.1)
+	var z0 := _zmin()
+	var g := Vector3(HOUSE_W * 0.5 - 1.0, 0, z0) # on the back wall
+	cam.global_position = Vector3(HOUSE_W * 0.5, 9.0, z0 - 12.0) # behind the house: its outside
+	builder.hover_at(g)
+	var faces: Array = builder.hover_paint.duplicate()
+	var c0 := Game.coins
+	builder.click(g)
+	var sky: Color = HouseBuilder.PAINT_COLOURS["sky"]
+	var outside := _count_mat(house_root, HouseSkin.material("plaster", sky))
+	_check("build: Paint colours the back wall's outside, the whole run, for coins (%d faces, all ':n' %s, %dc, %d plaster pieces in sky blue, tool %s, button lit %s)" % [faces.size(), faces.all(func(f): return str(f).ends_with(":n")), c0 - Game.coins, outside, builder.tool, hud.wall_btns["paint"].button_pressed],
+		builder.tool == "paint" and hud.wall_btns["paint"].button_pressed and faces.size() >= int(HOUSE_W) / HouseBuilder.STEP \
+		and faces.all(func(f): return str(f).ends_with(":n")) and c0 - Game.coins == faces.size() * HouseBuilder.paint_cost() and outside > 0)
+	builder.set_paint_kind("butter")
+	cam.global_position = Vector3(HOUSE_W * 0.5, 2.0, z0 + 2.0) # in the room: its inside
+	builder.hover_at(g)
+	var inner: Array = builder.hover_paint.duplicate()
+	builder.click(g)
+	var inside := _count_mat(house_root, HouseSkin.material("paintwood", HouseBuilder.PAINT_COLOURS["butter"]))
+	_check("build: from inside, Paint colours the boards on the inside face instead (%d faces ':p' %s, %d board meshes in butter, outside still sky %s)" % [inner.size(), inner.all(func(f): return str(f).ends_with(":p")), inside, _count_mat(house_root, HouseSkin.material("plaster", sky)) > 0],
+		inner.size() == faces.size() and inner.all(func(f): return str(f).ends_with(":p")) and inside > 0 and _count_mat(house_root, HouseSkin.material("plaster", sky)) > 0)
+	builder.hover_at(null)
+	_set_cam_lock(false)
+	cam_target = Vector3(HOUSE_W * 0.5, 0, z0)
+	cam_yaw = deg_to_rad(200.0)
+	cam_dist = 14.0
+	await _wait(0.8)
+	await _shot("62_build_paint.png")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	Game.flags.erase("wall_paint")
+	builder.refresh_world()
+	Game.from_dict(saved)
+	builder.refresh_world()
+	_check("build: the paint survives a save (%d faces painted)" % builder.paints().size(), builder.paints().size() == faces.size() * 2)
+	set_mode(Mode.BUILD)
+	builder.set_tool("paint")
+	builder.set_paint_kind("none")
+	cam.global_position = Vector3(HOUSE_W * 0.5, 9.0, z0 - 12.0)
+	builder.hover_at(g)
+	c0 = Game.coins
+	builder.click(g)
+	_check("build: No paint washes the outside back to plaster for nothing (%dc, %d faces left, sky pieces %d)" % [c0 - Game.coins, builder.paints().size(), _count_mat(house_root, HouseSkin.material("plaster", sky))],
+		Game.coins == c0 and builder.paints().size() == faces.size() and _count_mat(house_root, HouseSkin.material("plaster", sky)) == 0)
+	Game.flags.erase("wall_paint")
+	builder.set_paint_kind("sage")
+	builder.set_tool("")
+	builder.refresh_world()
+	set_mode(Mode.LIVE)
+	await _wait(0.1)
+	_check("build: the minimap is back after building (%s)" % hud.minimap.visible, hud.minimap.visible)
+
+
+func _count_mat(root: Node, m: Material) -> int:
+	var n := 0
+	for ch in root.find_children("*", "MeshInstance3D", true, false):
+		if (ch as MeshInstance3D).material_override == m:
+			n += 1
+	return n
+
+
 func _laid_floors() -> Array:
 	return house_root.find_children("*", "MeshInstance3D", true, false).filter(func(n: Node): return n.has_meta("floor") and not n.is_queued_for_deletion())
 

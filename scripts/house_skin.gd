@@ -7,10 +7,10 @@ extends RefCounted
 ## a box of any size keeps the same scale and the house can be moved without them swimming.
 
 ## metres one tile of each map covers (SIZES in the build script)
-const TILE := {"plaster": 2.0, "timber": 1.0, "timber_h": 1.0, "stone": 2.0, "shingles": 1.0, "shingles_r": 1.0}
+const TILE := {"plaster": 2.0, "timber": 1.0, "timber_h": 1.0, "stone": 2.0, "shingles": 1.0, "shingles_r": 1.0, "paintwood": 1.0}
 ## a tint over the map, so the walls keep the colour the house always had
-const TINT := {"plaster": Color(1.0, 1.0, 1.0), "timber": Color(0.95, 0.95, 0.95), "timber_h": Color(0.95, 0.95, 0.95), "stone": Color(1.0, 1.0, 1.0), "shingles": Color.WHITE, "shingles_r": Color.WHITE}
-const ROUGH := {"plaster": 0.92, "timber": 0.8, "timber_h": 0.8, "stone": 0.9, "shingles": 0.88, "shingles_r": 0.88}
+const TINT := {"plaster": Color(1.0, 1.0, 1.0), "timber": Color(0.95, 0.95, 0.95), "timber_h": Color(0.95, 0.95, 0.95), "stone": Color(1.0, 1.0, 1.0), "shingles": Color.WHITE, "shingles_r": Color.WHITE, "paintwood": Color.WHITE}
+const ROUGH := {"plaster": 0.92, "timber": 0.8, "timber_h": 0.8, "stone": 0.9, "shingles": 0.88, "shingles_r": 0.88, "paintwood": 0.7}
 ## a lighter oak for the door leaf and the window sills (Catalog.WOOD rather than WOOD_DARK)
 const LIGHT_OAK := Color(1.35, 1.3, 1.25)
 ## weathered dark oak for the roof's ridge cap and fascia boards
