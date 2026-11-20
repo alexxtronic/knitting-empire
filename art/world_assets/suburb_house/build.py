@@ -19,7 +19,7 @@ cut down like theirs and it can be walked into later:
 
 Three blocks, each a front-facing gable (its ridge front to back):
     L  the entry wing on the left: lower (eave 2.45 m), its front set back behind the right wing's
-    R  the right wing: forward, eave 2.7 m, one window in a cream strip
+    R  the right wing: forward, eave 2.6 m; its front part is the garage, its door in the side by the porch; one window in a cream strip
     M  the cream upper wing over the right wing, just behind its gable and above both (eave 4 m,
        apex about 5.5 m); the right wing's roof shows as its front gable and a skirt round the sides
 Front faces -Y (+Z in Godot); the origin is on the ground in the middle of the footprint.
@@ -52,18 +52,36 @@ FLOOR = 0.04
 RT = 0.12        # roof thickness
 OV = 0.4         # the roof's overhang at the eaves
 OVE = 0.3        # ... and past the gable ends
-PORCH = 1.1      # the entry wing's gable reaches out over a covered porch (the photo's bench sits under it)
+PORCH = 1.45     # the entry wing's gable reaches out over a covered porch (the photo's bench sits under it),
+                 # just in front of the upper wing's front wall, so its right slope shows coming down to the right wing
 # the blocks: (x0, x1, y0 (front), y1 (back), eave, pitch in degrees)
-R = (-1.44, 6.54, -4.4, 4.2, 2.6, 17.0)
+# the right wing runs out toward the street as a garage for a car (Alex, 2026-11-17: "the garage is
+# just that existing bottom part extended out towards the street to fit a car"): its front gable, now
+# with the garage door, stands GARAGE_D in front of where the rooms end (HOUSE_FRONT)
+HOUSE_FRONT = -4.4
+GARAGE_D = 5.6
+# the right wing and the upper wing run on BACK past the entry wing (Alex, 2026-11-20: "not enough room
+# on upper floor, expand internally a bit ... shouldn't be visible from the street"): BACK_EXT more
+# toward the back yard, so the street front is as it was
+BACK_EXT = 2.0
+R = (-1.44, 6.54, HOUSE_FRONT - GARAGE_D, 4.2 + BACK_EXT, 2.6, 17.0)
 # the upper wing (Alex, 2026-11-17: "the top floor needs more square footage ... extended a bit more
 # into the air"): over the whole right wing, front to back, standing just behind its brick gable, so
 # Marcus's bedroom floor (data/split_house.json) has full-height walls everywhere under it
-M = (-1.44, 6.54, -4.3, 4.2, 4.0, 20.0)
-# the entry wing: its ridge on the upper wing's left wall, the rake rising to meet the upper wing's
-# eave there, as in the photo (Alex, 2026-11-17: "increase tilt of bottom roof to be flush with top
-# wing"); its right half runs on under the other two, clipped at that wall
+M = (-1.44, 6.54, -4.3, 4.2 + BACK_EXT, 4.0, 20.0)
+# the entry wing: its apex just left of the upper wing, under that wing's eave corner, the rake rising
+# to meet it (Alex, 2026-11-17: "increase tilt of bottom roof to be flush with top wing"), then coming
+# down again to the right wing's rake, the whole upside-down V of the photo (Alex, 2026-11-17: "put
+# bottom angle line on leftmost roof to finish the upside-down V shape"); its right half runs on under
+# the other two, clipped inside the upper wing
 L_EAVE = 2.4
-L = (-6.6, 2 * M[0] + 6.6, -3.0, 4.2, L_EAVE, math.degrees(math.atan((M[4] - L_EAVE) / (M[0] + 6.6))))
+LA = (-2.1, 3.8)  # the entry wing's apex under its roof: x, height
+L = (-6.6, 2 * LA[0] + 6.6, -3.0, 4.2, L_EAVE, math.degrees(math.atan((LA[1] - L_EAVE) / (LA[0] + 6.6))))
+# the garage door is in the garage's left side, facing the porch and the driveway in front of it
+# (Alex, 2026-11-17: "put garage door on the right hand side (by the door entrance) and put it back to
+# how it was before in the front"): centre along y, width, height
+GDOOR = (HOUSE_FRONT - GARAGE_D / 2, 2.8, 2.15)
+GSIDE_DOOR = HOUSE_FRONT - 2.0   # the garage's side door, in the right wing's right wall (along y)
 MB = 2.42        # the centre block's walls start here, at the ceiling, under the low roofs
 CEIL = 2.42      # the flat ceiling over the rooms
 DOOR = (-2.5, 1.0, 2.05)              # the front door: centre x, width, height (in the entry wing)
@@ -123,6 +141,8 @@ def materials():
     M_["door"] = K.plain("suburb_door", "#f4f2ec", 0.45)
     M_["floor"] = K.plain("suburb_floor", "#8a6a48", 0.75)
     M_["lining"] = K.plain("suburb_lining", "#e9e2d4", 0.9)
+    # the right wing's ceiling: its own surface, so a walk-in house with an upper floor there can hide it
+    M_["lining_r"] = K.plain("suburb_lining_upper", "#e9e2d4", 0.9)
     M_["paving"] = K.plain("suburb_paving", "#b9b4aa", 0.95)
     M_["lamp"] = K.plain("suburb_lamp_black", "#22201e", 0.5)
     M_["bulb"] = K.plain("suburb_bulb", "#ffd98a", 0.3, emit=2.0)
@@ -245,7 +265,8 @@ def window(Mt, side, plane, c, w, zb, zt, bars=1, out=0.03):
 
 # the side and back windows (inferred): (block, side, centre along the wall, width, sill, head)
 SIDE_WINDOWS = [("L", "left", -1.0, 1.2, 1.0, 2.1), ("L", "left", 2.4, 1.2, 1.0, 2.1),
-                ("R", "right", -2.4, 1.3, 1.0, 2.2), ("R", "right", 1.6, 1.3, 1.0, 2.2),
+                ("R", "right", -2.4, 1.3, 1.0, 2.2), ("R", "right", 1.6, 1.3, 1.0, 2.2), ("R", "right", 4.9, 1.3, 1.0, 2.2),
+                ("R", "right", HOUSE_FRONT - 3.9, 1.0, 1.2, 2.0),
                 ("L", "back", -5.0, 1.4, 1.0, 2.1), ("L", "back", -2.8, 1.0, 1.2, 2.1),
                 ("R", "back", 0.6, 1.4, 1.0, 2.2), ("R", "back", 4.8, 1.2, 1.0, 2.2)]
 BACK_DOOR = 2.6  # in the right wing (inferred)
@@ -286,10 +307,14 @@ def wall_front(Mt, low):
     lined_wall(Mt, "front", yL, x0, x1, L[4], [door_op, pic_op], low)
     rx0, rx1, yR = R[0], R[1], R[2]
     rwin = (RWIN[0], RWIN[1], RWIN[2], RWIN[3])
-    lined_wall(Mt, "front", yR, rx0, rx1, R[4], [rwin], low)
-    # the right wing's left return, from its front back to the entry wing's front
-    wall_run("left", rx0, yR + T, yL, 0.0, LOW if low else R[4], Mt["brick"])
-    wall_run("left", rx0, yR + T, yL, FLOOR, LOW if low else CEIL, Mt["lining"], depth=0.02, inset=T)
+    wall_run("front", yR, rx0, rx1, 0.0, LOW if low else R[4], Mt["brick"], [rwin])
+    # where the rooms end, the garage's back wall: the rooms' old front, plain brick, plastered inside
+    lined_wall(Mt, "front", HOUSE_FRONT, rx0 + T, rx1 - T, R[4], [], low)
+    # the right wing's left side, from its front back to the entry wing's front, with the garage door
+    wall_run("left", rx0, yR + T, yL, 0.0, LOW if low else R[4], Mt["brick"], [(GDOOR[0], GDOOR[1], -0.1, GDOOR[2])])
+    wall_run("left", rx0, HOUSE_FRONT + T, yL, FLOOR, LOW if low else CEIL, Mt["lining"], depth=0.02, inset=T)
+    if not low:
+        garage_door(Mt, rx0)
     if low:
         return
     gable(Mt, L, yL, "brick", 1, upto=R[0])
@@ -327,6 +352,28 @@ def wall_front(Mt, low):
     # white downspouts at the front corners
     for x, y in ((rx0 - 0.08, yL - 0.08), (rx1 - 0.08, yR - 0.08)):
         K.box("downspout", (0.07, 0.07, L[4] if x < rx0 else R[4]), (x, y, (L[4] if x < rx0 else R[4]) / 2), Mt["trim"], bevel=0.0)
+    # under the entry wing's slope coming down to the right wing, in front of the upper wing's wall:
+    # the wedge of brick between the two rakes, as in the photo
+    valley_fill(Mt, M[2] - 0.13, 1)
+
+
+def garage_door(Mt, xf):
+    """The white sectional garage door in the garage's left side (its outer face on x = xf), four rows
+    of panels, its casing, a lamp either side."""
+    gc, gw, gh = GDOOR
+    x = xf + 0.12
+    K.box("garage_door", (0.05, gw, gh), (x, gc, gh / 2), Mt["trim"], bevel=0.0)
+    rows, cols = 4, 4
+    for k in range(rows):
+        for j in range(cols):
+            K.box("garage_panel", (0.02, gw / cols - 0.08, gh / rows - 0.12),
+                  (x - 0.035, gc - gw / 2 + (j + 0.5) * gw / cols, (k + 0.5) * gh / rows), Mt["trim"], bevel=0.008)
+    for s in (-1, 1):
+        K.box("casing", (0.07, 0.12, gh + 0.06), (xf - 0.035, gc + s * (gw / 2 + 0.06), gh / 2 + 0.03), Mt["trim"], bevel=0.0)
+        K.box("reveal", (0.12, 0.04, gh), (xf + 0.06, gc + s * (gw / 2 - 0.02), gh / 2), Mt["trim"], bevel=0.0)
+        K.box("lamp", (0.12, 0.16, 0.3), (xf - 0.08, gc + s * (gw / 2 + 0.45), 1.95), Mt["lamp"], bevel=0.01)
+        K.box("lamp_glass", (0.1, 0.12, 0.2), (xf - 0.085, gc + s * (gw / 2 + 0.45), 1.95), Mt["bulb"], bevel=0.0)
+    K.box("casing", (0.07, gw + 0.36, 0.12), (xf - 0.035, gc, gh + 0.06), Mt["trim"], bevel=0.0)
 
 
 def wall_back(Mt, low):
@@ -336,13 +383,15 @@ def wall_back(Mt, low):
             ops[blk].append((c, w, zb, zt))
     lined_wall(Mt, "back", L[3], L[0], R[0], L[4], ops["L"], low)
     lined_wall(Mt, "back", R[3], R[0], R[1], R[4], ops["R"], low)
+    # the right wing's left wall where it runs on past the entry wing's back
+    lined_wall(Mt, "left", R[0], L[3], R[3] - T, R[4], [], low)
     if low:
         return
     gable(Mt, L, L[3], "brick", -1, upto=R[0])
     # (the right wing's back gable is inside the upper wing's back wall)
     for blk, side, c, w, zb, zt in SIDE_WINDOWS:
         if side == "back":
-            window(Mt, "back", L[3], c, w, zb, zt)
+            window(Mt, "back", L[3] if blk == "L" else R[3], c, w, zb, zt)
     # the back door (inferred) in the right wing: a white leaf, shut
     K.box("back_door", (0.95, 0.06, 2.05), (BACK_DOOR, R[3] + 0.02, 1.03), Mt["door"], bevel=0.0)
     K.box("casing", (1.15, 0.06, 0.1), (BACK_DOOR, R[3] + 0.04, 2.1), Mt["trim"], bevel=0.0)
@@ -351,18 +400,30 @@ def wall_back(Mt, low):
 def wall_side(Mt, side, low):
     b = L if side == "left" else R
     plane = b[0] if side == "left" else b[1]
-    ops = [(c, w, zb, zt) for blk, s, c, w, zb, zt in SIDE_WINDOWS if s == side]
-    y0 = b[2] + (T if True else 0)
-    lined_wall(Mt, side, plane, b[2] + T, b[3] - T, b[4], ops, low)
+    ops = [(c, w, zb, zt) for blk, s, c, w, zb, zt in SIDE_WINDOWS if s == side and blk == ("L" if side == "left" else "R")]
+    if side == "left":
+        lined_wall(Mt, side, plane, b[2] + T, b[3] - T, b[4], ops, low)
+    else:
+        # the garage's stretch (bare brick, its side door) and the rooms' (plastered inside)
+        wall_run(side, plane, b[2] + T, HOUSE_FRONT + T, 0.0, LOW if low else b[4], Mt["brick"],
+                 [o for o in ops if o[0] < HOUSE_FRONT] + [(GSIDE_DOOR, 0.9, -0.1, 2.05)])
+        lined_wall(Mt, side, plane, HOUSE_FRONT + T, b[3] - T, b[4], [o for o in ops if o[0] > HOUSE_FRONT], low)
     if low:
         return
     for c, w, zb, zt in ops:
         window(Mt, side, plane, c, w, zb, zt)
+    if side == "right":  # the garage's side door, shut
+        K.box("side_door", (0.06, 0.88, 2.04), (plane - 0.08, GSIDE_DOOR, 1.02), Mt["door"], bevel=0.0)
+        K.box("casing", (0.06, 1.1, 0.1), (plane + 0.03, GSIDE_DOOR, 2.1), Mt["trim"], bevel=0.0)
+        for s in (-1, 1):
+            K.box("casing", (0.06, 0.1, 2.1), (plane + 0.03, GSIDE_DOOR + s * 0.5, 1.05), Mt["trim"], bevel=0.0)
 
-
-def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE):
+def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE, meet=None, under=None):
     """A block's roof: two slopes, the ridge, white fascia and gutters along the eaves, rake boards
-    and soffits. clip: the right slope stops at this x, inside the right wing's roof, untrimmed."""
+    and soffits. clip: the right slope stops at this x, inside the upper wing, untrimmed; meet: in
+    front of the upper wing's wall (y < M's front) it runs on to this x, where it comes down onto the
+    right wing's roof, its rake board with it. under: past this y (inside the upper wing) only the
+    eaves run on, out from the walls, so no roof hangs through the rooms of a floor up there."""
     x0, x1, y0, y1, eave, p = b
     cx, hw = (x0 + x1) / 2, (x1 - x0) / 2
     t = tan(p)
@@ -375,12 +436,25 @@ def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE):
         if s > 0 and clip is not None:
             zc = eave + hw * t - (clip - cx) * t
             flat("roof", [(clip, zc), (cx, eave + hw * t), (cx, eave + hw * t + top), (clip, zc + top)], ya, yb, Mt["roof"])
-            for ye in (ya, yb):
-                band = [(clip, zc + top + 0.03), (cx, eave + hw * t + top + 0.03), (cx, eave + hw * t - 0.16), (clip, zc - 0.16)]
+            ends_at = {ya: clip, yb: clip}
+            if meet is not None and meet > clip:
+                zm = eave + hw * t - (meet - cx) * t
+                flat("roof", [(meet, zm), (clip - 0.3, zc + 0.3 * t), (clip - 0.3, zc + 0.3 * t + top), (meet, zm + top)],
+                     ya, M[2] - 0.01, Mt["roof"])
+                ends_at[ya] = meet
+            for ye, xr in ends_at.items():
+                zr = eave + hw * t - (xr - cx) * t
+                band = [(xr, zr + top + 0.03), (cx, eave + hw * t + top + 0.03), (cx, eave + hw * t - 0.16), (xr, zr - 0.16)]
                 flat("rake", band, ye - 0.035, ye + 0.015, Mt["trim"])
             continue
         pts = [(xe, ze), (cx, eave + hw * t), (cx, eave + hw * t + top), (xe, ze + top)]
-        flat("roof", pts, ya, yb, Mt["roof"])
+        if under is None:
+            flat("roof", pts, ya, yb, Mt["roof"])
+        else:
+            flat("roof", pts, ya, under, Mt["roof"])
+            xw = cx + s * (hw - T / 2)  # into the hollow wall, so the joint can't be seen
+            zw = eave + T / 2 * t
+            flat("roof", [(xe, ze), (xw, zw), (xw, zw + top), (xe, ze + top)], under - 0.01, yb, Mt["roof"])
         # fascia and gutter along the eave, the soffit under the overhang
         K.box("fascia", (0.04, yb - ya, 0.24), (xe + s * 0.02, (ya + yb) / 2, ze + top - 0.1), Mt["trim"], bevel=0.0)
         K.box("gutter", (0.12, yb - ya, 0.11), (xe + s * 0.08, (ya + yb) / 2, ze + top - 0.12), Mt["trim"], bevel=0.0)
@@ -394,7 +468,8 @@ def slab(Mt, b, ends=(True, True), clip=None, front=OVE, back=OVE):
             # the rake's soffit: under the roof past the gable wall
             und = [(xe, ze - 0.005), (cx, eave + hw * t - 0.005), (cx, eave + hw * t - 0.02), (xe, ze - 0.02)]
             flat("rake_soffit", und, min(ye, y0 if ye == ya else y1), max(ye, y0 if ye == ya else y1), Mt["trim"])
-    K.box("ridge", (0.26, yb - ya, 0.07), (cx, (ya + yb) / 2, eave + hw * t + top + 0.01), Mt["roof"], bevel=0.0)
+    yr = yb if under is None else under
+    K.box("ridge", (0.26, yr - ya, 0.07), (cx, (ya + yr) / 2, eave + hw * t + top + 0.01), Mt["roof"], bevel=0.0)
 
 
 def centre_block(Mt):
@@ -410,21 +485,25 @@ def centre_block(Mt):
 
 
 def roof(Mt):
-    slab(Mt, L, clip=M[0] + 0.1, front=PORCH)  # the entry wing's right slope ends inside the upper wing
-    slab(Mt, R, ends=(True, False), back=-T - 0.02)  # its back end stops inside the upper wing
+    slab(Mt, L, clip=M[0] + 0.1, front=PORCH, meet=valley_x() + 0.05)  # its right slope ends inside the upper wing
+    slab(Mt, R, ends=(True, False), back=-T - 0.02, under=M[2])  # under the upper wing only its eaves run on
     slab(Mt, M)
     centre_block(Mt)
     # the ceiling over the rooms (the entry wing's only as far as the right wing)
-    for x0, x1, y0, y1 in ((L[0] + T, R[0], L[2] + T, L[3] - T), (R[0] + T, R[1] - T, R[2] + T, R[3] - T)):
-        K.box("ceiling", (x1 - x0, y1 - y0, 0.03), ((x0 + x1) / 2, (y0 + y1) / 2, CEIL + 0.015), Mt["lining"], bevel=0.0)
+    for x0, x1, y0, y1, mat in ((L[0] + T, R[0], L[2] + T, L[3] - T, "lining"), (R[0] + T, R[1] - T, HOUSE_FRONT + T, R[3] - T, "lining_r")):
+        K.box("ceiling", (x1 - x0, y1 - y0, 0.03), ((x0 + x1) / 2, (y0 + y1) / 2, CEIL + 0.015), Mt[mat], bevel=0.0)
 
 
 def base(Mt):
-    for x0, x1, y0, y1 in ((L[0] + 0.05, R[0], L[2] + 0.05, L[3] - 0.05), (R[0], R[1] - 0.05, R[2] + 0.05, R[3] - 0.05)):
+    for x0, x1, y0, y1 in ((L[0] + 0.05, R[0], L[2] + 0.05, L[3] - 0.05), (R[0], R[1] - 0.05, HOUSE_FRONT + 0.05, R[3] - 0.05)):
         K.box("floor", (x1 - x0, y1 - y0, FLOOR), ((x0 + x1) / 2, (y0 + y1) / 2, FLOOR / 2), Mt["floor"], bevel=0.0)
     dc = DOOR[0]
     K.box("stoop", (1.9, 1.1, 0.12), (dc, L[2] - 0.55, 0.06), Mt["paving"], bevel=0.01)
     K.box("back_step", (1.5, 0.9, 0.1), (BACK_DOOR, R[3] + 0.45, 0.05), Mt["paving"], bevel=0.01)
+    # the garage's concrete floor and the apron in front of its door
+    K.box("garage_floor", (R[1] - R[0] - 0.4, GARAGE_D - 0.2, 0.05), ((R[0] + R[1]) / 2, R[2] + GARAGE_D / 2, 0.025), Mt["paving"], bevel=0.0)
+    # (out to the driveway in front of the porch, suburb.gd DRIVE_X)
+    K.box("garage_apron", (1.9, GDOOR[1] + 0.4, 0.06), (R[0] - 0.95, GDOOR[0], 0.03), Mt["paving"], bevel=0.01)
 
 
 def door(Mt):
@@ -527,7 +606,8 @@ def build():
     stats = export(obs, NAME, 40000)
     with open(os.path.join(OUT, "stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
-    print("FOOTPRINT x %.2f..%.2f, Godot z %.2f..%.2f; door hinge %s" % (L[0], R[1], -R[3], -R[2], HINGES["door"]))
+    print("FOOTPRINT x %.2f..%.2f, Godot z %.2f..%.2f (the rooms to %.2f, the garage in front); door hinge %s"
+          % (L[0], R[1], -R[3], -R[2], -HOUSE_FRONT, HINGES["door"]))
 
 
 # --- the plants in front of it ---------------------------------------------------------------------
