@@ -59,13 +59,19 @@ func run(m: Node) -> void:
 				print("WALKIN grid z %.2f %s" % [1.5 + zi * 0.2, line])
 		if not got:
 			print("WALKIN couldn't reach the ", r[0])
+		if got and r[0] == "ensuite":
+			# the ensuite runs on over the basement stairs, its tub on the floor laid over the flight
+			await _picture(Vector3(2.0, 0.85, 3.0), 6.5, 82.0, "67_walkin_ensuite.png")
 		rooms_ok = rooms_ok and got
 	main._check("the baby's room and the master are each through their own door off the hall, and the ensuite (with its bathtub) through the master's", rooms_ok)
 	# first person upstairs: the roof off, the bedroom floor's ceiling on
 	main.fps.enter()
 	await main._wait(0.8)
-	main._check("in first person upstairs the roof is off and the bedroom ceilings are on", main.fps.active and not (wi.parts["roof"] as Node3D).visible and (wi.ceilings[0] as Node3D).visible)
+	main._check("in first person upstairs the roof stays on and the bedroom ceilings are on", main.fps.active and (wi.parts["roof"] as Node3D).visible and (wi.ceilings[0] as Node3D).visible)
 	await main._shot("67_walkin_fps.png")
+	main.fps.pitch = deg_to_rad(35.0)
+	await main._wait(0.4)
+	await main._shot("67_walkin_fps_up.png")
 	main.fps.leave()
 	await main._wait(0.5)
 	# down the flight beside it: halfway down, the basement takes over; at the foot, the green den
@@ -79,8 +85,9 @@ func run(m: Node) -> void:
 		for r in room["rects"]:
 			a += float(r[2]) * float(r[3])
 		areas[str(room["id"])] = a
-	main._check("the basement's green shag den is as big as its black-tile rec room (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
-		areas.has("den") and absf(float(areas["den"]) - float(areas.get("rec_room", 0.0))) < 0.2)
+	# the same size in Alex's plan; the rec room has run on 2 m with the house's back (2026-11-20)
+	main._check("the basement's black-tile rec room is the den's size and 2 m deeper (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
+		areas.has("den") and absf(float(areas["den"]) + 5.84 * 2.0 - float(areas.get("rec_room", 0.0))) < 0.5)
 	# the bathroom, to the right at the foot of the stairs: its door swings open as she comes up to it
 	ok = await _walk(Vector3(2.9, 0, 2.8))
 	await main._wait(0.8)
@@ -113,6 +120,17 @@ func run(m: Node) -> void:
 	# out of the door again
 	ok = await _walk(Vector3(-2.5, 0, 5.2))
 	main._check("out of the front door, the roof back on", ok and not wi.inside and (wi.parts["roof"] as Node3D).visible)
+	# in at any hour (Alex, 2026-11-17: "she should be able to go into house at any time"): from the
+	# middle of the cul-de-sac late at night, all the way to the living room
+	Game.hour = 22.5
+	main.suburb.update_lights(true)
+	main.player.position = main.suburb.centre
+	await main._wait(0.3)
+	ok = await _walk(Vector3(-2.0, 0, -1.0), 60.0)
+	main._check("in from the turning circle at half past ten at night, to the living room (inside %s)" % wi.inside, ok and wi.inside)
+	ok = await _walk(Vector3(-2.5, 0, 5.2))
+	Game.hour = 12.0
+	main.suburb.update_lights(true)
 	await _editor_checks()
 	main.player.position = nora0
 	if main.dog:

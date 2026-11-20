@@ -2,28 +2,28 @@
   "name": "building_suburb_house",
   "parts": {
     "base": {
-      "triangles": 240,
+      "triangles": 360,
       "materials": [
         "suburb_floor",
         "suburb_paving"
       ]
     },
     "wall_front": {
-      "triangles": 1094,
+      "triangles": 3146,
       "materials": [
         "suburb_brick",
         "suburb_lining",
-        "suburb_vinyl",
         "suburb_trim",
-        "suburb_pane",
-        "suburb_curtain_sheer",
         "suburb_lamp_black",
         "suburb_bulb",
+        "suburb_vinyl",
+        "suburb_pane",
+        "suburb_curtain_sheer",
         "suburb_paving"
       ]
     },
     "wall_back": {
-      "triangles": 924,
+      "triangles": 952,
       "materials": [
         "suburb_brick",
         "suburb_lining",
@@ -44,24 +44,25 @@
       ]
     },
     "wall_right": {
-      "triangles": 448,
+      "triangles": 918,
       "materials": [
         "suburb_brick",
         "suburb_lining",
         "suburb_trim",
         "suburb_pane",
-        "suburb_curtain_sheer"
+        "suburb_curtain_sheer",
+        "suburb_door"
       ]
     },
     "wall_front_low": {
-      "triangles": 176,
+      "triangles": 180,
       "materials": [
         "suburb_brick",
         "suburb_lining"
       ]
     },
     "wall_back_low": {
-      "triangles": 206,
+      "triangles": 232,
       "materials": [
         "suburb_brick",
         "suburb_lining"
@@ -75,7 +76,7 @@
       ]
     },
     "wall_right_low": {
-      "triangles": 104,
+      "triangles": 186,
       "materials": [
         "suburb_brick",
         "suburb_lining"
@@ -91,15 +92,16 @@
       ]
     },
     "roof": {
-      "triangles": 566,
+      "triangles": 602,
       "materials": [
         "suburb_roof_shake",
         "suburb_trim",
         "suburb_vinyl",
-        "suburb_lining"
+        "suburb_lining",
+        "suburb_lining_upper"
       ]
     }
   },
-  "triangles": 5110,
-  "glb_bytes": 577408
+  "triangles": 7928,
+  "glb_bytes": 703496
 }
