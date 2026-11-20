@@ -82,7 +82,7 @@ func _ready() -> void:
 	_sub.offset_top = 60
 	_layer.add_child(_sub)
 	_hint = _label(14)
-	_hint.text = "←  →  browse     Enter or click  put it on     X  city coat     Esc  close"
+	_hint.text = "←  →  browse     Enter or click  put it on     X  no sweater     Esc  close"
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -492,7 +492,7 @@ func _refresh_text() -> void:
 	_title.text = "%s  %s" % [str(d.get("name", "")), "★".repeat(s)]
 	var wearing: bool = str(d.get("id", "")) == Game.worn_design
 	_sub.text = "%s%s     %d of %d" % [TIER[s - 1], "  ·  you're wearing it" if wearing else "", focus + 1, hangers.size()]
-	_hint.text = "←  →  browse     Enter or click  put it on     X  city coat     Esc  close"
+	_hint.text = "←  →  browse     Enter or click  put it on     X  no sweater     Esc  close"
 
 
 # --- input (main.gd hands everything here while it's open) -----------------------------------------

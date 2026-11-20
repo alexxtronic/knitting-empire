@@ -210,6 +210,10 @@ static func _fit(body: Node3D) -> MeshInstance3D:
 		mi.skin = skin
 	body.skeleton.add_child(mi)
 	mi.skeleton = NodePath("..")
+	# full detail at any distance: the body under it is tucked in by a shape key on a copy without
+	# LODs, so a coarser LOD of the knit let the body poke through it from the game's camera
+	# (Alex, 2026-11-20: "sweater has a lot of graphic glitching through")
+	mi.lod_bias = 100.0
 	_add_tuck(body)
 	return mi
 

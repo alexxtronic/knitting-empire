@@ -958,7 +958,7 @@ func _update_needs(delta: float) -> void:
 		needs_meters[need].set_value(v / 100.0, t)
 	if sample:
 		_need_t = 0.0
-		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("her thin city coat" if Game.worn_quality <= 1 else "a %s sweater she knit" % Game.stars(Game.worn_quality))
+		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("no sweater" if Game.worn_design == "" else "a %s sweater she knit" % Game.stars(Game.worn_quality))
 		needs_cells["fitness"].tooltip_text = "Fitness: walking and farm work. Fitter means faster walking and less tiring work."
 		needs_cells["happiness"].tooltip_text = "Happiness: knitting, animals, books and good food. Low needs drag it down."
 		needs_cells["love"].tooltip_text = "Love: time with people. Talk, give gifts, keep your promises."

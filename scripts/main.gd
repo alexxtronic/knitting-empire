@@ -2293,13 +2293,15 @@ var _held_id := ""
 var _grip_meshes: Array = [] # her meshes with the grip_R shape key
 
 
-## Dresses her in the sweater she wears (Game.worn_design; none in the city coat).
+## Dresses her in the sweater she wears (Game.worn_design; "" is no sweater: her own clothes. The
+## grey city coat she used to start in is off, Alex 2026-11-20: "when u start a new game all sweaters
+## should be taken off her, totally fresh game". Sweaters.wear_coat() is still there.)
 func _update_sweater() -> void:
 	if player.body == null or player.body.skeleton == null:
 		return
-	var want := Game.worn_design # a Common one too (warmth 1, like the coat, but she has it on)
-	if want == "" and not Sweaters.coat_on(player.body):
-		Sweaters.wear_coat(player.body) # no sweater: her thin city coat
+	var want := Game.worn_design # a Common one too (warmth 1, but she has it on)
+	if want == "" and (Sweaters.worn(player.body) != "" or Sweaters.coat_on(player.body)):
+		Sweaters.take_off(player.body) # no sweater: her own clothes
 	elif want != "" and want != Sweaters.worn(player.body):
 		Sweaters.wear(player.body, want)
 	var bought: Dictionary = Game.flag("npc_sweaters", {}) # villagers wear only what they bought from her
@@ -3905,8 +3907,8 @@ func _act1_checks() -> void:
 	hud.hide_hint()
 	Game.wear("")
 	await _wait(0.2)
-	_check("she arrives in her thin city coat, not a sweater (coat %s, worn '%s')" % [Sweaters.coat_on(player.body), Sweaters.worn(player.body)],
-		Sweaters.coat_on(player.body) and Sweaters.worn(player.body) == "")
+	_check("she arrives in her own clothes: no sweater and no coat (coat %s, worn '%s')" % [Sweaters.coat_on(player.body), Sweaters.worn(player.body)],
+		not Sweaters.coat_on(player.body) and Sweaters.worn(player.body) == "")
 	var trust0 := Game.stat("rowan", "trust")
 	var journal0: int = Game.journal().size()
 	var day0 := Game.day
@@ -4014,7 +4016,7 @@ func _act1_checks() -> void:
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("finishing her first sweater starts the memory (%s)" % story.playing, story.playing == "act1_knit")
-	_check("her first sweater goes on over the city coat (wearing '%s', coat %s)" % [Sweaters.worn(player.body), Sweaters.coat_on(player.body)],
+	_check("her first sweater goes on (wearing '%s', coat %s)" % [Sweaters.worn(player.body), Sweaters.coat_on(player.body)],
 		Sweaters.worn(player.body) != "" and not Sweaters.coat_on(player.body))
 	await _act1_shot("Babe.", "27_act1_memory.png")
 	_check("the first knit opens memory thread #1 in the faded memory look", hud.memory_on())
@@ -9226,7 +9228,7 @@ func _sweater_checks() -> void:
 	# her wardrobe
 	Game.wear("")
 	await _wait(0.2)
-	_check("in her city coat she wears no knitted sweater", Sweaters.worn(player.body) == "")
+	_check("with no sweater on she wears nothing over her own clothes (coat %s)" % Sweaters.coat_on(player.body), Sweaters.worn(player.body) == "" and not Sweaters.coat_on(player.body))
 	var xp0 := Game.knit_xp
 	var q := Game.knit_sweater(4)
 	var knitted: String = str(Game.sweater_designs[-1])
@@ -9243,6 +9245,7 @@ func _sweater_checks() -> void:
 	_check("the skin under it is tucked in (%d points)" % Sweaters.tucked_points(player.body), Sweaters.tucked_points(player.body) > 1000 and tuck_on)
 	var aabb := sw.get_aabb() if sw else AABB()
 	_check("the sweater is her size (%.2f m tall, %.2f m wide)" % [aabb.size.y, aabb.size.x], aabb.size.y > 0.5 and aabb.size.y < 1.0 and aabb.size.x > 0.4 and aabb.size.x < 1.3)
+	_check("the sweater keeps its full detail far off, so her body can't show through (lod_bias %.0f)" % (sw.lod_bias if sw else 0.0), sw != null and sw.lod_bias >= 100.0)
 	if _wardrobe_piece():
 		_check("the wardrobe in her house offers her sweaters", _actions_for(_wardrobe_piece()).any(func(a): return a["id"] == "wardrobe"))
 	wardrobe_ui.open()
@@ -9281,6 +9284,10 @@ func _sweater_checks() -> void:
 	cam2.look_at(mid, Vector3.UP)
 	await _wait(0.6)
 	await _shot("55_sweater_walk.png")
+	cam2.global_position = mid + fwd.rotated(Vector3.UP, 0.6) * 16.0 + Vector3(0, 11.0, 0) # as far off as the game's own camera
+	cam2.look_at(mid, Vector3.UP)
+	await _wait(0.3)
+	await _shot("55_sweater_far.png")
 	player.body.play("Idle")
 	# the villagers: none wears one until they buy it from her
 	Game.set_flag("npc_sweaters", {})
