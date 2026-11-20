@@ -28,6 +28,14 @@ extends Node
 ## the floor the house was built with, takes it up again for half back. Drawn over the planks by
 ## _draw_floors(), only where the cell is still indoors.
 ##
+## Paint (Alex, 2026-11-20: "should be able to paint interior and exterior walls for small coin
+## cost"): the Paint tool colours one face of a wall, the face toward the camera, so inside from in
+## the room (or first person) and outside from the garden. A click paints the whole straight run of
+## standing wall that edge is part of (the house's long walls are drawn as one piece). Kept in
+## Game.flags["wall_paint"]: "edge:p" or "edge:n" (the face looking +z/+x, or -z/-x) -> a colour in
+## PAINTS. "none" washes it back to the plaster or boards as built. Coins only, per 2 m of wall
+## ("building" "paint"), nothing back. main._wall() reads it through paint_for().
+##
 ## main.gd draws it all in _rebuild_house() through build_into(), so the walls, floors and roofs
 ## are the house's own (_wall, _plank_floor, _house_roof), cut down and lifted by the same rules.
 
@@ -48,6 +56,11 @@ const FLOORS := ["planks", "carpet_grey", "carpet_blue", "carpet_cream", "tile_b
 const FLOOR_LABELS := {"planks": "Plank boards (as built)", "carpet_grey": "Grey carpet", "carpet_blue": "Blue carpet", "carpet_cream": "Cream carpet",
 	"tile_beige": "Beige tile", "tile_white": "White tile", "tile_black": "Black tile", "wood_oak": "Oak boards"}
 const FLOOR_Y := 0.035 # the top of a laid floor, just over the planks (0.02)
+const PAINTS := ["none", "white", "cream", "butter", "sage", "sky", "blush", "terracotta", "charcoal"]
+const PAINT_LABELS := {"none": "No paint (as built)", "white": "Chalk white", "cream": "Cream", "butter": "Butter yellow", "sage": "Sage green",
+	"sky": "Sky blue", "blush": "Blush pink", "terracotta": "Terracotta", "charcoal": "Charcoal"}
+const PAINT_COLOURS := {"white": Color(0.97, 0.96, 0.93), "cream": Color(0.96, 0.9, 0.76), "butter": Color(0.98, 0.86, 0.52),
+	"sage": Color(0.64, 0.75, 0.6), "sky": Color(0.6, 0.76, 0.9), "blush": Color(0.94, 0.71, 0.71), "terracotta": Color(0.8, 0.47, 0.34), "charcoal": Color(0.3, 0.31, 0.33)}
 
 var main
 var tool := "" # "" (furniture), or a kind in KINDS: what a click in build mode lays
@@ -67,6 +80,8 @@ var hover_cells: Array = [] # the cells the Floor tool would lay (Vector2i)
 var _floor_ghost: Node3D
 var _floor_mats := {}
 var _plot_root: Node3D
+var paint_kind := "sage" # what the Paint tool puts on
+var hover_paint: Array = [] # the face keys ("edge:p") the Paint tool would colour
 
 
 # --- the data ----------------------------------------------------------------------------------
@@ -1175,12 +1190,151 @@ func _hover_floor(g: Variant) -> void:
 	main.hud.set_wall_note(hover_note)
 
 
+# --- paint ------------------------------------------------------------------------------------
+
+func paints() -> Dictionary:
+	return Game.flag("wall_paint", {})
+
+
+static func paint_label(kind: String) -> String:
+	return str(PAINT_LABELS.get(kind, kind))
+
+
+## Coins for painting one 2 m face of wall.
+static func paint_cost() -> int:
+	return int(econ().get("paint", 5))
+
+
+## The paint on the face of the wall from a to b (world metres, on the grid) that looks along
+## `face`, or "" for none. A wall drawn in one piece over several edges takes its middle edge's.
+func paint_for(a: Vector2, b: Vector2, face: Vector3) -> String:
+	var pp := paints()
+	if pp.is_empty():
+		return ""
+	var h := absf(b.x - a.x) > absf(b.y - a.y)
+	var mid := (a + b) * 0.5
+	var k := key(int(floorf(mid.x / STEP) * STEP), int(roundf(mid.y)), true) if h \
+		else key(int(roundf(mid.x)), int(floorf(mid.y / STEP) * STEP), false)
+	var sgn := face.z if h else face.x
+	return str(pp.get(k + (":p" if sgn > 0.0 else ":n"), ""))
+
+
+## Every edge with a wall standing on it: hers and the house's own.
+func standing() -> Dictionary:
+	var out := house_edges()
+	for k in edges():
+		out[k] = true
+	return out
+
+
+## The face keys a click on edge k paints: the straight run of standing wall it's part of, on the
+## side the camera is.
+func paint_faces(k: String) -> Array:
+	var st := standing()
+	if k == "" or not st.has(k):
+		return []
+	var e := ends(k)
+	var h: bool = e[2]
+	var a: Vector2 = e[0]
+	var cam: Vector3 = main.cam.global_position if main.cam != null else Vector3.ZERO
+	var side := ":p" if ((cam.z > a.y) if h else (cam.x > a.x)) else ":n"
+	var run := [k]
+	for dir in [-1, 1]:
+		var at := a
+		while true:
+			at += (Vector2(STEP, 0) if h else Vector2(0, STEP)) * dir
+			var nk := key(int(at.x), int(at.y), h)
+			if not st.has(nk):
+				break
+			run.append(nk)
+	return run.map(func(x): return str(x) + side)
+
+
+## Paints the faces (paint_faces()) for coins; "none" washes them back for nothing.
+func paint(faces: Array, kind: String) -> bool:
+	var pp: Dictionary = paints().duplicate()
+	var todo := faces.filter(func(f): return str(pp.get(f, "none")) != kind and not (kind == "none" and not pp.has(f)))
+	if faces.is_empty():
+		main.hud.show_toast("Point at a wall of your house, or one you've built, to paint it.")
+		return false
+	if todo.is_empty():
+		main.hud.show_toast("That wall is %s already." % paint_label(kind).to_lower())
+		return false
+	var cost := 0 if kind == "none" else paint_cost() * todo.size()
+	if Game.coins < cost:
+		main.hud.show_toast("You need %dc to paint %d m of wall." % [cost, todo.size() * STEP])
+		return false
+	Game.coins -= cost
+	for f in todo:
+		if kind == "none":
+			pp.erase(f)
+		else:
+			pp[f] = kind
+	if pp.is_empty():
+		Game.flags.erase("wall_paint")
+	else:
+		Game.set_flag("wall_paint", pp)
+	main._rebuild_house()
+	main.hud.show_toast("Paint washed off %d m of wall." % (todo.size() * STEP) if kind == "none" \
+		else "%s on %d m of wall (%dc)." % [paint_label(kind), todo.size() * STEP, cost])
+	return true
+
+
+func set_paint_kind(kind: String) -> void:
+	paint_kind = kind
+	if main.hud.paint_pick != null and main.hud.paint_pick.selected != PAINTS.find(kind):
+		main.hud.paint_pick.select(PAINTS.find(kind))
+
+
+## A thin slab of the colour over the faces the Paint tool would cover.
+func _hover_paint(g: Variant) -> void:
+	if _floor_ghost != null:
+		_floor_ghost.visible = false
+	hover = "" if g == null else edge_at(g)
+	hover_paint = paint_faces(hover)
+	if hover_paint.is_empty():
+		_ghost.visible = false
+		hover_ok = false
+		hover_note = "Point at a wall of your house, or one you've built: the side you see is the side you paint."
+		main.hud.set_wall_note(hover_note)
+		return
+	var first: Array = ends(str(hover_paint[0]).split(":")[0])
+	var lo: Vector2 = first[0]
+	var hi: Vector2 = first[1]
+	for f in hover_paint:
+		var e := ends(str(f).split(":")[0])
+		lo = Vector2(minf(lo.x, e[0].x), minf(lo.y, e[0].y))
+		hi = Vector2(maxf(hi.x, e[1].x), maxf(hi.y, e[1].y))
+	var h: bool = first[2]
+	var sgn := 1.0 if str(hover_paint[0]).ends_with(":p") else -1.0
+	var mid := (lo + hi) * 0.5
+	var span := hi.x - lo.x if h else hi.y - lo.y
+	(_ghost.mesh as BoxMesh).size = Vector3(span, main.WALL_H - 0.1, 0.04) if h else Vector3(0.04, main.WALL_H - 0.1, span)
+	_ghost.position = Vector3(mid.x, main.WALL_H * 0.5, mid.y) + (Vector3(0, 0, sgn) if h else Vector3(sgn, 0, 0)) * 0.19
+	_ghost.visible = true
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var col: Color = PAINT_COLOURS.get(paint_kind, Color(1, 1, 1))
+	m.albedo_color = Color(col.r, col.g, col.b, 0.6)
+	_ghost.material_override = m
+	var n := hover_paint.filter(func(f): return str(paints().get(f, "none")) != paint_kind).size()
+	hover_ok = n > 0
+	if paint_kind == "none":
+		hover_note = "Click to wash the paint off this side of the wall (%d m)." % (n * STEP) if n > 0 else "This side of the wall has no paint."
+	else:
+		hover_note = "%s on this side of the wall: %d m, %dc." % [paint_label(paint_kind), n * STEP, n * paint_cost()] if n > 0 \
+			else "This side of the wall is %s already." % paint_label(paint_kind).to_lower()
+	main.hud.set_wall_note(hover_note)
+
+
 # --- the tool in build mode -------------------------------------------------------------------
 
 func set_tool(t: String) -> void:
 	tool = t
 	hover = ""
 	hover_cells = []
+	hover_paint = []
 	if _ghost != null:
 		_ghost.visible = false
 	if _floor_ghost != null:
@@ -1208,6 +1362,9 @@ func hover_at(g: Variant) -> void:
 	_ensure_ghost()
 	if tool == "floor":
 		_hover_floor(g)
+		return
+	if tool == "paint":
+		_hover_paint(g)
 		return
 	if _floor_ghost != null:
 		_floor_ghost.visible = false
@@ -1270,6 +1427,8 @@ func click(g: Variant) -> void:
 	if tool == "floor":
 		lay_floor(floor_cells_at(Vector2((g as Vector3).x, (g as Vector3).z)), floor_kind)
 		hover_cells = []
+	elif tool == "paint":
+		paint(hover_paint, paint_kind)
 	elif tool == "wall" and edges().has(hover):
 		remove(hover)
 	elif tool != "wall" and (edges().has(hover) or house_edges().has(hover)):

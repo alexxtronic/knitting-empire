@@ -72,13 +72,13 @@ func pick(design: String) -> void:
 
 func refresh() -> void:
 	var worn := Sweaters.design(Game.worn_design)
-	_wearing.text = "Wearing: %s" % ("her thin city coat" if worn.is_empty() else "%s  %s" % [worn["name"], "★".repeat(int(worn["stars"]))])
+	_wearing.text = "Wearing: %s" % ("no sweater" if worn.is_empty() else "%s  %s" % [worn["name"], "★".repeat(int(worn["stars"]))])
 	for c in _list.get_children():
 		_list.remove_child(c)
 		c.queue_free()
 	var es := entries()
 	_empty.visible = es.is_empty()
-	_list.add_child(_row("City coat", "the thin coat she came in", Color(0.6, 0.6, 0.62), Game.worn_design == "", ""))
+	_list.add_child(_row("No sweater", "just her own clothes", Color(0.6, 0.6, 0.62), Game.worn_design == "", ""))
 	for d in es:
 		var s := clampi(int(d["stars"]), 1, 4)
 		_list.add_child(_row(str(d["name"]), "%s  %s" % ["★".repeat(s), TIER[s - 1]], Color(str(d["colours"][0])), Game.worn_design == str(d["id"]), str(d["id"]), TIER_COLOUR[s - 1], d["colours"]))

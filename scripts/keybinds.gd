@@ -43,8 +43,8 @@ const ACTIONS := [
 	["hint", "Hide the controls hint", ["fps", "cine"], KEY_H],
 	["lane_1", "Knitting: lane 1", ["knit"], KEY_D],
 	["lane_2", "Knitting: lane 2", ["knit"], KEY_F],
-	["lane_3", "Knitting: lane 3", ["knit"], KEY_J],
-	["lane_4", "Knitting: lane 4", ["knit"], KEY_K],
+	["lane_3", "Knitting: lane 3", ["knit"], KEY_G],
+	["lane_4", "Knitting: lane 4", ["knit"], KEY_H],
 ]
 
 ## Keys the player can't bind (the menus and the hotbar need them).

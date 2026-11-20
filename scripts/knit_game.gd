@@ -1,6 +1,6 @@
 extends Control
 ## The knitting game: a rhythm game played to a song. Balls of yarn roll down four lanes towards four
-## knitting needles; press the lane's key (D F J K, or the arrow keys) as one reaches its needle, and
+## knitting needles; press the lane's key (D F G H, or the arrow keys) as one reaches its needle, and
 ## hold the key down along a strand of yarn until it ends. Every stitch you make is knitted into a
 ## swatch beside the playfield, and how well you do decides how rare the sweater is.
 ##
@@ -16,8 +16,8 @@ signal stitched(grade: int) # a stitch was made: 0 perfect, 1 great, 2 good
 
 const Keys = preload("res://scripts/keybinds.gd")
 const LANES := 4
-const LANE_KEYS := [[KEY_D, KEY_LEFT], [KEY_F, KEY_DOWN], [KEY_J, KEY_UP], [KEY_K, KEY_RIGHT]]
-const LANE_LETTERS := ["D", "F", "J", "K"]
+const LANE_KEYS := [[KEY_D, KEY_LEFT], [KEY_F, KEY_DOWN], [KEY_G, KEY_UP], [KEY_H, KEY_RIGHT]] # D F G H (Alex, 2026-11-20; it was D F J K)
+const LANE_LETTERS := ["D", "F", "G", "H"]
 const LANE_COLORS := [Color("a12b26"), Color("596b8c"), Color("9eae8f"), Color("e8b23a")] # plaid, denim, sage, sunflower
 const CREAM := Color("edddbd")
 const CHARCOAL := Color("2b2826")
@@ -647,7 +647,7 @@ func _draw_select() -> void:
 		var b := int(best.get(str(s["id"]), 0))
 		_text("Your best: %s" % (rarity_name(b) if b > 0 else "not yet"), Vector2(r.end.x - 30, r.position.y + 78), 16, rarity_color(b) if b > 0 else Color(0.7, 0.66, 0.58), 2)
 	_text("↑ ↓ choose · Enter to knit · Esc to go back", Vector2(640, 650), 18, Color(0.85, 0.8, 0.7), 1)
-	_text("Keys D F J K, or the arrow keys · timing %+d ms ( [ ] to change )" % offset_ms, Vector2(640, 678), 15, Color(0.7, 0.66, 0.58), 1)
+	_text("Keys D F G H, or the arrow keys · timing %+d ms ( [ ] to change )" % offset_ms, Vector2(640, 678), 15, Color(0.7, 0.66, 0.58), 1)
 
 
 func _draw_result() -> void:

@@ -5,8 +5,9 @@ extends CanvasLayer
 signal mode_selected(build: bool)
 signal expand_pressed
 signal color_chosen(cid: String) # a colour for the piece in her hands (furniture.gd set_color)
-signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", or ""
+signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", "paint", or ""
 signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
+signal paint_kind_chosen(kind: String) # the Paint tool's list: a colour in house_builder.gd's PAINTS
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -225,6 +226,7 @@ var expand_btn: Button
 var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
 var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
+var paint_pick: OptionButton # the Paint tool's list (house_builder.gd PAINTS)
 var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
 var graphics_btn: Button
@@ -956,7 +958,7 @@ func _update_needs(delta: float) -> void:
 		needs_meters[need].set_value(v / 100.0, t)
 	if sample:
 		_need_t = 0.0
-		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("her thin city coat" if Game.worn_quality <= 1 else "a %s sweater she knit" % Game.stars(Game.worn_quality))
+		needs_cells["warmth"].tooltip_text = "Warmth: weather, time of day, being indoors, and her sweater.\nWearing: %s" % ("no sweater" if Game.worn_design == "" else "a %s sweater she knit" % Game.stars(Game.worn_quality))
 		needs_cells["fitness"].tooltip_text = "Fitness: walking and farm work. Fitter means faster walking and less tiring work."
 		needs_cells["happiness"].tooltip_text = "Happiness: knitting, animals, books and good food. Low needs drag it down."
 		needs_cells["love"].tooltip_text = "Love: time with people. Talk, give gifts, keep your promises."
@@ -1119,6 +1121,26 @@ func _build_catalog() -> void:
 			wall_tool_chosen.emit("floor"))
 	frow.add_child(floor_pick)
 	vb.add_child(frow)
+	# paint: one side of a wall, inside or out, for a few coins (Alex, 2026-11-20)
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 6)
+	prow.add_child(_label("Paint", 15, GOLD))
+	var pb: Button
+	pb = _button("Paint", func(): wall_tool_chosen.emit("paint" if wall_btns["paint"].button_pressed else ""))
+	pb.toggle_mode = true
+	pb.tooltip_text = "Pick a colour in the list, then click a wall of your house or one you've built. The side you see is the side you paint, inside or out, the whole length of that wall. A few coins per 2 m; No paint washes it off for nothing."
+	wall_btns["paint"] = pb
+	prow.add_child(pb)
+	paint_pick = OptionButton.new()
+	for pk in HB.PAINTS:
+		paint_pick.add_item(HB.paint_label(pk))
+	paint_pick.select(HB.PAINTS.find("sage"))
+	paint_pick.item_selected.connect(func(i: int):
+		paint_kind_chosen.emit(HB.PAINTS[i])
+		if not wall_btns["paint"].button_pressed:
+			wall_tool_chosen.emit("paint"))
+	prow.add_child(paint_pick)
+	vb.add_child(prow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wall_note.custom_minimum_size = Vector2(408, 0)
@@ -1334,6 +1356,8 @@ func _build_help() -> void:
 
 func set_build_mode(on: bool) -> void:
 	catalog_panel.visible = on
+	if minimap != null: # Build & Buy sits where the map is (Alex, 2026-11-20: "no minimap while building")
+		minimap.visible = not on
 	build_btn.set_pressed_no_signal(on)
 	if not on:
 		set_holding(false)
