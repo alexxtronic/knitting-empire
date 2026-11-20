@@ -65,6 +65,9 @@ func run(m: Node) -> void:
 		main.townsfolk.build()
 		main.townsfolk.place_all()
 	main.town_rounds = true
+	if main.fog != null: # the fog over unexplored land, as a new game has it (fog_of_war.gd)
+		main.fog.enabled = true
+		main.fog.reset()
 	if main.suburb:
 		main.suburb.on = true # and to bed in Bretton Oaks at night
 	Game.fast_clock = false
@@ -260,6 +263,7 @@ func _probe(spot: Array) -> void:
 				if is_instance_valid(l):
 					(l as Light3D).visible = on,
 		"grass": func(on: bool) -> void: main.grass.visible = on,
+		"fog_of_war": func(on: bool) -> void: main.fog.enabled = on,
 		"nature": func(on: bool) -> void: main.nature.visible = on,
 		"wildlife": func(on: bool) -> void: main.wildlife.visible = on,
 		"villagers": func(on: bool) -> void:

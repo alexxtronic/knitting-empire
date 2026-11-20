@@ -33,7 +33,7 @@
       ]
     },
     "wall_front": {
-      "triangles": 30684,
+      "triangles": 30692,
       "materials": [
         "cafe_wall",
         "cafe_trim",
@@ -81,7 +81,7 @@
       ]
     },
     "wall_left": {
-      "triangles": 2688,
+      "triangles": 2696,
       "materials": [
         "cafe_wall",
         "cafe_trim",
@@ -100,7 +100,7 @@
       ]
     },
     "wall_right": {
-      "triangles": 4854,
+      "triangles": 4862,
       "materials": [
         "cafe_wall",
         "cafe_trim",
@@ -145,6 +145,6 @@
       ]
     }
   },
-  "triangles": 73396,
-  "glb_bytes": 6203796
+  "triangles": 73420,
+  "glb_bytes": 6205216
 }

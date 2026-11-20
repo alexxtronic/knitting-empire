@@ -4,10 +4,10 @@
   "reach": 1.4,
   "samples": 256,
   "device": "METAL",
-  "light_mean": 0.311,
+  "light_mean": 0.31,
   "light_p05": 0.0,
-  "seconds": 338.2,
-  "glb_bytes": 16002420,
+  "seconds": 333.6,
+  "glb_bytes": 16000740,
   "lost_nodes": [],
   "lost_materials": [],
   "lost_images": []

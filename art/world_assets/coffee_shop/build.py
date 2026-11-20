@@ -509,9 +509,13 @@ def wall_side(M, side, low):
         return
     for ya, z0, z1, w in SIDE_WINDOWS[side]:
         inner_window(M, side, ya, z0 + 0.06, z1 - 0.04 - w / 2, w - 0.06)
-    # the gable end above the eaves: a triangle of boards up to the ridge
+    # the gable end above the eaves: boards up to the ridge, their top edge just inside the roof's slab
+    # (a plain triangle from the eaves fell short of the slopes' underside and left a slit of sky
+    # along the foot of each slope, seen from the loft)
     sx = -1 if side == "left" else 1
-    tri = [(-D / 2 + 0.05, EAVE - 0.02), (D / 2 - 0.05, EAVE - 0.02), (0, RIDGE - 0.15)]
+    e = D / 2 - 0.05
+    top = RIDGE - SLOPE * e - 0.04
+    tri = [(-e, EAVE - 0.02), (e, EAVE - 0.02), (e, top), (0, RIDGE - 0.04), (-e, top)]
     g = flat("gable_end", tri, 0, 0.1, M["wall"], bevel=0.0)
     place(g, -90 * sx, (sx * (W / 2 - 0.1), cy, 0))
     K.uv_box(g, 0.55, grain="z")
@@ -609,7 +613,12 @@ def front_gable(M):
     loft's middle bay (it was an arched window into the roof space), a flower box under it, and the
     little truss in its peak. Built with the front wall, so it cuts down with it, not with the roof."""
     yf = FRONT
-    tri = [(G_CX - G_HALF + 0.12, EAVE - 0.1), (G_CX + G_HALF - 0.12, EAVE - 0.1), (G_CX, G_APEX - 0.25)]
+    # its top edges run just inside the cross-gable roof's slab (a plain triangle to G_APEX - 0.25 fell
+    # short of the roof's underside and left a slit of sky each side of the round window, from the loft)
+    h = G_HALF - 0.12
+    rake = (G_APEX - ROOF_EDGE) / (G_HALF + 0.15)
+    tri = [(G_CX - h, EAVE - 0.1), (G_CX + h, EAVE - 0.1), (G_CX + h, G_APEX - rake * h - 0.06),
+           (G_CX, G_APEX - 0.06), (G_CX - h, G_APEX - rake * h - 0.06)]
     g = flat("front_gable", tri, yf + 0.02, 0.08, M["wall"], bevel=0.0)
     round_hole(g, G_CX, GW_Z, yf, GW_R)
     K.uv_box(g, 0.55, grain="z")

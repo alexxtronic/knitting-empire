@@ -153,6 +153,12 @@ func reset() -> void:
 	flags = {}
 
 
+## Every drain on her energy is scaled by this (Alex, 2026-11-17: "make the energy meter more
+## forgiving, takes 50% more to empty it"): tools, chores, jobs, hunger and the cold all cost 1/1.5
+## of what they're written as. Rest and sleep give back as before.
+const ENERGY_DRAIN := 1.0 / 1.5
+
+
 func _process(delta: float) -> void:
 	if not time_running:
 		return
@@ -160,10 +166,10 @@ func _process(delta: float) -> void:
 		hour += delta / hour_seconds()
 	fullness = maxf(0.0, fullness - delta * HUNGER) # about one full bar over a 14-minute day
 	if fullness <= 0.0:
-		energy = maxf(0.0, energy - delta * 0.4)
+		energy = maxf(0.0, energy - delta * 0.4 * ENERGY_DRAIN)
 	warmth = move_toward(warmth, warmth_target, delta * 1.2)
 	if warmth < 25.0:
-		energy = maxf(0.0, energy - delta * 0.08) # shivering is tiring
+		energy = maxf(0.0, energy - delta * 0.08 * ENERGY_DRAIN) # shivering is tiring
 	# happiness slips slowly, faster when she's hungry, cold, exhausted or lonely
 	var low := 0.0
 	for v in [fullness, warmth, energy, love]:
@@ -259,12 +265,26 @@ func daylight() -> float:
 
 
 func sleep() -> void:
-	day += 1
+	# up past midnight by a bonfire (stay_up()), the day has turned already: no second new day
+	var turned: bool = int(flags.get("stayed_up", 0)) == day and hour < DAY_START
+	flags.erase("stayed_up")
+	if not turned:
+		day += 1
 	hour = 6.0
 	energy = 100.0
 	fullness = maxf(15.0, fullness - 25.0)
 	happiness = clampf(happiness + 10.0, 0.0, 100.0) # a fresh morning
 	warmth = maxf(warmth, 70.0) # under the quilt all night
+	if not turned:
+		day_started.emit(day)
+
+
+## Midnight with a bonfire burning (bonfire.gd): the night goes on and the day turns over without
+## sleep, so none of sleep's rest. Game.flags["stayed_up"] marks the day she began awake.
+func stay_up() -> void:
+	day += 1
+	hour = maxf(0.0, hour - 24.0)
+	flags["stayed_up"] = day
 	day_started.emit(day)
 
 
@@ -398,6 +418,7 @@ func take_item(id: String, n: int = 1) -> bool:
 
 
 func use_energy(amount: float) -> bool:
+	amount *= ENERGY_DRAIN
 	if energy < amount:
 		toast.emit("You're too tired. Rest in a chair or sleep in your bed.")
 		return false

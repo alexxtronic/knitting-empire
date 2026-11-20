@@ -186,6 +186,14 @@ static func keeper(id: String) -> Dictionary:
 
 
 ## The shop she is standing in ("" if none).
+## Just inside a walk-in shop's front door, in the world.
+static func door_in(id: String) -> Vector3:
+	var s: Shop = shops.get(id)
+	if s == null or not is_instance_valid(s.node):
+		return Vector3.ZERO
+	return s.node.global_transform * Vector3(float(s.info.get("door_x", s.room.get_center().x)), 0, s.room.end.y - 1.0)
+
+
 static func inside_of(who: Vector3) -> String:
 	for s in shops.values():
 		if _is_in(s, who):
@@ -365,6 +373,7 @@ class ReadSpot extends Node3D:
 		r.kind = str(f.get("read", "seat"))
 		r.label = str(item.get("name", f["id"]))
 		var sz: Vector2 = Data.vec2(item.get("size", [1.0, 1.0]))
+		r.size = sz
 		var src: Dictionary = sd if not sd.is_empty() else f
 		if src.has("seat"):
 			var a: Array = src["seat"]
@@ -412,9 +421,50 @@ class ReadSpot extends Node3D:
 			main.begin_read(self, id)
 
 	## Where she stands to use it, in the world (on the café's upstairs floor for a piece up there).
+	## The world editor can move the furniture round it (Alex's layout, 2026-11-18, closed the café
+	## lounge's sofa in between its coffee table and armchairs), so when its own spot can't be walked
+	## to from the shop's door, the nearest of its sides that can is used instead. Worked out again
+	## when the piece moves or the walking grid is built again.
 	func stand_point() -> Vector3:
 		var p := to_global(stand)
-		return Vector3(p.x, p.y if upstairs else 0.0, p.z)
+		var own := Vector3(p.x, p.y if upstairs else 0.0, p.z)
+		if upstairs or main == null or int(main.get("grid_stamp")) == 0:
+			return own
+		var stamp := int(main.get("grid_stamp"))
+		if stamp == _stamp and global_transform.is_equal_approx(_xf):
+			return _reach
+		_stamp = stamp
+		_xf = global_transform
+		_reach = own
+		var shop: String = str(_I().inside_of(own))
+		if shop == "" or _reachable(own, shop):
+			return own
+		var side := 1.0 if seat.x >= 0.0 else -1.0
+		var out_x := size.x * 0.5 + 0.45
+		var tries := [Vector3(side * out_x, 0, seat.z), Vector3(-side * out_x, 0, seat.z),
+			Vector3(seat.x, 0, -size.y * 0.5 - 0.45), Vector3(side * out_x, 0, stand.z), Vector3(-side * out_x, 0, stand.z)]
+		for t in tries:
+			var q := to_global(t)
+			q.y = 0.0
+			if str(_I().inside_of(q)) == shop and _reachable(q, shop):
+				_reach = q
+				return q
+		return own
+
+	var size := Vector2.ONE # the piece's footprint, its own x and z
+
+	## This file's own script, for its static functions (it isn't a global class).
+	static func _I() -> GDScript:
+		return load("res://scripts/interiors.gd")
+	var _stamp := -1
+	var _xf := Transform3D()
+	var _reach := Vector3.ZERO
+
+	func _reachable(q: Vector3, shop: String) -> bool:
+		var door: Vector3 = _I().door_in(shop)
+		var route: Array = main._find_path(door, q)
+		var end: Vector3 = route[-1] if not route.is_empty() else door
+		return Vector2(end.x - q.x, end.z - q.z).length() <= 0.75 and str(_I().inside_of(end)) == shop
 
 	## Where she sits (her origin), in the world, and the way she faces.
 	func seat_point() -> Vector3:
@@ -584,11 +634,14 @@ static func steer_ok(from: Vector3, p: Vector3) -> Variant:
 	var q2 := Vector2(q.x, q.z)
 	var st: Dictionary = s.loft["stairs"]
 	var lane := _rect(st["lane"])
-	if lane.grow(-0.08).has_point(q2):
+	# the flight itself, kept off its side walls but not shortened at either end: shrunk all round,
+	# its last 8 cm at the top (between the stairwell's block and the lane) let nobody across, so first
+	# person could neither climb off the top nor step down onto it
+	if Rect2(lane.position + Vector2(0.08, -0.05), lane.size + Vector2(-0.16, 0.1)).has_point(q2):
 		return true
 	var by := s.node.global_position.y
 	if from.y - by > s.loft_y * 0.5:
-		return _loft_ok(s, _loft_cell(s, q2)) or (q.z < float(st["high_z"]) and lane.grow(0.4).has_point(q2))
+		return _loft_ok(s, _loft_cell(s, q2)) or (q.z < float(st["high_z"]) + 0.1 and lane.grow(0.4).has_point(q2))
 	if q.z > float(st["low_z"]) - 0.1 and lane.grow(0.35).has_point(q2):
 		return true # stepping on at the foot
 	return null
