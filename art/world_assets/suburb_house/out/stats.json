@@ -23,7 +23,7 @@
       ]
     },
     "wall_back": {
-      "triangles": 928,
+      "triangles": 952,
       "materials": [
         "suburb_brick",
         "suburb_lining",
@@ -44,7 +44,7 @@
       ]
     },
     "wall_right": {
-      "triangles": 706,
+      "triangles": 918,
       "materials": [
         "suburb_brick",
         "suburb_lining",
@@ -62,7 +62,7 @@
       ]
     },
     "wall_back_low": {
-      "triangles": 206,
+      "triangles": 232,
       "materials": [
         "suburb_brick",
         "suburb_lining"
@@ -76,7 +76,7 @@
       ]
     },
     "wall_right_low": {
-      "triangles": 146,
+      "triangles": 186,
       "materials": [
         "suburb_brick",
         "suburb_lining"
@@ -92,15 +92,16 @@
       ]
     },
     "roof": {
-      "triangles": 578,
+      "triangles": 602,
       "materials": [
         "suburb_roof_shake",
         "suburb_trim",
         "suburb_vinyl",
-        "suburb_lining"
+        "suburb_lining",
+        "suburb_lining_upper"
       ]
     }
   },
-  "triangles": 7602,
-  "glb_bytes": 679328
+  "triangles": 7928,
+  "glb_bytes": 703496
 }

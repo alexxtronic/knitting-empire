@@ -85,8 +85,9 @@ func run(m: Node) -> void:
 		for r in room["rects"]:
 			a += float(r[2]) * float(r[3])
 		areas[str(room["id"])] = a
-	main._check("the basement's green shag den is as big as its black-tile rec room (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
-		areas.has("den") and absf(float(areas["den"]) - float(areas.get("rec_room", 0.0))) < 0.2)
+	# the same size in Alex's plan; the rec room has run on 2 m with the house's back (2026-11-20)
+	main._check("the basement's black-tile rec room is the den's size and 2 m deeper (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
+		areas.has("den") and absf(float(areas["den"]) + 5.84 * 2.0 - float(areas.get("rec_room", 0.0))) < 0.5)
 	# the bathroom, to the right at the foot of the stairs: its door swings open as she comes up to it
 	ok = await _walk(Vector3(2.9, 0, 2.8))
 	await main._wait(0.8)

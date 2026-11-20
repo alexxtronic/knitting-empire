@@ -56,6 +56,8 @@ var _floor_surfaces: Array = [] # [MeshInstance3D, surface index, its material]:
 var _hidden: Array = [] # villagers hidden while she's in the basement (they're upstairs)
 var _inv := Transform3D.IDENTITY # the house's world -> local, kept each frame
 var _mats := {}
+var _shell_src := {}
+var _reveal_roots := {} # side -> the node the window reveals in the shell's wall on that side hang under # the shell's wall parts' meshes as the model has them, before any opening is cut
 var _built: Array = [] # the walls, openings, floors and ceilings: rebuild() makes them again from cfg
 var doors: Array = [] # the doors and sliding doors in the walls' openings: {"node", "part", "kind", "c", "lv", "rot0", "x0", "open"}
 var selected_wall := -1 # the world editor's house tools: the wall picked (an index into cfg "walls"), drawn gold
@@ -98,10 +100,6 @@ func build(m: Node, node: Node3D) -> void:
 			var mat: Material = rf.get_active_material(i)
 			if mat != null and "lining_upper" in str(mat.resource_name).to_lower():
 				rf.set_surface_override_material(i, _invisible())
-	for od in cfg.get("outside_doors", []):
-		for nm in ["wall_%s" % od["side"], "wall_%s_low" % od["side"]]:
-			if parts.has(nm):
-				_cut(parts[nm], float(od["at"]) - float(od["width"]) * 0.5 - 0.02, float(od["at"]) + float(od["width"]) * 0.5 + 0.02, DOOR_HEAD + 0.3)
 	var interior := Node3D.new()
 	interior.name = "Interior"
 	house.add_child(interior)
@@ -173,6 +171,7 @@ func _well_ceilings() -> void:
 
 
 func _walls() -> void:
+	_cut_shell()
 	var wi := -1
 	for w in cfg.get("walls", []):
 		wi += 1
@@ -232,6 +231,202 @@ func _cut(mi: MeshInstance3D, x0: float, x1: float, top: float) -> void:
 	mi.mesh = out
 	for i in mini(keep.size(), out.get_surface_count()):
 		mi.set_surface_override_material(i, keep[i])
+
+
+## The shell's walls as the model has them, then cut again for the outside doors and for every
+## opening in an outer wall (a "liner" wall in cfg "walls"), so a window or door Alex puts in one
+## in the house editor shows the outdoors through the brick (2026-11-19), not the brick's inside.
+func _cut_shell() -> void:
+	for nm in parts:
+		if not str(nm).begins_with("wall_"):
+			continue
+		var mi: MeshInstance3D = parts[nm]
+		if not _shell_src.has(nm):
+			_shell_src[nm] = mi.mesh
+		elif mi.mesh != _shell_src[nm]:
+			var keep := []
+			for i in mi.get_surface_override_material_count():
+				keep.append(mi.get_surface_override_material(i))
+			mi.mesh = _shell_src[nm]
+			for i in mini(keep.size(), mi.get_surface_override_material_count()):
+				mi.set_surface_override_material(i, keep[i])
+	for od in cfg.get("outside_doors", []):
+		for nm in ["wall_%s" % od["side"], "wall_%s_low" % od["side"]]:
+			if parts.has(nm):
+				_cut(parts[nm], float(od["at"]) - float(od["width"]) * 0.5 - 0.02, float(od["at"]) + float(od["width"]) * 0.5 + 0.02, DOOR_HEAD + 0.3)
+	var mid := Vector2.ZERO
+	for r in footprint:
+		mid += (r as Rect2).get_center() / float(footprint.size())
+	for w in cfg.get("walls", []):
+		if not bool(w.get("liner", false)) or (w.get("doors", []) as Array).is_empty():
+			continue
+		var lv := str(w["level"])
+		var seg: Array = w["wall"]
+		var a := Vector2(float(seg[0]), float(seg[1]))
+		var b := Vector2(float(seg[2]), float(seg[3]))
+		var along_x := absf(b.x - a.x) > absf(b.y - a.y)
+		var line := a.y if along_x else a.x
+		var out := signf(line - (mid.y if along_x else mid.x))
+		var fl := _level_y(lv) if lv != "all" else basement_y
+		for d in w["doors"]:
+			var kind := str(d[2]) if d.size() > 2 else "open"
+			var at := float(d[0])
+			var wd := float(d[1])
+			var y0 := fl + (float(d[3]) if d.size() > 3 else WINDOW_SILL) if kind == "window" else fl
+			var y1 := fl + (float(d[4]) if d.size() > 4 else WINDOW_HEAD) if kind == "window" else fl + DOOR_HEAD + 0.06
+			var p0 := line + out * 0.03 # leave the liner's own side alone
+			var p1 := line + out * 0.6
+			var box := AABB()
+			if along_x:
+				box = AABB(Vector3(at - wd * 0.5, y0, minf(p0, p1)), Vector3(wd, y1 - y0, absf(p1 - p0)))
+			else:
+				box = AABB(Vector3(minf(p0, p1), y0, at - wd * 0.5), Vector3(absf(p1 - p0), y1 - y0, wd))
+			for nm in parts:
+				if str(nm).begins_with("wall_"):
+					_cut_box(parts[nm], box)
+			var side := ("front" if out > 0 else "back") if along_x else ("right" if out > 0 else "left")
+			_reveal(side, along_x, line, out, at, wd, y0, y1, kind == "window")
+
+
+## The opening's lining through the wall's thickness, from the liner out to the brick's face: a sill
+## (a window's only), a head and two jambs, white like the frames.
+func _reveal(side: String, along_x: bool, line: float, out: float, at: float, wd: float, y0: float, y1: float, sill: bool) -> void:
+	var trim := _flat_mat(Color("#f2efe8"))
+	var depth := 0.26
+	var mid_p := line + out * depth * 0.5
+	var pieces := [[Vector3(0.05, y1 - y0, depth), Vector3(at - wd * 0.5 - 0.025, (y0 + y1) * 0.5, mid_p)],
+			[Vector3(0.05, y1 - y0, depth), Vector3(at + wd * 0.5 + 0.025, (y0 + y1) * 0.5, mid_p)],
+			[Vector3(wd + 0.1, 0.05, depth), Vector3(at, y1 + 0.025, mid_p)]]
+	if sill:
+		pieces.append([Vector3(wd + 0.1, 0.05, depth + 0.06), Vector3(at, y0 - 0.025, mid_p + out * 0.03)])
+	for pc in pieces:
+		var sz: Vector3 = pc[0]
+		var c: Vector3 = pc[1]
+		if not along_x:
+			sz = Vector3(sz.z, sz.y, sz.x)
+			c = Vector3(c.z, c.y, c.x)
+		# under its side's own node, which _show() hides with the shell's wall there when that drops to a stub
+		if not _reveal_roots.has(side):
+			var r := Node3D.new()
+			r.name = "Reveals_" + side
+			(roots["all"] as Node3D).add_child(r)
+			_reveal_roots[side] = r
+		_built.append(_box(_reveal_roots[side], sz, c, trim))
+
+
+## The shell's wall `mi` without what lies inside `box` (the house's space): every triangle that
+## reaches into it is clipped to the parts outside, its points' normals and both UVs (the light
+## bake's) carried along. The brick wall faces are big quads, so dropping whole triangles won't do.
+func _cut_box(mi: MeshInstance3D, box: AABB) -> void:
+	var src := mi.mesh as ArrayMesh
+	if src == null:
+		return
+	var xf := house.global_transform.affine_inverse() * mi.global_transform
+	var lo := box.position
+	var hi := box.end
+	# the outside of the box as six convex pieces: [axis, value, keep above?] each
+	var regions := [
+		[[0, lo.x, false]], [[0, hi.x, true]],
+		[[0, lo.x, true], [0, hi.x, false], [1, lo.y, false]], [[0, lo.x, true], [0, hi.x, false], [1, hi.y, true]],
+		[[0, lo.x, true], [0, hi.x, false], [1, lo.y, true], [1, hi.y, false], [2, lo.z, false]],
+		[[0, lo.x, true], [0, hi.x, false], [1, lo.y, true], [1, hi.y, false], [2, hi.z, true]]]
+	var keep := []
+	for i in mi.get_surface_override_material_count():
+		keep.append(mi.get_surface_override_material(i))
+	var out_mesh := ArrayMesh.new()
+	var touched := false
+	for si in src.get_surface_count():
+		var arr := src.surface_get_arrays(si)
+		var mname := str(src.surface_get_material(si).resource_name).to_lower() if src.surface_get_material(si) != null else ""
+		# the model's own windows (glass, curtains, frames) stay: only the walls are cut
+		var solid := not ("pane" in mname or "curtain" in mname or "trim" in mname or "glass" in mname)
+		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX] if arr[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(verts.size()))
+		var nv: PackedVector3Array = verts.duplicate()
+		var nn: PackedVector3Array = arr[Mesh.ARRAY_NORMAL] if arr[Mesh.ARRAY_NORMAL] != null else PackedVector3Array()
+		var nt: PackedFloat32Array = arr[Mesh.ARRAY_TANGENT] if arr[Mesh.ARRAY_TANGENT] != null else PackedFloat32Array()
+		var nu: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV] if arr[Mesh.ARRAY_TEX_UV] != null else PackedVector2Array()
+		var nu2: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV2] if arr[Mesh.ARRAY_TEX_UV2] != null else PackedVector2Array()
+		var nc: PackedColorArray = arr[Mesh.ARRAY_COLOR] if arr[Mesh.ARRAY_COLOR] != null else PackedColorArray()
+		var kept := PackedInt32Array()
+		for t in range(0, idx.size(), 3):
+			var ids := [idx[t], idx[t + 1], idx[t + 2]]
+			var ps := [xf * verts[ids[0]], xf * verts[ids[1]], xf * verts[ids[2]]]
+			var tb := AABB(ps[0], Vector3.ZERO).expand(ps[1]).expand(ps[2])
+			if not solid or not tb.intersects(box.grow(-0.001)):
+				kept.append_array(PackedInt32Array(ids))
+				continue
+			touched = true
+			for reg in regions:
+				# the polygon as [house-space point, barycentric weights]
+				var poly := [[ps[0], Vector3(1, 0, 0)], [ps[1], Vector3(0, 1, 0)], [ps[2], Vector3(0, 0, 1)]]
+				for cons in reg:
+					poly = _clip(poly, int(cons[0]), float(cons[1]), bool(cons[2]))
+					if poly.size() < 3:
+						break
+				if poly.size() < 3:
+					continue
+				var first := nv.size()
+				for pv in poly:
+					var w: Vector3 = pv[1]
+					nv.append(verts[ids[0]] * w.x + verts[ids[1]] * w.y + verts[ids[2]] * w.z)
+					if not nn.is_empty():
+						nn.append((nn[ids[0]] * w.x + nn[ids[1]] * w.y + nn[ids[2]] * w.z).normalized())
+					if not nt.is_empty():
+						var tg := Vector3.ZERO
+						for k in 3:
+							var j: int = ids[k]
+							tg += Vector3(nt[j * 4], nt[j * 4 + 1], nt[j * 4 + 2]) * w[k]
+						tg = tg.normalized()
+						nt.append_array(PackedFloat32Array([tg.x, tg.y, tg.z, nt[ids[0] * 4 + 3]]))
+					if not nu.is_empty():
+						nu.append(nu[ids[0]] * w.x + nu[ids[1]] * w.y + nu[ids[2]] * w.z)
+					if not nu2.is_empty():
+						nu2.append(nu2[ids[0]] * w.x + nu2[ids[1]] * w.y + nu2[ids[2]] * w.z)
+					if not nc.is_empty():
+						nc.append(nc[ids[0]] * w.x + nc[ids[1]] * w.y + nc[ids[2]] * w.z)
+				for k in range(1, poly.size() - 1):
+					kept.append_array(PackedInt32Array([first, first + k, first + k + 1]))
+		if kept.is_empty():
+			kept = PackedInt32Array([0, 0, 0]) # keep the surface (and its material's index)
+		arr[Mesh.ARRAY_VERTEX] = nv
+		if not nn.is_empty():
+			arr[Mesh.ARRAY_NORMAL] = nn
+		if not nt.is_empty():
+			arr[Mesh.ARRAY_TANGENT] = nt
+		if not nu.is_empty():
+			arr[Mesh.ARRAY_TEX_UV] = nu
+		if not nu2.is_empty():
+			arr[Mesh.ARRAY_TEX_UV2] = nu2
+		if not nc.is_empty():
+			arr[Mesh.ARRAY_COLOR] = nc
+		arr[Mesh.ARRAY_INDEX] = kept
+		out_mesh.add_surface_from_arrays(src.surface_get_primitive_type(si), arr)
+		out_mesh.surface_set_material(si, src.surface_get_material(si))
+		out_mesh.surface_set_name(si, src.surface_get_name(si))
+	if not touched:
+		return
+	mi.mesh = out_mesh
+	for i in mini(keep.size(), out_mesh.get_surface_count()):
+		mi.set_surface_override_material(i, keep[i])
+
+
+## One step of Sutherland-Hodgman: the part of `poly` ([point, weights] pairs) on the kept side of
+## the plane where coordinate `axis` is `v`.
+static func _clip(poly: Array, axis: int, v: float, above: bool) -> Array:
+	var out := []
+	var n := poly.size()
+	for i in n:
+		var a: Array = poly[i]
+		var b: Array = poly[(i + 1) % n]
+		var fa: float = ((a[0] as Vector3)[axis] - v) * (1.0 if above else -1.0)
+		var fb: float = ((b[0] as Vector3)[axis] - v) * (1.0 if above else -1.0)
+		if fa >= 0.0:
+			out.append(a)
+		if (fa >= 0.0) != (fb >= 0.0):
+			var t := fa / (fa - fb)
+			out.append([(a[0] as Vector3).lerp(b[0], t), (a[1] as Vector3).lerp(b[1], t)])
+	return out
 
 
 ## The outside doors' frames and doors (cfg "outside_doors"), in the holes _cut() made.
@@ -831,11 +1026,23 @@ func mark_grid() -> void:
 		var doors: Array = w.get("doors", []) if w is Dictionary else []
 		for piece in _pieces(Vector2(float(seg[0]), float(seg[1])), Vector2(float(seg[2]), float(seg[3])), doors):
 			_block(_seg_rect(piece[0], piece[1], 0.22))
+	# a wall on the bedroom floor that stands over the basement flight (the ensuite's, or one Alex
+	# draws there in the house editor) is built from that floor up: the stairs run on under it
+	var down := _ramp("down")
+	var well := Rect2()
+	if not down.is_empty():
+		var dr: Array = down["rect"]
+		well = Rect2(float(dr[0]), float(dr[1]), float(dr[2]), float(dr[3]))
 	for w in walls:
 		if _reachable(str(w["level"])) and bool(w.get("block", true)):
+			var over_well: bool = str(w["level"]) == "upper" and well.has_area()
 			# a cell wide, so no cell centre slips through between its faces; its ends only reach
 			# the wall's own, so a doorway beside it stays open
 			for c in _cells([_wall_strip(w["a"], w["b"])], 0.0):
+				if over_well:
+					var cc: Vector3 = _inv * (main._cell_center(c) as Vector3)
+					if well.has_point(Vector2(cc.x, cc.z)):
+						continue
 				main.astar.set_point_solid(c, true)
 	if level != BASEMENT:
 		# the foot of the basement stairs belongs to the basement: from up here it's a wall, so no path
@@ -1002,6 +1209,11 @@ func editor_pick(from: Vector3, dir: Vector3) -> Variant:
 		var q := local(hit)
 		if in_footprint(q) and absf(floor_local(q, level) - float(h)) < 0.02:
 			return hit
+	# over a stairwell there's no floor at either height: take the top floor's plane there, so a wall
+	# can be drawn over the flight (Alex, 2026-11-19: the editor wouldn't let him wall in the ensuite)
+	var top: Variant = Plane(Vector3.UP, house.global_position.y + float(hs[0])).intersects_ray(from, dir)
+	if top != null and in_footprint(local(top)):
+		return top
 	return null
 
 
@@ -1065,6 +1277,8 @@ func _show() -> void:
 		var cut: bool = cut_on and (n.dot(cdir) > 0.25 or level == BASEMENT)
 		(parts["wall_" + side] as Node3D).visible = not cut
 		(parts["wall_%s_low" % side] as Node3D).visible = cut
+		if _reveal_roots.has(side) and is_instance_valid(_reveal_roots[side]):
+			(_reveal_roots[side] as Node3D).visible = not cut
 	var her := local((main.player as Node3D).position)
 	var cl: Vector3 = _inv.basis * cdir
 	for w in walls:
