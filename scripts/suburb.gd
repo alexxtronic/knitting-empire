@@ -455,9 +455,11 @@ func home_for(id: String) -> int:
 	if n == 0:
 		return -1
 	var res: Dictionary = cfg.get("residents", {})
-	if res.has(id):
-		return clampi(int(res[id]), 0, n - 1)
-	return absi(hash(id)) % n
+	var i := clampi(int(res[id]), 0, n - 1) if res.has(id) else absi(hash(id)) % n
+	# once she's bought Marcus's house (house_sale.gd) nobody else sleeps there
+	if n > 1 and Game.flag("marcus_house_owned") == true and i == int(Data.load_json("split_house").get("house", -1)):
+		i = (i + 1) % n
+	return i
 
 
 func door_for(id: String) -> Vector3:

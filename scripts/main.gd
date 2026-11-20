@@ -9,6 +9,8 @@ const PerfCheck = preload("res://scripts/perf_check.gd")
 const SuburbCheck = preload("res://scripts/suburb_check.gd")
 const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
+const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
+const HouseSaleCheck = preload("res://scripts/house_sale_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
 const Sheep = preload("res://scripts/sheep.gd")
@@ -50,6 +52,8 @@ const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
 const Scarves = preload("res://scripts/scarves.gd")
 const Wolves = preload("res://scripts/wolves.gd")
+const Shepherd = preload("res://scripts/shepherd.gd")
+const HouseSale = preload("res://scripts/house_sale.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
 const CafeVisits = preload("res://scripts/cafe_visits.gd")
@@ -145,6 +149,8 @@ var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the c
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
+var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it (house_sale.gd)
+var shepherd: Shepherd # Rowan watching the pen for a fee, and the flags his advice waits for (shepherd.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
@@ -456,6 +462,12 @@ func _ready() -> void:
 	wolves = Wolves.new()
 	wolves.main = self
 	add_child(wolves)
+	shepherd = Shepherd.new()
+	shepherd.main = self
+	add_child(shepherd)
+	house_sale = HouseSale.new()
+	house_sale.main = self
+	add_child(house_sale)
 	_load_graphics()
 	hud.render_thumbnails()
 	_load_display()
@@ -2336,6 +2348,8 @@ func sell_sweater_to(v, i: int, price: int) -> bool:
 	Game.add_need("happiness", 4.0)
 	var wearing := Sweaters.fits(v.vid) and not d.is_empty()
 	hud.show_toast("Sold %s to %s for %dc.%s" % [str(d.get("name", "a sweater")), v.title, price, " They're wearing it!" if wearing else ""])
+	if Game.flag("act1_knit3") == true:
+		_story_event_soon("sweater_sold") # Act 1: Rowan's fourth task (any sale in town)
 	return true
 
 
@@ -2998,6 +3012,7 @@ func _finish_shear(s) -> void:
 	Game.add_item("wool", 2)
 	Game.add_need("fitness", 3.0)
 	hud.show_toast("Snip snip! +2 wool.")
+	_story_event_soon("sheared") # Act 1: Rowan's third task
 
 
 func _finish_pet(s) -> void:
@@ -4125,7 +4140,7 @@ func _act1_checks() -> void:
 	await _act1_until_done(60.0)
 	_check("Rosa bought the second sweater (coins %d→%d, sweaters %d→%d) and gave wool on credit (wool %d→%d, trust %d→%d), and the strays are bleating out by the pond (%d, '%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), rosa0, Game.stat("rosa", "trust"), homestead.strays.size(), hud.goal_label.text],
 		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("rosa_credit") == true
-		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and homestead.strays.size() == 2 and hud.goal_label.text.begins_with("Find"))
+		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and homestead.strays.size() == homestead.econ("strays", 4) and hud.goal_label.text.begins_with("Find"))
 	_check("the dog is with her from the start (for now), but the strays don't shy from him before there's a pen (here %s, herding %s)" % [dog != null and dog.visible, homestead.herders.has(dog)],
 		dog != null and dog.visible and not homestead.herders.has(dog))
 	# the hunt: walk out to the strays
@@ -4137,12 +4152,14 @@ func _act1_checks() -> void:
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("finding the strays starts Rowan's scene (%s)" % story.playing, story.playing == "act1_strays")
-	await _act1_shot("Two sheep", "25_act1_strays.png")
+	await _act1_shot("Four sheep", "25_act1_strays.png")
 	await _act1_shot("You alright?", "25_act1_rowan.png")
 	await _act1_until_done(60.0)
 	Game.hour = 9.0
-	_check("the strays: met Rowan, opened up (trust %d→%d), off to Steve for wood ('%s')" % [trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
-		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Get wood"))
+	var rowan_v = _villager("rowan")
+	_check("the strays: met Shepherd Rowan ('%s'), opened up (trust %d→%d), his first task: off to Steve for wood ('%s')" % [rowan_v.display_name(), trust0, Game.stat("rowan", "trust"), hud.goal_label.text],
+		Game.flag("met_rowan") == true and Game.flag("nora_opened") == true and Game.stat("rowan", "trust") == trust0 + 3 and hud.goal_label.text.begins_with("Rowan 1/4. Get wood")
+		and rowan_v.display_name() == "Shepherd Rowan")
 	# wood from Steve at Builder's Delight
 	var acts: Array = _villager_actions(steve).map(func(x): return x["id"])
 	_check("Steve sells wood (%s)" % str(acts), "buy_wood" in acts)
@@ -4222,7 +4239,8 @@ func _act1_checks() -> void:
 	await _shot("26_act1_pen.png")
 	# a stray may have wandered through the open gate by itself while the scene played: count those as well
 	_check("with the pen built the dog can herd, but only while she plays him: following her he leaves the strays be (can %s, herding now %s, strays %d, %d already in)" % [dog_herds(), homestead.herders.has(dog), homestead.strays.size(), sheep_list.size()],
-		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() >= 1 and homestead.strays.size() + sheep_list.size() == 2)
+		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() >= 1 and homestead.strays.size() + sheep_list.size() == homestead.econ("strays", 4)
+		and hud.goal_label.text.begins_with("Rowan 2/4"))
 	# herding: the strays move off from her
 	var s0 = homestead.strays[0]
 	s0.position = Vector3(o.x - 2.0, 0, o.y + 1.5)
@@ -4240,11 +4258,54 @@ func _act1_checks() -> void:
 	while story.playing != "act1_flock" and t < 5.0:
 		await _wait(0.1)
 		t += 0.1
-	_check("both strays in the pen: 'sheep_penned' (%s), two sheep in her flock (%d)" % [story.playing, Game.sheep_count],
-		story.playing == "act1_flock" and Game.sheep_count == 2 and sheep_list.size() == 2 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
+	_check("all four strays in the pen: 'sheep_penned' (%s), four sheep in her flock (%d)" % [story.playing, Game.sheep_count],
+		story.playing == "act1_flock" and Game.sheep_count == 4 and sheep_list.size() == 4 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
 	await _act1_until_done(30.0)
 	cam_target = cam0
-	_check("their own wool now, and home by dusk ('%s', %.1fh)" % [hud.goal_label.text, Game.hour], Game.flag("act1_fence_done") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
+	_check("Rowan's third task: shear them ('%s'), and it isn't dusk yet (%.1fh)" % [hud.goal_label.text, Game.hour], Game.flag("act1_flock_in") == true and hud.goal_label.text.begins_with("Rowan 3/4. Shear") and Game.flag("act1_fence_done") != true)
+	# Rowan's third task: shear, then knit from their wool
+	var wool_sh := Game.count("wool")
+	t0 = Time.get_ticks_msec()
+	_do_action(sheep_list[0], "shear")
+	t = 0.0
+	while story.playing != "act1_sheared" and t < 40.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("shearing one starts Rowan's next step (%s, wool %d→%d)" % [story.playing, wool_sh, Game.count("wool")], story.playing == "act1_sheared" and Game.count("wool") == wool_sh + 2)
+	await _act1_until_done(20.0)
+	_check("then knit their wool ('%s')" % hud.goal_label.text, hud.goal_label.text.begins_with("Rowan 3/4. Knit"))
+	Game.hour = 11.0
+	var sweaters_k := Game.count("sweater")
+	t0 = Time.get_ticks_msec()
+	_do_action(chair, "knit")
+	t = 0.0
+	while story.playing != "act1_knit3" and t < 90.0:
+		await _wait(0.1)
+		t += 0.1
+	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
+	_check("knitting their wool finishes the third task (%s, sweaters %d→%d)" % [story.playing, sweaters_k, Game.count("sweater")], story.playing == "act1_knit3" and Game.count("sweater") == sweaters_k + 1)
+	await _act1_until_done(20.0)
+	_check("Rowan's fourth task: sell it in town ('%s')" % hud.goal_label.text, hud.goal_label.text.begins_with("Rowan 4/4. Sell"))
+	# the fourth: a face-to-face sale to Steve (anyone in town, Rosa too, would do)
+	var asked1: Dictionary = (Game.flag("sweater_asked", {}) as Dictionary).duplicate()
+	asked1["steve"] = {"day": Game.day, "yes": true, "tries": 0}
+	Game.set_flag("sweater_asked", asked1)
+	_villager_action(steve, "sale_haggle")
+	await _wait(0.3)
+	sale.pick(Game.sweaters.size() - 1)
+	sale.set_price(sale.fair(int(Game.sweaters[-1])))
+	sale.force_roll = 0.0
+	var sold1 := sale.offer()
+	sale.force_roll = -1.0
+	hud.hide_dialogue()
+	t = 0.0
+	while story.playing != "act1_rowan_done" and t < 5.0:
+		await _wait(0.1)
+		t += 0.1
+	_check("selling it to Steve finishes Rowan's tutorial (%s, '%s')" % [sold1, story.playing], story.playing == "act1_rowan_done")
+	await _act1_until_done(30.0)
+	_check("his four tasks done, and home by dusk ('%s', %.1fh)" % [hud.goal_label.text, Game.hour], Game.flag("act1_fence_done") == true and hud.goal_label.text.begins_with("Head home") and Game.hour > 18.0)
 	var buy_ok: bool = _villager_actions(rosa).filter(func(x): return x["id"] == "buy_sheep").size() == 1
 	_check("Rosa sells sheep now there's a pen", buy_ok)
 	# the porch at night
@@ -4299,7 +4360,7 @@ func _act1_checks() -> void:
 	homestead.apply()
 	_check("Act 1 progress and the pen survive a save (journal %d, fences %d, pen %d cells, sheep %d)" % [Game.journal().size(), homestead.fences.size(), homestead.pen_cells.size(), Game.sheep_count],
 		Game.flag("act1_done") == true and Game.flag("seen_act1_porch") == true and Game.journal().size() == journal0 + 3
-		and homestead.fences.size() == 12 and homestead.pen_cells.size() == 9 and Game.sheep_count == 2)
+		and homestead.fences.size() == 12 and homestead.pen_cells.size() == 9 and Game.sheep_count == 4)
 	story.auto = false
 	story.auto_line = 0.08
 	homestead.reset_sandbox() # the rest of the autotest plays on the old farm: its pen and three sheep
@@ -5896,6 +5957,18 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=marcushouse" in OS.get_cmdline_user_args(): # just buying Marcus's house: his favour, the sale, her edits to it
+		await _wait(1.5)
+		await HouseSaleCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=shepherd" in OS.get_cmdline_user_args(): # just Shepherd Rowan: his tag, his Act 1 tasks' chain, his advice, hiring him
+		await _wait(1.5)
+		await ShepherdCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=wolves" in OS.get_cmdline_user_args(): # just the wolves at night: the roll, the alert, scaring them off, a loss, the barn, a save
 		await _wait(1.5)
 		await _wolf_checks()
@@ -6195,6 +6268,8 @@ func _autotest() -> void:
 	await _wildlife_checks()
 	await _empire_checks()
 	await _wolf_checks()
+	await ShepherdCheck.new().run(self)
+	await HouseSaleCheck.new().run(self)
 	await _sale_checks()
 	await _sweater_checks()
 	await _wardrobe_checks()
@@ -11732,6 +11807,7 @@ func _villager_actions(v) -> Array:
 					acts.append(_act("pay_barn_rent", "Pay the barn rent  (%dc)" % owed, Game.coins >= owed))
 				else:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
+	acts.append_array(shepherd.rows_for(v)) # Rowan: hire him to watch the pen (shepherd.gd)
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
 	acts.append_array(sale.rows_for(v)) # ask if they want a sweater, and haggle (sweater_sale.gd)
@@ -11770,6 +11846,9 @@ func _villager_action(v, id: String) -> void:
 		return
 	if id.begins_with("job_"):
 		jobs.action(v, id)
+		return
+	if id.begins_with("shep_"): # hiring Rowan to watch the pen (shepherd.gd)
+		shepherd.action(v, id)
 		return
 	if id == "sale_ask" or id == "sale_haggle":
 		sale.ask(v)
@@ -11820,6 +11899,7 @@ func _villager_action(v, id: String) -> void:
 				var praise: Array = ["Oh, these are gorgeous!", "Lovely work, as always.", "The city folks will snap these up!"]
 				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], worth, n, "s" if n > 1 else ""])
 				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", worth])
+				_story_event_soon("sweater_sold") # Act 1: Rowan's fourth task, Rosa counts
 		"buy_wool":
 			if _wool_packs_left() > 0 and Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
 				Game.set_flag("wool_bought", [Game.day, _wool_packs_bought() + 1])
@@ -13061,6 +13141,34 @@ func _wolf_checks() -> void:
 	var st2: Dictionary = wolves.state()
 	_check("a save keeps the wolves: the raid comes back with its pack (%d of %d) and about its seconds (%.0f), and the tally (seen off %d, lost %d)" % [wolves.pack.size(), pack_n, wolves.raid_left, int(st2.get("seen_off", 0)), int(st2.get("lost", 0))],
 		wolves.active() and wolves.pack.size() == pack_n and wolves.raid_left > 25.0 and wolves.raid_left <= 30.0 and int(st2.get("seen_off", 0)) == 1 and int(st2.get("lost", 0)) == 2)
+	# Rowan watching the pen (shepherd.gd): half the barn's rent, and he stops half the raids
+	wolves.clear()
+	Game.flags.erase("shepherd_until")
+	Game.coins = maxi(Game.coins, Shepherd.fee())
+	var risk_r: int = wolves.at_risk().size()
+	shepherd.hire()
+	shepherd.force_roll = 0.0 # a night he hears them
+	wolves.force_next = true
+	var stopped_r: bool = wolves.roll(Game.day, false) and not wolves.active()
+	var after_r: int = wolves.at_risk().size()
+	var tally_r := int(wolves.state().get("rowan_stopped", 0))
+	shepherd.force_roll = 0.99 # a night he doesn't
+	wolves.force_next = true
+	var missed_r: bool = wolves.roll(Game.day, false) and wolves.active()
+	wolves.clear()
+	shepherd.force_roll = -1.0
+	var stops_n := 0
+	var same := true
+	for night in range(1, 401):
+		if shepherd.stops(night):
+			stops_n += 1
+		same = same and shepherd.night_roll(night) == shepherd.night_roll(night)
+	Game.set_flag("shepherd_until", Game.day) # his watch has run out
+	var lapsed: bool = not shepherd.stops(3) and not shepherd.stops(4) and not shepherd.stops(5)
+	Game.flags.erase("shepherd_until")
+	_check("Rowan watching the pen (%dc, half the barn's %dc): a night he hears them, the raid never comes and nothing's lost (%s, %d -> %d at risk, stopped %d); a night he doesn't, it comes (%s); over 400 nights he stops %d (about half), the same roll for the same night (%s); lapsed, never (%s)" % [
+		Shepherd.fee(), homestead.econ("barn_rent", 120), stopped_r, risk_r, after_r, tally_r, missed_r, stops_n, same, lapsed],
+		Shepherd.fee() * 2 == homestead.econ("barn_rent", 120) and risk_r >= 1 and stopped_r and after_r == risk_r and tally_r == 1 and missed_r and stops_n > 160 and stops_n < 240 and same and lapsed)
 	# taming isn't built: the hook keeps the wild ones away once it is
 	wolves.clear()
 	Game.set_flag("wolves_tamed", true)

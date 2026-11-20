@@ -477,11 +477,15 @@ func actions(p) -> Array:
 		var row := {"id": "sale", "label": "Show them a sweater" if n > 0 else "Wants a sweater  (you have none)", "enabled": n > 0}
 		row["group"] = SweaterSale.GROUP
 		acts.append(row)
+	if main.house_sale != null:
+		acts.append_array(main.house_sale.rows_for(p)) # Marcus's task and his house (house_sale.gd)
 	return acts
 
 
 func action(p, id: String) -> void:
 	p.face_point(main.player.position, 6.0)
+	if main.house_sale != null and main.house_sale.action(p, id):
+		return
 	match id:
 		"talk":
 			main.hud.show_dialogue(p.title, -1, line_for(p))
@@ -521,7 +525,7 @@ func update_pins(delta: float) -> void:
 	var t := Time.get_ticks_msec() * 0.001
 	for v in main.villagers + people:
 		if check:
-			var w: bool = not hide_all and v.visible and (wants(v) if v in people else villager_wants(v))
+			var w: bool = not hide_all and v.visible and ((wants(v) or (main.house_sale != null and main.house_sale.wants_sweater(v))) if v in people else villager_wants(v))
 			_pin_want[v] = w
 		var g: Node = v.get_node_or_null("SweaterPin") as Sprite3D
 		var want: bool = _pin_want.get(v, false) and v.visible and not hide_all

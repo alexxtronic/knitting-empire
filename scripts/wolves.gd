@@ -133,6 +133,17 @@ func roll(night: int, asleep: bool) -> bool:
 		return false
 	s["raids"] = int(s.get("raids", 0)) + 1
 	_set_state(s)
+	# Rowan, while she pays him to watch the pen (shepherd.gd), stops about half the raids on the
+	# animals the barn doesn't shelter: they never reach the pen.
+	if main.get("shepherd") != null and main.shepherd.stops(night):
+		s["rowan_stopped"] = int(s.get("rowan_stopped", 0)) + 1
+		_set_state(s)
+		var line := "Rowan was walking your fence %s: he heard the wolves in the woods and drove them off before they reached the pen." % ("in the night" if asleep else "tonight")
+		if asleep:
+			Game.set_flag("wolf_note", line)
+		else:
+			main.hud.show_toast(line)
+		return true
 	if asleep:
 		_take_one("While you slept, wolves came out of the woods and took %s.")
 		return true
@@ -330,7 +341,7 @@ func _take_one(fmt: String) -> String:
 	Game.set_flag("wolf_note", line)
 	Game.add_need("happiness", -15.0)
 	if not main.sleeping:
-		main.hud.show_toast(line + " Renting stalls in Lars's barn keeps them safe at night.")
+		main.hud.show_toast(line + " Stalls in Lars's barn keep them safe at night, or pay Rowan to watch the pen for half as much.")
 	return what
 
 

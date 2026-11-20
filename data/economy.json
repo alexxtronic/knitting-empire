@@ -40,7 +40,18 @@
     "max_visit_hours": 4,
     "max_return_days": 3,
     "barn_rent": 120,
-    "barn_rent_days": 28
+    "barn_rent_days": 28,
+    "strays": 4
+  },
+  "marcus_house": {
+    "_about": "Buying Marcus's house in Bretton Oaks (scripts/house_sale.gd; Alex, 2026-11-20): after his task (a hand-knit sweater, any, paid at its fair price) he offers it for `price` coins. Bought, she edits its walls, doors, windows and floors from Build & Buy while inside it, for nothing for now. A draft until Alex approves it.",
+    "price": 1000
+  },
+  "shepherd": {
+    "_about": "Rowan the shepherd (scripts/shepherd.gd; Alex, 2026-11-20): she can pay him to watch her pen. He costs `fee_share` of Lars's barn rent (data 'story' barn_rent) for `days` days, paid in advance on his menu, and is half as good as the barn: while he's paid up, each night the wolves come for animals the barn doesn't shelter he stops them with a chance of `cover` (rolled from the night, so the same night always rolls the same). Drafts until Alex approves them.",
+    "fee_share": 0.5,
+    "days": 28,
+    "cover": 0.5
   },
   "land": [
     {

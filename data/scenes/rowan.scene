@@ -33,6 +33,69 @@ Nora (happy): I might.
 @label done
 > He tips his head and goes back to watching the road, like he's waiting for something that never comes.
 
+# --- Shepherd Rowan's advice (Alex, 2026-11-20: "He gives further advise as the game progresses to
+# search for rare animals, upgrade the pen to hold more animals etc."). One a day at most (@daily),
+# before his other topics. The *_due flags are set by scripts/shepherd.gd as the farm gets there.
+# Hiring him to watch the pen is a row on his menu (shepherd.gd). Every line is a draft for Alex.
+
+== rowan_tip_watch
+@trigger talk rowan
+@requires seen_rowan_town_chat act1_done
+@once
+@daily
+@camera between rowan nora 6
+Rowan (neutral): Heard wolves on the ridge last night. They'll find your pen sooner or later. They always do.
+Nora (worried): What do I do?
+Rowan (neutral): Lars rents stalls in his barn. Walls and a door: nothing gets in. That's the safe way.
+Rowan (wry): Or pay me half what Lars asks and I'll walk your fence at night. I'm cheaper than a barn. I'm also not a barn. I'll catch about half of them.
+Rowan (neutral): Your call. Ask me any time.
+@camera player
+
+== rowan_tip_rare
+@trigger talk rowan
+@requires seen_rowan_tip_watch
+@once
+@daily
+@camera between rowan nora 6
+Rowan (neutral): Sheep wool makes a Common sweater. Fine for paying the rent. It won't make you rich.
+Rowan (wry): The money's in the shy ones. Rabbits by the farm for angora. Further out, foxes and raccoons. Out in the swamp and up the foothills, things you'll see once a season if you're lucky.
+Rowan (neutral): The rarer they are, the fewer there are, and the further from town. Take the dog, take a lantern, and don't run at them. Bark, and let the dog do the walking.
+Nora (warm): Bark and let the dog do the walking. Got it.
+@camera player
+
+== rowan_tip_pen
+@trigger talk rowan
+@requires rowan_tip_pen_due seen_rowan_tip_rare
+@once
+@daily
+@camera between rowan nora 6
+Rowan (neutral): Your pen's full. Saw it from the hill: not a blade of grass left standing.
+Rowan (wry): Four to a pen, that's the rule. Want more animals, you need more room. Fence off another patch with a gate, and that's four more.
+Rowan (neutral): Or rent Lars's stalls. Four more places, and the wolves can't reach them. Either way: room first, then animals.
+@camera player
+
+== rowan_tip_scarf
+@trigger talk rowan
+@requires rowan_tip_wild_due seen_rowan_tip_rare
+@once
+@daily
+@camera between rowan nora 6
+Rowan (happy): You caught a wild one. Took me three winters before I caught my first.
+Rowan (neutral): Comb it every few days. Knit its fibre with a bit of plain wool and the sweater comes out rarer, however the knitting goes.
+Rowan (wry): And knit that dog of yours a scarf while you're at it. A good one puts a spring in his step. The rare ones won't wait for a slow dog.
+@camera player
+
+== rowan_tip_wolves
+@trigger talk rowan
+@requires rowan_tip_wolves_due seen_rowan_tip_watch
+@once
+@daily
+@camera between rowan nora 6
+Rowan (worried): Wolves came for your pen. I heard them.
+Rowan (neutral): When they come, you've got a minute, maybe less. Run at them, or play the dog and bark. The big black one takes some convincing.
+Rowan (neutral): If you'd rather sleep through it, the barn's the only sure thing. I'm the half-sure thing.
+@camera player
+
 # --- Romance v1: talk topics, one a day (@daily), as he warms up --------------------------------
 # Order matters: the first scene whose conditions hold plays. Canon is in docs/CHARACTERS.md:
 # Ellie first, then the long evenings, and Anna only once he trusts her.
