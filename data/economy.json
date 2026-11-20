@@ -44,7 +44,7 @@
     "strays": 4
   },
   "marcus_house": {
-    "_about": "Buying Marcus's house in Bretton Oaks (scripts/house_sale.gd; Alex, 2026-11-20): after his task (a hand-knit sweater, any, paid at its fair price) he offers it for `price` coins. Bought, she edits its walls, doors, windows and floors from Build & Buy while inside it, for nothing for now. A draft until Alex approves it.",
+    "_about": "Buying Marcus's house in Bretton Oaks (scripts/house_sale.gd; Alex, 2026-11-20): after his task (a hand-knit sweater, any, paid at its fair price) he offers it for `price` coins. Bought, she edits its walls, doors, windows and floors from Build & Buy while inside it, paid at \"building\"'s prices: a wall by the metre (half its 2 m `wall`), each opening at its `openings` price, a floor by the square metre (its `floors` price over four); half back for a piece she paid for and takes out, nothing for Marcus's own. A draft until Alex approves it.",
     "price": 1000
   },
   "shepherd": {
@@ -96,7 +96,9 @@
       "tile_beige": {"coins": 16},
       "tile_white": {"coins": 16},
       "tile_black": {"coins": 18},
-      "wood_oak": {"coins": 14, "wood": 2}
+      "wood_oak": {"coins": 14, "wood": 2},
+      "shag_green": {"coins": 13},
+      "cement": {"coins": 8}
     },
     "recolor": 15,
     "_about_paint": "Build mode's Paint tool (house_builder.gd; Alex, 2026-11-20: paint interior and exterior walls for a small coin cost), a draft: coins per 2 m of one side of a wall. Coins only, nothing back; no paint is free.",

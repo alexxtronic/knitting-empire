@@ -18,13 +18,15 @@ extends Node
 ##   undo_stack, house_split_edited, unsaved, _show_status()). Her changes go in her save
 ##   (Game.flags["marcus_house_layout"]: {"walls", "rooms"}), never in data/world_layout.json, and
 ##   apply() lays them over the house after a load. Ctrl/Cmd+Z undoes, Delete removes a picked wall,
-##   right click or Esc puts the tool down. Edits are free for now (a draft: Alex to say).
+##   right click or Esc puts the tool down. Each change is paid for (see "what her changes cost" below;
+##   the prices are drafts).
 ##   Not yet: placing catalogue furniture in it, moving Marcus's own furniture, and paint (build mode's
 ##   paint is for her farm house's walls only).
 ##
 ## Every line and number is a draft until Alex approves it.
 
 const HouseEdit = preload("res://scripts/house_edit.gd")
+const HouseBuilder = preload("res://scripts/house_builder.gd")
 const Data = preload("res://scripts/data.gd")
 
 const MARCUS := "tf_marcus"
@@ -194,13 +196,19 @@ func set_tool(t: String) -> void:
 			main.builder.set_tool("")
 		if main.ghost:
 			main._cancel_ghost()
-		main.hud.show_toast(tools.hint(t) + " Ctrl/Cmd+Z undoes. Right click puts the tool down.")
+		main.hud.show_toast(tools.hint(t) + " " + price_text(t) + " Ctrl/Cmd+Z undoes. Right click puts the tool down.")
 	for k in _btns:
 		(_btns[k] as Button).set_pressed_no_signal(k == t)
 
 
-## house_edit.gd's host call after every change: keep it in her save.
+## house_edit.gd's host call after every change: pay for it, then keep it in her save.
 func _show_status() -> void:
+	if not _undoing and not undo_stack.is_empty() and not _charge(undo_stack.back()):
+		return
+	_save()
+
+
+func _save() -> void:
 	var snap: Array = tools.snapshot()
 	Game.set_flag("marcus_house_layout", {"walls": snap[0], "rooms": snap[1]})
 	if main.has_method("_rebuild_grid"):
@@ -211,9 +219,165 @@ func undo() -> bool:
 	if undo_stack.is_empty():
 		return false
 	var u: Array = undo_stack.pop_back()
+	_undoing = true
 	tools.restore(u[1])
-	_show_status()
+	_undoing = false
+	if u.size() > 2:
+		_unpay(u[2])
+	_save()
 	return true
+
+
+# --- what her changes cost (Alex, 2026-11-19: "with costs and saved in the player's save") ---------------
+# Priced from data/economy.json "building", like her farm house's: a wall by the metre (its 2 m price
+# halved), each door, sliding door, window or opening at its own price, a floor by the square metre (its
+# 2 m cell's price over four). Paid all in wood when she has enough, else coins (house_builder._pay()).
+# Each piece she adds is recorded with what it cost (Game.flags["marcus_house_paid"], by a key made from
+# where it is, so moving it counts as taking it out and putting it in again); taking out a piece she
+# paid for gives half back in the same (house_builder._refund()), and taking out one of Marcus's own
+# gives nothing. Ctrl/Cmd+Z gives back all of what that step cost. The prices are drafts.
+
+const OPENING_KIND := {"open": "door", "door": "hdoor", "slide": "slide", "window": "window"} # house_edit's kinds -> house_builder's prices
+
+var _undoing := false
+
+
+static func wall_rate() -> Array:
+	var c: Array = HouseBuilder.wall_cost()
+	return [float(c[0]) / HouseBuilder.STEP, float(c[1]) / HouseBuilder.STEP]
+
+
+static func floor_rate(kind: String) -> Array:
+	var c: Array = HouseBuilder.floor_cost(kind)
+	return [float(c[0]) / (HouseBuilder.STEP * HouseBuilder.STEP), float(c[1]) / (HouseBuilder.STEP * HouseBuilder.STEP)]
+
+
+static func _r(v) -> String:
+	return "%.2f" % float(v)
+
+
+## Every piece of a layout with what it costs: {key: [coins, wood]}.
+static func pieces(walls: Array, rooms: Array) -> Dictionary:
+	var out := {}
+	var wr := wall_rate()
+	for w in walls:
+		var seg: Array = w["wall"]
+		var a := Vector2(float(seg[0]), float(seg[1]))
+		var b := Vector2(float(seg[2]), float(seg[3]))
+		if b < a:
+			var t := a
+			a = b
+			b = t
+		var wk := "w|%s|%s,%s,%s,%s" % [str(w.get("level", "")), _r(a.x), _r(a.y), _r(b.x), _r(b.y)]
+		var n := a.distance_to(b)
+		_add(out, wk, [ceili(n * float(wr[0]) - 0.001), ceili(n * float(wr[1]) - 0.001)])
+		for d in w.get("doors", []):
+			var kind := str(d[2]) if (d as Array).size() > 2 else "open"
+			_add(out, "o|%s|%s|%s" % [wk, _r(d[0]), kind], HouseBuilder.opening_cost(str(OPENING_KIND.get(kind, "door"))))
+	for room in rooms:
+		if not bool(room.get("patch", false)):
+			continue
+		var kind := str(room.get("floor", ""))
+		var fr := floor_rate(kind)
+		for r in room.get("rects", []):
+			var area := float(r[2]) * float(r[3])
+			_add(out, "f|%s|%s,%s,%s,%s|%s" % [str(room.get("level", "")), _r(r[0]), _r(r[1]), _r(r[2]), _r(r[3]), kind],
+				[ceili(area * float(fr[0]) - 0.001), ceili(area * float(fr[1]) - 0.001)])
+	return out
+
+
+static func _add(out: Dictionary, k: String, cost: Array) -> void:
+	var key := k
+	var i := 1
+	while out.has(key):
+		i += 1
+		key = "%s#%d" % [k, i]
+	out[key] = [int(cost[0]), int(cost[1])]
+
+
+## The change undo_stack's last entry made: pay for what's new (or put it back if she can't), give
+## half back for what she'd paid for and took out. Keeps what happened on the entry for undo.
+func _charge(u: Array) -> bool:
+	var before: Array = u[1]
+	var now := pieces(house().cfg.get("walls", []), house().cfg.get("rooms", []))
+	var was := pieces(before[0], before[1])
+	var added := {}
+	for k in now:
+		if not was.has(k) and (int(now[k][0]) > 0 or int(now[k][1]) > 0):
+			added[k] = now[k]
+	var rec: Dictionary = (Game.flag("marcus_house_paid", {}) as Dictionary).duplicate(true)
+	var paid := {}
+	if not added.is_empty():
+		var b = main.builder
+		paid = b._pay(added, 0)
+		if paid.is_empty():
+			_undoing = true
+			tools.restore(before)
+			_undoing = false
+			undo_stack.pop_back()
+			main.hud.show_toast("That costs %s. You have %dc and %d wood." % [b._cost_text(added, 0), Game.coins, Game.count("wood")])
+			_save()
+			return false
+		for k in paid:
+			rec[k] = paid[k]
+	var back := {}
+	var given := [0, 0]
+	for k in was:
+		if not now.has(k) and rec.has(k):
+			back[k] = rec[k]
+			var g: Array = main.builder._refund(rec[k])
+			given = [given[0] + int(g[0]), given[1] + int(g[1])]
+			rec.erase(k)
+	if rec.is_empty():
+		Game.flags.erase("marcus_house_paid")
+	else:
+		Game.set_flag("marcus_house_paid", rec)
+	u.append({"paid": paid, "back": back, "given": given})
+	var said: Array = []
+	if not paid.is_empty():
+		said.append("Paid %s" % main.builder._paid_text(paid, 0))
+	if given[0] > 0 or given[1] > 0:
+		said.append("%s back" % main.builder._back_text(given))
+	if not said.is_empty():
+		main.hud.show_toast(". ".join(said) + ".")
+	return true
+
+
+## Undo: what that step paid comes back whole, and what it gave back is taken again.
+func _unpay(x: Dictionary) -> void:
+	var rec: Dictionary = (Game.flag("marcus_house_paid", {}) as Dictionary).duplicate(true)
+	for k in x.get("paid", {}):
+		var p: Array = x["paid"][k]
+		Game.coins += int(p[0])
+		if int(p[1]) > 0:
+			Game.add_item("wood", int(p[1]))
+		rec.erase(k)
+	var g: Array = x.get("given", [0, 0])
+	Game.coins = maxi(0, Game.coins - int(g[0]))
+	if int(g[1]) > 0:
+		Game.take_item("wood", mini(int(g[1]), Game.count("wood")))
+	for k in x.get("back", {}):
+		rec[k] = x["back"][k]
+	if rec.is_empty():
+		Game.flags.erase("marcus_house_paid")
+	else:
+		Game.set_flag("marcus_house_paid", rec)
+
+
+## The price line for a tool's hint.
+func price_text(t: String) -> String:
+	var b = main.builder
+	match t:
+		"h_wall":
+			var wr := wall_rate()
+			return "A wall costs %s a metre." % b._cost_text({"x": [ceili(float(wr[0])), ceili(float(wr[1]))]}, 0)
+		"h_door", "h_slide", "h_window", "h_open":
+			var k: String = {"h_door": "door", "h_slide": "slide", "h_window": "window", "h_open": "open"}[t]
+			return "%s." % b._cost_text({"x": HouseBuilder.opening_cost(str(OPENING_KIND[k]))}, 0)
+		"h_floor":
+			var fr := floor_rate(tools.floor_kind)
+			return "This floor costs %s a square metre." % b._cost_text({"x": [ceili(float(fr[0])), ceili(float(fr[1]))]}, 0)
+	return ""
 
 
 func _process(_delta: float) -> void:

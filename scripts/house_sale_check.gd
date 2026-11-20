@@ -3,7 +3,9 @@ extends RefCounted
 ## (scripts/house_sale.gd). Builds the townsfolk for itself to find Marcus, and clears them after.
 ## Nothing on his menu before Act 1 is done; his favour, the red pin while he waits, a sweater handed
 ## over at its fair price, the 1,000c sale, nobody sleeping there after; then, inside it in Build &
-## Buy, the owner's bar and a wall drawn and a floor laid with the house tools, kept in her save (not
+## Buy, the owner's bar and a wall drawn and a floor laid with the house tools (paid for: refused with no
+## coins, the wall by the metre and the floor by the square metre, half back for her own wall, nothing
+## for Marcus's, undo giving it all back), kept in her save (not
 ## the layout file) and laid back over the house after a load, and undone. Saves
 ## 69_house_owned_bar.png and 69_house_owned_edit.png. Leaves the flags, coins, sweaters, the house,
 ## Nora and the camera as it found them.
@@ -121,9 +123,37 @@ func run(main: Node) -> void:
 				break
 		if found:
 			break
+	# what it costs: nothing she can't pay for goes in; a 3 m wall and a 2 x 1.8 m oak floor, in coins
+	var wood0: int = Game.count("wood")
+	if wood0 > 0:
+		Game.take_item("wood", wood0)
+	Game.coins = 0
 	await _drag("h_wall", wa, wa + Vector3(3.0, 0, 0))
+	var refused: bool = (wi.cfg["walls"] as Array).size() == n_walls and hs.undo_stack.is_empty()
+	Game.coins = 1000
+	await _drag("h_wall", wa, wa + Vector3(3.0, 0, 0))
+	var wall_c: int = 1000 - Game.coins
 	hs.tools.floor_kind = "wood_oak"
 	await _drag("h_floor", Vector3(-6.0, 0, -3.8), Vector3(-4.0, 0, -2.0))
+	var floor_c: int = 1000 - wall_c - Game.coins
+	var wr: Array = HouseSale.wall_rate()
+	var fr: Array = HouseSale.floor_rate("wood_oak")
+	m._check("her changes cost: refused with no coins (%s); a 3 m wall %dc (%d a metre), a 3.6 m² oak floor %dc (%.1f a m²), recorded in her save (%d)" % [refused, wall_c, int(wr[0]), floor_c, float(fr[0]), (Game.flag("marcus_house_paid", {}) as Dictionary).size()],
+		refused and wall_c == ceili(3.0 * float(wr[0]) - 0.001) and floor_c == ceili(3.6 * float(fr[0]) - 0.001) and (Game.flag("marcus_house_paid", {}) as Dictionary).size() == 2)
+	# taking her wall down gives half back; taking down one of Marcus's gives nothing; undo puts each back
+	var c0 := Game.coins
+	wi.selected_wall = n_walls
+	hs.tools.delete_selected()
+	var half: int = Game.coins - c0
+	hs.undo()
+	var after_undo: int = Game.coins
+	wi.selected_wall = 0
+	hs.tools.delete_selected()
+	var base_back: int = Game.coins - c0
+	var base_gone: bool = (wi.cfg["walls"] as Array).size() == n_walls # hers is back, his first is gone
+	hs.undo()
+	m._check("her wall taken down gives half back (+%dc of %dc), undone (%dc); one of Marcus's own gives nothing (+%dc, gone %s), undone (walls %d)" % [half, wall_c, after_undo - c0, base_back, base_gone, (wi.cfg["walls"] as Array).size()],
+		half == roundi(wall_c * 0.5) and after_undo == c0 and base_back == 0 and base_gone and (wi.cfg["walls"] as Array).size() == n_walls + 1)
 	var saved: Variant = Game.flag("marcus_house_layout", null)
 	var drew: bool = (wi.cfg["walls"] as Array).size() == n_walls + 1 and (wi.cfg["rooms"] as Array).size() == n_rooms + 1
 	var in_save: bool = saved is Dictionary and ((saved as Dictionary)["walls"] as Array).size() == n_walls + 1 and ((saved as Dictionary)["rooms"] as Array).size() == n_rooms + 1
@@ -136,7 +166,7 @@ func run(main: Node) -> void:
 	var untouched: bool = FileAccess.get_file_as_string("res://data/world_layout.json") == layout_file
 	hs.undo()
 	hs.undo()
-	var undone: bool = (wi.cfg["walls"] as Array).size() == n_walls and (wi.cfg["rooms"] as Array).size() == n_rooms
+	var undone: bool = (wi.cfg["walls"] as Array).size() == n_walls and (wi.cfg["rooms"] as Array).size() == n_rooms and Game.coins == 1000
 	hs.set_tool("")
 	m.set_mode(m.Mode.LIVE)
 	await m._wait(0.2)
@@ -149,6 +179,8 @@ func run(main: Node) -> void:
 	m.townsfolk.clear()
 	Game.flags = keep["flags"]
 	Game.coins = keep["coins"]
+	if Game.count("wood") < wood0:
+		Game.add_item("wood", wood0 - Game.count("wood"))
 	Game.hour = keep["hour"]
 	Game.time_running = keep["clock"]
 	Game.sweaters = keep["sw"]
