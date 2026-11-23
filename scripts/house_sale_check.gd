@@ -71,8 +71,9 @@ func run(main: Node) -> void:
 	var ask_row: Array = ids.call()
 	m.townsfolk.action(marcus, "mh_ask")
 	var pin: bool = hs.wants_sweater(marcus)
-	while Game.count("sweater") > 0:
+	while not Game.sweaters.is_empty():
 		Game.remove_sweater(0)
+	Game.inv["sweater"] = 0
 	var no_sw: Array = m.townsfolk.actions(marcus).filter(func(a): return str(a["id"]) == "mh_give")
 	Game.add_sweater(3, "")
 	Game.add_sweater(1, "")
