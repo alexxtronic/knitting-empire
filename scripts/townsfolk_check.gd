@@ -177,9 +177,15 @@ func run(main: Node) -> void:
 	Game.set_flag("tf_want_" + buyer.vid, Game.day)
 	await m._wait(0.8)
 	var pin := buyer.get_node_or_null("SweaterPin") as Sprite3D
+	# the bob is abs(sin(t * 3.2)), about a second round: two samples can straddle a peak or a trough
+	# and read the same, so watch a whole bob and take its lowest and highest
 	var y0: float = pin.position.y if pin else 0.0
-	await m._wait(0.15)
-	var y1: float = pin.position.y if pin else 0.0
+	var y1: float = y0
+	for i in 8:
+		await m._wait(0.13)
+		var y: float = pin.position.y if pin else 0.0
+		y0 = minf(y0, y)
+		y1 = maxf(y1, y)
 	m._check("townsfolk: %s wants a sweater, and a red pin floats over their head and bobs (%.2f -> %.2f m)" % [buyer.title, y0, y1],
 		pin != null and pin.visible and y0 > 1.0 and absf(y1 - y0) > 0.001)
 	var others_pinned: Array = people.filter(func(p): return p != buyer and p.get_node_or_null("SweaterPin") != null and p.get_node("SweaterPin").visible and not tf.wants(p))
