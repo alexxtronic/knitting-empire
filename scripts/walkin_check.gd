@@ -5,7 +5,8 @@ extends RefCounted
 ## the basement's green den (the basement takes over the house's cells on the walking grid, the
 ## floors above are hidden and the ground over the house isn't drawn), its bathroom and through to
 ## the rec room, then back up. Saves
-## 67_walkin_living.png, 67_walkin_upstairs.png, 67_walkin_basement.png and 67_walkin_fps.png.
+## 67_walkin_living.png, 67_walkin_upstairs.png, 67_walkin_basement.png and 67_walkin_fps.png. The
+## stairs set the floors' heights (_stair_checks): 67_walkin_stairs_up.png, 67_walkin_stairs_outside.png.
 
 var main: Node
 var wi = null
@@ -132,6 +133,7 @@ func run(m: Node) -> void:
 	Game.hour = 12.0
 	main.suburb.update_lights(true)
 	await _editor_checks()
+	await _stair_checks()
 	main.player.position = nora0
 	if main.dog:
 		main.dog.position = dog0
@@ -259,3 +261,115 @@ func _drag_at(tool: String, a: Vector3, b: Vector3) -> void:
 		await main._wait(0.05)
 	ht.release()
 	await main._wait(0.2)
+
+
+## The stairs set how high the floors are (Alex, 2026-11-23): two steps more on the half flight lift
+## the bedroom floor two risers, the ensuite's tub with it; a third is refused (the roof's eave); one
+## more on the basement flight lowers the basement. She walks up and lands on the new floor, then down
+## to the deeper basement. A step taken away, the layout kept and laid back over the data file's house,
+## then everything undone.
+func _stair_checks() -> void:
+	var god = main.god
+	if not god.is_admin():
+		return
+	var path0: String = god.layout_path
+	god.layout_path = "user://autotest_walkin_layout.json"
+	var s0: Dictionary = wi.stairs()
+	var saved0: Dictionary = god.house_split_saved
+	var up0: float = wi.upper_y
+	var down0: float = wi.basement_y
+	var undo0: int = god.undo_stack.size()
+	var walls0: Array = (wi.cfg["walls"] as Array).duplicate(true)
+	var rooms0: Array = (wi.cfg["rooms"] as Array).duplicate(true)
+	var tub: Node3D = null
+	for n in (wi.roots["upper"] as Node3D).get_children():
+		if str(n.get_meta("item_id", "")) == "bathtub":
+			tub = n
+	var tub_el = null
+	for el in god.els:
+		if el.node == tub:
+			tub_el = el
+	god.set_active(true)
+	await main._wait(0.3)
+	await main._god_look(wi.house.global_transform * Vector3(1.2, 0, 1.6), 11.0)
+	await main._wait(0.8)
+	var ht = god.house_tools
+	var up_at := Vector3(1.125, (up0) * 0.5, 1.275)
+	var down_at := Vector3(1.3, down0 * 0.5, 2.72)
+	var found_up: String = ht.flight_at(_screen(up_at))
+	var found_down: String = ht.flight_at(_screen(down_at))
+	god.set_tool("h_step_add")
+	ht.press("h_step_add", _screen(up_at))
+	ht.release()
+	ht.press("h_step_add", _screen(Vector3(1.125, wi.upper_y * 0.5, 1.275)))
+	ht.release()
+	var two: Dictionary = wi.stairs()
+	var up2: float = wi.upper_y
+	var third: bool = ht.step("up", 1)
+	var why: String = wi.stairs_fit(int(two["up"]) + 1, int(two["down"]))
+	ht.press("h_step_add", _screen(down_at))
+	ht.release()
+	var deeper: float = wi.basement_y
+	var tub_y: float = tub.position.y if tub else -9.0
+	var el_ok: bool = tub_el != null and absf(float(tub_el.xf.origin.y) - tub.global_position.y) < 0.01
+	main._check("stairs: the flights found under the pointer (%s, %s); two steps more on the half flight (%d) lift the bedroom floor to %.2f m (2 x %.2f m), the tub with it (%.2f m, the editor's record too: %s); a third refused (%s: '%s'); one more down lowers the basement to %.2f m" % [
+		found_up, found_down, int(two["up"]), up2, wi.RISER, tub_y, el_ok, not third, why, deeper],
+		found_up == "up" and found_down == "down" and int(two["up"]) == int(s0["up"]) + 2 and absf(up2 - (up0 + 2.0 * wi.RISER)) < 0.001
+		and tub != null and absf(tub_y - (up2 + 0.045)) < 0.01 and el_ok and not third and int(wi.stairs()["up"]) == int(two["up"]) and "eave" in why
+		and absf(deeper - (down0 - wi.RISER)) < 0.001 and absf(float(wi.cfg["switch_y"]) - deeper * 0.5) < 0.001)
+	await main._wait(0.4)
+	await main._shot("67_walkin_stairs_editor.png")
+	god.set_tool("select")
+	god.set_active(false)
+	await main._wait(0.3)
+	# up the longer half flight, onto the raised floor; down the longer flight to the deeper basement
+	main.player.position = wi.house.global_transform * Vector3(-2.0, 0, -1.0)
+	await main._wait(0.3)
+	var ok: bool = await _walk(Vector3(4.8, 0, -1.0))
+	var y_up: float = main.player.position.y - wi.house.global_position.y
+	main._check("stairs: up the half flight of %d steps she lands on the raised bedroom floor (at %.2f m, the floor at %.2f m)" % [int(wi.stairs()["up"]), y_up, wi.upper_y],
+		ok and absf(y_up - wi.upper_y) < 0.05)
+	await _picture(Vector3(3.0, wi.upper_y, 0.4), 12.0, 58.0, "67_walkin_stairs_up.png")
+	ok = await _walk(Vector3(1.5, 0, 2.7))
+	ok = ok and await _walk(Vector3(3.5, 0, 1.2))
+	var y_down: float = main.player.position.y - wi.house.global_position.y
+	main._check("stairs: down the flight of %d steps to the deeper basement (level %d, at %.2f m, the floor at %.2f m)" % [int(wi.stairs()["down"]), wi.level, y_down, wi.basement_y],
+		ok and wi.level == wi.BASEMENT and absf(y_down - wi.basement_y) < 0.05)
+	ok = await _walk(Vector3(0.75, 0, 2.7))
+	ok = ok and await _walk(Vector3(-2.0, 0, -1.0))
+	ok = ok and await _walk(Vector3(-2.5, 0, 5.2))
+	main._check("stairs: back up and out of the house", ok and wi.level == wi.UPPER and not wi.inside)
+	# the upper wing's windows from outside: they stay where they are in the brick
+	await _picture(Vector3(6.4, 1.7, -1.0), 9.0, 10.0, "67_walkin_stairs_outside.png", 90.0)
+	# one taken away again, the layout kept and laid back after a load, then everything undone
+	god.set_active(true)
+	await main._wait(0.3)
+	await main._god_look(wi.house.global_transform * Vector3(1.2, 0, 1.6), 11.0)
+	await main._wait(0.5)
+	god.set_tool("h_step_del")
+	ht.press("h_step_del", _screen(Vector3(1.125, wi.upper_y * 0.5, 1.275)))
+	ht.release()
+	var one_less: Dictionary = wi.stairs()
+	var up1: float = wi.upper_y
+	var saved: Dictionary = god.layout()
+	var kept: Dictionary = saved.get("split_house", {}).get("stairs", {})
+	wi.set_layout(walls0.duplicate(true), rooms0.duplicate(true), s0)
+	var reset: bool = absf(wi.upper_y - up0) < 0.001
+	god.apply_split_house(saved.get("split_house", {}))
+	var loaded: bool = int(wi.stairs()["up"]) == int(one_less["up"]) and int(wi.stairs()["down"]) == int(one_less["down"]) and absf(wi.upper_y - up1) < 0.001
+	var tub_loaded: bool = tub != null and absf(tub.position.y - (up1 + 0.045)) < 0.01
+	while god.undo_stack.size() > undo0:
+		god.undo()
+	var back: bool = int(wi.stairs()["up"]) == int(s0["up"]) and int(wi.stairs()["down"]) == int(s0["down"]) and absf(wi.upper_y - up0) < 0.001 and absf(wi.basement_y - down0) < 0.001
+	var tub_back: bool = tub != null and absf(tub.position.y - (up0 + 0.045)) < 0.01
+	main._check("stairs: a step taken away (%d, the floor at %.2f m); the layout keeps the step counts (%s), laid back after a load (%s, the tub %s); undo puts the stairs and floors back (%s, the tub %s)" % [
+		int(one_less["up"]), up1, str(kept), loaded, tub_loaded, back, tub_back],
+		int(one_less["up"]) == int(two["up"]) - 1 and absf(up1 - (up0 + wi.RISER)) < 0.001 and int(kept.get("up", 0)) == int(one_less["up"]) and int(kept.get("down", 0)) == int(one_less["down"])
+		and reset and loaded and tub_loaded and back and tub_back)
+	god.set_tool("select")
+	god.house_split_edited = false
+	god.house_split_saved = saved0
+	god.unsaved = false
+	god.set_active(false)
+	god.layout_path = path0
+	await main._wait(0.3)

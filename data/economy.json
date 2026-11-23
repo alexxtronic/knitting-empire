@@ -88,6 +88,8 @@
       "slide": {"coins": 90, "wood": 4},
       "window": {"coins": 30, "wood": 2}
     },
+    "_about_stair_step": "A step she adds to a flight in her Bretton Oaks house past Marcus's own count (house_sale.gd; Alex, 2026-11-23: the stairs set how high the floors are), a draft: wood when she has enough, else coins; taken out again, half back in what paid.",
+    "stair_step": {"coins": 25, "wood": 3},
     "_about_floors": "Build mode's Floor tool (house_builder.gd; Alex, 2026-11-17), drafts: what one 2 m square of each floor costs, laid over a whole room at a click; wood when she has enough for the room, else coins; taken up (plank boards again), half back in what paid.",
     "floors": {
       "carpet_grey": {"coins": 12},

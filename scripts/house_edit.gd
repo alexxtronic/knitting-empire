@@ -13,6 +13,11 @@ extends RefCounted
 ##             swing and sliding doors slide as she comes up to them; windows still block the way.
 ##   Floor     drag a rectangle to lay the floor chosen in the list over what's there; click a floor
 ##             laid this way to take it up.
+##   Step +, Step -
+##             click a flight of stairs to give it a step more or one fewer: the floor it leads to goes
+##             up or down a riser (the half flight lifts the bedroom floor, the basement flight lowers
+##             the basement; split_house.gd step()). What the house's shell can't take is refused, and
+##             the toast says why.
 ## The floors shown are the ones being edited: the main floor and the bedroom floor from above, the
 ## basement when she's down there as the editor opens. Every change can be undone.
 
@@ -20,7 +25,7 @@ const SNAP := 0.1
 const WIDTHS := {"open": 1.0, "door": 0.85, "slide": 1.8, "window": 1.2} # the width each kind of opening starts at
 const FLOORS := [["carpet_grey", "Grey carpet"], ["carpet_blue", "Blue carpet"], ["carpet_cream", "Cream carpet"], ["shag_green", "Green shag"],
 	["tile_beige", "Beige tile"], ["tile_black", "Black tile"], ["tile_white", "White tile"], ["cement", "Cement"], ["wood_oak", "Oak boards"]]
-const TOOLS := [["h_wall", "Wall"], ["h_door", "Door"], ["h_slide", "Sliding door"], ["h_window", "Window"], ["h_open", "Opening"], ["h_floor", "Floor"]]
+const TOOLS := [["h_wall", "Wall"], ["h_door", "Door"], ["h_slide", "Sliding door"], ["h_window", "Window"], ["h_open", "Opening"], ["h_floor", "Floor"], ["h_step_add", "Step +"], ["h_step_del", "Step -"]]
 
 var god # god_mode.gd
 var main
@@ -47,13 +52,25 @@ func hint(tool: String) -> String:
 			return "Click a wall to put a %s in it; click it again to take it out." % {"h_door": "door", "h_slide": "sliding door", "h_window": "window", "h_open": "plain opening"}[tool]
 		"h_floor":
 			return "Drag a rectangle to lay the floor chosen in the list; click a laid floor to take it up."
+		"h_step_add", "h_step_del":
+			return "Click a flight of stairs to give it %s: the floor it leads to %s. %s" % ["a step more" if tool == "h_step_add" else "one step fewer",
+				"moves a step further from the main floor" if tool == "h_step_add" else "comes a step nearer the main floor", stairs_text()]
 	return ""
 
 
-## The walls and rooms as they stand, for undo and the layout file.
+## The stairs as they stand, for the hints and toasts.
+func stairs_text() -> String:
+	var h = house()
+	if h == null:
+		return ""
+	var s: Dictionary = h.stairs()
+	return "The half flight has %d steps (the bedroom floor at %.2f m), the basement flight %d (the basement at %.2f m)." % [int(s["up"]), h.upper_y, int(s["down"]), h.basement_y]
+
+
+## The walls, rooms and stairs (their step counts) as they stand, for undo and the layout file.
 func snapshot() -> Array:
 	var h = house()
-	return [(h.cfg.get("walls", []) as Array).duplicate(true), (h.cfg.get("rooms", []) as Array).duplicate(true)]
+	return [(h.cfg.get("walls", []) as Array).duplicate(true), (h.cfg.get("rooms", []) as Array).duplicate(true), h.stairs()]
 
 
 func restore(snap: Array) -> void:
@@ -61,7 +78,7 @@ func restore(snap: Array) -> void:
 	if h == null:
 		return
 	h.selected_wall = -1
-	h.set_layout((snap[0] as Array).duplicate(true), (snap[1] as Array).duplicate(true))
+	h.set_layout((snap[0] as Array).duplicate(true), (snap[1] as Array).duplicate(true), (snap[2] as Dictionary).duplicate() if snap.size() > 2 else {})
 
 
 func _changed(before: Array) -> void:
@@ -140,6 +157,9 @@ static func _snap(v: Vector2) -> Vector2:
 func press(tool: String, mpos: Vector2) -> void:
 	_drag = {}
 	var h = house()
+	if tool == "h_step_add" or tool == "h_step_del":
+		_step(tool, mpos)
+		return
 	var at := _at(mpos)
 	var hit_wall := _wall_under(mpos) if tool != "h_floor" else {}
 	var under: int = int(hit_wall.get("i", -1))
@@ -292,6 +312,67 @@ func _opening(tool: String, q: Vector2, lv: String, under := -1) -> void:
 	w["doors"] = ops
 	h.rebuild()
 	_changed(before)
+
+
+## The flight of stairs under the pointer ("up" or "down"), or "". Each flight is met at its own middle
+## height, so a click lands on it however steep the camera looks down; where the pointer is over both
+## (the camera's slant puts the half flight's plane over the basement flight), the one whose own hit
+## falls nearest its middle.
+func flight_at(mpos: Vector2) -> String:
+	var h = house()
+	if h == null:
+		return ""
+	var from: Vector3 = main.cam.project_ray_origin(mpos)
+	var dir: Vector3 = main.cam.project_ray_normal(mpos)
+	var best := ""
+	var best_d := INF
+	for k in (["down"] if h.level == h.BASEMENT else ["up", "down"]):
+		var rp: Dictionary = h._ramp(k)
+		if rp.is_empty():
+			continue
+		var mid := (float(rp["from"]) + float(rp["to"])) * 0.5
+		var hit = Plane(Vector3.UP, h.house.global_position.y + mid).intersects_ray(from, dir)
+		if hit == null:
+			continue
+		var q: Vector3 = h.local(hit)
+		var r: Array = rp["rect"]
+		var rect := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+		if not rect.grow(0.25).has_point(Vector2(q.x, q.z)):
+			continue
+		var off := (Vector2(q.x, q.z) - rect.get_center()) / (rect.size * 0.5 + Vector2(0.25, 0.25))
+		var score := maxf(absf(off.x), absf(off.y))
+		if score < best_d:
+			best_d = score
+			best = k
+	return best
+
+
+## Step + or Step - on the flight under the pointer.
+func _step(tool: String, mpos: Vector2) -> void:
+	var k := flight_at(mpos)
+	if k == "":
+		main.hud.show_toast("Click on a flight of stairs.")
+		return
+	step(k, 1 if tool == "h_step_add" else -1)
+
+
+## A step more (+1) or fewer (-1) on flight `k`; true if the house took it. The toast says what it
+## did, or what won't fit.
+func step(k: String, d: int) -> bool:
+	var h = house()
+	if h == null:
+		return false
+	var before := snapshot()
+	var why: String = h.step(k, d)
+	if why != "":
+		main.hud.show_toast(why)
+		return false
+	_changed(before)
+	if h.stairs().hash() == (before[2] as Dictionary).hash(): # her house refused to pay for it, and put it back
+		return false
+	main.hud.show_toast(("The half flight has %d steps now: the bedroom floor is at %.2f m." % [int(h.stairs()["up"]), h.upper_y]) if k == "up"
+		else ("The basement flight has %d steps now: the basement is at %.2f m." % [int(h.stairs()["down"]), h.basement_y]))
+	return true
 
 
 ## Delete with the Wall tool: the picked wall goes.

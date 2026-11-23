@@ -170,6 +170,17 @@ func run(main: Node) -> void:
 	hs.undo()
 	hs.undo()
 	var undone: bool = (wi.cfg["walls"] as Array).size() == n_walls and (wi.cfg["rooms"] as Array).size() == n_rooms and Game.coins == 1000
+	# a step more on the half flight lifts the bedroom floor; past Marcus's own count it's paid for and kept
+	var st0: Dictionary = wi.stairs()
+	var cs0 := Game.coins
+	var stepped: bool = hs.tools.step("up", 1)
+	var step_c: int = cs0 - Game.coins
+	var lay_st: Dictionary = (Game.flag("marcus_house_layout", {}) as Dictionary).get("stairs", {})
+	var raised: float = wi.upper_y
+	hs.undo()
+	var step_back: bool = int(wi.stairs()["up"]) == int(st0["up"]) and Game.coins == cs0
+	m._check("her stairs: a step more on the half flight (%s) lifts the bedroom floor to %.2f m for %dc (%s), kept in her save (%s); undone (%s)" % [stepped, raised, step_c, str(HouseSale.step_cost()), str(lay_st), step_back],
+		stepped and step_c == int(HouseSale.step_cost()[0]) and int(lay_st.get("up", 0)) == int(st0["up"]) + 1 and step_back)
 	hs.set_tool("")
 	m.set_mode(m.Mode.LIVE)
 	await m._wait(0.2)
@@ -177,7 +188,7 @@ func run(main: Node) -> void:
 	m._check("hers to change: inside in Build & Buy the owner's bar shows (%s, gone after %s); a wall drawn and an oak floor laid (%s), kept in her save (%s) and laid back after a load (%s), the layout file untouched (%s); undo puts it back (%s)" % [bar_on, bar_off, drew, in_save, reloaded, untouched, undone],
 		bar_on and bar_off and drew and in_save and reloaded and untouched and undone)
 	# put it all back
-	wi.set_layout(walls0.duplicate(true), rooms0.duplicate(true))
+	wi.set_layout(walls0.duplicate(true), rooms0.duplicate(true), {"up": wi.base_up_steps, "down": wi.base_down_steps})
 	m._rebuild_grid()
 	m.townsfolk.clear()
 	Game.flags = keep["flags"]

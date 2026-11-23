@@ -14,9 +14,9 @@ extends Node
 ##   nobody sleeps there any more (suburb.home_for() skips it) and Marcus has moved across the circle.
 ## - Making it hers. In Build & Buy (B) while she stands inside it, a "Your Bretton Oaks house" bar
 ##   offers the world editor's house tools (house_edit.gd: Wall, Door, Sliding door, Window, Opening,
-##   Floor and its list), with this node standing in for the world editor (the duck-typed host:
+##   Floor and its list, Step + and Step -), with this node standing in for the world editor (the duck-typed host:
 ##   undo_stack, house_split_edited, unsaved, _show_status()). Her changes go in her save
-##   (Game.flags["marcus_house_layout"]: {"walls", "rooms"}), never in data/world_layout.json, and
+##   (Game.flags["marcus_house_layout"]: {"walls", "rooms", "stairs"}), never in data/world_layout.json, and
 ##   apply() lays them over the house after a load. Ctrl/Cmd+Z undoes, Delete removes a picked wall,
 ##   right click or Esc puts the tool down. Each change is paid for (see "what her changes cost" below;
 ##   the prices are drafts).
@@ -77,7 +77,8 @@ func apply() -> void:
 	var lay: Variant = Game.flag("marcus_house_layout", null)
 	if h == null or not owned() or not (lay is Dictionary):
 		return
-	h.set_layout(((lay as Dictionary).get("walls", []) as Array).duplicate(true), ((lay as Dictionary).get("rooms", []) as Array).duplicate(true))
+	h.set_layout(((lay as Dictionary).get("walls", []) as Array).duplicate(true), ((lay as Dictionary).get("rooms", []) as Array).duplicate(true),
+		((lay as Dictionary).get("stairs", {}) as Dictionary).duplicate())
 	if main.has_method("_rebuild_grid"):
 		main._rebuild_grid()
 
@@ -210,7 +211,7 @@ func _show_status() -> void:
 
 func _save() -> void:
 	var snap: Array = tools.snapshot()
-	Game.set_flag("marcus_house_layout", {"walls": snap[0], "rooms": snap[1]})
+	Game.set_flag("marcus_house_layout", {"walls": snap[0], "rooms": snap[1], "stairs": snap[2]})
 	if main.has_method("_rebuild_grid"):
 		main._rebuild_grid()
 
@@ -231,7 +232,7 @@ func undo() -> bool:
 # --- what her changes cost (Alex, 2026-11-19: "with costs and saved in the player's save") ---------------
 # Priced from data/economy.json "building", like her farm house's: a wall by the metre (its 2 m price
 # halved), each door, sliding door, window or opening at its own price, a floor by the square metre (its
-# 2 m cell's price over four). Paid all in wood when she has enough, else coins (house_builder._pay()).
+# 2 m cell's price over four), each step she adds to a flight past Marcus's own count at "stair_step". Paid all in wood when she has enough, else coins (house_builder._pay()).
 # Each piece she adds is recorded with what it cost (Game.flags["marcus_house_paid"], by a key made from
 # where it is, so moving it counts as taking it out and putting it in again); taking out a piece she
 # paid for gives half back in the same (house_builder._refund()), and taking out one of Marcus's own
@@ -256,9 +257,28 @@ static func _r(v) -> String:
 	return "%.2f" % float(v)
 
 
+static func step_cost() -> Array:
+	var c: Dictionary = HouseBuilder.econ().get("stair_step", {})
+	return [int(c.get("coins", 0)), int(c.get("wood", 0))]
+
+
+static var _base_steps := {}
+
+## Marcus's own step counts (data/split_house.json): steps past them are hers, and paid for.
+static func base_steps() -> Dictionary:
+	if _base_steps.is_empty():
+		var rp: Dictionary = Data.load_json("split_house").get("ramps", {})
+		_base_steps = {"up": int(rp.get("up", {}).get("steps", 5)), "down": int(rp.get("down", {}).get("steps", 10))}
+	return _base_steps
+
+
 ## Every piece of a layout with what it costs: {key: [coins, wood]}.
-static func pieces(walls: Array, rooms: Array) -> Dictionary:
+static func pieces(walls: Array, rooms: Array, stairs: Dictionary = {}) -> Dictionary:
 	var out := {}
+	var bs := base_steps()
+	for k in ["up", "down"]:
+		for i in range(int(bs[k]), int(stairs.get(k, bs[k]))):
+			_add(out, "s|%s|%d" % [k, i], step_cost())
 	var wr := wall_rate()
 	for w in walls:
 		var seg: Array = w["wall"]
@@ -299,8 +319,8 @@ static func _add(out: Dictionary, k: String, cost: Array) -> void:
 ## half back for what she'd paid for and took out. Keeps what happened on the entry for undo.
 func _charge(u: Array) -> bool:
 	var before: Array = u[1]
-	var now := pieces(house().cfg.get("walls", []), house().cfg.get("rooms", []))
-	var was := pieces(before[0], before[1])
+	var now := pieces(house().cfg.get("walls", []), house().cfg.get("rooms", []), house().stairs())
+	var was := pieces(before[0], before[1], before[2] if before.size() > 2 else {})
 	var added := {}
 	for k in now:
 		if not was.has(k) and (int(now[k][0]) > 0 or int(now[k][1]) > 0):
@@ -377,6 +397,10 @@ func price_text(t: String) -> String:
 		"h_floor":
 			var fr := floor_rate(tools.floor_kind)
 			return "This floor costs %s a square metre." % b._cost_text({"x": [ceili(float(fr[0])), ceili(float(fr[1]))]}, 0)
+		"h_step_add":
+			return "A step past Marcus's own costs %s." % b._cost_text({"x": step_cost()}, 0)
+		"h_step_del":
+			return "Taking out a step you added gives half back."
 	return ""
 
 

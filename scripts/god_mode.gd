@@ -849,6 +849,9 @@ func load_layout() -> void:
 		push_warning("world layout: %s isn't valid JSON, so the world is as the code builds it" % layout_path)
 		return
 	loaded = true
+	# Marcus's house first: its stairs set its floors' heights, which the furniture inside it then
+	# stands on (the pieces below are placed against them)
+	apply_split_house(d.get("split_house", {}))
 	var sc: Dictionary = d.get("scenery", {})
 	var trees_changed := false
 	for kind in sc:
@@ -918,10 +921,29 @@ func load_layout() -> void:
 	if d.has("roads"):
 		_load_roads(d["roads"])
 	house_list = d.get("house", [])
-	house_split_saved = d.get("split_house", {})
-	if not house_split_saved.is_empty() and main.suburb != null and main.suburb.walk_in != null:
-		main.suburb.walk_in.set_layout((house_split_saved.get("walls", []) as Array).duplicate(true), (house_split_saved.get("rooms", []) as Array).duplicate(true))
 	unsaved = false
+
+
+## The layout's "split_house" entry laid over Marcus's house: its walls, floors and stairs (the step
+## counts, which set how high its floors are). {} leaves the house as the data file builds it.
+func apply_split_house(sh: Dictionary) -> void:
+	house_split_saved = sh
+	if sh.is_empty() or main.suburb == null or main.suburb.walk_in == null:
+		return
+	var h = main.suburb.walk_in
+	h.set_layout((sh.get("walls", h.cfg.get("walls", [])) as Array).duplicate(true), (sh.get("rooms", h.cfg.get("rooms", [])) as Array).duplicate(true), (sh.get("stairs", {}) as Dictionary).duplicate())
+
+
+## Marcus's house moved a floor up or down by `dy` (its stairs changed, split_house.gd): the pieces
+## of furniture on it, already moved, have their places here moved too, so the editor keeps them there.
+func house_floor_moved(root: Node3D, dy: float) -> void:
+	for el in els:
+		var e := el as El
+		if e.inside == null or e.node == null or not is_instance_valid(e.node) or not root.is_ancestor_of(e.node):
+			continue
+		e.local_base.origin.y += dy
+		e.base = e.inside.xf * e.local_base
+		e.xf.origin.y += dy
 
 
 ## A piece's place in its building from the layout file: where the code put it, moved to x, z,
@@ -1016,7 +1038,7 @@ func layout() -> Dictionary:
 		d["added_in"] = added_in
 	if house_split_edited and house_tools != null and house_tools.house() != null:
 		var snap: Array = house_tools.snapshot()
-		d["split_house"] = {"walls": snap[0], "rooms": snap[1]}
+		d["split_house"] = {"walls": snap[0], "rooms": snap[1], "stairs": snap[2]}
 	elif not house_split_saved.is_empty():
 		d["split_house"] = house_split_saved
 	if home_edited:

@@ -61,6 +61,23 @@ var _reveal_roots := {} # side -> the node the window reveals in the shell's wal
 var _built: Array = [] # the walls, openings, floors and ceilings: rebuild() makes them again from cfg
 var doors: Array = [] # the doors and sliding doors in the walls' openings: {"node", "part", "kind", "c", "lv", "rot0", "x0", "open"}
 var selected_wall := -1 # the world editor's house tools: the wall picked (an index into cfg "walls"), drawn gold
+# The stairs decide how high the floors are (Alex, 2026-11-23: "in future you should be able to decide
+# how high floors are by adding more stairs to staircase"). Each step more on the half flight up lifts
+# the bedroom floor a riser (RISER), each step more on the flight down lowers the basement one; the
+# step counts are what's saved (stairs()), and the heights follow from them against the data file's
+# own (base_*). Walls with a height of their own in the data ("from"/"to" at the bedroom floor's
+# underside, or down at the basement's floor) and the windows in the bedroom floor's outer walls are
+# authored for those base heights and moved at build time (_wy(), _window_span()), never rewritten.
+const RISER := 0.18
+const UP_HEADROOM := 2.2 # the bedroom floor under the upper wing's eave (upper_ceiling)
+const WELL_HEADROOM := 1.7 # going down the basement flight under the ensuite's floor
+const DOWN_HEADROOM := DOOR_HEAD + 0.12 # the basement under its ceiling (basement_ceiling): a door must fit
+const UP_STEPS := Vector2i(3, 9) # the fewest and most steps each flight can have
+const DOWN_STEPS := Vector2i(6, 16)
+var base_upper := 0.85
+var base_basement := -2.4
+var base_up_steps := 5
+var base_down_steps := 10
 
 const DOOR_GLB := "res://assets/props/door_interior.glb"
 const SLIDE_GLB := "res://assets/props/sliding_door.glb"
@@ -79,6 +96,10 @@ func build(m: Node, node: Node3D) -> void:
 	split_x = float(cfg.get("split_x", 0.5))
 	upper_y = float(cfg.get("upper_y", 0.85))
 	basement_y = float(cfg.get("basement_y", -2.4))
+	base_upper = upper_y
+	base_basement = basement_y
+	base_up_steps = int(_ramp("up").get("steps", 5))
+	base_down_steps = int(_ramp("down").get("steps", 10))
 	for r in cfg.get("footprint", []):
 		footprint.append(Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
 	for r in cfg.get("basement_footprint", cfg.get("footprint", [])):
@@ -180,8 +201,8 @@ func _walls() -> void:
 		var a := Vector2(float(seg[0]), float(seg[1]))
 		var b := Vector2(float(seg[2]), float(seg[3]))
 		var base_y := _level_y(lv) if lv != "all" else basement_y
-		var y0 := float(w.get("from", base_y))
-		var y1 := float(w.get("to", _ceiling_y(lv) if lv != "all" else upper_y))
+		var y0 := _wy(float(w["from"])) if w.has("from") else base_y
+		var y1 := _wy(float(w["to"])) if w.has("to") else (_ceiling_y(lv) if lv != "all" else upper_y)
 		var col := _wall_colour(a.lerp(b, 0.5), lv)
 		if wi == selected_wall:
 			col = Color(1.0, 0.8, 0.3)
@@ -272,8 +293,9 @@ func _cut_shell() -> void:
 			var kind := str(d[2]) if d.size() > 2 else "open"
 			var at := float(d[0])
 			var wd := float(d[1])
-			var y0 := fl + (float(d[3]) if d.size() > 3 else WINDOW_SILL) if kind == "window" else fl
-			var y1 := fl + (float(d[4]) if d.size() > 4 else WINDOW_HEAD) if kind == "window" else fl + DOOR_HEAD + 0.06
+			var span := _window_span(lv, true, d)
+			var y0 := fl + span.x if kind == "window" else fl
+			var y1 := fl + span.y if kind == "window" else fl + DOOR_HEAD + 0.06
 			var p0 := line + out * 0.03 # leave the liner's own side alone
 			var p1 := line + out * 0.6
 			var box := AABB()
@@ -461,8 +483,10 @@ func _opening(lv: String, a: Vector2, b: Vector2, d: Array, y0: float, y1: float
 	var fl := _level_y(lv) if lv != "all" else basement_y
 	# a window may give its own sill and head over the floor ([at, width, "window", sill, head]), to
 	# line up with the house model's own windows
-	var w_sill := float(d[3]) if d.size() > 3 else WINDOW_SILL
-	var w_head := float(d[4]) if d.size() > 4 else WINDOW_HEAD
+	var liner: bool = wi >= 0 and wi < (cfg.get("walls", []) as Array).size() and bool(cfg["walls"][wi].get("liner", false))
+	var span := _window_span(lv, liner, d)
+	var w_sill := span.x
+	var w_head := span.y
 	var head := fl + (w_head if kind == "window" else DOOR_HEAD + (0.06 if kind == "slide" else 0.0))
 	if y1 > head + 0.01:
 		var hb := _short_box(roots[lv], p0, p1, head, y1, col)
@@ -572,15 +596,154 @@ func rebuild() -> void:
 	_floors()
 	_well_ceilings()
 	_walls()
+	_stairs()
 	_show()
 	mark_grid()
 
 
-## The world editor's house tools change these and rebuild (god_mode.gd, house_edit.gd).
-func set_layout(new_walls: Array, new_rooms: Array) -> void:
+## The world editor's house tools change these and rebuild (god_mode.gd, house_edit.gd). `new_stairs`
+## ({"up", "down"} step counts, stairs()) also sets the floors' heights; empty leaves them as they are.
+func set_layout(new_walls: Array, new_rooms: Array, new_stairs: Dictionary = {}) -> void:
 	cfg["walls"] = new_walls
 	cfg["rooms"] = new_rooms
+	if not new_stairs.is_empty():
+		_set_heights(int(new_stairs.get("up", base_up_steps)), int(new_stairs.get("down", base_down_steps)))
 	rebuild()
+
+
+# --- the stairs set the floors' heights ---------------------------------------------------------
+
+## The two flights' step counts as they stand: {"up", "down"}. What the layout file and her save keep.
+func stairs() -> Dictionary:
+	return {"up": int(_ramp("up").get("steps", base_up_steps)), "down": int(_ramp("down").get("steps", base_down_steps))}
+
+
+func upper_for(up: int) -> float:
+	return base_upper + float(up - base_up_steps) * RISER
+
+
+func basement_for(down: int) -> float:
+	return base_basement - float(down - base_down_steps) * RISER
+
+
+## Why the flights can't have these counts ("" if they can): what won't fit in the house's shell. The
+## shell is the house model's and never changes: the upper wing's eave (upper_ceiling) caps the bedroom
+## floor, the main floor's ceiling and the ensuite's floor over the basement flight need headroom, and
+## the basement's ceiling sits just under the ground.
+func stairs_fit(up: int, down: int) -> String:
+	if up < UP_STEPS.x:
+		return "The half flight can't have fewer than %d steps." % UP_STEPS.x
+	if up > UP_STEPS.y:
+		return "The half flight can't have more than %d steps: they'd be too steep for its run." % UP_STEPS.y
+	if down < DOWN_STEPS.x:
+		return "The basement flight can't have fewer than %d steps." % DOWN_STEPS.x
+	if down > DOWN_STEPS.y:
+		return "The basement flight can't have more than %d steps: they'd be too steep for its run." % DOWN_STEPS.y
+	var uy := upper_for(up)
+	var by := basement_for(down)
+	var top := _ceiling_y("upper")
+	if top - uy < UP_HEADROOM - 0.001:
+		return "The bedroom floor can't go higher: the roof's eave is at %.2f m, so it would leave %.2f m of headroom (it needs %.1f m). The house's shell stays as it is." % [top, top - uy, UP_HEADROOM]
+	var bc := _ceiling_y("basement")
+	if bc - by < DOWN_HEADROOM - 0.001:
+		return "The basement can't come up any further: its ceiling is just under the ground at %.2f m, so it would be %.2f m high (a door needs %.2f m)." % [bc, bc - by, DOWN_HEADROOM]
+	var room := _well_headroom(uy, by)
+	if room < WELL_HEADROOM - 0.001:
+		return "Not with these: going down to the basement you'd hit your head on the ensuite's floor over the stairs (%.2f m clear, it needs %.1f m)." % [room, WELL_HEADROOM]
+	return ""
+
+
+## The least room between the basement flight and a bedroom-floor room laid over it (the ensuite).
+func _well_headroom(uy: float, by: float) -> float:
+	var rp := _ramp("down")
+	if rp.is_empty():
+		return INF
+	var r: Array = rp["rect"]
+	var well := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+	var least := INF
+	for room in cfg.get("rooms", []):
+		if str(room["level"]) != "upper":
+			continue
+		for rr in room["rects"]:
+			var o := well.intersection(Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3])))
+			if not o.has_area():
+				continue
+			# the flight is highest at its top end (lowest x) under the room
+			var t := clampf((o.position.x - well.position.x) / well.size.x, 0.0, 1.0)
+			var stair := lerpf(float(rp["from"]), by, t)
+			least = minf(least, uy + 0.045 - 0.2 - stair)
+	return least
+
+
+## One step more (+1) or fewer (-1) on flight `k` ("up" or "down"). "" if done, else why not.
+func step(k: String, d: int) -> String:
+	var s := stairs()
+	s[k] = int(s[k]) + d
+	var why := stairs_fit(int(s["up"]), int(s["down"]))
+	if why != "":
+		return why
+	_set_heights(int(s["up"]), int(s["down"]))
+	rebuild()
+	return ""
+
+
+## The floors at the heights these counts give: the ramps, the switch to the basement, and the
+## furniture on each floor (the world editor's own records of it too) moved with them. Counts the
+## shell can't take are clamped back to the nearest that fit.
+func _set_heights(up: int, down: int) -> void:
+	up = clampi(up, UP_STEPS.x, UP_STEPS.y)
+	down = clampi(down, DOWN_STEPS.x, DOWN_STEPS.y)
+	while stairs_fit(up, down) != "" and (up != base_up_steps or down != base_down_steps):
+		up += signi(base_up_steps - up)
+		down += signi(base_down_steps - down)
+	var du := upper_for(up) - upper_y
+	var db := basement_for(down) - basement_y
+	upper_y = upper_for(up)
+	basement_y = basement_for(down)
+	cfg["upper_y"] = upper_y
+	cfg["basement_y"] = basement_y
+	cfg["switch_y"] = basement_y * 0.5
+	var ramps: Dictionary = cfg.get("ramps", {})
+	if ramps.has("up"):
+		ramps["up"]["steps"] = up
+		ramps["up"]["to"] = upper_y
+	if ramps.has("down"):
+		ramps["down"]["steps"] = down
+		ramps["down"]["to"] = basement_y
+	for pair in [["upper", du], ["basement", db]]:
+		var dy: float = pair[1]
+		if absf(dy) < 0.0001 or not roots.has(pair[0]):
+			continue
+		var root: Node3D = roots[pair[0]]
+		for n in root.get_children():
+			if n is Node3D and n.has_meta("item_id"):
+				(n as Node3D).position.y += dy
+		if main != null and main.get("god") != null and main.god.has_method("house_floor_moved"):
+			main.god.house_floor_moved(root, dy)
+
+
+## A wall's own height from the data ("from"/"to"), authored for the data file's floors: one at the
+## basement's floor follows the basement, one just under the bedroom floor (its slab's underside, the
+## ensuite's walls round the stairwell) follows that floor.
+func _wy(v: float) -> float:
+	if absf(v - base_basement) < 0.02:
+		return v + basement_y - base_basement
+	if v > base_upper - 0.3 and v < base_upper + 0.05:
+		return v + upper_y - base_upper
+	return v
+
+
+## A window's sill and head over its floor. The bedroom floor's outer walls' windows line up with the
+## house model's own (sill and head in the data, for the data's floor height): they stay where they are
+## in the brick as the floor moves, short of the floor and the ceiling.
+func _window_span(lv: String, liner: bool, d: Array) -> Vector2:
+	var sill := float(d[3]) if d.size() > 3 else WINDOW_SILL
+	var head := float(d[4]) if d.size() > 4 else WINDOW_HEAD
+	if lv == "upper" and liner:
+		var dy := upper_y - base_upper
+		head = clampf(head - dy, 0.4, _ceiling_y("upper") - upper_y - 0.1)
+		sill = clampf(sill - dy, 0.05, head - 0.3)
+	return Vector2(sill, head)
 
 
 ## A wall's centre line cut at its doors: [[from, to], ...].
@@ -674,10 +837,10 @@ func _stairs() -> void:
 			var x0 := rect.position.x + run * i
 			var bottom := minf(y_to, y_from) - 0.05
 			var st := Rect2(x0, rect.position.y, run, rect.size.y)
-			_slab(parent, st, bottom, top + 0.045, tread, "Step_%s_%d" % [k, i])
+			_built.append(_slab(parent, st, bottom, top + 0.045, tread, "Step_%s_%d" % [k, i]))
 		if k == "down":
 			# the stairwell's front side below the ground, so you can't see out under the house
-			_wall_box(parent, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y), y_to, 0.0, riser.albedo_color)
+			_built.append(_wall_box(parent, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y), y_to, 0.0, riser.albedo_color))
 
 
 func _lights() -> void:
