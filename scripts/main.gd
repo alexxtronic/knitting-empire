@@ -4398,6 +4398,10 @@ func _act1_pen_spot() -> Vector2:
 ## and what he tells her after. Stats are nudged directly so it doesn't take a week of play.
 func _romance_checks() -> void:
 	var rowan := _villager("rowan")
+	# Shepherd Rowan's advice talks come before his romance topics; they have their own check
+	# (--only=shepherd), so mark them heard here and the romance plays as it always did
+	for tip in ["watch", "rare", "pen", "scarf", "wolves"]:
+		Game.set_flag("seen_rowan_tip_" + tip)
 	story.auto = true
 	story.auto_line = 0.25
 	story.auto_choices = [] # first option every time
@@ -5914,9 +5918,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
-	if "--only=act1" in OS.get_cmdline_user_args(): # just Act 1, from the bus to the porch (a few minutes)
+	if "--only=act1" in OS.get_cmdline_user_args() or "--only=romance" in OS.get_cmdline_user_args():
+		# just Act 1, from the bus to the porch (a few minutes); --only=romance goes on to Rowan's romance
 		await _wait(1.5)
 		await _act1_checks()
+		if "--only=romance" in OS.get_cmdline_user_args():
+			await _romance_checks()
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

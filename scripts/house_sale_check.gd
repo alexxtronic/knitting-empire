@@ -71,6 +71,8 @@ func run(main: Node) -> void:
 	var ask_row: Array = ids.call()
 	m.townsfolk.action(marcus, "mh_ask")
 	var pin: bool = hs.wants_sweater(marcus)
+	# empty her bag by the list itself: an earlier check can leave the bag's count above the list's
+	# length, and remove_sweater() can't take what isn't listed (looping on count() hung here)
 	while not Game.sweaters.is_empty():
 		Game.remove_sweater(0)
 	Game.inv["sweater"] = 0
