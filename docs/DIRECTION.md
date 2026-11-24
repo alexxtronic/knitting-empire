@@ -196,3 +196,4 @@ Romance runs through all four acts: one partner at a time, out of Rowan, Lars an
 - **Two animals per dog.** One dog herds 2 (it was 3), two dogs herd 4, and so on up to 12 dogs herding 24.
 - **Ages 25, 50, 75 and 100.** Act 1's lines change so that Nora is 25 (she was "in her thirties").
 - **The time skip is the player's choice.** Finishing an act's last goal opens a "twenty-five years later" scene, which she starts when she's ready. Everything she owns carries over.
+- **A full game takes 30 to 40 hours on average** (Alex, 2026-11-24). At 20 real minutes a day, that is 90 to 120 game days, about 8 to 10 hours and 25 to 30 game days for each act. The pacing table is in `docs/REVIEW_2026-11-24.md` (section 7).
