@@ -7,7 +7,11 @@ A cozy life-sim prototype built in Godot 4. Raise sheep, knit sweaters, grow cro
 ## Play
 
 1. Install [Godot 4.7+](https://godotengine.org/download) into `/Applications`.
-2. Double-click `Play.command`, or run:
+2. Double-click `Play.command`, or run these two (the first imports any model or texture that changed since the last import, which starting the game alone never does):
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --import
+```
 
 ```bash
 open -n -a /Applications/Godot.app --args --path .
