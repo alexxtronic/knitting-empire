@@ -190,9 +190,9 @@ In short:
 
 Romance runs through all four acts: one partner at a time, out of Rowan, Lars and Max. Each act he goes from boyfriend to fiancé to husband. Whoever she's closest to can take his place, and the jealousy that causes makes the men cross with each other or with her, and leads to small, silly sabotage.
 
-### Still open (asked on 2026-11-24)
+### Decided (Alex, 2026-11-24, answering the review)
 
-- Max as a partner: in the story he is her abusive ex, whom she can have arrested.
-- How many animals one dog herds: 3 today, "the usual 2" in this plan.
-- Nora's age in Act 1: she is "in her thirties" in `docs/CHARACTERS.md`, 25 here.
-- How an act ends and the years pass.
+- **The three partners are Rowan, Lars and Gary.** Max stays as the story has him: the abusive ex she gets free of, who can be arrested. He is never a romance option.
+- **Two animals per dog.** One dog herds 2 (it was 3), two dogs herd 4, and so on up to 12 dogs herding 24.
+- **Ages 25, 50, 75 and 100.** Act 1's lines change so that Nora is 25 (she was "in her thirties").
+- **The time skip is the player's choice.** Finishing an act's last goal opens a "twenty-five years later" scene, which she starts when she's ready. Everything she owns carries over.
