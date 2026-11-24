@@ -4281,8 +4281,8 @@ func _act1_checks() -> void:
 	while story.playing != "act1_flock" and t < 5.0:
 		await _wait(0.1)
 		t += 0.1
-	_check("all four strays in the pen: 'sheep_penned' (%s), four sheep in her flock (%d)" % [story.playing, Game.sheep_count],
-		story.playing == "act1_flock" and Game.sheep_count == 4 and sheep_list.size() == 4 and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
+	_check("every stray in the pen: 'sheep_penned' (%s), %d sheep in her flock" % [story.playing, Game.sheep_count],
+		story.playing == "act1_flock" and Game.sheep_count == homestead.econ("strays", 2) and sheep_list.size() == homestead.econ("strays", 2) and homestead.strays.is_empty() and Game.flag("act1_flock") == true)
 	await _act1_until_done(30.0)
 	cam_target = cam0
 	_check("Rowan's third task: shear them ('%s'), and it isn't dusk yet (%.1fh)" % [hud.goal_label.text, Game.hour], Game.flag("act1_flock_in") == true and hud.goal_label.text.begins_with("Rowan 3/4. Shear") and Game.flag("act1_fence_done") != true)
@@ -4383,7 +4383,7 @@ func _act1_checks() -> void:
 	homestead.apply()
 	_check("Act 1 progress and the pen survive a save (journal %d, fences %d, pen %d cells, sheep %d)" % [Game.journal().size(), homestead.fences.size(), homestead.pen_cells.size(), Game.sheep_count],
 		Game.flag("act1_done") == true and Game.flag("seen_act1_porch") == true and Game.journal().size() == journal0 + 3
-		and homestead.fences.size() == 12 and homestead.pen_cells.size() == 9 and Game.sheep_count == 4)
+		and homestead.fences.size() == 12 and homestead.pen_cells.size() == 9 and Game.sheep_count == homestead.econ("strays", 2))
 	story.auto = false
 	story.auto_line = 0.08
 	homestead.reset_sandbox() # the rest of the autotest plays on the old farm: its pen and three sheep
