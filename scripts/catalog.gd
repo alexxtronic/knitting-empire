@@ -28,7 +28,10 @@ static var ITEMS: Dictionary = Data.furniture()
 static var INDOOR: Array = Data.furniture_ids("indoors")
 static var OUTDOOR: Array = Data.furniture_ids("yard")
 ## The Build catalog's tabs (Builder's Delight's catalogue), by each piece's "cat" in furniture.json.
-const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm"]
+## The last three are filled at launch by build_plus.gd from the world editor's Place list (Alex,
+## 2026-11-24: build mode can buy everything god mode can place): its scenery, its other models and the
+## shops' own fittings.
+const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm", "Garden & Nature", "Outdoor", "Shop & Town"]
 
 
 ## The tab a piece is in: its "cat", or Living for an indoor piece and Garden for the yard.
@@ -351,6 +354,10 @@ static func build(id: String, r: Node3D) -> void:
 	var path := str(ITEMS.get(id, {}).get("model", ""))
 	var inst := model(path, r) if path != "" else null
 	if inst != null:
+		if ITEMS.get(id, {}).has("scale"): # a "(small)" option of the world editor's (build_plus.gd)
+			inst.scale *= float(ITEMS[id]["scale"])
+		if ITEMS.get(id, {}).get("measure", false) == true:
+			_measure(id, inst)
 		if ITEMS.get(id, {}).has("hang"): # a painting: hung on the wall at this height, wherever it's placed
 			inst.position.y += float(ITEMS[id]["hang"])
 		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here
@@ -402,6 +409,32 @@ static func build(id: String, r: Node3D) -> void:
 		"hay_bale": _hay_bale(r)
 		"computer": _computer(r)
 		_: box(r, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), Color.MAGENTA)
+
+
+## A piece build_plus.gd registered from the world editor's Place list has no size in the data: the
+## first time it's built its footprint and height come from the model itself. A tree stands on its
+## trunk ("trunk"), not under its crown.
+static func _measure(id: String, inst: Node3D) -> void:
+	var box := AABB()
+	var first := true
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		var t := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != inst.get_parent():
+			t = (n as Node3D).transform * t
+			n = n.get_parent()
+		var b: AABB = t * (mi as MeshInstance3D).get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	var info: Dictionary = ITEMS[id]
+	info.erase("measure")
+	if first:
+		return
+	info["height"] = maxf(0.12, box.end.y)
+	if info.get("trunk", false) == true:
+		info["size"] = Vector2(0.9, 0.9)
+	else:
+		info["size"] = Vector2(maxf(0.3, snappedf(box.size.x, 0.1)), maxf(0.3, snappedf(box.size.z, 0.1)))
 
 
 ## A stand-in for the computer (scripts/online_store.gd) until its Tripo model lands as

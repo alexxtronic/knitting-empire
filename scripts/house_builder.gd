@@ -41,6 +41,7 @@ extends Node
 
 const Data = preload("res://scripts/data.gd")
 const Catalog = preload("res://scripts/catalog.gd")
+const Town = preload("res://scripts/town.gd")
 
 const STEP := 2 # metres between grid lines
 const DOORWAY := 1.4 # metres across a doorway (her front door's is 1.4)
@@ -161,6 +162,26 @@ func plot_at(q: Vector2) -> String:
 		if not p.is_empty() and plot_rect(p).has_point(q):
 			return str(id)
 	return ""
+
+
+## Whether she may change the world at a spot in Build & Buy (build_plus.gd: buying and placing
+## scenery and props, taking the world's own up, painting the ground): "" if she may, else why not.
+## Hers are her farm, the plots she owns, and the open lands round them; never Maple Grove's town or
+## Bretton Oaks, but for the inside of Marcus's house once she owns it (Alex, 2026-11-24).
+func can_edit_at(at: Vector3) -> String:
+	var q := Vector2(at.x, at.z)
+	if plot_at(q) != "":
+		return ""
+	var sb = main.suburb
+	if sb != null and sb.walk_in != null and sb.walk_in.in_footprint(sb.walk_in.local(at)):
+		return "" if Game.flag("marcus_house_owned") == true else "That's Marcus's house, not yours."
+	if Town.TOWN.has_point(q):
+		return "Maple Grove's streets aren't yours to change."
+	if sb != null and sb.clears(at):
+		return "Bretton Oaks isn't yours to change."
+	if main.LOT.has_point(q) or main.whole_map().has_point(q):
+		return ""
+	return "That's past the edge of the map."
 
 
 ## Scenery standing on a plot she owns is cleared (forage.apply hides it, like a felled tree).
@@ -1331,6 +1352,8 @@ func _hover_paint(g: Variant) -> void:
 # --- the tool in build mode -------------------------------------------------------------------
 
 func set_tool(t: String) -> void:
+	if tool == "ground" and t != "ground" and main.buildplus != null:
+		main.buildplus.paint_off()
 	tool = t
 	hover = ""
 	hover_cells = []
@@ -1360,6 +1383,9 @@ func _ensure_ghost() -> void:
 ## The pointer moved over the ground at g: show the edge under it.
 func hover_at(g: Variant) -> void:
 	_ensure_ghost()
+	if tool == "ground": # painting the ground (build_plus.gd)
+		main.buildplus.paint_hover(g)
+		return
 	if tool == "floor":
 		_hover_floor(g)
 		return
@@ -1422,6 +1448,9 @@ func hover_at(g: Variant) -> void:
 ## or build a new wall with it in.
 func click(g: Variant) -> void:
 	if g == null:
+		return
+	if tool == "ground":
+		main.buildplus.paint_begin(g)
 		return
 	hover_at(g)
 	if tool == "floor":

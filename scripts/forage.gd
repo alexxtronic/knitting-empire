@@ -89,11 +89,12 @@ func apply() -> void:
 			kept[k] = day
 	if kept.size() != cut.size():
 		Game.set_flag("cut", kept)
+	var cleared: Dictionary = Game.flag("cleared", {}) # the world's scenery she took up in Build & Buy (build_plus.gd): gone for good
 	var grid := false
 	for el in main.god.els:
 		if not el.scenery:
 			continue
-		var on: bool = kept.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) or (main.suburb != null and main.suburb.clears(el.xf.origin)) # a plot she bought is cleared (and Bretton Oaks' ground)
+		var on: bool = kept.has(key_of(el)) or cleared.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) or (main.suburb != null and main.suburb.clears(el.xf.origin)) # a plot she bought is cleared (and Bretton Oaks' ground)
 		if el.cut != on:
 			_set_cut(el, on)
 			grid = true # trees, rocks and the rest stand in the walking grid's way

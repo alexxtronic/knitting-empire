@@ -63,6 +63,8 @@ const ReadingPose = preload("res://scripts/reading_pose.gd")
 const Barista = preload("res://scripts/barista.gd")
 const OnlineStore = preload("res://scripts/online_store.gd")
 const HouseBuilder = preload("res://scripts/house_builder.gd")
+const BuildPlus = preload("res://scripts/build_plus.gd")
+const BuildPlusCheck = preload("res://scripts/build_plus_check.gd")
 const Bonfire = preload("res://scripts/bonfire.gd")
 const FogOfWar = preload("res://scripts/fog_of_war.gd")
 
@@ -156,6 +158,7 @@ var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it
 var shepherd: Shepherd # Rowan watching the pen for a fee, and the flags his advice waits for (shepherd.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
+var buildplus: BuildPlus # Build & Buy with god mode's reach: its Place list for coins, ground paint, the world's scenery (build_plus.gd)
 var builder: HouseBuilder # walls she builds in build mode, the rooms they close, Gary's plots (house_builder.gd)
 var hud: Hud
 var cinema: Cinematic # cinematic mode: the free camera and its photos (cinematic.gd), P
@@ -333,6 +336,10 @@ func _ready() -> void:
 		god.load_layout()
 	_place_shopkeepers() # behind their counters, wherever the layout put their shops
 	god.reapply_scenery() # nothing grows on the shops' floors where they stand now
+	buildplus = BuildPlus.new() # god mode's Place list into the catalogue: before the HUD builds it and the save spawns from it
+	buildplus.main = self
+	add_child(buildplus)
+	buildplus.register()
 	if _autotest_dir != "":
 		god.layout_path = GOD_TEST_LAYOUT # the test saves here, never over the real layout
 	player = Player.new()
@@ -436,6 +443,7 @@ func _ready() -> void:
 	forage.main = self
 	add_child(forage)
 	forage.apply()
+	buildplus.apply_saved() # her ground paint over the layout's road map
 	_setup_dog()
 	wildlife = Wildlife.new()
 	wildlife.main = self
@@ -563,6 +571,7 @@ func _connect_hud() -> void:
 		builder.set_tool(k))
 	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
 	hud.paint_kind_chosen.connect(func(k: String): builder.set_paint_kind(k))
+	hud.ground_kind_chosen.connect(func(k: String): buildplus.ground_kind = k)
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -1845,6 +1854,8 @@ func _unhandled_input(e: InputEvent) -> void:
 						_live_click(mb.position)
 				else:
 					hold_release()
+					if mode == Mode.BUILD and builder.tool == "ground":
+						buildplus.paint_end()
 	elif e is InputEventMouseMotion:
 		var mm := e as InputEventMouseMotion
 		_last_mouse = mm.position
@@ -3223,6 +3234,8 @@ func _placement_valid(f, pos: Vector3) -> bool:
 	var inside := interior_rect().encloses(r) or in_cottage or builder.encloses(r) # a room she built is indoors too
 	var in_yard := cottage_owned() and Town.COTTAGE_LOT.encloses(r) and not cottage_house_rect().grow(0.25).intersects(r)
 	var outside := (LOT.encloses(r) and not house_rect().grow(0.25).intersects(r) and not builder.blocks(r.grow(0.25))) or in_yard
+	if not outside and not LOT.intersects(r) and buildplus != null:
+		outside = buildplus.outdoor_ok(r, f.is_flat()) # out past her farm: her plots and the open lands (build_plus.gd)
 	match str(f.info()["where"]):
 		"in":
 			if not inside:
@@ -3251,10 +3264,13 @@ func _build_click(mpos: Vector2, keep_placing: bool) -> void:
 	if ghost:
 		_update_ghost(mpos)
 		if not ghost_valid:
-			hud.show_toast("Can't place that there.")
+			var why: String = builder.can_edit_at(ghost.position)
+			hud.show_toast(why if why != "" else "Can't place that there.")
 			return
 		var id: String = ghost.item_id
 		var bought := ghost_from == null
+		if ghost_from != null and (ghost_from as Dictionary).has("world"):
+			ghost.set_meta("w", true) # the world's own, moved: hers now, but worth nothing
 		if bought and not _pay_for(id):
 			return
 		if bought and ghost.color != "" and not Game.spend(recolor_price()): # a new piece pays for its colour as it goes down
@@ -3277,8 +3293,29 @@ func _build_click(mpos: Vector2, keep_placing: bool) -> void:
 		ghost_rot = t.rot
 		ghost.set_ghost(true)
 		ghost_marker.visible = true
-		hud.set_holding(true, int(Catalog.ITEMS[t.item_id]["price"]) / 2)
+		hud.set_holding(true, buildplus.sell_value(t), true)
 		hud.set_colors(t.colors(), t.color, recolor_price())
+		_rebuild_grid() # where it stood is free again
+		_update_ghost(mpos)
+		return
+	var el = buildplus.world_at(mpos) # the world's own tree, rock or flowers: take it up
+	if el != null:
+		var why: String = builder.can_edit_at(el.xf.origin)
+		if why != "":
+			hud.show_toast(why)
+			return
+		var key := Forage.key_of(el)
+		var at: Vector3 = el.xf.origin
+		buildplus.clear(el)
+		ghost = Furniture.new()
+		furniture_root.add_child(ghost)
+		ghost.setup(buildplus.item_for(el.kind), 0)
+		ghost.set_ghost(true)
+		ghost.position = Vector3(at.x, 0, at.z)
+		ghost_from = {"pos": ghost.position, "rot": 0, "world": key}
+		ghost_marker.visible = true
+		hud.set_holding(true, 0, true)
+		hud.set_colors([], "", recolor_price())
 		_update_ghost(mpos)
 
 
@@ -3316,7 +3353,10 @@ func _rotate_ghost() -> void:
 func _cancel_ghost() -> void:
 	if not ghost:
 		return
-	if ghost_from != null:
+	if ghost_from != null and (ghost_from as Dictionary).has("world"):
+		ghost.queue_free() # the world's own goes back where it stood
+		buildplus.unclear(str(ghost_from["world"]))
+	elif ghost_from != null:
 		ghost.position = ghost_from["pos"]
 		ghost.set_rot(ghost_from["rot"])
 		ghost.set_ghost(false)
@@ -3333,9 +3373,9 @@ func _cancel_ghost() -> void:
 func _sell_ghost() -> void:
 	if not ghost or ghost_from == null:
 		return
-	var value := int(Catalog.ITEMS[ghost.item_id]["price"]) / 2
+	var value: int = 0 if (ghost_from as Dictionary).has("world") else buildplus.sell_value(ghost)
 	Game.coins += value
-	hud.show_toast("Sold the %s for %dc." % [ghost.display_name(), value])
+	hud.show_toast("Sold the %s for %dc." % [ghost.display_name(), value] if value > 0 else "Removed the %s." % ghost.display_name().to_lower())
 	ghost.queue_free()
 	ghost = null
 	ghost_from = null
@@ -3366,6 +3406,8 @@ func furniture_entry(f: Furniture) -> Dictionary:
 		e["s"] = snappedf(sc, 0.001)
 	if f.color != "":
 		e["c"] = f.color # a colour she bought for it
+	if f.has_meta("w"):
+		e["w"] = 1 # the world's own scenery she moved (build_plus.gd): worth nothing taken up
 	return e
 
 
@@ -3387,6 +3429,8 @@ func _spawn_entry(e: Dictionary) -> void:
 		f.scale = Vector3.ONE * float(e["s"])
 	if e.has("c"):
 		f.set_color(str(e["c"]))
+	if e.has("w"):
+		f.set_meta("w", true)
 
 
 func _new_world() -> void:
@@ -6100,6 +6144,12 @@ func _autotest() -> void:
 	if "--only=wardrobe" in OS.get_cmdline_user_args(): # just the wardrobe from her eyes: hangers, browsing, picking
 		await _wait(1.5)
 		await _wardrobe_checks()
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=buildplus" in OS.get_cmdline_user_args(): # just Build & Buy with god mode's reach (build_plus_check.gd)
+		await _wait(1.5)
+		await BuildPlusCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

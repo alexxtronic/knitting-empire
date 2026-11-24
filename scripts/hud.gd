@@ -8,6 +8,7 @@ signal color_chosen(cid: String) # a colour for the piece in her hands (furnitur
 signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "floor", "paint", or ""
 signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
 signal paint_kind_chosen(kind: String) # the Paint tool's list: a colour in house_builder.gd's PAINTS
+signal ground_kind_chosen(kind: String) # the Ground tool's list: a surface in god_mode.gd's ROADS (build_plus.gd)
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -229,6 +230,8 @@ var wall_btn: Button # Build & Buy's wall tool (house_builder.gd)
 var door_btn: Button
 var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
 var paint_pick: OptionButton # the Paint tool's list (house_builder.gd PAINTS)
+var ground_pick: OptionButton # the Ground tool's list (god_mode.gd ROADS, build_plus.gd prices)
+var cat_tabs := {} # the catalogue's room -> its tab button
 var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
 var graphics_btn: Button
@@ -1126,8 +1129,10 @@ func _build_catalog() -> void:
 	frow.add_child(floor_pick)
 	vb.add_child(frow)
 	# paint: one side of a wall, inside or out, for a few coins (Alex, 2026-11-20)
-	var prow := HBoxContainer.new()
-	prow.add_theme_constant_override("separation", 6)
+	var prow := HFlowContainer.new() # paint, and the ground beside it (on a line of its own if it won't fit)
+	prow.add_theme_constant_override("h_separation", 6)
+	prow.add_theme_constant_override("v_separation", 4)
+	prow.custom_minimum_size = Vector2(408, 0)
 	prow.add_child(_label("Paint", 15, GOLD))
 	var pb: Button
 	pb = _button("Paint", func(): wall_tool_chosen.emit("paint" if wall_btns["paint"].button_pressed else ""))
@@ -1144,13 +1149,34 @@ func _build_catalog() -> void:
 		if not wall_btns["paint"].button_pressed:
 			wall_tool_chosen.emit("paint"))
 	prow.add_child(paint_pick)
+	# the ground: god mode's road surfaces, paid by the square metre (build_plus.gd, Alex 2026-11-24)
+	var BP := preload("res://scripts/build_plus.gd")
+	var GM := preload("res://scripts/god_mode.gd")
+	var gb: Button
+	gb = _button("Ground", func(): wall_tool_chosen.emit("ground" if wall_btns["ground"].button_pressed else ""))
+	gb.toggle_mode = true
+	gb.tooltip_text = "Pick a surface in the list, then drag over the ground to pave it, or Grass to put lawn back. Paid by the square metre that changes. Not in Maple Grove or Bretton Oaks."
+	wall_btns["ground"] = gb
+	prow.add_child(gb)
+	ground_pick = OptionButton.new()
+	for r in GM.ROADS:
+		ground_pick.add_item(BP.ground_label(str(r[0])))
+		ground_pick.set_item_metadata(ground_pick.item_count - 1, str(r[0]))
+	ground_pick.select(1) # gravel
+	ground_pick.item_selected.connect(func(i: int):
+		ground_kind_chosen.emit(str(ground_pick.get_item_metadata(i)))
+		if not wall_btns["ground"].button_pressed:
+			wall_tool_chosen.emit("ground"))
+	prow.add_child(ground_pick)
 	vb.add_child(prow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wall_note.custom_minimum_size = Vector2(408, 0)
 	vb.add_child(wall_note)
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
+	var tabs := HFlowContainer.new() # nine rooms since the world editor's Place list came in (build_plus.gd): two lines
+	tabs.add_theme_constant_override("h_separation", 4)
+	tabs.add_theme_constant_override("v_separation", 4)
+	tabs.custom_minimum_size = Vector2(408, 0)
 	vb.add_child(tabs)
 	var group := ButtonGroup.new()
 	var pages: Array[Control] = []
@@ -1160,7 +1186,7 @@ func _build_catalog() -> void:
 		if not ids.is_empty():
 			sections.append([c, ids])
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(408, 430)
+	scroll.custom_minimum_size = Vector2(408, 300)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var stack := VBoxContainer.new()
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1192,6 +1218,7 @@ func _build_catalog() -> void:
 				pages[k].visible = k == si)
 		tab.toggle_mode = true
 		tab.button_group = group
+		cat_tabs[sections[si][0]] = tab
 		tab.button_pressed = si == 0
 		tabs.add_child(tab)
 	vb.add_child(scroll)
@@ -1393,12 +1420,12 @@ func set_colors(opts: Array, current: String, price: int) -> void:
 		color_btns[cid] = b
 
 
-func set_holding(on: bool, sell_value := 0) -> void:
+func set_holding(on: bool, sell_value := 0, removable := false) -> void:
 	holding_bar.visible = on
 	if not on and color_row != null:
 		color_row.visible = false
-	sell_btn.visible = sell_value > 0
-	sell_btn.text = "Sell for %dc  (Del)" % sell_value
+	sell_btn.visible = sell_value > 0 or removable # the world's own scenery, or a copy of it, is removed for nothing
+	sell_btn.text = "Sell for %dc  (Del)" % sell_value if sell_value > 0 else "Remove  (Del)"
 
 
 ## Which wall tool is in hand ("" for none): lights its button.

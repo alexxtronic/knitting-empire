@@ -1111,6 +1111,8 @@ func set_active(on: bool) -> void:
 	active = on
 	Interiors.editing = on
 	if on:
+		if main.buildplus != null:
+			main.buildplus.suspend() # her own ground paint is her save's, never the layout's
 		sync_home()
 		sync_built()
 		if _ui == null:
@@ -1152,6 +1154,8 @@ func set_active(on: bool) -> void:
 		_return_built()
 		if unsaved and save_layout():
 			main.hud.show_toast("World layout saved.")
+		if main.buildplus != null:
+			main.buildplus.resume()
 	_show_status()
 
 
@@ -1496,6 +1500,8 @@ func place_options() -> Array:
 		models[kind] = true
 	var in_catalog := {}
 	for id in Catalog.ITEMS:
+		if Catalog.ITEMS[id].get("world", false) == true:
+			continue # Build & Buy's copies of this list (build_plus.gd) aren't the catalogue's own
 		in_catalog[str(Catalog.ITEMS[id].get("model", "")).get_file().get_basename()] = true
 	for f in DirAccess.get_files_at(Nature.P):
 		var m := f.get_basename()
@@ -1514,7 +1520,7 @@ func place_options() -> Array:
 						out.append(["scenery:%s:%s" % [m, str(small[1])], small[2], group[0]])
 	var decor: Array = []
 	for id in Catalog.ITEMS:
-		if Catalog.has_builder(id):
+		if Catalog.has_builder(id) and Catalog.ITEMS[id].get("world", false) != true:
 			decor.append(["decor:" + str(id), str(Catalog.ITEMS[id]["name"]), "Furniture and decor"])
 	decor.sort_custom(func(a, b): return str(a[1]) < str(b[1]))
 	out.append_array(decor)

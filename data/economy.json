@@ -234,6 +234,22 @@
     "density": 0.05,
     "max_alpha": 0.62
   },
+  "_about_build_prices": "Build & Buy's prices for everything the world editor (god mode) can place that has no furniture.json entry of its own (Alex, 2026-11-24: \"build mode near-identical to god mode but everything just has a coin price ... a tulip would be one coin ... repaving the ground a set amount of coin per square meter\"). scripts/build_plus.gd reads it. \"prefixes\": the first whose start matches the model's name (a land's own kind, \"swamp-rock_cluster\", by its model, \"rock_cluster\") sets the price; \"small\" scales it for a \"(small)\" option; \"default\" for anything else. \"shop_pieces\": the price for a shop's or the café's own fittings, which have 0 in furniture.json. \"ground\": coins per square metre of ground painted with each surface, counted on the road map's own pixels (8 a metre), only where it changes. Taking a piece back up gives half its price back, as furniture does; the world's own scenery taken up gives nothing. Every price and label is a draft until Alex approves it.",
+  "build_prices": {
+    "prefixes": [["flowers_", 1], ["tuft_", 1], ["clover", 1], ["leaf_", 1], ["crop_", 2],
+      ["bush_", 8], ["red_shrub", 8], ["arborvitae", 14], ["hedge", 12],
+      ["rock_single", 12], ["rock_cluster", 15], ["rock_boulder", 30], ["rock_", 12],
+      ["tree_", 40], ["maple_", 40],
+      ["fence_post", 3], ["fence_rails", 4], ["fence_", 5],
+      ["sign_", 30], ["door_interior", 40], ["sliding_door", 90],
+      ["axe", 15], ["hoe", 12], ["scythe", 18], ["shears", 10], ["shovel", 12], ["watering_can", 10],
+      ["dog", 60], ["knitting_needles", 6], ["lantern", 28], ["plaza_fountain", 225],
+      ["maplewood_bus", 900], ["barn", 2400], ["building_", 3000]],
+    "small": 0.5,
+    "default": 25,
+    "shop_pieces": {"bakery_counter": 60, "cafe_counter": 60, "espresso_bar": 80, "cafe_bookshelf": 70, "cafe_table": 40, "cafe_coffee_table": 30, "pouf": 20, "pendant_lamp": 25, "welcome_sign": 120, "bakery_stall": 400},
+    "ground": {"dirt": 1, "gravel": 2, "cobble": 4, "pavement": 3, "sidewalk": 3, "grass": 1}
+  },
   "forage": {
     "tree_wood": 8,
     "mulch_leaves": 3,
