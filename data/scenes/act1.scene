@@ -18,7 +18,7 @@
 #   act1_knit2 → act1_market (Rosa buys the second; bleating from the farm) → act1_strays (meet
 #   Rowan the shepherd: herd your own wool and stop buying it; his four tasks, one at a time) →
 #   1. act1_wood (wood, then the pen builder, F, and gate crafting, G) → act1_pen ("pen_built") →
-#   2. herd the four strays in, playing the dog (or on foot) → act1_flock ("sheep_penned") →
+#   2. herd the two strays in, playing the dog (or on foot) → act1_flock ("sheep_penned") →
 #   3. act1_sheared ("sheared") → act1_knit3 ("knit_done": a Common sweater from their wool) →
 #   4. act1_rowan_done ("sweater_sold": sold to anyone in town, Rosa included) →
 #   act1_porch (the voicemail, Rowan's lantern) → end card. After that she isn't guided any more.
@@ -313,7 +313,7 @@ Nora (neutral): Rosa runs a stall at the market. Maybe she'd take this one.
 @walk nora 12.2 -12.4
 @face nora 13.5 -14
 @camera 13.8 -13.4 8
-> Four sheep, grazing past the pond like they own the place. No ear tags. Burrs in their wool.
+> Two sheep, grazing past the pond like they own the place. No ear tags. Burrs in their wool.
 @face rowan nora
 @face nora rowan
 @camera between rowan nora 6.5
@@ -349,7 +349,7 @@ Nora (warm): Thanks.
 @label keep
 Rowan (neutral): If you want them, they're yours. Finders keepers, out here.
 Rowan (wry): Rosa says you've been buying wool off her by the skein. Every one of those is coins walking out your door.
-Rowan (neutral): Four sheep is wool every day, for nothing but grass. Pen them, shear them, knit it, sell it. That's the whole trade.
+Rowan (neutral): Two sheep is wool every day, for nothing but grass. Pen them, shear them, knit it, sell it. That's the whole trade.
 Nora (surprised): You make it sound easy.
 Rowan (wry): It isn't. So we'll do it one job at a time. First job: a pen, or they'll wander back the way they came.
 Nora (worried): Gran's pen is long gone. I've never built anything in my life.
@@ -392,7 +392,7 @@ Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing th
 > Now the hard part. The strays are still out by the pond, and they don't look like they're in any hurry.
 > Rowan's whistle carries down from the hill: two notes, then a third. Job done. Next job.
 @toast Rowan's task 2 of 4: press Tab and play the dog. The sheep shy from him, so come round behind them and steer them in through the gate. (They shy from you on foot too, a little.)
-@goal Rowan 2/4. Herd the four strays into your pen with the dog (Tab)
+@goal Rowan 2/4. Herd the two strays into your pen with the dog (Tab)
 
 == act1_flock
 @trigger event sheep_penned
@@ -400,9 +400,9 @@ Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing th
 @once
 @goal
 @camera player 7
-Nora (happy): All four. In!
+Nora (happy): Both of them. In!
 > They're already eating the grass inside the pen as if they'd never been anywhere else.
-Nora (warm): Welcome home, you four. That makes five of us.
+Nora (warm): Welcome home, you two. That makes three of us.
 > Rowan's whistle again from the hill. Then, faint on the wind: "Now shear them!"
 @set act1_flock_in
 @camera player

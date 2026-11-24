@@ -178,7 +178,7 @@ func reset_sandbox() -> void:
 			main.place_blockers.append(r)
 		_hidden_pen = false
 	main.pen_rect = _sandbox_pen
-	Game.sheep_count = Game.START_SHEEP # exactly three: Act 1 now pens four strays (Rowan's task)
+	Game.sheep_count = Game.START_SHEEP # exactly three: Act 1 pens two strays (Rowan's task)
 	while main.sheep_list.size() > Game.sheep_count:
 		main.sheep_list.pop_back().queue_free()
 	for s in main.sheep_list:
@@ -602,10 +602,10 @@ func craft(id: String) -> bool:
 # --- the strays and herding ------------------------------------------------------------
 
 ## The strays come to graze east of the pond (@farm strays in the story): `strays` in
-## data/economy.json "story" (four since 2026-11-20, for Rowan's task: herd four sheep).
+## data/economy.json "story" (two: four on 2026-11-20, back to two on 2026-11-24, Alex: "keep the economy as-is").
 func spawn_strays(n := -1) -> void:
 	if n < 0:
-		n = econ("strays", 4)
+		n = econ("strays", 2)
 	for i in n:
 		_add_stray(STRAYS_AT + Vector3((i % 2) * 1.6 - 0.8, 0, (i / 2) * 1.4 + (i % 2) * 0.5))
 	_save_strays()

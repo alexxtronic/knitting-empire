@@ -29,8 +29,8 @@ func run(main: Node) -> void:
 	m.cam_dist = 6.0
 	await m._wait(0.6)
 	await m._shot("68_shepherd_rowan.png")
-	# Act 1: four strays, and his tasks' events each start the next step only in their place
-	m._check("four strays come for Rowan's second task (economy 'story' strays = %d)" % m.homestead.econ("strays", 0), m.homestead.econ("strays", 0) == 4)
+	# Act 1: two strays, and his tasks' events each start the next step only in their place
+	m._check("two strays come for Rowan's second task (economy 'story' strays = %d)" % m.homestead.econ("strays", 0), m.homestead.econ("strays", 0) == 2)
 	for k in ["act1_flock_in", "act1_knit3", "act1_done", "seen_act1_sheared", "seen_act1_knit3", "seen_act1_rowan_done", "act1_yarn", "act1_note", "seen_act1_knit", "seen_act1_knit2"]:
 		Game.flags.erase(k)
 	Game.set_flag("seen_act1_knit")

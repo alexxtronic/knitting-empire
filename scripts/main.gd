@@ -4140,7 +4140,7 @@ func _act1_checks() -> void:
 	await _act1_until_done(60.0)
 	_check("Rosa bought the second sweater (coins %d→%d, sweaters %d→%d) and gave wool on credit (wool %d→%d, trust %d→%d), and the strays are bleating out by the pond (%d, '%s')" % [coins0, Game.coins, sweaters0, Game.count("sweater"), wool1, Game.count("wool"), rosa0, Game.stat("rosa", "trust"), homestead.strays.size(), hud.goal_label.text],
 		Game.coins == coins0 + 60 and Game.count("sweater") == sweaters0 - 1 and Game.count("wool") == wool1 + 5 and Game.flag("rosa_credit") == true
-		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and homestead.strays.size() == homestead.econ("strays", 4) and hud.goal_label.text.begins_with("Find"))
+		and Game.stat("rosa", "trust") == rosa0 + 2 and Game.flag("act1_market") == true and homestead.strays.size() == homestead.econ("strays", 2) and hud.goal_label.text.begins_with("Find"))
 	_check("the dog is with her from the start (for now), but the strays don't shy from him before there's a pen (here %s, herding %s)" % [dog != null and dog.visible, homestead.herders.has(dog)],
 		dog != null and dog.visible and not homestead.herders.has(dog))
 	# the hunt: walk out to the strays
@@ -4152,7 +4152,7 @@ func _act1_checks() -> void:
 		t += 0.1
 	walk_secs += (Time.get_ticks_msec() - t0) / 1000.0
 	_check("finding the strays starts Rowan's scene (%s)" % story.playing, story.playing == "act1_strays")
-	await _act1_shot("Four sheep", "25_act1_strays.png")
+	await _act1_shot("Two sheep", "25_act1_strays.png")
 	await _act1_shot("You alright?", "25_act1_rowan.png")
 	await _act1_until_done(60.0)
 	Game.hour = 9.0
@@ -4239,7 +4239,7 @@ func _act1_checks() -> void:
 	await _shot("26_act1_pen.png")
 	# a stray may have wandered through the open gate by itself while the scene played: count those as well
 	_check("with the pen built the dog can herd, but only while she plays him: following her he leaves the strays be (can %s, herding now %s, strays %d, %d already in)" % [dog_herds(), homestead.herders.has(dog), homestead.strays.size(), sheep_list.size()],
-		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() >= 1 and homestead.strays.size() + sheep_list.size() == homestead.econ("strays", 4)
+		dog_herds() and not homestead.herders.has(dog) and homestead.strays.size() >= 1 and homestead.strays.size() + sheep_list.size() == homestead.econ("strays", 2)
 		and hud.goal_label.text.begins_with("Rowan 2/4"))
 	# herding: the strays move off from her
 	var s0 = homestead.strays[0]
