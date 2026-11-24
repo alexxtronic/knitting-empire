@@ -36,6 +36,7 @@ const VINYL_BASE := Color("#d8ccac") # the siding's colour in its own texture (b
 ## porch post (art/world_assets/suburb_house/build.py, L and R, Blender y turned to Godot z).
 const FOOTPRINT := [Rect2(-6.6, -4.2, 5.16, 7.2), Rect2(-1.44, -6.2, 7.98, 10.6), Rect2(-6.6, 3.85, 0.25, 0.25)]
 const GARAGE := Rect2(-1.44, 4.4, 7.98, 5.6) # the right wing run out to the street as a garage (Alex, 2026-11-17), in front of Marcus's walk-in footprint
+const HOUSE_LOT := Rect2(-10.0, -9.0, 20.0, 25.0) # a house's own ground kept clear of scenery, in its space (the shell, the garage, the yard and drive in front)
 const DOOR_AT := Vector3(-2.5, 0, 4.6) # where to stand to go in: in front of the stoop
 const INSIDE_AT := Vector3(-2.5, 0, 1.5) # where a sleeper is put, out of sight
 const PORCH_LIGHT := Vector3(-2.5, 2.2, 3.7)
@@ -479,7 +480,18 @@ func clears(at: Vector3) -> bool:
 	var on_road := c + road_dir * c.distance_to(b) * t
 	if p.distance_to(on_road) < float(cfg.get("road_width", 6.0)) * 0.5 + 3.5:
 		return true
-	return sign_node != null and p.distance_to(Vector2(sign_node.global_position.x, sign_node.global_position.z)) < 2.5
+	if sign_node != null and p.distance_to(Vector2(sign_node.global_position.x, sign_node.global_position.z)) < 2.5:
+		return true
+	# and each house's own lot wherever the world editor has put it, front yard and drive included
+	# (Alex moved them off the circle on 2026-11-24, and the woods there boxed their front doors in)
+	for h in house_list:
+		var n := h["node"] as Node3D
+		if n == null or not is_instance_valid(n) or not n.is_inside_tree():
+			continue
+		var l: Vector3 = n.global_transform.affine_inverse() * Vector3(at.x, 0.0, at.z)
+		if HOUSE_LOT.has_point(Vector2(l.x, l.z)):
+			return true
+	return false
 
 
 # --- the night ---------------------------------------------------------------------------------------

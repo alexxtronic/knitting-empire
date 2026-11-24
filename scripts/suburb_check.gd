@@ -102,11 +102,15 @@ func run(m: Node) -> void:
 	# every door can be walked to from the town square
 	var reach := 0
 	var from := Vector3(53.0, 0.0, -1.0)
+	var cut: Array = []
 	for h in sb.houses():
 		var path: Array = main._find_path(from, h["door"])
 		if not path.is_empty() and (path[-1] as Vector3).distance_to(h["door"]) < 1.0:
 			reach += 1
-	main._check("every front door can be walked to from the square (%d of 6)" % reach, reach == 6)
+		else:
+			var d: Vector3 = h["door"]
+			cut.append("house %d door %.1f,%.1f (%s)" % [h["i"], d.x, d.z, "open cell, no way to it" if main._walkable(main._cell(d)) else "its cell is blocked"])
+	main._check("every front door can be walked to from the square (%d of 6%s)" % [reach, (": not " + "; ".join(cut)) if cut.size() > 0 else ""], reach == 6)
 	# the API: who sleeps where
 	main._check("home_for gives each named villager their house and anyone else the same one every time",
 		sb.home_for("wren") == 0 and sb.home_for("rosa") == 2 and sb.home_for("someone_new") == sb.home_for("someone_new")
