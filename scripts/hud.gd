@@ -9,6 +9,7 @@ signal wall_tool_chosen(kind: String) # a kind in house_builder.gd's KINDS, "flo
 signal floor_kind_chosen(kind: String) # the Floor tool's list: a kind in house_builder.gd's FLOORS
 signal paint_kind_chosen(kind: String) # the Paint tool's list: a colour in house_builder.gd's PAINTS
 signal ground_kind_chosen(kind: String) # the Ground tool's list: a surface in god_mode.gd's ROADS (build_plus.gd)
+signal build_undo_pressed # the Paint row's Undo: her last stroke, placement, move or removal in Build & Buy (build_plus.gd)
 signal walls_pressed
 signal save_pressed
 signal new_game_pressed
@@ -234,6 +235,7 @@ var door_btn: Button
 var floor_pick: OptionButton # the Floor tool's list (house_builder.gd FLOORS)
 var paint_pick: OptionButton # the Paint tool's list (house_builder.gd PAINTS)
 var ground_pick: OptionButton # the Ground tool's list (god_mode.gd ROADS, build_plus.gd prices)
+var build_undo_btn: Button # the Paint row's Undo (build_plus.gd undo())
 var cat_tabs := {} # the catalogue's room -> its tab button
 var wall_btns := {} # kind -> its toggle button in the Walls row (house_builder.gd KINDS)
 var wall_note: Label
@@ -1176,6 +1178,9 @@ func _build_catalog() -> void:
 		if not wall_btns["ground"].button_pressed:
 			wall_tool_chosen.emit("ground"))
 	prow.add_child(ground_pick)
+	build_undo_btn = _button("Undo", func(): build_undo_pressed.emit())
+	build_undo_btn.tooltip_text = "Take back your last ground stroke, piece placed, moved or taken up here (Ctrl/Cmd+Z), with its coins. The last 10, until you leave the game or open the world editor."
+	prow.add_child(build_undo_btn)
 	vb.add_child(prow)
 	wall_note = _label("Close a room against your house and it joins it. On a plot from Gary, the first wall lays a new house's foundations (+%dc)." % HB.new_house_fee(), 11, Color(0.85, 0.8, 0.7))
 	wall_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

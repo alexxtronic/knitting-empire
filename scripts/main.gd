@@ -596,6 +596,7 @@ func _connect_hud() -> void:
 	hud.floor_kind_chosen.connect(func(k: String): builder.set_floor_kind(k))
 	hud.paint_kind_chosen.connect(func(k: String): builder.set_paint_kind(k))
 	hud.ground_kind_chosen.connect(func(k: String): buildplus.ground_kind = k)
+	hud.build_undo_pressed.connect(func(): buildplus.undo())
 	hud.rotate_pressed.connect(_rotate_ghost)
 	hud.sell_pressed.connect(_sell_ghost)
 	hud.cancel_pressed.connect(_cancel_ghost)
@@ -1971,6 +1972,10 @@ func _input(e: InputEvent) -> void:
 		hud.hotbar_key(kc - KEY_0)
 		get_viewport().set_input_as_handled()
 		return
+	if mode == Mode.BUILD and kc == KEY_Z and k.is_command_or_control_pressed() and not god.active and house_sale.tool == "":
+		buildplus.undo() # Build & Buy: her last stroke, placement, move or removal (build_plus.gd)
+		get_viewport().set_input_as_handled()
+		return
 	var handled := true
 	match Keys.map(kc, ["world"]): # the player's key bindings, as the default keys below
 		KEY_I:
@@ -3302,12 +3307,21 @@ func _build_click(mpos: Vector2, keep_placing: bool) -> void:
 			return
 		var id: String = ghost.item_id
 		var bought := ghost_from == null
+		var coins0 := Game.coins
+		var wood0 := Game.count("wood")
+		var given0 := Catalog.given(id)
 		if ghost_from != null and (ghost_from as Dictionary).has("world"):
 			ghost.set_meta("w", true) # the world's own, moved: hers now, but worth nothing
 		if bought and not _pay_for(id):
 			return
 		if bought and ghost.color != "" and not Game.spend(recolor_price()): # a new piece pays for its colour as it goes down
 			ghost.set_color("")
+		if buildplus != null: # for Ctrl/Cmd+Z (build_plus.gd undo())
+			if bought or (ghost_from as Dictionary).has("world"):
+				buildplus.push_undo("place", {"node": ghost, "node_id": ghost.get_instance_id(), "id": id, "coins": coins0 - Game.coins,
+					"wood": wood0 - Game.count("wood"), "given": Catalog.given(id) < given0, "world": str((ghost_from as Dictionary).get("world", "")) if not bought else ""})
+			else:
+				buildplus.push_undo("move", {"node": ghost, "node_id": ghost.get_instance_id(), "pos": ghost_from["pos"], "rot": int(ghost_from["rot"])})
 		ghost.set_ghost(false)
 		furniture.append(ghost)
 		ghost = null
@@ -3407,6 +3421,15 @@ func _sell_ghost() -> void:
 	if not ghost or ghost_from == null:
 		return
 	var value: int = 0 if (ghost_from as Dictionary).has("world") else buildplus.sell_value(ghost)
+	if (ghost_from as Dictionary).has("world"): # for Ctrl/Cmd+Z (build_plus.gd undo())
+		buildplus.push_undo("remove_world", {"world": str(ghost_from["world"])})
+	else:
+		var entry := furniture_entry(ghost)
+		entry["x"] = snappedf((ghost_from["pos"] as Vector3).x, 0.001)
+		entry["z"] = snappedf((ghost_from["pos"] as Vector3).z, 0.001)
+		entry["rot"] = int(ghost_from["rot"])
+		entry.erase("yaw")
+		buildplus.push_undo("sell", {"entry": entry, "value": value, "node_id": ghost.get_instance_id()})
 	Game.coins += value
 	hud.show_toast("Sold the %s for %dc." % [ghost.display_name(), value] if value > 0 else "Removed the %s." % ghost.display_name().to_lower())
 	ghost.queue_free()
@@ -7695,6 +7718,95 @@ func _god_look(p: Vector3, dist := 16.0) -> void:
 	await _wait(0.5)
 
 
+## Ctrl/Cmd+Z as the keyboard sends it, through _input (the world editor's undo, or Build & Buy's).
+func _cmd_z_tap() -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = KEY_Z
+	ev.physical_keycode = KEY_Z
+	ev.ctrl_pressed = true
+	ev.meta_pressed = true
+	ev.pressed = true
+	ev.set_meta("ke_test", true)
+	Input.parse_input_event(ev)
+	await _wait(0.1)
+	var up := ev.duplicate() as InputEventKey
+	up.pressed = false
+	up.set_meta("ke_test", true)
+	Input.parse_input_event(up)
+	await _wait(0.5)
+
+
+## God mode's road undo, by the keys and by its button: a gravel stroke over lawn with tufts, then
+## the eraser over paving, each taken back to exactly the map, the drawn ground, the grass and the
+## plants it found. Leaves the undo stack as it found it.
+func _god_road_undo_checks() -> void:
+	var spot := Vector3.INF
+	var most := -1
+	for i in 10:
+		for j in 6:
+			var q := Vector3(24.0 + i * 1.5, 0, 10.0 + j * 1.5)
+			if god.road_at(q.x, q.z) != "" or god.road_at(q.x + 2.0, q.z) != "" or grass.grass_at(q.x + 1.0, q.z) < 0.5 or Vector2(q.x - 21.0, q.z - 7.5).length() < 5.0:
+				continue
+			var n: int = god.els.filter(func(e): return GodMode.SMALL.has(e.kind) and not e.deleted and Vector2(e.xf.origin.x - q.x - 1.0, e.xf.origin.z - q.z).length() < 1.4).size()
+			if n > most:
+				most = n
+				spot = q
+	if spot == Vector3.INF:
+		_check("god mode: found lawn for the road undo check", false)
+		return
+	await _god_look(spot, 14.0)
+	var depth0 := god.undo_stack.size()
+	var area := Rect2(spot.x - 3, spot.z - 3, 8, 6)
+	var map_of := func() -> PackedByteArray: return god.road_img.get_region(god._px_in(area)).get_data()
+	var tex_of := func() -> PackedByteArray: return god.road_tex.get_image().get_region(god._px_in(area)).get_data()
+	var plants_of := func() -> int: return god.els.filter(func(e): return GodMode.SMALL.has(e.kind) and not e.deleted and area.has_point(Vector2(e.xf.origin.x, e.xf.origin.z))).size()
+	var map0: PackedByteArray = map_of.call()
+	var tex0: PackedByteArray = tex_of.call()
+	var grass0: float = grass.grass_at(spot.x + 1.0, spot.z)
+	var blades0: int = grass.blades_near(spot.x + 1.0, spot.z, 1.0)
+	var plants0: int = plants_of.call()
+	var tiles0: int = god.painted_tiles()
+	god.set_tool("gravel")
+	god.set_brush(1.0)
+	god.press(cam.unproject_position(spot))
+	god.move(cam.unproject_position(spot + Vector3(2.0, 0, 0)))
+	god.release()
+	await _wait(0.4)
+	var painted: String = god.road_at(spot.x + 1.0, spot.z)
+	var grass1: float = grass.grass_at(spot.x + 1.0, spot.z)
+	var plants1: int = plants_of.call()
+	await _cmd_z_tap()
+	await _wait(0.3)
+	var map1: PackedByteArray = map_of.call()
+	var tex1: PackedByteArray = tex_of.call()
+	var grass2: float = grass.grass_at(spot.x + 1.0, spot.z)
+	var blades2: int = grass.blades_near(spot.x + 1.0, spot.z, 1.0)
+	_check("god mode: Ctrl/Cmd+Z after a gravel stroke over lawn puts the map back byte for byte (%s), the drawn ground (%s), the grass (%.2f, %.2f painted, %.2f now; blades %d then %d) and the tufts it cleared (%d, %d under it, %d now)" % [map1 == map0, tex1 == tex0, grass0, grass1, grass2, blades0, blades2, plants0, plants1, plants_of.call()],
+		painted == "gravel" and grass1 < 0.2 and map1 == map0 and tex1 == tex0 and absf(grass2 - grass0) < 0.02 and plants_of.call() == plants0 and (plants0 == 0 or plants1 < plants0) and blades2 >= blades0 * 3 / 4 and god.undo_stack.size() == depth0)
+	# the eraser over paving, undone by the toolbar's Undo button
+	var plaza := Vector3(47.0, 0, 0.0)
+	await _god_look(plaza, 14.0)
+	var parea := Rect2(plaza.x - 2, plaza.z - 2, 4, 4)
+	var pmap0: PackedByteArray = god.road_img.get_region(god._px_in(parea)).get_data()
+	var was: String = god.road_at(plaza.x, plaza.z)
+	god.set_tool("erase")
+	god.set_brush(1.0)
+	god.press(cam.unproject_position(plaza))
+	god.release()
+	await _wait(0.3)
+	var gone: String = god.road_at(plaza.x, plaza.z)
+	var undo_btn: Button = null
+	for b in god._ui.find_children("*", "Button", true, false):
+		if (b as Button).text == "Undo":
+			undo_btn = b
+	if undo_btn != null:
+		undo_btn.pressed.emit()
+	await _wait(0.3)
+	var tiles1: int = god.painted_tiles()
+	_check("god mode: the toolbar has an Undo button (%s) and it takes the eraser back over the plaza ('%s', erased '%s', back '%s', map the same %s, tiles %d then %d)" % [undo_btn != null, was, gone, god.road_at(plaza.x, plaza.z), god.road_img.get_region(god._px_in(parea)).get_data() == pmap0, tiles0, tiles1],
+		undo_btn != null and was != "" and gone == "" and god.road_at(plaza.x, plaza.z) == was and god.road_img.get_region(god._px_in(parea)).get_data() == pmap0 and tiles1 == tiles0 and god.undo_stack.size() == depth0)
+
+
 ## Guardrails: whatever is in the world now, and whatever is added later, the world editor can
 ## reach it. Every piece of furniture anywhere (her house, the yard, the town's decor) is something
 ## it picks up, or part of something it picks up (a shop's furnishings move with the shop); every
@@ -7887,6 +7999,7 @@ func _god_checks() -> void:
 	var rubbed: bool = god.road_at(47.0, 2.0) == ""
 	god.undo()
 	_check("god mode: the eraser rubs paving out, and Undo puts it back (%s)" % god.road_at(47.0, 2.0), rubbed and god.road_at(47.0, 2.0) == "cobble")
+	await _god_road_undo_checks()
 
 	# Shift paints a straight line that snaps to 45 degrees and follows the pointer
 	await _god_look(Vector3(31.0, 0, 9.5), 24.0)

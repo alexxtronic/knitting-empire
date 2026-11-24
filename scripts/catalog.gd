@@ -28,10 +28,10 @@ static var ITEMS: Dictionary = Data.furniture()
 static var INDOOR: Array = Data.furniture_ids("indoors")
 static var OUTDOOR: Array = Data.furniture_ids("yard")
 ## The Build catalog's tabs (Builder's Delight's catalogue), by each piece's "cat" in furniture.json.
-## The last three are filled at launch by build_plus.gd from the world editor's Place list (Alex,
-## 2026-11-24: build mode can buy everything god mode can place): its scenery, its other models and the
-## shops' own fittings.
-const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm", "Garden & Nature", "Outdoor", "Shop & Town"]
+## The last two are filled at launch by build_plus.gd from the world editor's Place list (Alex,
+## 2026-11-24: build mode can buy everything god mode can place that makes sense to buy): its scenery
+## and the shops' own fittings; its fence parts join Farm.
+const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm", "Garden & Nature", "Shop & Town"]
 
 
 ## The tab a piece is in: its "cat", or Living for an indoor piece and Garden for the yard.

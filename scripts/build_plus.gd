@@ -12,8 +12,13 @@ extends Node
 ##     launch (after the layout, before the HUD and the save): a catalogue piece stays itself, and every
 ##     other option (each scenery kind, each other model in assets/props, a "(small)" option) becomes a
 ##     catalogue entry of its own, "w_<kind>", with "world": true, priced from data/economy.json
-##     "build_prices" and put in the Garden & Nature or Outdoor tab. The shops' own fittings (no shop in
+##     "build_prices" and put in the Garden & Nature or Farm tab. The shops' own fittings (no shop in
 ##     furniture.json) go in Shop & Town. These are ordinary Furniture once placed, kept in her save.
+##     What's no use as a purchase ("build_prices" "exclude": buildings, the bus, the dog, crops, tools
+##     and the lantern as props, signs, the stalls...) isn't listed, and a model in twice is listed once
+##     ("prefer_scenery"; Alex, 2026-11-24: "take out things that don't make sense").
+##   - Undo (Ctrl/Cmd+Z, the Paint row's Undo): her last UNDO_MAX strokes, placements, moves and
+##     removals, each put back exactly with its coins. In memory only: not saved.
 ##   - Painting the ground with god mode's road surfaces, paid per square metre that changes
 ##     (paint_begin/hover/end). It uses god mode's own brush (_dab) on its road map, but none of its
 ##     undo, layout or "unsaved" state: what she paints is a layer of her own (an RGBA image over the
@@ -33,7 +38,7 @@ const Forage = preload("res://scripts/forage.gd")
 
 const BRUSH := 1.0 # metres: the ground brush's radius
 const NATURE_TAB := "Garden & Nature"
-const OUTDOOR_TAB := "Outdoor"
+const OUTDOOR_TAB := "Farm" # what isn't nature (the fence parts) goes in with the pen's fence
 const SHOP_TAB := "Shop & Town"
 const NATURAL := ["tree_", "rock_", "bush_", "tuft_", "flowers_", "clover", "leaf_", "maple_", "hedge", "arborvitae", "red_shrub"]
 const FLAT := ["tuft_", "flowers_", "clover", "leaf_", "crop_"] # nothing walks round these
@@ -47,6 +52,10 @@ var layer: Image # her ground paint: RGBA8 over the road map, alpha 1 where she 
 var under: Image # the road map under her paint (the layout's, and god mode's edits)
 var last_cost := 0 # what the last stroke cost (the check reads it)
 var last_refusal := ""
+var excluded: Dictionary = {} # god mode's Place option id -> the "exclude" pattern that keeps it out of Build & Buy
+var hidden: Dictionary = {} # a catalogue id left out as a second copy of a model -> the one listed instead
+var undo_stack: Array = [] # her last few strokes, placements, moves and removals in Build & Buy (undo())
+const UNDO_MAX := 10
 var _painting := false
 var _before: Image
 var _rect := Rect2()
@@ -85,7 +94,19 @@ static func price_for(model: String) -> int:
 
 # --- the catalogue ----------------------------------------------------------------------------
 
-## Makes a catalogue entry for every option on god mode's Place list that isn't one already.
+## Whether a Build & Buy id (a "w_" option or a catalogue id) is one "build_prices" "exclude" leaves
+## out of the catalogue: the pattern that matched, or "".
+static func exclude_pattern(id: String) -> String:
+	for p in econ().get("exclude", []):
+		var pat := str(p)
+		if (pat.ends_with("*") and id.begins_with(pat.trim_suffix("*"))) or id == pat:
+			return pat
+	return ""
+
+
+## Makes a catalogue entry for every option on god mode's Place list that isn't one already. Those
+## "exclude" names stay out of the catalogue (an entry is still made, so a save that has one keeps it
+## and the world's scenery of that kind can still be taken up), and a model listed twice is listed once.
 func register() -> void:
 	var shop_prices: Dictionary = econ().get("shop_pieces", {})
 	for o in main.god.place_options():
@@ -93,6 +114,12 @@ func register() -> void:
 		var what := pid.get_slice(":", 1)
 		if pid.begins_with("decor:"):
 			if not Catalog.ITEMS.has(what):
+				continue
+			var pat := exclude_pattern(what)
+			if pat != "":
+				excluded[pid] = pat
+				Catalog.INDOOR.erase(what)
+				Catalog.OUTDOOR.erase(what)
 				continue
 			options[pid] = what
 			if not (what in Catalog.INDOOR or what in Catalog.OUTDOOR):
@@ -125,8 +152,53 @@ func register() -> void:
 		if model.begins_with("tree_") or model.begins_with("maple_"):
 			e["trunk"] = true
 		Catalog.ITEMS[id] = e
+		var pat := exclude_pattern(id)
+		if pat != "":
+			excluded[pid] = pat
+			continue
 		Catalog.OUTDOOR.append(id)
 		options[pid] = id
+	_dedupe()
+
+
+## The model (and size) a catalogue piece draws, so two entries for one thing can be told apart.
+static func _draws(id: String) -> String:
+	var info: Dictionary = Catalog.ITEMS.get(id, {})
+	return "%s@%.2f" % [str(info.get("model", id)).get_file().get_basename(), float(info.get("scale", 1.0))]
+
+
+## One model listed twice (a catalogue piece and the world editor's option, or a land's own copy of a
+## kind): "prefer_scenery" models keep the world editor's own option (the plain kind, not a land's),
+## anything else keeps the catalogue piece. The other is left out of the catalogue's lists, its entry
+## kept (taking a land's rock up still hands her a copy of it).
+func _dedupe() -> void:
+	var groups := {}
+	for id in Catalog.INDOOR + Catalog.OUTDOOR:
+		var k := _draws(str(id))
+		if not groups.has(k):
+			groups[k] = []
+		(groups[k] as Array).append(str(id))
+	for k in groups:
+		var ids: Array = groups[k]
+		if ids.size() < 2:
+			continue
+		var scenery := GodMode._starts(str(k).get_slice("@", 0), econ().get("prefer_scenery", []))
+		var rank := func(id: String) -> int:
+			var world: bool = Catalog.ITEMS[id].get("world", false) == true
+			var land: bool = world and str(Catalog.ITEMS[id].get("kind", "")).contains("-")
+			if scenery:
+				return 0 if world and not land else (1 if not world else 2)
+			return 0 if not world else (1 if not land else 2)
+		ids.sort_custom(func(a, b): return rank.call(a) < rank.call(b) or (rank.call(a) == rank.call(b) and a < b))
+		var keep: String = ids[0]
+		for i in range(1, ids.size()):
+			var id: String = ids[i]
+			hidden[id] = keep
+			Catalog.INDOOR.erase(id)
+			Catalog.OUTDOOR.erase(id)
+	for pid in options.keys():
+		if hidden.has(options[pid]):
+			options[pid] = hidden[options[pid]]
 
 
 ## The catalogue piece a piece of the world's scenery is a copy of ("" if none).
@@ -325,9 +397,12 @@ func paint_end() -> void:
 		last_refusal = "Not enough coins: that's %dc of %s." % [cost, ground_label(ground_kind).get_slice(" (", 0).to_lower()]
 		main.hud.show_toast(last_refusal)
 		return
-	_before = null
 	if changed.is_empty():
+		_before = null
 		return
+	# for undo: the map and her layer as they were where the stroke reached, and what it cost
+	var rec := {"px": px, "road": _before.get_region(px), "layer": layer.get_region(px), "cost": cost, "area": _rect.grow(0.2), "cleared": []}
+	_before = null
 	Game.coins -= cost
 	last_cost = cost
 	for q in changed:
@@ -340,9 +415,12 @@ func paint_end() -> void:
 			if el.scenery and not el.cut and not el.deleted and GodMode.SMALL.has(el.kind) and _rect.has_point(Vector2(el.xf.origin.x, el.xf.origin.z)) \
 					and god.road_at(el.xf.origin.x, el.xf.origin.z) != "":
 				var cl: Dictionary = (Game.flag("cleared", {}) as Dictionary).duplicate()
+				if not cl.has(Forage.key_of(el)):
+					(rec["cleared"] as Array).append(Forage.key_of(el))
 				cl[Forage.key_of(el)] = Game.day
 				Game.set_flag("cleared", cl)
 				main.forage._set_cut(el, true)
+	push_undo("paint", rec)
 	main.hud.show_toast("Painted %.1f m² of %s for %dc." % [changed.size() / per, ground_label(ground_kind).get_slice(" (", 0).to_lower(), cost])
 
 
@@ -380,6 +458,7 @@ func _composite(px: Rect2i) -> void:
 
 ## After a load (or a new game): the road map as the layout made it, then her saved layer over it.
 func apply_saved() -> void:
+	undo_stack.clear() # a load or a new game: nothing of before to take back (and no refunds for it)
 	var god = main.god
 	if under != null and god.roads_on and layer != null:
 		var old := layer.get_used_rect()
@@ -408,6 +487,7 @@ func apply_saved() -> void:
 ## God mode opens: the road map goes back to the layout's own, so its file never gets her paint.
 func suspend() -> void:
 	paint_end()
+	undo_stack.clear() # god mode may change the map under her strokes: their snapshots would be stale
 	if layer == null or under == null:
 		return
 	var used := layer.get_used_rect()
@@ -425,3 +505,101 @@ func resume() -> void:
 	if used.size.x > 0:
 		_composite(used)
 		_show(_world_rect(used))
+
+
+# --- undo -------------------------------------------------------------------------------------
+
+## Remembers one of her changes in Build & Buy for undo(): "paint" (a ground stroke), "place" (a piece
+## bought or a copy of the world's own set down), "move", "sell" (a piece taken up and sold back) or
+## "remove_world" (the world's own scenery taken up and removed). Kept in memory only, the last
+## UNDO_MAX of them: not in her save, and gone after a load or once god mode opens.
+func push_undo(kind: String, d: Dictionary) -> void:
+	d["kind"] = kind
+	undo_stack.append(d)
+	while undo_stack.size() > UNDO_MAX:
+		undo_stack.pop_front()
+
+
+## Takes back her last change in Build & Buy (Ctrl/Cmd+Z, or the Undo button in the Paint row): exactly
+## what it changed, and every coin it cost (or the coins a sale gave, if she still has them).
+func undo() -> void:
+	paint_end()
+	if main.ghost != null:
+		main._cancel_ghost() # the piece in her hands goes back first
+		return
+	if undo_stack.is_empty():
+		main.hud.show_toast("Nothing to undo.")
+		return
+	var u: Dictionary = undo_stack.pop_back()
+	match str(u["kind"]):
+		"paint":
+			var god = main.god
+			var px: Rect2i = u["px"]
+			var road: Image = u["road"]
+			god.road_img.blit_rect(road, Rect2i(Vector2i.ZERO, road.get_size()), px.position)
+			if layer != null:
+				var lr: Image = u["layer"]
+				layer.blit_rect(lr, Rect2i(Vector2i.ZERO, lr.get_size()), px.position)
+				_save_layer()
+			Game.coins += int(u["cost"])
+			if not (u["cleared"] as Array).is_empty():
+				var cl: Dictionary = (Game.flag("cleared", {}) as Dictionary).duplicate()
+				for key in u["cleared"]:
+					cl.erase(key)
+				Game.set_flag("cleared", cl)
+				main.forage.apply()
+			_show(u["area"])
+			main.hud.show_toast("Undid the paint (+%dc)." % int(u["cost"]))
+		"place":
+			var f = _live(u)
+			if f == null:
+				main.hud.show_toast("That piece isn't there any more.")
+				return
+			main.furniture.erase(f)
+			f.queue_free()
+			Game.coins += int(u.get("coins", 0))
+			if int(u.get("wood", 0)) > 0:
+				Game.add_item("wood", int(u["wood"]))
+			if u.get("given", false) == true:
+				var g: Dictionary = (Game.flag("given", {}) as Dictionary).duplicate()
+				g[u["id"]] = int(g.get(u["id"], 0)) + 1
+				Game.set_flag("given", g)
+			if str(u.get("world", "")) != "":
+				unclear(str(u["world"])) # the world's own goes back where it stood
+			main._rebuild_grid()
+			main.hud.show_toast("Undid placing the %s." % str(Catalog.ITEMS.get(u["id"], {}).get("name", "piece")).to_lower())
+		"move":
+			var f = _live(u)
+			if f == null:
+				main.hud.show_toast("That piece isn't there any more.")
+				return
+			f.position = u["pos"]
+			f.set_rot(int(u["rot"]))
+			main._rebuild_grid()
+			main.hud.show_toast("Moved the %s back." % f.display_name().to_lower())
+		"sell":
+			var value := int(u.get("value", 0))
+			if Game.coins < value:
+				undo_stack.append(u)
+				main.hud.show_toast("You'd need the %dc back to undo that sale." % value)
+				return
+			Game.coins -= value
+			main._spawn_entry(u["entry"])
+			var f = main.furniture.back()
+			for e in undo_stack: # earlier records of that piece now mean the new one
+				if int(e.get("node_id", 0)) == int(u["node_id"]):
+					e["node"] = f
+					e["node_id"] = f.get_instance_id()
+			main._rebuild_grid()
+			main.hud.show_toast("Put the %s back." % f.display_name().to_lower())
+		"remove_world":
+			unclear(str(u["world"]))
+			main.hud.show_toast("Put it back.")
+
+
+## The piece an undo record is about, if it's still hers.
+func _live(u: Dictionary):
+	var f = u.get("node")
+	if f == null or not is_instance_valid(f) or not main.furniture.has(f):
+		return null
+	return f

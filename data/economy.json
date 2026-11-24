@@ -248,7 +248,12 @@
     "small": 0.5,
     "default": 25,
     "shop_pieces": {"bakery_counter": 60, "cafe_counter": 60, "espresso_bar": 80, "cafe_bookshelf": 70, "cafe_table": 40, "cafe_coffee_table": 30, "pouf": 20, "pendant_lamp": 25, "welcome_sign": 120, "bakery_stall": 400},
-    "ground": {"dirt": 1, "gravel": 2, "cobble": 4, "pavement": 3, "sidewalk": 3, "grass": 1}
+    "ground": {"dirt": 1, "gravel": 2, "cobble": 4, "pavement": 3, "sidewalk": 3, "grass": 1},
+    "_about_exclude": "What Build & Buy leaves out of its catalogue (Alex, 2026-11-24: \"God mode's list includes odd things: yes, take out things that don't make sense\"). god mode's own Place list keeps all of it. \"exclude\": Build & Buy ids (\"w_<model>\" for a world editor option, or a catalogue id), exact, or ending in * for every id that starts so: the town's buildings and the barn, the bus, the dog, the crops (she plants seeds), the tools and the lantern as props (Steve sells the real ones), the shop signs, the welcome sign, the bakery stall and the town's mailboxes (hers stands by the porch), and the house editor's doors (the Walls row's Door tools put real ones in). The pieces still exist (a save that has one keeps it); they just aren't for sale. \"prefer_scenery\": where one model is in the catalogue twice (a catalogue piece and a world editor option, or a land's own copy of a kind), a model starting with one of these keeps the world editor's option at its scenery price (flowers, tufts, bushes, rocks, trees, hedges) and the catalogue's own piece is left out; any other model keeps the catalogue piece (the picket fence, the fountain).",
+    "exclude": ["w_building_*", "w_barn", "w_maplewood_bus", "w_suitcase*", "w_dog", "w_sheep_*", "w_crop_*",
+      "w_axe", "w_hoe", "w_scythe", "w_shears", "w_shovel", "w_watering_can", "w_knitting_needles", "w_lantern",
+      "w_sign_*", "welcome_sign", "bakery_stall", "w_market_stall", "mailbox", "w_cobble_*", "w_door_interior", "w_sliding_door"],
+    "prefer_scenery": ["flowers_", "tuft_", "clover", "leaf_", "bush_", "red_shrub", "arborvitae", "hedge", "rock_", "tree_", "maple_"]
   },
   "forage": {
     "tree_wood": 8,
