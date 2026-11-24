@@ -57,6 +57,9 @@ extends RefCounted
 ##   @time 21.5                      set the clock (hours, or 21:30)
 ##   @sleep                          she sleeps: next morning, a new day (crops grow, prices change)
 ##   @give coins 60 / @take coins 5  coins work like items
+##   @act next / @act card           the skip between acts (scripts/acts.gd, data/scenes/acts.scene):
+##                                   "next" makes it (the act, the calendar, Gran, her model),
+##                                   "card" shows the montage card of what she has until it's clicked
 ##   @if has sweater -> label        jump if she has an item ("has wool 3" for at least 3)
 ##   @if hearts rowan >= 3 -> label  friendship hearts (0-5); "@if hour < 17 -> label" checks the clock
 ## Text can use {player} for the heroine's name.
@@ -65,7 +68,7 @@ const SCENE_DIR := "res://data/scenes"
 const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "eyes", "walk", "place", "set", "unset",
 	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
 	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home",
-	"memory", "journal", "time", "sleep", "music", "farm"]
+	"memory", "journal", "time", "sleep", "music", "farm", "act"]
 const HEADERS := ["label", "trigger", "requires", "when", "once", "daily"]
 const STATS := ["familiarity", "trust", "romance"]
 

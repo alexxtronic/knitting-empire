@@ -11,6 +11,8 @@ const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
 const GoalsCheck = preload("res://scripts/goals_check.gd")
+const ActsCheck = preload("res://scripts/acts_check.gd")
+const Acts = preload("res://scripts/acts.gd")
 const HouseSaleCheck = preload("res://scripts/house_sale_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
@@ -152,6 +154,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
+var act_frame: Acts # the four acts: Game.act, the skip to the next, its card, her model by age (acts.gd)
 var goals: EmpireGoals # the Empire goal list, the takings ledger, the Field Guide and the Lookbook (empire_goals.gd)
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
 var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it (house_sale.gd)
@@ -463,6 +466,12 @@ func _ready() -> void:
 	goals.main = self
 	add_child(goals)
 	goals.setup()
+	act_frame = Acts.new()
+	act_frame.main = self
+	add_child(act_frame)
+	act_frame.apply_model() # her age's model, once the save has said which act it is
+	hud.chapter_offered = act_frame.offered
+	hud.chapter_pressed.connect(func(): act_frame.begin())
 	bonfire = Bonfire.new()
 	bonfire.main = self
 	add_child(bonfire)
@@ -2637,7 +2646,7 @@ func _actions_for(t) -> Array:
 			"bench", "bench_short":
 				return [_act("rest", "Rest  (+energy)"), _act("nap", "Take a nap  (1 hour)")]
 			"bed":
-				return [_act("sleep", "Sleep until morning"), _act("nap", "Take a nap  (1 hour)")]
+				return [_act("sleep", "Sleep until morning"), _act("nap", "Take a nap  (1 hour)")] + act_frame.bed_rows()
 			"kitchen":
 				return [
 					_act("cook_turnip", "Cook turnip stew  (1 turnip)", Game.has_item("turnip")),
@@ -2798,6 +2807,8 @@ func _perform(t, id: String) -> void:
 			else:
 				player.start_activity("Zzz", 1.8, func(): pass, _seat_point(t), t.rotation.y)
 			_go_to_sleep(false)
+		"next_chapter": # the skip to the next act, from her bed (acts.gd): its scene asks first
+			act_frame.begin()
 		"cook_turnip", "cook_pumpkin", "snack":
 			if id == "snack" and not Game.spend(5):
 				return
@@ -6048,6 +6059,12 @@ func _autotest() -> void:
 	if "--only=marcushouse" in OS.get_cmdline_user_args(): # just buying Marcus's house: his favour, the sale, her edits to it
 		await _wait(1.5)
 		await HouseSaleCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=acts" in OS.get_cmdline_user_args(): # just the four acts: the chapter rows, the skip and its card, Act 2, Gran, the save
+		await _wait(1.5)
+		await ActsCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

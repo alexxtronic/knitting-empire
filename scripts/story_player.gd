@@ -404,6 +404,10 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 		"music":
 			if main.audio:
 				main.audio.play_tune(str(a[0]) if not a.is_empty() else "off", 0.1 if auto and not cinematic else 2.5)
+		"act":
+			# the skip between acts (scripts/acts.gd): @act next, @act card
+			if main.act_frame and not a.is_empty():
+				await main.act_frame.cmd(str(a[0]))
 		"farm":
 			# Act 1's farm (scripts/homestead.gd): @farm note (Gran's note, rent starts; "gran_coins" is 0
 			# since 2026-11-16: she leaves yarn and needles instead), @farm strays (two stray sheep graze

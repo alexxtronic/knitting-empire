@@ -1,0 +1,50 @@
+# The skip between acts (scripts/acts.gd; Alex, 2026-11-24: "the time skip is the player's choice").
+# Each act's last goal sets act_ready; her bed's "Begin the next chapter…" or the Esc menu's row then
+# plays act<N>_begin, never on its own. The first choice is the confirm: "Not yet" changes nothing.
+# @act next makes the skip (the act, her age and model, the calendar, act_ready cleared, the next
+# act's goals; going into Act 2, Gran's passing and the end of her rent), @act card shows the
+# montage card of what she has. The format is at the top of scripts/story.gd.
+# Every line here is a DRAFT for Alex.
+
+== act2_begin
+@requires act_ready
+? Begin the next chapter? Twenty-five years will pass, and everything you own comes with you.
+- Begin it. -> go
+- Not yet.
+@end
+@label go
+@fade out 1.5
+@act next
+@title Twenty-five years later
+@act card
+@fade in 1.5
+Nora (warm): Fifty. Somewhere along the way the farm stopped being Gran's and started being mine.
+> The needles are the same pair. Her hands know them better now.
+
+== act3_begin
+@requires act_ready
+? Begin the next chapter? Twenty-five years will pass, and everything you own comes with you.
+- Begin it. -> go
+- Not yet.
+@end
+@label go
+@fade out 1.5
+@act next
+@title Twenty-five years later
+@act card
+@fade in 1.5
+Nora (warm): Seventy-five. The whole valley wears my sweaters now. Imagine that.
+
+== act4_begin
+@requires act_ready
+? Begin the last chapter? Twenty-five years will pass, and everything you own comes with you.
+- Begin it. -> go
+- Not yet.
+@end
+@label go
+@fade out 1.5
+@act next
+@title Twenty-five years later
+@act card
+@fade in 1.5
+Nora (warm): A hundred years old, and still knitting. Gran would laugh.

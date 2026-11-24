@@ -20,6 +20,7 @@ const BLEND := 0.22
 const MIN_STRIDE_RATE := 0.55
 
 var id := ""
+var model_path := "" # the model it loaded (Nora's changes with the act: scripts/acts.gd)
 var ok := false # true when the model loaded with every loop
 var anim: AnimationPlayer
 var skeleton: Skeleton3D
@@ -49,15 +50,16 @@ var _last_speed := 0.0
 var _have_last := false
 
 
-## Loads the character's model. Returns false (and adds nothing) if it's missing or incomplete.
-func load_character(char_id: String) -> bool:
+## Loads the character's model (or `model`, in place of the one data/characters.json names). Returns
+## false (and adds nothing) if it's missing or incomplete.
+func load_character(char_id: String, model := "") -> bool:
 	id = char_id
 	var info := Data.character(char_id)
 	walk_anim_speed = float(info.get("walk_anim_speed", 3.0))
 	run_anim_speed = float(info.get("run_anim_speed", 3.0))
 	brisk_anim_speed = float(info.get("brisk_anim_speed", 0.0))
 	label_height = float(info.get("label_height", 2.1))
-	var path := str(info.get("model", "res://assets/%s.glb" % char_id))
+	var path := model if model != "" else str(info.get("model", "res://assets/%s.glb" % char_id))
 	if not ResourceLoader.exists(path) and info.has("model_painted_eyes"):
 		path = str(info["model_painted_eyes"]) # the real eyes aren't made yet (tools/add_eyes.py)
 	if not ResourceLoader.exists(path):
@@ -84,6 +86,7 @@ func load_character(char_id: String) -> bool:
 		if anim.has_animation(n):
 			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 	add_child(inst)
+	model_path = path
 	var sk := inst.find_children("*", "Skeleton3D", true, false)
 	skeleton = sk[0] if not sk.is_empty() else null
 	if skeleton:

@@ -6,6 +6,7 @@
       "id": "nora",
       "name": "Nora",
       "model": "res://assets/nora_tripo_eyes.glb",
+      "nora_ages": {"1": "res://assets/nora_tripo_eyes.glb", "2": "res://assets/nora_tripo_eyes.glb", "3": "res://assets/nora_tripo_eyes.glb", "4": "res://assets/nora_tripo_eyes.glb", "_about": "Her model in each act (scripts/acts.gd: at 25, 50, 75 and 100), put on at load and on the skip. All four are today's until Alex supplies Nora at 50, 75 and 100, each rigged like her, with real eyes, the rigid head, her grip (tools/add_grip.py) and her fitted sweater."},
       "model_painted_eyes": "res://assets/nora_tripo.glb",
       "model_procedural": "res://assets/nora.glb",
       "model_triposr": "res://assets/nora_tsr.glb",

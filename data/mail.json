@@ -1,5 +1,5 @@
 {
-  "_about": "The post (scripts/mail.gd). Every word here is a DRAFT for Alex. Barbara brings the post on her nine o'clock round (main.gd _update_post); what's due goes into Nora's mailbox by the porch, she takes it out and reads it in the letters panel (scripts/letters_panel.gd). 'letters': one-off letters, each with an 'id', 'from', 'place' (where it's posted from), 'subject' and 'body' ({name} is the player's name, \\n\\n a new paragraph). When it comes: 'day' (the earliest day), 'needs' (a story flag; a flag starting 'act1' counts as set on a farm that isn't the story farm), 'after' + 'days' (that many days after the letter 'after' was delivered). Enclosed, given when she first reads it: 'coins', 'item' + 'item_n'. 'orders': sweater orders by post. From 'start_day' (and 'needs'), one comes every 'every' days while fewer than 'max_open' are waiting; the customers take turns. Each wants one sweater of 'stars' (1 Common .. 5 Legendary) or better and pays 'pay', plus 'tip_per_star' for each star above. She puts the sweater in the mailbox, Barbara takes it on her next round, and the payment comes with the customer's 'thanks' in the post the morning after.",
+  "_about": "The post (scripts/mail.gd). Every word here is a DRAFT for Alex. Barbara brings the post on her nine o'clock round (main.gd _update_post); what's due goes into Nora's mailbox by the porch, she takes it out and reads it in the letters panel (scripts/letters_panel.gd). 'letters': one-off letters, each with an 'id', 'from', 'place' (where it's posted from), 'subject' and 'body' ({name} is the player's name, \\n\\n a new paragraph). When it comes: 'day' (the earliest day), 'needs' (a story flag; a flag starting 'act1' counts as set on a farm that isn't the story farm), 'after' + 'days' (that many days after the letter 'after' was delivered); 'until' (a story flag that, once set, means it never comes: Gran's Florida letters stop when she has passed, scripts/acts.gd). Enclosed, given when she first reads it: 'coins', 'item' + 'item_n'. 'orders': sweater orders by post. From 'start_day' (and 'needs'), one comes every 'every' days while fewer than 'max_open' are waiting; the customers take turns. Each wants one sweater of 'stars' (1 Common .. 5 Legendary) or better and pays 'pay', plus 'tip_per_star' for each star above. She puts the sweater in the mailbox, Barbara takes it on her next round, and the payment comes with the customer's 'thanks' in the post the morning after.",
   "letters": [
     {
       "id": "gran_florida_1",
@@ -7,6 +7,7 @@
       "place": "Sarasota, Florida",
       "day": 2,
       "needs": "act1_note",
+      "until": "gran_passed",
       "subject": "Safe and sweltering",
       "body": "My darling Nora,\n\nI'm here, I'm alive, and I'm melting. Dot met me at the airport in a sun hat the size of a cartwheel and has not stopped talking since. She has a parrot called Admiral who says \"hello, gorgeous\" to the postman and nothing at all to me.\n\nThe doctor here says my chest is already better for the warm. I say it's better for not shovelling snow off a porch, but we're both happy, so I let him win.\n\nHow is the house? Is the front door still sticking? Lift and shove, love. Are the roses sulking? Ignore them, they always come round.\n\nI've put a little something in for wool. Don't argue, you can't from there.\n\nWrite when you can. Barbara knows the address.\n\nAll my love,\nGran\n\nP.S. If you haven't met Rowan yet, you will: tall, quiet, always mending somebody's fence. Feed him. He won't ask, but he's always hungry.",
       "coins": 25
@@ -26,10 +27,19 @@
       "place": "Sarasota, Florida",
       "after": "gran_florida_1",
       "days": 7,
+      "until": "gran_passed",
       "subject": "A parcel for my girl",
       "body": "My darling Nora,\n\nDot has joined a bridge club and dragged me along. I am a terrible bridge player. I am, however, a very good knitter, and half the table has already asked whether my granddaughter takes orders. I told them you might. Don't be surprised if strangers write.\n\nI've sent you a little wool from a woman at the farmers' market here. She keeps three sheep in her back garden and calls them all Doris. It's soft, and it smells of oranges.\n\nBarbara says you've been looking thin. Barbara says a lot of things. Eat something.\n\nAll my love, always,\nGran",
       "item": "wool",
       "item_n": 3
+    },
+    {
+      "id": "gran_last",
+      "from": "Gran",
+      "place": "Sarasota, Florida",
+      "needs": "gran_passed",
+      "subject": "For when you're ready",
+      "body": "My darling Nora,\n\nI've asked Dot to post this when the time comes, so if you're reading it, I've gone, and I went peacefully, in the sun, with a cup of tea going cold beside me. Don't you dare be sad for long.\n\nThe farm is yours now. It has been for years, really. I only kept my name on the tin so you'd have a reason to write.\n\nKeep the needles warm. Look after the sheep, and let somebody look after you.\n\nAll my love, always,\nGran\n\nP.S. Dot says hello. Dot always says hello."
     }
   ],
   "orders": {

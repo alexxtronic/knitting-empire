@@ -23,7 +23,8 @@ const MAX_HOUSE_LEVEL := 3
 ## v4: adds the needs happiness, love, warmth and fitness, knitting skill and the sweater she wears.
 ## v5: adds typed chats with villagers (the last lines of each conversation).
 ## v6: every sweater has a rarity (1 Common .. 5 Legendary), kept in `sweaters` (scripts/knit_game.gd).
-const SAVE_VERSION := 8
+## v7: Daniel is Max. v8: tools are bought. v9: the act (1..4, scripts/acts.gd); an older save is Act 1.
+const SAVE_VERSION := 9
 ## Relationship stats and their ranges. Familiarity drives hearts (20 per heart).
 const STATS := {"familiarity": [0, 100], "trust": [-50, 100], "romance": [0, 100]}
 
@@ -97,6 +98,11 @@ var owns_cottage := false
 var sheep_count: int = 3
 ## Story progress: named flags set by scenes and choices ("met_rowan", "act1_done", ...).
 var flags := {}
+## The act, 1 to 4 (Alex, 2026-11-24: four acts across one life, Nora 25, 50, 75 and 100). The skip
+## to the next is hers to start (scripts/acts.gd); everything she owns carries over.
+var act: int = 1
+const AGES := [25, 50, 75, 100]
+const LAST_ACT := 4
 
 
 func _init() -> void:
@@ -151,6 +157,7 @@ func reset() -> void:
 	owns_cottage = false
 	sheep_count = START_SHEEP
 	flags = {}
+	act = 1
 
 
 ## Every drain on her energy is scaled by this (Alex, 2026-11-17: "make the energy meter more
@@ -472,6 +479,22 @@ func add_stat(id: String, stat_name: String, amount: int) -> int:
 	return int(f[stat_name])
 
 
+# --- the acts ------------------------------------------------------------------
+
+## Nora's age in this act: 25, 50, 75 or 100.
+func age() -> int:
+	return int(AGES[clampi(act, 1, LAST_ACT) - 1])
+
+
+## True once the act that opens `what` has come: data/economy.json "acts" "unlocks" (drafts: dogs,
+## workers and town at 2; mayor and shops at 3; god_sweater at 4). Unknown names are never unlocked.
+func unlocked(what: String) -> bool:
+	var u: Dictionary = (Data.economy().get("acts", {}) as Dictionary).get("unlocks", {})
+	if not u.has(what):
+		return false
+	return act >= int(u[what])
+
+
 # --- story flags ---------------------------------------------------------------
 
 func set_flag(flag_name: String, value: Variant = true) -> void:
@@ -497,7 +520,7 @@ func add_journal(kind: String, title: String, text: String) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": SAVE_VERSION, "flags": flags,
+		"version": SAVE_VERSION, "flags": flags, "act": act,
 		"coins": coins, "inv": inv, "slots": slots, "energy": energy, "fullness": fullness,
 		"happiness": happiness, "love": love, "warmth": warmth, "fitness": fitness,
 		"knit_xp": knit_xp, "worn_quality": worn_quality, "worn_design": worn_design, "sweaters": sweaters,
@@ -551,6 +574,9 @@ static func migrate(d: Dictionary) -> Dictionary:
 		inv8["pumpkin_seeds"] = int(inv8.get("pumpkin_seeds", 0)) + 2
 		d["inv"] = inv8
 		v = 8
+	if v < 9:
+		d["act"] = 1 # the acts came in (Alex, 2026-11-24): every game before them is in Act 1
+		v = 9
 	d["version"] = v
 	return d
 
@@ -644,3 +670,4 @@ func from_dict(d: Dictionary) -> void:
 	owns_cottage = bool(d.get("owns_cottage", false))
 	sheep_count = clampi(int(d.get("sheep_count", START_SHEEP)), 0, MAX_SHEEP) # Act 1 starts with none
 	flags = (d.get("flags", {}) as Dictionary).duplicate(true)
+	act = clampi(int(d.get("act", 1)), 1, LAST_ACT)

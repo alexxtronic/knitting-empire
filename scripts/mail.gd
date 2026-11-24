@@ -182,6 +182,8 @@ func due_letters() -> Array:
 func _ready_today(d: Dictionary) -> bool:
 	if Game.day < int(d.get("day", 1)) or not _needs_met(str(d.get("needs", ""))):
 		return false
+	if str(d.get("until", "")) != "" and Game.flag(str(d["until"])) == true: # too late now (Gran's letters once she has passed)
+		return false
 	if d.has("after"):
 		var sent: Dictionary = state()["sent"]
 		var a := str(d["after"])

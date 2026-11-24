@@ -216,6 +216,9 @@ var album: PhotoAlbum # the photo album (photo_album.gd): what cinematic mode to
 var letters: LettersPanel # the letters from the mailbox (letters_panel.gd); main.gd gives it the post (mail.gd)
 var guide: Control # the Field Guide (field_guide.gd); empire_goals.gd builds it and the Lookbook
 var lookbook: Control # the Lookbook of the fifty designs (lookbook.gd)
+signal chapter_pressed # the Esc menu's "Begin the next chapter…" (scripts/acts.gd)
+var chapter_btn: Button
+var chapter_offered: Callable # main.gd sets it: is there a chapter to begin?
 var needs_panel: PanelContainer
 var cam_pad: PanelContainer
 var fps_check: CheckButton
@@ -610,6 +613,9 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Wardrobe", func(): shut.call(); wardrobe_pressed.emit()))
 	vb.add_child(_button("Field Guide", func(): shut.call(); if guide: guide.call("open")))
 	vb.add_child(_button("Lookbook", func(): shut.call(); if lookbook: lookbook.call("open")))
+	chapter_btn = _button("Begin the next chapter…", func(): shut.call(); chapter_pressed.emit()) # scripts/acts.gd
+	chapter_btn.visible = false
+	vb.add_child(chapter_btn)
 	vb.add_child(_button("First person (V)", func(): shut.call(); first_person_pressed.emit()))
 	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
 	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))
@@ -628,6 +634,8 @@ func _build_game_menu() -> void:
 
 func toggle_game_menu() -> void:
 	game_menu.visible = not game_menu.visible
+	if chapter_btn: # once the act's last goal is done (scripts/acts.gd)
+		chapter_btn.visible = chapter_offered.is_valid() and bool(chapter_offered.call())
 	if game_menu.visible:
 		click("ui_open")
 		game_menu.move_to_front()
@@ -1569,7 +1577,7 @@ func _process(_delta: float) -> void:
 		Game.coins_shown = Game.coins
 	_update_slots()
 	_update_needs(_delta)
-	clock_label.text = "%s, Day %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.clock_text()]
+	clock_label.text = "%s, Day %d   ·   Act %d, %d   ·   %s" % [Game.season_name(), Game.day_of_season(), Game.act, Game.age(), Game.clock_text()]
 	if catalog_panel.visible:
 		for id in item_buttons:
 			item_buttons[id].disabled = not Catalog.affordable(id, Game.coins, Game.count("wood"))

@@ -257,5 +257,11 @@
     "tree_regrow_days": 14,
     "plant_regrow_days": 2,
     "leaves": {"bush_": 3, "tuft_": 1, "flowers_": 1, "clover": 1}
+  },
+  "acts": {
+    "_about": "The four acts (scripts/acts.gd; Alex, 2026-11-24: Nora at 25, 50, 75 and 100, the skip hers to start once the act's last goal sets act_ready, everything she owns carried over). 'names' are each act's title on the skip's card (drafts). 'skip_days' is how far the calendar jumps (28: a season, so the weekday, the day of the season and every weekly sum stay where they were; the rent and other days still to come move with it). 'unlocks' is the act each later system opens in, read by Game.unlocked(name) (drafts: dogs, workers and her town at 2; mayor and shops at 3; the God Sweater at 4).",
+    "names": {"1": "Cast On", "2": "The Long Row", "3": "Casting Wide", "4": "Bind Off"},
+    "skip_days": 28,
+    "unlocks": {"dogs": 2, "workers": 2, "town": 2, "mayor": 3, "shops": 3, "god_sweater": 4}
   }
 }

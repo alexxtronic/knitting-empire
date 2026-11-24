@@ -739,12 +739,18 @@ func start_rent() -> void:
 
 
 func rent_owed() -> int:
-	return int(Game.flag("rent_owed", 0))
+	return int(Game.flag("rent_owed", 0)) if not farm_hers() else 0
+
+
+## From Act 2 the farm is Nora's: Gran has passed (scripts/acts.gd sets the flag on the skip; her
+## last letter comes in the post), and there is no more rent for her tin.
+static func farm_hers() -> bool:
+	return Game.flag("gran_passed") == true
 
 
 func _on_day(day: int) -> void:
 	_barn_rent_day(day)
-	if Game.flag("rent_on") != true:
+	if Game.flag("rent_on") != true or farm_hers():
 		return
 	var due := int(Game.flag("rent_due", day + econ("rent_days", 7)))
 	if day >= due:
@@ -912,7 +918,7 @@ class _Pickable extends Node3D:
 		if kind == "seeds":
 			return [{"id": "open_seeds", "label": "Open the seed tin", "enabled": true}]
 		var owed: int = home.rent_owed()
-		if Game.flag("rent_on") == true:
+		if Game.flag("rent_on") == true and not home.farm_hers():
 			if owed > 0:
 				acts.append({"id": "pay_rent", "label": "Pay rent  (%dc)" % owed, "enabled": Game.coins >= owed})
 			else:

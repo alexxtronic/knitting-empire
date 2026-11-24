@@ -73,6 +73,28 @@ func _ready() -> void:
 	_ring = Catalog.glow(Catalog.ring(self, 0.4, 0.46, Vector3(0, 0.03, 0), Color(0.55, 0.95, 0.4)), Color(0.55, 0.95, 0.4), 0.8)
 
 
+## Puts her in another model (her age in each act: scripts/acts.gd), keeping where she is and what
+## she's doing. The body is built afresh: her eyes come with the model, the grip and knitting fists are
+## its shape keys, and main.gd puts her sweater back on the next frame (_update_sweater). False, and
+## nothing changed, if the model won't load.
+func set_model(path: String) -> bool:
+	if body and body.ok and body.model_path == path:
+		return true
+	var nb := Body.new()
+	_model.add_child(nb)
+	if not nb.load_character(Data.player_character(), path):
+		_model.remove_child(nb)
+		nb.queue_free()
+		return false
+	var old := body
+	body = nb
+	detailed = true
+	if old:
+		_model.remove_child(old)
+		old.queue_free()
+	return true
+
+
 func _build_simple_model() -> void:
 	var denim := Color(0.25, 0.3, 0.42)
 	var sweater := Catalog.CREAM

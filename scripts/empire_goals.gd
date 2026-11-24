@@ -41,7 +41,10 @@ const STATS := ["caught", "combed", "fibre_knits", "face_sales"]
 static var on := true
 
 var main: Node # main.gd
+## The goals of the act she's in (data/goals.json, each goal's "act", 1 when it has none; scripts/acts.gd).
 var defs: Array = []
+var all_defs: Array = [] # every act's
+var _act := 0 # the act `defs` was taken for
 var guide: FieldGuide
 var lookbook: Lookbook
 var _t := 0.0
@@ -55,7 +58,8 @@ var _card_t := 0.0
 
 func _ready() -> void:
 	name = "EmpireGoals"
-	defs = Data.load_json("goals").get("goals", [])
+	all_defs = Data.load_json("goals").get("goals", [])
+	sync_act()
 	Game.day_started.connect(_on_day_started)
 
 
@@ -245,6 +249,15 @@ func _mark_seen() -> void:
 
 # --- the goals -----------------------------------------------------------------------------------
 
+## Takes the current act's goals into `defs` when the act has changed (the skip, a load).
+func sync_act() -> void:
+	if _act == Game.act:
+		return
+	_act = Game.act
+	defs = all_defs.filter(func(g): return int(g.get("act", 1)) == Game.act)
+	_shown = ""
+
+
 func state() -> Dictionary:
 	var s: Variant = Game.flags.get("empire_goals", null)
 	if not s is Dictionary:
@@ -269,6 +282,7 @@ func live() -> bool:
 
 ## The goals on screen: the first SHOWN not yet done; the last ("ready") only once it's all that's left.
 func window() -> Array:
+	sync_act()
 	var out := []
 	var left := defs.filter(func(g): return not is_done(str(g["id"])))
 	for g in left:
@@ -343,7 +357,7 @@ func complete(g: Dictionary) -> void:
 		Game.coins += r # a reward, not takings: the ledger leaves it out
 	if str(g.get("check", "")) == "ready":
 		Game.flags["act_ready"] = 1
-		main.hud.show_toast("Ready for the next chapter. Your empire has outgrown its first years.")
+		main.hud.show_toast("Ready for the next chapter. Begin it from your bed, or the menu (Esc), whenever you like.")
 	else:
 		main.hud.show_toast("Goal done: %s%s" % [str(g["line"]), "  (+%dc)" % r if r > 0 else ""])
 	if main.audio:
@@ -387,8 +401,10 @@ func _refresh() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size = Vector2(330, 0)
 		_rows.add_child(l)
-	if w.is_empty(): # every goal is done, "ready" included
+	if w.is_empty(): # every goal is done, "ready" included: the skip is hers to start (scripts/acts.gd)
 		_rows.add_child(main.hud._label("Ready for the next chapter", 14, GOLD))
+		var how: Label = main.hud._label("Begin it from your bed, or the menu (Esc)", 13, TEXT)
+		_rows.add_child(how)
 
 
 func _process(delta: float) -> void:
@@ -404,7 +420,8 @@ func _process(delta: float) -> void:
 		if _card_t <= 0.0:
 			_card.visible = false
 	if _panel:
-		var show: bool = live() and int(main.mode) == 0 and not main.hud.title_visible()
+		sync_act()
+		var show: bool = live() and not defs.is_empty() and int(main.mode) == 0 and not main.hud.title_visible() # Act 4 has none
 		_panel.visible = show
 		if show and main.hud.needs_panel: # just under the needs, wherever they end
 			var y: float = main.hud.needs_panel.get_global_rect().end.y + 10.0
