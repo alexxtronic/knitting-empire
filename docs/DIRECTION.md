@@ -162,3 +162,37 @@ Alex's answers to the review of 16 November (`docs/REVIEW_2026-11-16.md`). Where
 - **Lantern and glowing sweaters: do both.** The lantern is cheap and early, so no player is ever stuck in the dark. Glowing and warming sweaters come later as rewards, and give the designs a purpose.
 - **Warm sweaters gating a cold land is the strongest idea of the three.** It ties knitting quality straight to exploration, and it already fits the story idea of a rare animal in the cold mountains.
 - **Catching should stay a little uncertain.** Rarer animals take more barks, run faster and calm down if the dog lets up, so he can lose them. That keeps a mink feeling like a prize.
+
+## Four acts across one life (Alex, 2026-11-24)
+
+Alex's plan of 24 November, in his words. Where it differs from anything above, it wins, except on the points still open below. Claude's review and recommendations are in `docs/REVIEW_2026-11-24.md`. Every name, price and line that comes out of it is a draft until Alex approves it.
+
+The same day he set Act 1's free strays back from four to two: "let's do 2 free sheep in beginning instead of 4 and keep the economy as-is".
+
+> Review current Act 1 (aged 25) and give recommendations on how to make it more fun and a constant sense of progress and cash scaling,
+>
+> set up Act 2 (aged 50) and how we should set them up to go on 'hunts' for rare animals and fur and expand their territory and create a small town of their own (they build the town then try to attract NPCs to move there by advertising in the main city with flyers and advertising), introduce hiring grannies to knit and kids to sheer animals on autopilot for passive income (user still has to hunt manually) introduce purchasing additional dogs which you can use to hunt larger packs of animals at a time (example 2 dogs allows you to herd 4 animals at once rather than the usual 2, 3 dogs allows for 6 etc all the way up to 12 dogs maximum. Dogs are an expensive investment).
+>
+> then Act 3 (aged 75) where they set have dozens of grannies knitting and kids sheering animals for wool on autopilot for passive income (user still has to hunt manually but they get a pack of dogs which allow them to herd more animals at a time into a larger pen) , they have lots of money and take over the main town as mayor as well and become a conglomerate
+>
+> then Act 4 (aged 100) have to choose to keep their status and keep playing on until they 'die' and the game ends or sell their 90% of their wealth to buy the ultra rare wool and knit the 'God Sweater' to stay young forever like the other NPCs though they have no money (but they still keep their assets (the town, any passive income streams) so they'll regain the wealth quickly and can continue playing on forever theoretically).
+>
+> All along the way we can form relationships with NPCs and one "Boyfriend" at a time but this can change based on who we currently have the strongest relations with. Each act the boyfriend progresses from Boyfriend to Fiance to Husband but it can change based on the relationship meter which can cause drama and make the guys angry at one another or angry at her and sabatoge her operations in mild silly ways. Only 3 options for potential partners like this (Rowan, Max and Lars).
+
+In short:
+
+| Act | Nora's age | What it adds |
+|---|---|---|
+| 1 | 25 | The guided opening, then the loop (as built). |
+| 2 | 50 | Hunts for rare animals and fur; more territory; a small town of her own, which she fills by advertising in Maple Grove; grannies who knit and kids who shear on autopilot; more dogs, up to 12, each one more animal in the herd. |
+| 3 | 75 | Dozens of workers; a pack of dogs and a larger pen; mayor of Maple Grove; a conglomerate. |
+| 4 | 100 | The choice: play on until she dies and the game ends, or give 90% of her wealth for the ultra rare wool and knit the God Sweater, young forever like the town, keeping her town and her income. |
+
+Romance runs through all four acts: one partner at a time, out of Rowan, Lars and Max. Each act he goes from boyfriend to fiancé to husband. Whoever she's closest to can take his place, and the jealousy that causes makes the men cross with each other or with her, and leads to small, silly sabotage.
+
+### Still open (asked on 2026-11-24)
+
+- Max as a partner: in the story he is her abusive ex, whom she can have arrested.
+- How many animals one dog herds: 3 today, "the usual 2" in this plan.
+- Nora's age in Act 1: she is "in her thirties" in `docs/CHARACTERS.md`, 25 here.
+- How an act ends and the years pass.
