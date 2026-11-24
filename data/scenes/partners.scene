@@ -1,0 +1,170 @@
+# Her partner (scripts/partners.gd; Alex, 2026-11-24: one partner at a time out of Rowan, Lars and
+# Gary, never Max; whoever she's closest to can take his place, and the jealousy that causes makes
+# the men cross with each other or with her). None of these has a trigger: partners.gd plays them.
+#
+# partner_ask_<id>: his menu's "Ask him out". With no partner he says yes (@partner take). With one,
+#   he has climbed past her partner by the margin, and she chooses: "@partner take" switches (the
+#   one before is sore), "@partner stay" turns him down (a little romance off him).
+# partner_argue_<id>: he's sore, and on the day the morning rolled it, talking to him or to her
+#   partner brings the other over (partners.gd stands them side by side) for a short argument.
+#
+# The format is at the top of scripts/story.gd. Every line here is a DRAFT for Alex.
+
+== partner_ask_rowan
+@camera between rowan nora 5
+@if partner lars -> from_lars
+@if partner gary -> from_gary
+Nora (warm): Rowan. I'd like us to be... something. Officially.
+Rowan (surprised): Officially.
+> He looks at the hill, then at her, as if the hill might have an opinion.
+Rowan (warm): ...Yes. I'd like that. Don't make me say it twice.
+@partner take rowan
+@end
+@label from_lars
+Rowan (neutral): You're with Lars. Everyone knows. The sheep know.
+Rowan (warm): But if you're asking, I'm answering. Your choice, though. Not mine.
+? Leave Lars for Rowan?
+- Yes. It's you. -> yes | partner take rowan
+- No. I'm staying with Lars. -> no | partner stay rowan
+@label from_gary
+Rowan (neutral): You're with Gary. Him and his blazer.
+Rowan (warm): But if you're asking, I'm answering. Your choice, though. Not mine.
+? Leave Gary for Rowan?
+- Yes. It's you. -> yes | partner take rowan
+- No. I'm staying with Gary. -> no | partner stay rowan
+@label yes
+Rowan (warm): Alright, then. Alright.
+@end
+@label no
+Rowan (neutral): Fair enough. Offer stands. Like the fence.
+
+== partner_ask_lars
+@camera between lars nora 5
+@if partner rowan -> from_rowan
+@if partner gary -> from_gary
+Nora (warm): Lars. Would you want to... be together? Properly?
+Lars (surprised): Me? I mean. Yes. Obviously yes. Sorry. Yes.
+Lars (warm): No rush, though. We'll go at your pace. All good.
+@partner take lars
+@end
+@label from_rowan
+Lars (worried): You're with Rowan, though. He's a good guy. I don't want to be that guy.
+Lars (warm): But if it's me you want... it's your call. Always is.
+? Leave Rowan for Lars?
+- It's you. It's been you for a while. -> yes | partner take lars
+- No. I'm staying with Rowan. -> no | partner stay lars
+@label from_gary
+Lars (worried): You're with Gary, though. I don't want to step on anybody's shoes. Especially his. They're expensive.
+Lars (warm): But if it's me you want... it's your call. Always is.
+? Leave Gary for Lars?
+- It's you. It's been you for a while. -> yes | partner take lars
+- No. I'm staying with Gary. -> no | partner stay lars
+@label yes
+Lars (happy): Okay. Okay! Wow. Okay.
+@end
+@label no
+Lars (warm): All good. Really. I'll be at the barn.
+
+== partner_ask_gary
+@camera between gary nora 5
+@if partner rowan -> from_rowan
+@if partner lars -> from_lars
+Nora (warm): Gary. I think we should make this official. You and me.
+Gary (surprised): Are you... is this you asking me out? In my own office?
+Gary (warm): Yes. Before you change your mind. Yes. I accept the offer, no conditions.
+@partner take gary
+@end
+@label from_rowan
+Gary (wry): Leaving the shepherd for the estate agent. It's an upgrade, I'd know.
+Gary (neutral): But I'm not going to sell you on it. Not this. Your choice.
+? Leave Rowan for Gary?
+- Yes. It's you. -> yes | partner take gary
+- No. I'm staying with Rowan. -> no | partner stay gary
+@label from_lars
+Gary (wry): Leaving the farmer for the estate agent. Bold. I respect it.
+Gary (neutral): But I'm not going to sell you on it. Not this. Your choice.
+? Leave Lars for Gary?
+- Yes. It's you. -> yes | partner take gary
+- No. I'm staying with Lars. -> no | partner stay gary
+@label yes
+Gary (happy): Sold. To the lady with the knitting needles.
+@end
+@label no
+Gary (wry): Ah. Well. I've lost better sales. I haven't, but it sounds nice.
+
+# --- the arguments --------------------------------------------------------------------------------
+
+== partner_argue_rowan
+@if partner lars -> lars
+@if partner gary -> gary
+@end
+@label lars
+@camera between rowan lars 5
+Rowan (angry): Your radio was on till two, Lars. Half the hill heard it.
+Lars (worried): Hey, sorry, man. Didn't think it'd carry that far.
+Rowan (angry): You never think. That's your whole thing.
+Lars (neutral): ...Okay. That's not really about the radio, is it.
+Nora (worried): Can we not do this here? Please?
+Rowan (neutral): Fine.
+> Rowan walks off toward the hill. Lars rubs the back of his neck and doesn't say anything for a while.
+@camera player
+@end
+@label gary
+@camera between rowan gary 5
+Rowan (angry): Nice blazer.
+Gary (wry): Thank you. It's wasted on you, but thank you.
+Rowan (angry): Sell her a gate, did you?
+Gary (angry): I didn't sell her anything. She chose. People do that, apparently.
+Nora (worried): Both of you. Stop it. Not here.
+> Rowan leaves without another word. Gary straightens his cuffs twice.
+@camera player
+
+== partner_argue_lars
+@if partner rowan -> rowan
+@if partner gary -> gary
+@end
+@label rowan
+@camera between lars rowan 5
+Lars (neutral): Rowan. All good?
+Rowan (neutral): Fine.
+Lars (angry): Cool. Great. Only, you could've said something. Before. Man to man.
+Rowan (neutral): Wasn't mine to say. It was hers.
+Lars (sad): ...Yeah. Yeah, I know. Doesn't make it better.
+Nora (worried): Lars, I'm sorry. I didn't want it to be like this.
+Lars (neutral): I know. I'm just gonna... go and see to the sheep. Mine. Not yours.
+@camera player
+@end
+@label gary
+@camera between lars gary 5
+Lars (angry): Nice of you to show up. In the blazer.
+Gary (wry): I always show up in the blazer. That's the point of the blazer.
+Lars (angry): Bet it was easy for you. Smooth talk. You talk to everybody like that.
+Gary (neutral): Not everybody. That's rather the point.
+Nora (worried): Please. Both of you. Not in front of the whole square.
+> Lars goes. He doesn't slam anything, because Lars has never slammed anything in his life, but you can tell he wanted to.
+@camera player
+
+== partner_argue_gary
+@if partner rowan -> rowan
+@if partner lars -> lars
+@end
+@label rowan
+@camera between gary rowan 5
+Gary (wry): The shepherd. Congratulations. I hear she likes the strong, silent type. I tried silent once. Didn't take.
+Rowan (neutral): You done?
+Gary (angry): Not even slightly. I'd sold that whole future, you know. House with a gate. The lot.
+Rowan (neutral): She's not a listing, Gary.
+Gary (sad): ...No. No, she isn't. That's the annoying part.
+Nora (worried): Gary. Please.
+> Gary takes a breath, straightens his cuffs, and goes back to his office without the last word, which may be a first.
+@camera player
+@end
+@label lars
+@camera between gary lars 5
+Gary (wry): The farmer. Of course. What's your secret, Lars? Is it the overalls?
+Lars (neutral): Hey, man. No secret. Just... I'm around.
+Gary (angry): I'm around! I'm extremely around! I'm around in a blazer!
+Lars (warm): Yeah. You are. It's a good blazer.
+Gary (sad): ...Don't be nice to me. I can't work with nice.
+Nora (worried): Okay. Okay. Let's all just go home.
+@camera player

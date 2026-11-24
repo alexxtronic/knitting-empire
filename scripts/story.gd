@@ -60,6 +60,9 @@ extends RefCounted
 ##   @act next / @act card           the skip between acts (scripts/acts.gd, data/scenes/acts.scene):
 ##                                   "next" makes it (the act, the calendar, Gran, her model),
 ##                                   "card" shows the montage card of what she has until it's clicked
+##   @partner take lars / @partner stay lars  her partner (scripts/partners.gd): "take" makes him
+##                                   her partner (the one before is sore), "stay" turns him down
+##   @if partner lars -> label       jump if he's her partner ("partner any", "partner none")
 ##   @if has sweater -> label        jump if she has an item ("has wool 3" for at least 3)
 ##   @if hearts rowan >= 3 -> label  friendship hearts (0-5); "@if hour < 17 -> label" checks the clock
 ## Text can use {player} for the heroine's name.
@@ -68,7 +71,7 @@ const SCENE_DIR := "res://data/scenes"
 const COMMANDS := ["camera", "fade", "title", "wait", "anim", "face", "eyes", "walk", "place", "set", "unset",
 	"familiarity", "trust", "romance", "if", "goto", "end", "give", "take", "toast",
 	"goal", "weather", "prop", "prop_move", "prop_remove", "phone", "shake", "sheep", "home",
-	"memory", "journal", "time", "sleep", "music", "farm", "act"]
+	"memory", "journal", "time", "sleep", "music", "farm", "act", "partner"]
 const HEADERS := ["label", "trigger", "requires", "when", "once", "daily"]
 const STATS := ["familiarity", "trust", "romance"]
 
@@ -217,6 +220,13 @@ static func requirements_met(reqs: Array) -> bool:
 static func condition(cond: Array) -> bool:
 	if cond.size() == 1:
 		return requirements_met(cond)
+	if str(cond[0]) == "partner" and cond.size() == 2: # her partner (partners.gd): an id, "any" or "none"
+		var p: Variant = Game.flags.get("partner", null)
+		var pid := str((p as Dictionary).get("id", "")) if p is Dictionary else ("" if p == null else str(p))
+		match str(cond[1]):
+			"any": return pid != ""
+			"none": return pid == ""
+			_: return pid == str(cond[1])
 	if str(cond[0]) == "has" and cond.size() in [2, 3]:
 		return Game.has_item(str(cond[1]), int(cond[2]) if cond.size() == 3 else 1)
 	if cond.size() == 4 and (str(cond[0]) in STATS or str(cond[0]) == "hearts"):
@@ -245,6 +255,8 @@ static func well_formed(c: Array) -> bool:
 	var ops := [">=", ">", "<=", "<", "==", "=", "!="]
 	if c.size() == 1:
 		return true
+	if str(c[0]) == "partner":
+		return c.size() == 2
 	if str(c[0]) == "has":
 		return c.size() in [2, 3]
 	if c.size() == 4 and (str(c[0]) in STATS or str(c[0]) == "hearts"):

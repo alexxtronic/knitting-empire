@@ -1,0 +1,141 @@
+# Gary's romance (Alex, 2026-11-24: one partner at a time out of Rowan, Lars and Gary). Modelled on
+# Rowan's in rowan.scene: talk topics one a day (@daily) as he warms up, each raising romance, then a
+# first date: the town square after dark, by the fountain, with two coffees. Canon is
+# docs/CHARACTERS.md: the snarky pretty boy at Willow Homes, a blazer in a farming town, always
+# selling, never cruel, softer underneath; the caravan he grew up in, the gate he swore he'd own.
+# Asking him out is a row on his menu once his romance is high enough (scripts/partners.gd,
+# data/scenes/partners.scene). The format is at the top of scripts/story.gd. Every line here is a
+# DRAFT for Alex.
+
+== gary_topic_blazer
+@trigger talk gary
+@requires seen_meet_gary act1_done
+@when hearts gary >= 1
+@once
+@daily
+@camera between gary nora 6
+Gary (wry): Before you say it: yes, a blazer. Yes, in a farming town. Somebody has to raise the tone.
+Nora (wry): It's got hay on the sleeve.
+Gary (surprised): It has not. ...It has. This whole valley is out to get me.
+? What do you say?
+- It suits you. Hay and all. -> suits | romance gary +2; familiarity gary +3
+- You know nobody here cares, right? -> cares | familiarity gary +2; trust gary +1
+@label suits
+Gary (happy): Finally, someone with taste. I'll tell my tailor. I don't have a tailor. I'll get one, and tell him.
+@goto done
+@label cares
+Gary (neutral): People care. They just don't say so. That's what the blazer's for.
+@label done
+
+== gary_topic_starter
+@trigger talk gary
+@requires seen_gary_topic_blazer
+@when trust gary >= 5
+@once
+@daily
+@camera between gary nora 6
+Gary (wry): How's the starter farm? Still standing? Still... rustic?
+Nora (wry): It's Gran's farm. It isn't a starter anything.
+Gary (neutral): Everything's a starter something. That's the whole point of property. You start, and then you move up.
+Gary (warm): Ellie was the only client I ever had who never wanted to move up. Drove me mad. I liked her a lot.
+? What do you say?
+- Maybe some people are already where they want to be. -> already | trust gary +2; romance gary +1
+- Fine. Show me Eastfield Acres. For research. -> research | familiarity gary +3; romance gary +2
+@label already
+Gary (wry): Don't. That kind of talk puts estate agents out of work.
+@goto done
+@label research
+Gary (happy): Twelve and a half thousand coins and a view you could frame. For research. Of course.
+@label done
+
+== gary_topic_caravan
+# canon (docs/CHARACTERS.md): he grew up in a caravan on the edge of town
+@trigger talk gary
+@requires seen_gary_topic_starter
+@when hearts gary >= 2
+@when trust gary >= 9
+@once
+@daily
+@camera between gary nora 5
+Gary (neutral): Want to know a secret? Don't tell the blazer.
+Gary (sad): I grew up in a caravan on the edge of town. Past the bins. Cold every winter, and Mum pretending it wasn't.
+Gary (neutral): I used to walk past the big houses and pick which gate I'd have. Swore I'd own one someday.
+? What do you say?
+- Did you get your gate? -> gate | romance gary +2; trust gary +2
+- Thank you for telling me. -> thanks | trust gary +4
+@label gate
+Gary (wry): Not yet. I sell other people theirs. It's very good practice.
+Gary (warm): You're the first person I've told who didn't look sorry for me. Don't start now.
+@goto done
+@label thanks
+Gary (warm): Don't make it a thing. ...Thanks for not making it a thing.
+@label done
+
+# --- the first date: the square after dark -------------------------------------------------------
+
+== gary_date_invite
+# not @once: turned down, he pitches it again another day (one scene a day, @daily)
+@trigger talk gary
+@requires seen_gary_topic_caravan !gary_date_invited
+@when hearts gary >= 3
+@when romance gary >= 3
+@daily
+@camera between gary nora 5
+Gary (wry): Professional enquiry. Have you ever seen the square after dark? It's my best listing. Not for sale.
+Gary (warm): The fountain, tonight, after eight. I'll bring coffee. Sabrina owes me. She'd say she doesn't.
+? Meet him at the fountain tonight?
+- It's a date. -> yes | romance gary +1; set gary_date_invited
+- Not tonight. Pitch it again some time. -> later | trust gary +1
+@label yes
+Gary (happy): Wear something nice. I'm joking. Wear anything. I'll be the one who's overdressed.
+@goal Meet Gary by the fountain after dark | 53 2.4
+@home gary 54.4 2.4
+@end
+@label later
+Gary (wry): Turned down. In my own square. I'll recover. Eventually.
+
+== gary_date1
+@trigger area fountain
+@requires gary_date_invited !gary_date_done
+@once
+@goal
+@fade out 1.0
+@weather clear
+@if hour >= 20 -> placed
+@time 20.5
+@label placed
+@place nora 52.4 2.4 90
+@place gary 53.6 2.4 270
+@face nora gary
+@face gary nora
+@camera between gary nora 4.5 low
+@fade in 1.6
+> The square's empty. The lamps are lit. The fountain talks to itself.
+Gary (happy): Two coffees. One black, one with far too much milk, because I guessed.
+Nora (happy): You guessed right.
+Gary (wry): I always do. It's the job. Know what people want before they do.
+Nora (wry): And what do I want?
+Gary (neutral): ...That one I haven't worked out. It's very annoying. I've been up nights.
+Gary (warm): Ellie used to say the square looked best at night, when nobody was trying to impress anybody.
+Nora (wry): You're trying very hard right now.
+Gary (wry): Painfully. Is it working?
+? He's straightened his cuffs three times since you sat down.
+- Kiss his cheek. "It's working." -> kiss | romance gary +4; trust gary +1; set gary_close
+- "Same time next week? You bring the coffee." -> week | romance gary +2; familiarity gary +4
+- "I'd like to take this slow. Is that alright?" -> slow | trust gary +4
+@label kiss
+Gary (surprised): ...Oh. Right. Yes. Good. I had a whole line ready and it's gone.
+@goto end
+@label week
+Gary (happy): Done. I'll pencil you in. In pen.
+@goto end
+@label slow
+Gary (warm): Slow's fine. Slow's... new. I think I'd like new.
+@label end
+@journal note The square at night | Coffee with Gary by the fountain after dark. He guessed how I take it. He straightened his cuffs about forty times.
+@set gary_date_done
+@fade out 1.4
+@home gary off
+@camera player
+@fade in 1.2
+@toast Gary walks you to the edge of the square, and pretends he isn't cold.

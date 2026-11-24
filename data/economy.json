@@ -263,5 +263,40 @@
     "names": {"1": "Cast On", "2": "The Long Row", "3": "Casting Wide", "4": "Bind Off"},
     "skip_days": 28,
     "unlocks": {"dogs": 2, "workers": 2, "town": 2, "mayor": 3, "shops": 3, "god_sweater": 4}
+  },
+  "partners": {
+    "_about": "Her partner (scripts/partners.gd; Alex, 2026-11-24: one partner at a time out of Rowan, Lars and Gary, never Max; boyfriend in Act 1, fiance in Act 2, husband in Acts 3 and 4; whoever she's closest to can take his place, which makes the men cross and leads to mild, silly sabotage). 'candidates' are the men who can be asked out (each also has \"romance\": true in villagers.json; Max is refused in code whatever this says). 'ask_at' is the romance a man needs before his menu has \"Ask him out\"; with a partner already, only the candidate with the most romance gets the row, and only once he leads the partner by 'switch_margin'. Switching makes the old partner sore for 'sore_days' days and takes 'sore_drop' off his romance; turning the new man down takes 'stay_drop' off his. While a man is sore: talking to him on 'mend_talk_days' different days, or any gift, ends it early; each talk has 'sharp_chance' of a sharp line instead of his usual one ('sharp'); each day there's 'argue_chance' that talking to him or her partner plays their argument (once per spell of soreness); and each morning there's 'prank_chance' of one prank, at most one every 'prank_every' days, from 'pranks' (only those that can happen: no pastry in her bag, no pastry prank). needles, itch and pen last until the next morning; pastry and paint until he isn't sore any more, when he puts it right. 'garish' is the paint he uses (house_builder.gd PAINT_COLOURS, not in the paint picker). 'titles' by act, 'lines' the toasts. Every number and line is a DRAFT until Alex approves it.",
+    "candidates": ["rowan", "lars", "gary"],
+    "ask_at": 10,
+    "switch_margin": 8,
+    "sore_days": 7,
+    "sore_drop": 10,
+    "stay_drop": 3,
+    "mend_talk_days": 2,
+    "sharp_chance": 0.6,
+    "argue_chance": 0.35,
+    "prank_chance": 0.4,
+    "prank_every": 3,
+    "pranks": ["pen", "needles", "itch", "pastry", "paint"],
+    "garish": "garish",
+    "titles": {"1": "boyfriend", "2": "fiancé", "3": "husband", "4": "husband"},
+    "sharp": {
+      "rowan": ["Busy.", "Fence is fine. Ask your {partner}.", "Sheep don't need company today. Neither do I."],
+      "lars": ["Oh. Hey. All good. Really. It's fine.", "Radio's on. Can't really hear you. Sorry.", "Your {partner} not around, then?"],
+      "gary": ["Look who it is. Shouldn't you be with your {partner}?", "I'd love to chat, but my hair has an appointment.", "No, really, I'm thrilled for you. Can't you tell?"]
+    },
+    "lines": {
+      "sore": "%s isn't taking it well.",
+      "mended": "%s isn't sore any more.",
+      "pen": "%s left the pen gate open, and one of your sheep has wandered out. Herd her back in.",
+      "pen_home": "She's back in the pen.",
+      "needles": "%s hid your needles. You knit with Gran's spare pair today: one grade lower.",
+      "itch": "%s told %s your sweaters itch. They won't buy one today.",
+      "pastry": "%s ate a pastry out of your bag. Crumbs and all.",
+      "paint": "%s painted the front of your house a colour that can be seen from space.",
+      "undo_pastry": "%s left a fresh pastry by your door. Sorry, says the note.",
+      "undo_paint": "%s painted the front of your house back the way it was.",
+      "itch_no": "Someone told me your sweaters itch. Maybe another day."
+    }
   }
 }

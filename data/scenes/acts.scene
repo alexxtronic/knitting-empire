@@ -3,7 +3,9 @@
 # plays act<N>_begin, never on its own. The first choice is the confirm: "Not yet" changes nothing.
 # @act next makes the skip (the act, her age and model, the calendar, act_ready cleared, the next
 # act's goals; going into Act 2, Gran's passing and the end of her rent), @act card shows the
-# montage card of what she has. The format is at the top of scripts/story.gd.
+# montage card of what she has. With a partner (scripts/partners.gd), going into Act 2 he proposes on
+# the porch, and going into Act 3 they marry in the town square ("@if partner <id>"); without one,
+# neither scene plays. The format is at the top of scripts/story.gd.
 # Every line here is a DRAFT for Alex.
 
 == act2_begin
@@ -20,6 +22,86 @@
 @fade in 1.5
 Nora (warm): Fifty. Somewhere along the way the farm stopped being Gran's and started being mine.
 > The needles are the same pair. Her hands know them better now.
+@if partner rowan -> rowan
+@if partner lars -> lars
+@if partner gary -> gary
+@end
+# --- the proposal, on the porch at dusk
+@label rowan
+@fade out 1.0
+@time 18.5
+@place nora 9.8 3.0 90
+@place rowan 11.1 3.0 270
+@face nora rowan
+@face rowan nora
+@camera between rowan nora 5.5
+@fade in 1.2
+> The porch light Gran never fixed is still broken. Rowan fixed everything else.
+Rowan (neutral): Twenty-five years of walking your fence. Thought I'd ask before the next twenty-five.
+> He opens his hand. A plain silver ring, threaded on a loop of her own grey wool.
+Rowan (warm): Marry me. If you want. No rush. Well. Some rush. I'm not getting younger. You are, somehow.
+? Rowan is asking you to marry him.
+- "Yes. Of course, yes." -> rowan_yes | romance rowan +5
+- "Yes. What took you so long?" -> rowan_tease | romance rowan +5
+@label rowan_yes
+Rowan (happy): ...Good. That's good. I'd practised a longer one.
+@goto proposed
+@label rowan_tease
+Rowan (wry): Sheep don't rush. Neither do I. You knew that.
+@goto proposed
+@label lars
+@fade out 1.0
+@time 5.8
+@place nora 9.8 3.0 90
+@place lars 11.1 3.0 270
+@face nora lars
+@face lars nora
+@camera between lars nora 5.5
+@fade in 1.2
+> First light on the porch. Lars has brought the radio over from the barn, and it's playing a slow one.
+Lars (warm): So. I've been meaning to ask. For about twenty-five years. No rush, I said. Turns out I meant it.
+> He goes down on one knee, which takes him a moment, and holds up a ring on a twist of baling twine.
+Lars (happy): Marry me? All good if you need to think. Please don't think too long.
+? Lars is asking you to marry him.
+- "Yes. Yes, you lovely man." -> lars_yes | romance lars +5
+- "Get up before your knee goes. Yes." -> lars_tease | romance lars +5
+@label lars_yes
+Lars (happy): Yes! She said yes! The sheep heard that. Everybody heard that.
+@goto proposed
+@label lars_tease
+Lars (wry): Bit late for the knee. Worth it, though.
+@goto proposed
+@label gary
+@fade out 1.0
+@time 19.0
+@place nora 9.8 3.0 90
+@place gary 11.1 3.0 270
+@face nora gary
+@face gary nora
+@camera between gary nora 5.5
+@fade in 1.2
+> Gary on her porch, in a new blazer, holding a small velvet box like it might go off.
+Gary (neutral): I've sold four hundred houses. I've never been this nervous about a closing.
+Gary (warm): You never wanted to move up. You were already where you wanted to be. I'd like to be there too.
+> The box opens. The ring is very shiny. Of course it is.
+Gary (wry): Marry me. Please note the please. I don't say it to clients.
+? Gary is asking you to marry him.
+- "Yes. No conditions." -> gary_yes | romance gary +5
+- "Yes. But the blazer stays at the wedding." -> gary_tease | romance gary +5
+@label gary_yes
+Gary (happy): Sold. Best deal I ever made, and I didn't even have to pitch it.
+@goto proposed
+@label gary_tease
+Gary (wry): The blazer is the wedding. But fine. Yes. Yes!
+@label proposed
+@set proposed
+@journal note The proposal | Twenty-five years on, and he asked me on Gran's porch. I said yes.
+@fade out 1.0
+@home rowan off
+@home lars off
+@home gary off
+@camera player
+@fade in 1.0
 
 == act3_begin
 @requires act_ready
@@ -34,6 +116,86 @@ Nora (warm): Fifty. Somewhere along the way the farm stopped being Gran's and st
 @act card
 @fade in 1.5
 Nora (warm): Seventy-five. The whole valley wears my sweaters now. Imagine that.
+@if partner rowan -> rowan
+@if partner lars -> lars
+@if partner gary -> gary
+@end
+# --- the wedding, in the town square: Wren marries them by the fountain
+@label rowan
+@fade out 1.0
+@time 15.0
+@weather clear
+@place nora 52.5 2.4 90
+@place rowan 53.6 2.4 270
+@place wren 53.05 3.6 180
+@place rosa 51.2 4.6 30
+@place giorgio 54.9 4.6 330
+@place lars 50.6 3.4 60
+@face nora rowan
+@face rowan nora
+@camera between rowan nora 5.5
+@fade in 1.4
+> The whole town has come to the square. Rosa is already crying. Giorgio has baked a cake taller than he is.
+Wren (warm): Rowan. Nora. Took you long enough. Shall we?
+Rowan (neutral): I'm not good with words.
+Rowan (warm): So. You. Always. That's it. That's the speech.
+Nora (warm): That's a good speech.
+Wren (happy): Then by the power vested in me by Maple Grove, and a stack of forms I filled in myself: you're married.
+@goto wed
+@label lars
+@fade out 1.0
+@time 15.0
+@weather clear
+@place nora 52.5 2.4 90
+@place lars 53.6 2.4 270
+@place wren 53.05 3.6 180
+@place rosa 51.2 4.6 30
+@place giorgio 54.9 4.6 330
+@place rowan 50.6 3.4 60
+@face nora lars
+@face lars nora
+@camera between lars nora 5.5
+@fade in 1.4
+> The whole town has come to the square. Rosa is already crying. Someone has brought the barn's radio, and it's playing a slow one.
+Wren (warm): Lars. Nora. Ready?
+Lars (happy): Been ready for fifty years. No rush, though.
+Lars (warm): I don't need anywhere else. I never did. Now I'm sure.
+Nora (warm): Me too.
+Wren (happy): Then by the power vested in me by Maple Grove, and a stack of forms I filled in myself: you're married.
+@goto wed
+@label gary
+@fade out 1.0
+@time 15.0
+@weather clear
+@place nora 52.5 2.4 90
+@place gary 53.6 2.4 270
+@place wren 53.05 3.6 180
+@place rosa 51.2 4.6 30
+@place giorgio 54.9 4.6 330
+@place lars 50.6 3.4 60
+@face nora gary
+@face gary nora
+@camera between gary nora 5.5
+@fade in 1.4
+> The whole town has come to the square. Rosa is already crying. Gary's blazer is, for once, not the smartest thing in sight.
+Wren (warm): Gary. Nora. Ready?
+Gary (warm): I've had my vows written for a month. I've thrown them all away. Here's the short one.
+Gary (neutral): I got my gate. It's yours. It's always been yours.
+Nora (warm): That's the best pitch you've ever made.
+Wren (happy): Then by the power vested in me by Maple Grove, and a stack of forms I filled in myself: you're married.
+@label wed
+> The square goes up in a cheer. Rosa blows her nose like a trumpet.
+@set married
+@journal note The wedding | Married in the square by the fountain, with the whole town watching. Rosa cried the entire time.
+@fade out 1.2
+@home rowan off
+@home lars off
+@home gary off
+@home wren off
+@home rosa off
+@home giorgio off
+@camera player
+@fade in 1.0
 
 == act4_begin
 @requires act_ready

@@ -645,7 +645,7 @@ func _process(delta: float) -> void:
 			_ui_sig = sig
 			ui.refresh()
 		for s in main.sheep_list: # a sheep Rosa sold her stands in the pen, wherever it is
-			if not s.housed and not s.heading_in and s.route.is_empty():
+			if not s.housed and not s.heading_in and s.route.is_empty() and not s.has_meta("loose"): # loose: a sore man's prank (partners.gd)
 				_put_in_pen(s)
 	# the note in her hand: open it to read
 	var sel: String = main.hud.selected_item()
@@ -656,7 +656,8 @@ func _process(delta: float) -> void:
 	# the gate stands open while there are strays to bring in
 	for g in _fence_root.get_children():
 		if g.name.begins_with("Gate"):
-			var want := -1.35 if not strays.is_empty() and has_pen() else 0.0
+			var open_for: bool = not strays.is_empty() or (main.partners != null and main.partners.loose_out()) # a stray, or a sheep a sore man let out
+			var want := -1.35 if open_for and has_pen() else 0.0
 			var base: float = g.get_meta("yaw", g.rotation.y)
 			g.set_meta("yaw", base)
 			g.rotation.y = lerp_angle(g.rotation.y, base + want, 1.0 - exp(-delta * 3.0))

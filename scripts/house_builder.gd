@@ -59,9 +59,12 @@ const FLOOR_LABELS := {"planks": "Plank boards (as built)", "carpet_grey": "Grey
 const FLOOR_Y := 0.035 # the top of a laid floor, just over the planks (0.02)
 const PAINTS := ["none", "white", "cream", "butter", "sage", "sky", "blush", "terracotta", "charcoal"]
 const PAINT_LABELS := {"none": "No paint (as built)", "white": "Chalk white", "cream": "Cream", "butter": "Butter yellow", "sage": "Sage green",
-	"sky": "Sky blue", "blush": "Blush pink", "terracotta": "Terracotta", "charcoal": "Charcoal"}
+	"sky": "Sky blue", "blush": "Blush pink", "terracotta": "Terracotta", "charcoal": "Charcoal",
+	"garish": "Garish lime"} # garish: a sore man's prank (partners.gd), not in PAINTS, so not in the picker
+
 const PAINT_COLOURS := {"white": Color(0.97, 0.96, 0.93), "cream": Color(0.96, 0.9, 0.76), "butter": Color(0.98, 0.86, 0.52),
-	"sage": Color(0.64, 0.75, 0.6), "sky": Color(0.6, 0.76, 0.9), "blush": Color(0.94, 0.71, 0.71), "terracotta": Color(0.8, 0.47, 0.34), "charcoal": Color(0.3, 0.31, 0.33)}
+	"sage": Color(0.64, 0.75, 0.6), "sky": Color(0.6, 0.76, 0.9), "blush": Color(0.94, 0.71, 0.71), "terracotta": Color(0.8, 0.47, 0.34), "charcoal": Color(0.3, 0.31, 0.33),
+	"garish": Color(0.66, 1.0, 0.08)}
 
 var main
 var tool := "" # "" (furniture), or a kind in KINDS: what a click in build mode lays

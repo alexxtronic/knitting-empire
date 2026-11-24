@@ -1,0 +1,158 @@
+# Lars's romance (Alex, 2026-11-24: one partner at a time out of Rowan, Lars and Gary). Modelled on
+# Rowan's in rowan.scene: talk topics one a day (@daily) as he warms up, each raising romance, then a
+# first date: sunrise from the hay door of his barn's loft. Canon is docs/CHARACTERS.md: easy,
+# warm, unhurried, "no rush", "all good"; the loft he did up himself, the old radio, early mornings;
+# his dad's back, the lonely winters. Asking him out is a row on his menu once his romance is high
+# enough (scripts/partners.gd, data/scenes/partners.scene). The format is at the top of
+# scripts/story.gd. Every line here is a DRAFT for Alex.
+#
+# lars.scene loads before seeds.scene, so his first topic waits for his seed gift (seeds_lars).
+
+== lars_topic_radio
+@trigger talk lars
+@requires seen_seeds_lars
+@when hearts lars >= 1
+@once
+@daily
+@camera between lars nora 6
+> From somewhere in the barn behind him, a radio is playing a fiddle tune, badly tuned.
+Lars (happy): Hear that? Radio's on. Always is.
+Nora (wry): For the sheep?
+Lars (wry): Course. They like the farming report. Very serious listeners.
+Lars (warm): Honestly? It's company. Barn's big when it's just you in it.
+? What do you say?
+- What do you listen to, when the sheep aren't choosing? -> music | romance lars +2; familiarity lars +3
+- I talk to my needles. It's about the same. -> needles | romance lars +1; trust lars +2
+@label music
+Lars (happy): Old dance songs. Late on, they play the slow ones. I don't dance. Mostly.
+Nora (happy): Mostly?
+Lars (wry): The sheep have seen things. They won't talk.
+@goto done
+@label needles
+Lars (happy): Ha. Do they answer?
+Nora (wry): Only when I drop a stitch.
+@label done
+> The fiddle crackles, finds its tune again, and goes on.
+
+== lars_topic_dad
+@trigger talk lars
+@requires seen_lars_topic_radio
+@when trust lars >= 5
+@once
+@daily
+@camera between lars nora 6
+Lars (neutral): Dad's back went when I was nineteen. Somebody had to do the milking. So.
+Lars (warm): Thought it'd be a year. That was sixteen years ago. Never once wanted to be anywhere else.
+? What do you say?
+- You never wanted to see the city? -> city | trust lars +2; familiarity lars +2
+- That sounds like a good thing to be sure of. -> sure | romance lars +2; trust lars +2
+@label city
+Lars (wry): Saw it once. Loud. Everybody rushing to be somewhere else. You came the other way, so you know.
+Nora (warm): I know.
+@goto done
+@label sure
+Lars (warm): It is. No rush to get anywhere when you're already there.
+@label done
+
+== lars_topic_loft
+@trigger talk lars
+@requires seen_lars_topic_dad
+@when hearts lars >= 2
+@when trust lars >= 8
+@once
+@daily
+@camera between lars nora 6
+Lars (happy): Did the loft up myself, you know. Up over the stalls. Bed, stove, a window in the gable.
+Lars (warm): Best bit's the hay door. Open it at five and the whole valley's under you, going pink.
+Nora (surprised): Five? In the morning?
+Lars (wry): There's another five?
+? What do you say?
+- I've never once been up for a sunrise on purpose. -> never | romance lars +2; familiarity lars +3
+- It sounds lovely. And a bit lonely. -> lonely | romance lars +1; trust lars +3
+@label never
+Lars (surprised): Never? Huh. We'll have to fix that.
+@goto done
+@label lonely
+Lars (neutral): Winters, a bit. That's what the radio's for. For the animals. Mostly for me.
+@label done
+
+# --- the first date: sunrise from the hay door ---------------------------------------------------
+
+== lars_date_invite
+# not @once: turned down, he asks again another day (one scene a day, @daily)
+@trigger talk lars
+@requires seen_lars_topic_loft !lars_date_invited
+@when hearts lars >= 3
+@when romance lars >= 3
+@daily
+@camera between lars nora 5
+Lars (neutral): So. Sunrise. From the hay door.
+Lars (warm): Tomorrow? I'll have the kettle on. No pressure. All good if not.
+? Watch the sunrise with him?
+- First light. I'll be there. -> yes | romance lars +1; set lars_date_invited
+- Not this week. Ask me again? -> later | trust lars +1
+@label yes
+Lars (happy): Dress warm. The loft's not, at five.
+@goal Meet Lars at his barn at first light (before 8:00) | 19.2 -6.1
+@end
+@label later
+Lars (warm): No rush. Sun comes up every day. I checked.
+
+== lars_date1
+@trigger talk lars
+@requires lars_date_invited !lars_date_done
+@when hour < 8
+@once
+@goal
+@fade out 1.0
+@weather clear
+@time 5.6
+@place nora by barn -0.7 4.4 180
+@place lars by barn 0.7 4.4 180
+@face nora lars
+@face lars nora
+@camera between lars nora 4.5 low
+@fade in 1.6
+> Up the ladder, through the trapdoor, past a bed made more neatly than she expected.
+> The hay door swings open on the whole valley, grey and blue and waiting.
+Lars (happy): Kettle's on. Radio's on. Sun's nearly on.
+Nora (wry): You planned this.
+Lars (wry): I plan everything. I just don't hurry it.
+> The first light comes over the foothills and runs down the fields like spilled honey.
+Nora (warm): Oh.
+Lars (warm): Yeah. Every day. Never gets old.
+Nora (neutral): Can I tell you something? In the city I used to lie awake till four and dread the morning.
+Lars (neutral): And now?
+Nora (warm): Now I knit till I'm sleepy, and the morning's just... the next thing.
+Lars (warm): That's all it should be. The next thing. No rush.
+> The radio plays something slow. He doesn't dance. Mostly.
+? The sun's all the way up, and he's close enough that their shoulders touch.
+- Lean into his shoulder. -> lean | romance lars +4; trust lars +1; set lars_close
+- "Same time next week? I'll bring the biscuits." -> week | romance lars +2; familiarity lars +4
+- "I'd like to take this slow. Is that alright?" -> slow | trust lars +4
+@label lean
+Lars (surprised): ...Oh. Hey.
+Lars (warm): All good. All very good.
+@goto end
+@label week
+Lars (happy): Deal. Radio'll be on.
+@goto end
+@label slow
+Lars (warm): Slow's my best speed. Ask anyone.
+@label end
+@journal note The hay door | Watched the sun come up over the valley from the door of Lars's loft. The radio played a slow one. He didn't dance. Mostly.
+@set lars_date_done
+@fade out 1.4
+@time 7.5
+@home lars off
+@camera player
+@fade in 1.2
+@toast Lars sees you to the bottom of the ladder, and then to your gate.
+
+== lars_date_wait
+# invited, but she's come after the sun's up
+@trigger talk lars
+@requires lars_date_invited !lars_date_done
+@when hour >= 8
+@camera lars 6
+Lars (wry): First light, remember? The sun doesn't do afternoons.

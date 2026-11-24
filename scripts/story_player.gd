@@ -404,6 +404,10 @@ func _cmd(op: Dictionary, sc: Dictionary) -> Variant:
 		"music":
 			if main.audio:
 				main.audio.play_tune(str(a[0]) if not a.is_empty() else "off", 0.1 if auto and not cinematic else 2.5)
+		"partner":
+			# her partner (scripts/partners.gd): @partner take lars, @partner stay lars
+			if main.partners:
+				main.partners.cmd(a)
 		"act":
 			# the skip between acts (scripts/acts.gd): @act next, @act card
 			if main.act_frame and not a.is_empty():

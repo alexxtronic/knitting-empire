@@ -14,13 +14,15 @@ extends Node
 ## act's goals, her model for her age (data/characters.json "nora" "nora_ages"), and in Act 2 Gran's
 ## passing (`gran_passed`: her rent stops, homestead.gd, and her last letter comes in the post, mail.json
 ## "gran_last"). `@act card` shows the montage card: twenty-five years later, her age, the act's name,
-## what she has, and a line for her partner when Game.flags["partner"] exists (step 3 builds it).
+## what she has, and a line for her partner when Game.flags["partner"] exists (scripts/partners.gd),
+## named with his title for the act; the proposal (Act 2) and the wedding (Act 3) follow the card.
 ## Everything she owns carries over. Game.flags["acts_log"] keeps the day and play time of each skip.
 ##
 ## Every line players see here and in acts.scene is a DRAFT until Alex approves it.
 
 const Data = preload("res://scripts/data.gd")
 const EmpireGoals = preload("res://scripts/empire_goals.gd")
+const Partners = preload("res://scripts/partners.gd")
 
 const GOLD := Color(0.95, 0.80, 0.46) # hud.gd's colours
 const TEXT := Color(0.97, 0.93, 0.85)
@@ -183,8 +185,8 @@ func apply_model() -> bool:
 
 # --- the montage card -----------------------------------------------------------------------------
 
-## A line for her partner: "" until Game.flags["partner"] exists (step 3). It may be a villager id, or
-## {"id", "name", "title"}.
+## A line for her partner: "" until Game.flags["partner"] exists. It is his villager id (partners.gd;
+## the title is the act's: boyfriend, fiancé, husband), or {"id", "name", "title"}.
 static func partner_line() -> String:
 	var p: Variant = Game.flags.get("partner", null)
 	if p == null:
@@ -198,6 +200,7 @@ static func partner_line() -> String:
 		title = str((p as Dictionary).get("title", ""))
 	else:
 		id = str(p)
+		title = Partners.title()
 	if who == "" and id != "":
 		for v in Data.villagers():
 			if str(v.get("id", "")) == id:

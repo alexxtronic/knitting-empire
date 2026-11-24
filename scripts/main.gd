@@ -57,6 +57,8 @@ const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const Scarves = preload("res://scripts/scarves.gd")
 const Wolves = preload("res://scripts/wolves.gd")
 const Shepherd = preload("res://scripts/shepherd.gd")
+const Partners = preload("res://scripts/partners.gd")
+const PartnersCheck = preload("res://scripts/partners_check.gd")
 const HouseSale = preload("res://scripts/house_sale.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const BookPanel = preload("res://scripts/book_panel.gd")
@@ -159,6 +161,7 @@ var goals: EmpireGoals # the Empire goal list, the takings ledger, the Field Gui
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
 var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it (house_sale.gd)
 var shepherd: Shepherd # Rowan watching the pen for a fee, and the flags his advice waits for (shepherd.gd)
+var partners: Partners # her partner out of Rowan, Lars and Gary, the sore one and his pranks (partners.gd)
 var wolves: Wolves # wolves at night, after her penned animals (wolves.gd, data/wolves.json)
 var townsfolk: Townsfolk # the town's passers-by and the red pin over anyone who wants a sweater (townsfolk.gd)
 var buildplus: BuildPlus # Build & Buy with god mode's reach: its Place list for coins, ground paint, the world's scenery (build_plus.gd)
@@ -490,6 +493,11 @@ func _ready() -> void:
 	shepherd = Shepherd.new()
 	shepherd.main = self
 	add_child(shepherd)
+	Partners.on = _autotest_dir == "" # no pranks, sharp lines or arguments in the autotest but its own check
+	partners = Partners.new()
+	partners.main = self
+	add_child(partners)
+	partners.apply()
 	house_sale = HouseSale.new()
 	house_sale.main = self
 	add_child(house_sale)
@@ -2618,6 +2626,8 @@ func _click_marker(p: Vector3) -> void:
 # --- actions --------------------------------------------------------------------------
 
 func _name_of(t) -> String:
+	if t is Villager and partners != null:
+		return partners.heading(t) # "Shepherd Rowan  (your boyfriend)"
 	return t.display_name()
 
 
@@ -2989,6 +2999,7 @@ func _finish_knit(rarity := 0) -> void:
 		rarity = maxi(rarity, wildlife.knit_floor(fibre))
 	else:
 		paid = Game.take_item("wool", 3)
+	rarity = maxi(1, rarity - partners.knit_penalty()) # a sore man hid her needles today (partners.gd)
 	if paid:
 		var worn0 := Game.worn_quality
 		var q := Game.knit_sweater(rarity)
@@ -6065,6 +6076,12 @@ func _autotest() -> void:
 	if "--only=acts" in OS.get_cmdline_user_args(): # just the four acts: the chapter rows, the skip and its card, Act 2, Gran, the save
 		await _wait(1.5)
 		await ActsCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=partners" in OS.get_cmdline_user_args(): # just her partner: asking, switching, the sore one's pranks, the proposal and the wedding
+		await _wait(1.5)
+		await PartnersCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -11979,6 +11996,7 @@ func _villager_actions(v) -> Array:
 				else:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(shepherd.rows_for(v)) # Rowan: hire him to watch the pen (shepherd.gd)
+	acts.append_array(partners.rows_for(v)) # Rowan, Lars or Gary: ask him out (partners.gd)
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
 	acts.append_array(sale.rows_for(v)) # ask if they want a sweater, and haggle (sweater_sale.gd)
@@ -12021,6 +12039,9 @@ func _villager_action(v, id: String) -> void:
 	if id.begins_with("shep_"): # hiring Rowan to watch the pen (shepherd.gd)
 		shepherd.action(v, id)
 		return
+	if id == "partner_ask": # asking him out (partners.gd)
+		partners.action(v, id)
+		return
 	if id == "sale_ask" or id == "sale_haggle":
 		sale.ask(v)
 		return
@@ -12046,21 +12067,25 @@ func _villager_action(v, id: String) -> void:
 	match id:
 		"talk":
 			var scene_id := Jobs.offer_scene(v.vid) # a job offer comes first, once it's due
-			if scene_id == "":
+			var argue := partners.argument_for(v) # a sore man and her partner, at it in town (partners.gd)
+			var sharp := partners.talk_line(v) # a sore man: something sharp now and then
+			if scene_id == "" and argue == "" and sharp == "":
 				scene_id = Story.find_trigger("talk", v.vid)
-			var line := "" if scene_id != "" else _talk_line(v)
+			var line := "" if scene_id != "" or argue != "" else (sharp if sharp != "" else _talk_line(v))
 			f["n"] = int(f["n"]) + 1
 			if int(f["talk"]) != Game.day:
 				f["talk"] = Game.day
 				Game.add_friendship(v.vid, 8)
 				Game.add_need("love", 6.0)
 				Game.add_need("happiness", 2.0)
-			if scene_id != "":
+			if argue != "" and partners.play_argument(v, argue):
+				pass
+			elif scene_id != "":
 				v.face_point(player.position, 3.0)
 				player.face_point(v.position)
 				story.play(scene_id)
 			else:
-				_say(v, line)
+				_say(v, line if line != "" else _talk_line(v))
 		"sell_sweater":
 			var n := Game.count("sweater")
 			var price := _rosa_price()
@@ -12148,6 +12173,7 @@ func _villager_action(v, id: String) -> void:
 					_say(v, Dialogue.GIFT_LOVED[v.vid])
 				else:
 					_say(v, str(Dialogue.GIFT_LINES.get(v.vid, {}).get(item, "Oh, a %s! That's very thoughtful of you. Thank you." % item)))
+				partners.on_gift(v) # a gift ends a sore man's sulk (partners.gd)
 	_update_price_board()
 
 

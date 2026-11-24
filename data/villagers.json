@@ -28,6 +28,7 @@
       "title": "Estate Agent",
       "loves": "sweater",
       "likes": ["pumpkin"],
+      "romance": true,
       "works_in": "office",
       "pos": [64.2, 0.0, -7.2],
       "roam": [1.0, 0.35],

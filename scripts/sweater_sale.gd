@@ -84,7 +84,21 @@ static func _day_roll(vid: String, what: String) -> float:
 
 ## Whether they're looking for a sweater today.
 static func looking(vid: String) -> bool:
+	if itchy(vid):
+		return false
 	return _day_roll(vid, "ask") < yes_chance(vid)
+
+
+## A sore man told `vid` her sweaters itch, today (scripts/partners.gd's "itch" prank, read straight
+## from Game.flags["pranks"]): they won't buy one today.
+static func itchy(vid: String) -> bool:
+	var all: Variant = Game.flags.get("pranks", [])
+	if not (all is Array):
+		return false
+	for p in all:
+		if p is Dictionary and str(p.get("kind", "")) == "itch" and str(p.get("who", "")) == vid and int(p.get("day", -1)) == Game.day:
+			return true
+	return false
 
 
 ## The plain fair price of a sweater: Rosa's price for its rarity.
@@ -161,7 +175,8 @@ func ask(villager) -> bool:
 		var yes := looking(vid)
 		_note(vid, {"yes": yes, "tries": 0})
 		if not yes:
-			main._say(villager, str(NO[(Game.day + vid.length()) % NO.size()]))
+			var itch_no := str((Data.economy().get("partners", {}).get("lines", {}) as Dictionary).get("itch_no", ""))
+			main._say(villager, itch_no if itchy(vid) and itch_no != "" else str(NO[(Game.day + vid.length()) % NO.size()]))
 			return false
 	elif not bool(asked(vid).get("yes", false)):
 		return false
