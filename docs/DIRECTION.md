@@ -197,3 +197,17 @@ Romance runs through all four acts: one partner at a time, out of Rowan, Lars an
 - **Ages 25, 50, 75 and 100.** Act 1's lines change so that Nora is 25 (she was "in her thirties").
 - **The time skip is the player's choice.** Finishing an act's last goal opens a "twenty-five years later" scene, which she starts when she's ready. Everything she owns carries over.
 - **A full game takes 30 to 40 hours on average** (Alex, 2026-11-24). At 20 real minutes a day, that is 90 to 120 game days, about 8 to 10 hours and 25 to 30 game days for each act. The pacing table is in `docs/REVIEW_2026-11-24.md` (section 7).
+
+### Models still needed (Alex, 2026-11-24: "make a note")
+
+Alex makes these, in Tripo and in the game's style. The game uses stand-ins until they land:
+
+| What | For | Stand-in until then | Where it plugs in |
+|---|---|---|---|
+| Nora at 50 | Act 2 | today's Nora | `nora_ages` in `data/characters.json` |
+| Nora at 75 | Act 3 | today's Nora | `nora_ages` |
+| Nora at 100 | Act 4 | today's Nora | `nora_ages` |
+| A granny who knits (or a few) | Act 2's hired knitters | none yet: the workers aren't built | the workers step (review section 6, step 5) |
+| A kid who shears (or a few) | Act 2's hired shearers | none yet | the workers step |
+
+Each character model must be rigged like Nora, with real eyes (`tools/add_eyes.py`) and a rigid head (`tools/rigid_head.py`). Nora's also need her fitted sweater (`art/world_assets/sweater/build.py`) and her tool grip (`tools/add_grip.py`). Also wanted later: more dog breeds (the pack uses tinted coats of the retriever until then), the God Sweater's look, and the ultra rare animal of the cold mountains.
