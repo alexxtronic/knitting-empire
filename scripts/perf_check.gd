@@ -238,6 +238,21 @@ func measure(secs := SAMPLE_SECS) -> Dictionary:
 	}
 
 
+var _grass_shader: Shader
+
+## The grass blades drawn with a variant of their shader (`from` swapped for `to`), or as they are.
+func _grass_variant(on: bool, from: String, to: String) -> void:
+	var m: ShaderMaterial = main.grass.blade_mat
+	if _grass_shader == null:
+		_grass_shader = m.shader
+	if on:
+		m.shader = _grass_shader
+	else:
+		var sh := Shader.new()
+		sh.code = _grass_shader.code.replace(from, to)
+		m.shader = sh
+
+
 ## Each effect, and each of the frame-rate pass's changes, switched off on its own at this spot:
 ## what it costs, measured back to back with it on.
 func _probe(spot: Array) -> void:
@@ -301,6 +316,20 @@ func _probe(spot: Array) -> void:
 		"grass_full_density": func(on: bool) -> void:
 			main.grass.set_quality(1.0 if on else 0.75, main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx]),
 		"grass_patch_bake": func(on: bool) -> void: main.grass.blade_mat.set_shader_parameter("patch_baked", on),
+		# the grass over the whole map (2026-11-24): the squares streamed in outside the farm and town, and
+		# drawn as fully as at the farm against Medium's leaner way (GRASS_OUTER_FRAC, GRASS_OUTER_REACH)
+		"grass_outer": func(on: bool) -> void: main.grass.show_outer(on),
+		"grass_outer_full_v_medium": func(on: bool) -> void:
+			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx], main.GRASS_THIN_NEAR[main.gfx],
+				1.0 if on else main.GRASS_OUTER_FRAC[1], 1.0 if on else main.GRASS_OUTER_REACH[1]),
+		# the blades' lighting: Burley and GGX against Lambert with no specular; the backlight
+		"grass_burley_ggx": func(on: bool) -> void: _grass_variant(on, "diffuse_burley, specular_schlick_ggx", "diffuse_lambert, specular_disabled"),
+		"grass_backlight": func(on: bool) -> void: _grass_variant(on, "BACKLIGHT =", "vec3 no_backlight ="),
+		# how far grass thins: off is a leaner variant (fewer far blades; thinning from 12 m)
+		"grass_keep_04v03": func(on: bool) -> void:
+			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx] if on else 0.3, main.GRASS_THIN_NEAR[main.gfx]),
+		"grass_near_16v12": func(on: bool) -> void:
+			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx], 16.0 if on else 12.0),
 		"3d_res_x0.7": func(on: bool) -> void:
 			main.render_scale = 1.0 if on else 0.7
 			main._fit_3d_resolution(),

@@ -684,9 +684,17 @@ const LAMP_SHADOWS := [0, 1, 2, 4]
 const LAMP_SHADOW_FADE := [20.0, 30.0, 35.0, 40.0]
 ## grass.gd per level: the share of blades drawn, how far from the camera they go, and the share
 ## left at the end of that range
-const GRASS_FRAC := [0.45, 0.75, 1.0, 1.0]
+const GRASS_FRAC := [0.45, 0.65, 1.0, 1.0] # each drawn blade widened by 1/sqrt(share) to look as full (2026-11-24: Medium was 0.75 unwidened)
 const GRASS_RANGE := [30.0, 32.0, 40.0, 46.0]
-const GRASS_THIN := [0.4, 0.4, 0.4, 0.45]
+const GRASS_THIN := [0.3, 0.3, 0.4, 0.45]
+## ... and from how far off it starts thinning. Low and Medium thin sooner and further (2026-11-24): that
+## pays for the blades now grown over the whole map (grass.gd), and the wider far blades keep it as full
+const GRASS_THIN_NEAR := [12.0, 12.0, 16.0, 16.0]
+## ... and out in the lands, where there was no grass before (grass.gd outer_frac, outer_reach): on Low and
+## Medium this share of the blades (of GRASS_FRAC's), each widened to look as full, out to this share of
+## the range. A blade's cost is mostly its own (unlit, the grass costs much the same), so it's the count that's cut
+const GRASS_OUTER_FRAC := [0.25, 0.3, 1.0, 1.0]
+const GRASS_OUTER_REACH := [0.8, 0.9, 1.0, 1.0]
 ## How far the sun's shadow reaches at most, per level (it follows the zoom below that).
 const SUN_SHADOW_REACH := [40.0, 55.0, 62.0, 70.0]
 const RECOMMENDED_APPLE := 1 # Medium: on an M4 MacBook Air at 2560x1378 High runs 19-29 fps, Medium 30-50 (--only=perf)
@@ -782,7 +790,7 @@ func apply_graphics() -> void:
 	Interiors.no_casters = not ultra
 	Interiors.lights_off = not hi
 	light_budget.update(get_tree(), cam_target, 0.0, true)
-	grass.set_quality(GRASS_FRAC[gfx], GRASS_RANGE[gfx], GRASS_THIN[gfx])
+	grass.set_quality(GRASS_FRAC[gfx], GRASS_RANGE[gfx], GRASS_THIN[gfx], GRASS_THIN_NEAR[gfx], GRASS_OUTER_FRAC[gfx], GRASS_OUTER_REACH[gfx])
 	lighting.apply_graphics(gfx)
 	_fit_3d_resolution()
 	hud.set_graphics_label(GFX_NAMES[gfx])
@@ -942,10 +950,25 @@ func _rebuild_grass(replant := true) -> void:
 	clear.append(Rect2(8.1, 2.35, 1.0, 1.3)) # doormat
 	clear.append_array(World.barn_floor()) # its walls block the way; the floor between them only stops the grass
 	clear.append_array(Interiors.floors()) # and the shops' floors (their walls and furniture block the way)
+	if suburb != null: # Bretton Oaks' houses: Marcus's walk-in footprint isn't on the grid's blockers, but grass mustn't grow through its floor
+		for h in suburb.house_list:
+			var n := h["node"] as Node3D
+			var mx := -1.0 if bool(h["mirror"]) else 1.0
+			for r in Suburb.FOOTPRINT + [Suburb.GARAGE]:
+				var rr: Rect2 = r
+				rr = rr.grow(0.3)
+				var quad := PackedVector2Array()
+				for c in [rr.position, Vector2(rr.end.x, rr.position.y), rr.end, Vector2(rr.position.x, rr.end.y)]:
+					var w: Vector3 = n.global_transform * Vector3(c.x * mx, 0, c.y)
+					quad.append(Vector2(w.x, w.z))
+				clear.append(quad) # turned with the house: grass.gd draws it into its whole-map mask
 	var roads: Image = god.roads_over(Grass.REGION) if painted else null # the grass's mask covers less than the road map
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
+	# the blades out in the lands (grass.gd streams them); Bretton Oaks' lawns stay short farm lawn, not meadow
+	var lawn: Array = [Vector3(suburb.centre.x, suburb.centre.z, float(suburb.cfg.get("ring", 21.0)) + 8.0)] if suburb != null else []
+	grass.set_lands(regions.defs, regions.pools, regions.shore_z, lawn)
 	if replant:
-		grass.build(dirt, clear, pond, roads)
+		grass.build(dirt, clear, pond, roads, god.road_img if painted else null)
 	else:
 		grass.remask(dirt, clear, pond, roads)
 
@@ -6336,11 +6359,64 @@ func _world_checks() -> void:
 	await _wait(3.0)
 	await _shot("49_world_range.png")
 	cam_glide = {}
+	await _grass_land_checks()
 	player.position = home
 	cam_target = home
 	Game.hour = 10.0
 	await _wait(0.5)
 	Game.time_running = was_running
+
+
+## The grass over the whole map (grass.gd, 2026-11-24): blades in every land but the beach's sand,
+## none in a swamp pool, past the shore, on Bretton Oaks' pavement or inside one of its houses, and a
+## closer picture of the grass in each land (49_grass_<id>.png).
+func _grass_land_checks() -> void:
+	var lands_ok := PackedStringArray()
+	var all_ok := true
+	for id in regions.defs:
+		var walk: Rect2 = Regions._rect(regions.defs[id]["walk"])
+		var n := 0 # the most at its middle or a quarter of the way in from a corner (the middle may be a pool or Bretton Oaks)
+		for f in [Vector2(0.5, 0.5)] if id == "beach" else [Vector2(0.5, 0.5), Vector2(0.25, 0.25), Vector2(0.75, 0.25), Vector2(0.25, 0.75), Vector2(0.75, 0.75)]:
+			var c: Vector2 = walk.position + walk.size * f
+			n = maxi(n, grass.blades_near(c.x, c.y, 4.0 if id == "beach" else 8.0)) # the beach: its sand, clear of the grassy fringe
+		var ok: bool = n == 0 if id == "beach" else n > 400
+		all_ok = all_ok and ok
+		lands_ok.append("%s %d" % [id, n])
+	var pool_n := 0
+	for p in regions.pools:
+		pool_n += grass.blades_near(p.x, p.y, p.z * 0.5)
+	var sea_n: int = grass.blades_near(30.0, regions.shore_z + 3.0, 3.0)
+	var house_n := 0
+	var road_n := -1
+	if suburb != null:
+		for h in suburb.houses():
+			var at: Vector3 = h["inside"]
+			house_n += grass.blades_near(at.x, at.z, 1.2)
+		# a spot well inside the cul-de-sac's paving
+		for i in 60:
+			var a := i * 0.37
+			var p: Vector3 = suburb.centre + Vector3(cos(a), 0, sin(a)) * (9.0 + float(i % 5) * 1.5)
+			var paved := true
+			for o in [Vector2.ZERO, Vector2(0.7, 0), Vector2(-0.7, 0), Vector2(0, 0.7), Vector2(0, -0.7)]:
+				paved = paved and god.road_at(p.x + o.x, p.z + o.y) != ""
+			if paved:
+				road_n = grass.blades_near(p.x, p.z, 0.4)
+				break
+	_check("grass over the whole map: blades in every land but the beach's sand (%s), none in the swamp's pools (%d), past the shore (%d), inside Bretton Oaks' houses (%d) or on its pavement (%d)" % [", ".join(lands_ok), pool_n, sea_n, house_n, road_n],
+		all_ok and pool_n == 0 and sea_n == 0 and house_n == 0 and road_n == 0)
+	# closer: what a player sees walking there
+	var spots := {"swamp": Vector3(-58.0, 0, -6.0), "meadow": Vector3(127.0, 0, -22.0), "mountains": Vector3(30.0, 0, -60.0)}
+	if suburb != null:
+		spots["suburb"] = suburb.centre + Vector3(0, 0, 4.0)
+	for id in spots:
+		var at: Vector3 = spots[id]
+		Game.hour = 11.0
+		player.position = at
+		cam_target = at
+		cam_glide = {"pos": at, "dist": 16.0, "pitch": 34.0}
+		await _wait(2.0)
+		await _shot("49_grass_%s.png" % id)
+		cam_glide = {}
 
 
 ## The lighting (scripts/lighting.gd, art/world_assets/light_bake): the props carry their Cycles
