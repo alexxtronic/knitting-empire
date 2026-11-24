@@ -633,6 +633,14 @@ func _town_checks(furn0: Array) -> void:
 		bought and c0 - Game.coins == price and missing.is_empty() and a3["town"] == n_town and a3["tab"] and toast.contains("Town") and Game.flag("town_pieces_open") == true
 		and met1 == 1 and (a3["never"] as Array).is_empty() and Catalog.cat_of("w_building_shop") == Catalog.TOWN_CAT
 		and int(Catalog.ITEMS["welcome_sign"]["price"]) > 0 and int(Catalog.ITEMS["bakery_stall"]["price"]) > 0)
+	# the town cards read as things you'd buy, not as god mode's model names (Alex, 2026-11-24)
+	var odd: Array = []
+	for id in Catalog.in_cat(Catalog.TOWN_CAT):
+		var nm := str(Catalog.ITEMS[id].get("name", ""))
+		if nm.to_lower().begins_with("building") or nm.contains("_"):
+			odd.append(nm)
+	_check("the town cards have friendly names (bakery: '%s', mayor's: '%s'; odd: %s)" % [str(Catalog.ITEMS["w_building_bakery"]["name"]), str(Catalog.ITEMS["w_building_mayor"]["name"]), str(odd)],
+		odd.is_empty() and str(Catalog.ITEMS["w_building_bakery"]["name"]) == "Bakery")
 	m.set_mode(m.Mode.BUILD)
 	if m.hud.town_tab != null:
 		m.hud.town_tab.pressed.emit()

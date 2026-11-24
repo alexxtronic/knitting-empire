@@ -168,7 +168,10 @@ func register() -> void:
 		var natural := GodMode._starts(model, NATURAL)
 		var land := what.get_slice("-", 0) if what.contains("-") else ""
 		var nm := str(o[1])
-		if land != "":
+		var names: Dictionary = econ().get("names", {})
+		if names.has(model):
+			nm = str(names[model]) # a friendlier card name ("names" in build_prices; drafts)
+		elif land != "":
 			nm = "%s (%s)" % [GodMode.TITLES.get(model, model.capitalize()), land.capitalize()]
 		var price := price_for(model)
 		var e := {"id": id, "name": nm, "price": maxi(1, roundi(price * (float(econ().get("small", 0.5)) if small else 1.0))),
