@@ -80,7 +80,7 @@ func setup() -> void:
 	_card.add_child(_card_text)
 	_card.visible = false
 	hud.root.add_child(_card)
-	hud._place(_card, 0.5, 0.0, Vector2(0, 130)) # under the goal line and the toasts
+	hud._place(_card, 0.5, 0.0, Vector2(0, 150)) # under the goal line and the toasts
 	hud.chrome.append(_card)
 	guide = FieldGuide.new()
 	guide.setup(hud, self)
