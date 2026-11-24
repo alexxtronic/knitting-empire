@@ -10,6 +10,7 @@ const SuburbCheck = preload("res://scripts/suburb_check.gd")
 const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
+const GoalsCheck = preload("res://scripts/goals_check.gd")
 const HouseSaleCheck = preload("res://scripts/house_sale_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
 const Plot = preload("res://scripts/plot.gd")
@@ -50,6 +51,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const SeeThrough = preload("res://scripts/see_through.gd")
 const Wildlife = preload("res://scripts/wildlife.gd")
 const Empire = preload("res://scripts/empire.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const Scarves = preload("res://scripts/scarves.gd")
 const Wolves = preload("res://scripts/wolves.gd")
 const Shepherd = preload("res://scripts/shepherd.gd")
@@ -148,6 +150,7 @@ var player: Player
 var dog: Dog # the golden retriever: keeps Nora company, and Tab hands him the clicks (dog.gd)
 var wildlife: Wildlife # the wild animals and birds round the farm (wildlife.gd, data/wildlife.json)
 var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
+var goals: EmpireGoals # the Empire goal list, the takings ledger, the Field Guide and the Lookbook (empire_goals.gd)
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
 var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it (house_sale.gd)
 var shepherd: Shepherd # Rowan watching the pen for a fee, and the flags his advice waits for (shepherd.gd)
@@ -447,6 +450,11 @@ func _ready() -> void:
 	empire = Empire.new()
 	empire.main = self
 	add_child(empire)
+	EmpireGoals.on = _autotest_dir == "" # the autotest turns it on for its own check (scripts/goals_check.gd)
+	goals = EmpireGoals.new()
+	goals.main = self
+	add_child(goals)
+	goals.setup()
 	bonfire = Bonfire.new()
 	bonfire.main = self
 	add_child(bonfire)
@@ -1977,6 +1985,9 @@ func _input(e: InputEvent) -> void:
 				hud.album.close()
 			elif hud.letters.visible:
 				hud.letters.close()
+			elif hud.guide.visible or hud.lookbook.visible:
+				hud.guide.visible = false
+				hud.lookbook.visible = false
 			elif wardrobe_ui.visible:
 				wardrobe_ui.close()
 			elif sale.visible:
@@ -1998,7 +2009,7 @@ func _input(e: InputEvent) -> void:
 func panel_open() -> bool:
 	return books_ui.visible or wardrobe_ui.visible or sale.visible or hud.letters.visible or hud.bag_panel.visible \
 		or hud.album.visible or hud.journal_panel.visible or hud.settings_panel.visible or hud.help_panel.visible \
-		or hud.keys_open() or hud.game_menu.visible or homestead.ui.is_open()
+		or hud.keys_open() or hud.game_menu.visible or homestead.ui.is_open() or hud.guide.visible or hud.lookbook.visible
 
 
 func _ray_target(mpos: Vector2) -> Variant:
@@ -2360,6 +2371,7 @@ func sell_sweater_to(v, i: int, price: int) -> bool:
 	var sw := Game.remove_sweater(i)
 	var d := Sweaters.design(str(sw.get("design", "")))
 	Game.coins += price
+	EmpireGoals.took("face", price)
 	if Sweaters.fits(v.vid) and not d.is_empty():
 		var bought: Dictionary = Game.flag("npc_sweaters", {}).duplicate()
 		bought[v.vid] = str(d["id"])
@@ -2960,6 +2972,7 @@ func _finish_knit(rarity := 0) -> void:
 		var q := Game.knit_sweater(rarity)
 		if fibre != "": # what it was knitted with: the online store's orders ask for a fibre
 			Game.sweater_fibres[Game.sweater_fibres.size() - 1] = fibre
+			EmpireGoals.note("fibre_knits")
 		Game.add_need("happiness", 14.0)
 		if fibre != "" and empire.knitted(fibre, q): # the one a local asked for: put by for them
 			var who = _villager(str(empire.request().get("who", "")))
@@ -3066,6 +3079,7 @@ func _ship(kind: String) -> void:
 		Game.take_item("sweater", Game.count("sweater"))
 	if earned > 0:
 		Game.coins += earned
+		EmpireGoals.took("mailbox", earned)
 		hud.show_toast("Shipped! +%dc" % earned)
 
 
@@ -5990,6 +6004,12 @@ func _autotest() -> void:
 	if "--only=marcushouse" in OS.get_cmdline_user_args(): # just buying Marcus's house: his favour, the sale, her edits to it
 		await _wait(1.5)
 		await HouseSaleCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=goals" in OS.get_cmdline_user_args(): # just the Empire goals, the Field Guide, the Lookbook and the morning ledger
+		await _wait(1.5)
+		await GoalsCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -11980,6 +12000,7 @@ func _villager_action(v, id: String) -> void:
 			var worth := Game.sweater_worth(price) # by rarity
 			if n > 0 and Game.take_item("sweater", n):
 				Game.coins += worth
+				EmpireGoals.took("rosa", worth)
 				var praise: Array = ["Oh, these are gorgeous!", "Lovely work, as always.", "The city folks will snap these up!"]
 				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], worth, n, "s" if n > 1 else ""])
 				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", worth])

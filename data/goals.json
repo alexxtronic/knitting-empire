@@ -1,0 +1,20 @@
+{
+	"_about": "The Empire goal list after Act 1 (Alex, approved 2026-11-18; docs/REVIEW_2026-11-24.md section 2 and section 7's pacing: Act 1 is about 25 game days, so one goal every two days or so, the last near day 25). scripts/empire_goals.gd shows the first three not yet done, top left, and any of them can be done. Each has an id, a line (every line is a DRAFT until Alex approves it), a check the code reads, n (how many; default 1) and a reward in coins (drafts, 20 to 150c). Checks: caught, penned, combed, fibre_knits, face_sales, requests count from the moment the goal first shows (so what she did in Act 1 doesn't tick it off); needles (has that pair or better), pens (that many pens), barn (Lars's barn rented and paid up), guide_seen (species seen in the Field Guide), designs (designs knitted for the Lookbook), best_day (coins from sweaters in one day, the morning ledger's best), ready (the last one: sets Game.flags[\"act_ready\"] for the time skip).",
+	"goals": [
+		{"id": "catch", "line": "Catch a wild animal with the dog (Tab, then bark)", "check": "caught", "reward": 20},
+		{"id": "pen", "line": "Lead a wild animal home to a pen", "check": "penned", "reward": 25},
+		{"id": "comb", "line": "Comb a wild animal for its fibre", "check": "combed", "reward": 25},
+		{"id": "knit_fibre", "line": "Knit a sweater with wild fibre", "check": "fibre_knits", "reward": 40},
+		{"id": "sell_face", "line": "Sell a sweater to someone face to face", "check": "face_sales", "reward": 30},
+		{"id": "steel", "line": "Buy Rosa's steel needles", "check": "needles", "needles": "steel", "reward": 40},
+		{"id": "guide5", "line": "Find five animals for the Field Guide", "check": "guide_seen", "n": 5, "reward": 50},
+		{"id": "request", "line": "Fill a local's request", "check": "requests", "reward": 60},
+		{"id": "pen2", "line": "Build a second pen", "check": "pens", "n": 2, "reward": 60},
+		{"id": "lookbook10", "line": "Knit ten designs for the Lookbook", "check": "designs", "n": 10, "reward": 70},
+		{"id": "barn", "line": "Rent Lars's barn", "check": "barn", "reward": 80},
+		{"id": "rosewood", "line": "Buy Rosa's rosewood needles", "check": "needles", "needles": "rosewood", "reward": 100},
+		{"id": "pen3", "line": "Build a third pen", "check": "pens", "n": 3, "reward": 100},
+		{"id": "day1000", "line": "Earn 1,000c from sweaters in one day", "check": "best_day", "n": 1000, "reward": 150},
+		{"id": "ready", "line": "Ready for the next chapter", "check": "ready", "reward": 0}
+	]
+}

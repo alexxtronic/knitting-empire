@@ -32,6 +32,7 @@ const WildAnimal = preload("res://scripts/wild_animal.gd")
 const Bird = preload("res://scripts/bird.gd")
 const Hud = preload("res://scripts/hud.gd")
 const KnitGame = preload("res://scripts/knit_game.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const CULL := 60.0
 const SEED := 20261114
 const BARK_RANGE := 8.0 # a bark frightens the wild animals this close
@@ -317,6 +318,7 @@ func barked(at: Vector3) -> int:
 ## Its fright meter is full: it gives in and follows the dog home.
 func frightened(a: Node3D) -> void:
 	a.caught = true
+	EmpireGoals.mark(a.species, "caught") # the Field Guide and the goal list
 	a.fleeing = 0.0
 	a.fright = 0.0
 	a._show_meter()
@@ -480,6 +482,7 @@ func combed(a: Node3D) -> void:
 	a.hold(1.5)
 	var f: String = a.fibre()
 	Game.add_item(f, 1)
+	EmpireGoals.mark(a.species, "combed") # the Field Guide and the goal list
 	Game.add_need("happiness", 4.0)
 	Game.add_need("fitness", 1.0)
 	var t := tier_name(a.tier())

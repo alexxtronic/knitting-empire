@@ -15,6 +15,7 @@
 extends Node
 
 const Catalog = preload("res://scripts/catalog.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const Data = preload("res://scripts/data.gd")
 
 const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
@@ -236,6 +237,8 @@ func read(l: Dictionary) -> String:
 	var got: Array = []
 	if int(l.get("coins", 0)) > 0:
 		Game.coins += int(l["coins"])
+		if str(l.get("kind", "")) == "payment": # a sweater order's payment (Gran's enclosures aren't takings)
+			EmpireGoals.took("mail", int(l["coins"]))
 		got.append("%dc" % int(l["coins"]))
 	if str(l.get("item", "")) != "":
 		Game.add_item(str(l["item"]), int(l.get("item_n", 1)))

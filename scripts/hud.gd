@@ -213,6 +213,8 @@ var menu_btn: Button
 var game_menu: PanelContainer # Save, Settings, Journal, How to Play, New Game
 var album: PhotoAlbum # the photo album (photo_album.gd): what cinematic mode took
 var letters: LettersPanel # the letters from the mailbox (letters_panel.gd); main.gd gives it the post (mail.gd)
+var guide: Control # the Field Guide (field_guide.gd); empire_goals.gd builds it and the Lookbook
+var lookbook: Control # the Lookbook of the fifty designs (lookbook.gd)
 var needs_panel: PanelContainer
 var cam_pad: PanelContainer
 var fps_check: CheckButton
@@ -603,6 +605,8 @@ func _build_game_menu() -> void:
 	vb.add_child(_button("Journal", func(): shut.call(); open_journal()))
 	vb.add_child(_button("Letters", func(): shut.call(); letters.open()))
 	vb.add_child(_button("Wardrobe", func(): shut.call(); wardrobe_pressed.emit()))
+	vb.add_child(_button("Field Guide", func(): shut.call(); if guide: guide.call("open")))
+	vb.add_child(_button("Lookbook", func(): shut.call(); if lookbook: lookbook.call("open")))
 	vb.add_child(_button("First person (V)", func(): shut.call(); first_person_pressed.emit()))
 	vb.add_child(_button("Cinematic camera (P)", func(): shut.call(); cinematic_pressed.emit()))
 	vb.add_child(_button("Photo album", func(): shut.call(); album.open()))

@@ -21,6 +21,7 @@ const KnitGame = preload("res://scripts/knit_game.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Catalog = preload("res://scripts/catalog.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const LANTERN_MODEL := "res://assets/props/lantern.glb" # art/world_assets/lantern/build.py; its origin is the ring's top
 const GLOBE_DROP := 0.175 # metres from the ring's top down to the flame
 const LIGHT_OUT := 0.14 # how far out from her side the light sits, so it doesn't burn a patch on her sweater
@@ -361,6 +362,7 @@ func give(v) -> bool:
 	if r.has("rarity"): # the plainest sweater in her bag that will do
 		design = str(Game.remove_sweater(sweater_for(int(r["rarity"]))).get("design", ""))
 	Game.coins += coins
+	EmpireGoals.took("request", coins)
 	if Sweaters.fits(v.vid) and not Sweaters.design(design).is_empty():
 		var worn: Dictionary = (Game.flag("npc_sweaters", {}) as Dictionary).duplicate()
 		worn[v.vid] = design

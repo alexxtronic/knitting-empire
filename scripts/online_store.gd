@@ -28,6 +28,7 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 const Data = preload("res://scripts/data.gd")
 const FirstPerson = preload("res://scripts/first_person.gd")
 const Catalog = preload("res://scripts/catalog.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 
 const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const STAND := 0.28 # how far in front of the desk she stands
@@ -368,6 +369,7 @@ func _on_day_started(_day: int) -> void:
 	var n := pending().size()
 	var s := state()
 	Game.coins += total
+	EmpireGoals.took("store", total) # the morning it arrives
 	s["earned"] = int(s.get("earned", 0)) + total
 	s["pending"] = []
 	if main != null:
