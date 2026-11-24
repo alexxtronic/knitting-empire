@@ -5078,8 +5078,9 @@ func _cast_checks() -> void:
 		await _shot("51_cast_sabrina.png")
 	# Gary's listings
 	var land: Array = _villager_actions(_villager("gary")).filter(func(a): return str(a.get("group", "")) == "Land for sale")
-	_check("Gary lists three plots of land, all out of reach (%s)" % ", ".join(land.map(func(a): return a["label"])),
-		land.size() == 3 and land.all(func(a): return not a["enabled"]))
+	var land_n: int = (Data.economy().get("land", []) as Array).size() # Eastfield Acres went to "building" "plots" (2026-11-24)
+	_check("Gary lists his %d plots of land, all out of reach (%s)" % [land_n, ", ".join(land.map(func(a): return a["label"]))],
+		land_n > 0 and land.size() == land_n and land.all(func(a): return not a["enabled"]))
 	# Lars, by his barn next door, and the barn's rent
 	var lars := _villager("lars")
 	var by_barn := _spot_at(_villager_def("lars")["at"])
