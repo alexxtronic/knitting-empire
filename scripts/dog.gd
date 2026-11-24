@@ -455,9 +455,9 @@ func _follow_leader(delta: float) -> void:
 	if _line_clear(target): # the usual case: straight there, aimed afresh each time he thinks
 		path = [target]
 		return
-	if _repath > 0.0 and not path.is_empty():
-		return
-	_repath = 0.45 + 0.07 * (pack_index % 5) # round something by the grid, and not too often
+	if _repath > 0.0: # round something by the grid, and not too often (a place inside a wall
+		return # would otherwise ask every frame once he's as near as he can get)
+	_repath = 0.45 + 0.07 * (pack_index % 5)
 	path = main._find_path(position, target) if main.has_method("_find_path") else [target]
 
 
