@@ -268,6 +268,11 @@ var title_new_btn: Button
 var _title_new_armed := false
 var catalog_panel: PanelContainer
 var item_buttons := {}
+var town_buttons := {} # the town pieces' cards (build_plus.gd): in item_buttons only while the Town tab shows
+var town_tab: Button # the Town tab, hidden until she has a large plot in Act 2 or later
+var town_page: Control
+var _cat_pages: Array = []
+var _town_thumbs := false
 var thumbs # thumbs.gd
 var holding_bar: HBoxContainer
 var sell_btn: Button
@@ -1210,17 +1215,7 @@ func _build_catalog() -> void:
 		grid.add_theme_constant_override("h_separation", 6)
 		grid.add_theme_constant_override("v_separation", 6)
 		for id in sections[si][1]:
-			var info: Dictionary = Catalog.ITEMS[id]
-			var item_id: String = id
-			var b := _button("%s\n%s" % [info["name"], Catalog.price_text(id)], func(): item_chosen.emit(item_id))
-			b.custom_minimum_size = Vector2(128, 138)
-			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-			b.expand_icon = true
-			b.add_theme_constant_override("icon_max_width", 112)
-			b.add_theme_font_size_override("font_size", 12)
-			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			b.tooltip_text = "%s · %s" % [info["name"], Catalog.price_text(id)]
+			var b := _catalog_card(str(id))
 			grid.add_child(b)
 			item_buttons[id] = b
 		grid.visible = si == 0
@@ -1234,6 +1229,31 @@ func _build_catalog() -> void:
 		cat_tabs[sections[si][0]] = tab
 		tab.button_pressed = si == 0
 		tabs.add_child(tab)
+	# the town pieces (build_plus.gd): their own tab, hidden until she has a large plot in Act 2 or later
+	# (show_town_tab()); their cards join item_buttons only then
+	if not Catalog.TOWN.is_empty():
+		var tgrid := GridContainer.new()
+		tgrid.columns = 3
+		tgrid.add_theme_constant_override("h_separation", 6)
+		tgrid.add_theme_constant_override("v_separation", 6)
+		for id in Catalog.TOWN:
+			var b := _catalog_card(str(id))
+			tgrid.add_child(b)
+			town_buttons[id] = b
+		tgrid.visible = false
+		stack.add_child(tgrid)
+		var ti := pages.size()
+		pages.append(tgrid)
+		var ttab := _button(Catalog.TOWN_CAT, func():
+			for k in pages.size():
+				pages[k].visible = k == ti)
+		ttab.toggle_mode = true
+		ttab.button_group = group
+		ttab.visible = false
+		tabs.add_child(ttab)
+		town_tab = ttab
+		town_page = tgrid
+		_cat_pages = pages
 	vb.add_child(scroll)
 	vb.add_child(_label("Wooden pieces are built from your wood when you have enough, or bought with coins.\nR rotates · right-click cancels · click a placed item to move or sell it", 11, Color(0.85, 0.8, 0.7)))
 	catalog_panel.add_child(vb)
@@ -1244,8 +1264,48 @@ func _build_catalog() -> void:
 	add_child(th)
 	th.thumb_ready.connect(func(id: String, tex: Texture2D):
 		if item_buttons.has(id):
-			item_buttons[id].icon = tex)
+			item_buttons[id].icon = tex
+		elif town_buttons.has(id):
+			town_buttons[id].icon = tex)
 	thumbs = th
+
+
+## One card in the catalogue: its picture (rendered later), name and price.
+func _catalog_card(id: String) -> Button:
+	var info: Dictionary = Catalog.ITEMS[id]
+	var b := _button("%s\n%s" % [info["name"], Catalog.price_text(id)], func(): item_chosen.emit(id))
+	b.custom_minimum_size = Vector2(128, 138)
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	b.expand_icon = true
+	b.add_theme_constant_override("icon_max_width", 112)
+	b.add_theme_font_size_override("font_size", 12)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.tooltip_text = "%s · %s" % [info["name"], Catalog.price_text(id)]
+	return b
+
+
+## The Town tab (build_plus.gd sync_town()): shown, its cards in item_buttons and their pictures
+## rendered the first time; or hidden again (a load of an earlier save), back to the first tab if it
+## was open.
+func show_town_tab(on: bool) -> void:
+	if town_tab == null:
+		return
+	town_tab.visible = on
+	for id in town_buttons:
+		if on:
+			item_buttons[id] = town_buttons[id]
+		else:
+			item_buttons.erase(id)
+	if on and not _town_thumbs and thumbs != null:
+		_town_thumbs = true
+		thumbs.render(Catalog.TOWN)
+	if not on and town_page.visible:
+		town_page.visible = false
+		if not _cat_pages.is_empty():
+			(_cat_pages[0] as Control).visible = true
+		if not cat_tabs.is_empty():
+			(cat_tabs.values()[0] as Button).button_pressed = true
 
 
 ## Starts rendering the catalog pictures (main.gd calls this once the world is up).

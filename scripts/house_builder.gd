@@ -158,6 +158,21 @@ func buy_plot(id: String) -> bool:
 	return true
 
 
+## Whether she owns a large plot ("large": true in "building" "plots"): room for a town of her own,
+## which opens Build & Buy's town pieces from Act 2 (build_plus.gd town_open()).
+func owns_large() -> bool:
+	for id in owned():
+		if plot_def(str(id)).get("large", false) == true:
+			return true
+	return false
+
+
+## The large plot of hers a ground point is on ("" for none).
+func large_plot_at(q: Vector2) -> String:
+	var id := plot_at(q)
+	return id if id != "" and plot_def(id).get("large", false) == true else ""
+
+
 ## The plot a ground point is on ("" for none of hers).
 func plot_at(q: Vector2) -> String:
 	for id in owned():

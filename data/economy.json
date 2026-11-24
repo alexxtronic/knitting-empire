@@ -55,13 +55,6 @@
   },
   "land": [
     {
-      "id": "eastfield",
-      "name": "Eastfield Acres",
-      "where": "the meadows east of town",
-      "price": 12500,
-      "pitch": "Twenty flat acres of sweet grass. Room for a hundred sheep and a barn you could hold a wedding in."
-    },
-    {
       "id": "greyspine",
       "name": "Greyspine Hollow",
       "where": "the foothills to the north",
@@ -76,8 +69,8 @@
       "pitch": "Sea on three sides. Sunsets you can sell tickets to. The crown jewel, and I don't say that about everything. I say it about most things."
     }
   ],
-  "_about_land": "Gary's listings at Willow Homes (main.land_plots): shown on his menu and pitched on his visits to the farm (data/scenes/town.scene). Out of reach early on by design, and not for sale yet: buying land is still to come. Names, prices and pitches are drafts for Alex.",
-  "_about_building": "Walls she builds in build mode (scripts/house_builder.gd; Alex, 2026-11-15): 'wall' and 'door' (a doorway) are coins a 2 m length, paid as each goes up. A room is about three days of sweater sales: a 4 x 4 m room against the house takes six walls (480c), the old 8 x 4 'Expand House' about 640c. Taking one down gives 'refund' of its price back. 'plots' are building plots Gary sells at Willow Homes ([x, z, width, depth], on the even grid), a little cheaper for each of his hearts; the first wall of a new house on one also pays 'new_house_fee' for the foundations. 'plot_sold' are Gary's lines. 'recolor' is what a new colour for a piece of furniture costs (data/furniture.json 'palettes'). Every number and line is a draft for Alex.",
+  "_about_land": "Gary's listings at Willow Homes (main.land_plots): shown on his menu and pitched on his visits to the farm (data/scenes/town.scene). Out of reach early on by design, and not for sale yet: buying land is still to come. Eastfield Acres left this list on 2026-11-24 to be the first large plot (\"building\" \"plots\"). Names, prices and pitches are drafts for Alex.",
+  "_about_building": "Walls she builds in build mode (scripts/house_builder.gd; Alex, 2026-11-15): 'wall' and 'door' (a doorway) are coins a 2 m length, paid as each goes up. A room is about three days of sweater sales: a 4 x 4 m room against the house takes six walls (480c), the old 8 x 4 'Expand House' about 640c. Taking one down gives 'refund' of its price back. 'plots' are building plots Gary sells at Willow Homes ([x, z, width, depth], on the even grid), a little cheaper for each of his hearts; a plot with 'large': true is room for a town of her own (Alex, 2026-11-24): owning one in Act 2 or later opens Build & Buy's Town tab (build_plus.gd). Eastfield Acres, out in the Eastfield Meadows clear of Bretton Oaks, is the first, priced as about six days of mid-Act-2 takings (about 3,000c a day, docs/REVIEW_2026-11-24.md section 7); the first wall of a new house on one also pays 'new_house_fee' for the foundations. 'plot_sold' are Gary's lines. 'recolor' is what a new colour for a piece of furniture costs (data/furniture.json 'palettes'). Every number and line is a draft for Alex.",
   "building": {
     "wall": 80,
     "wall_wood": 10,
@@ -109,7 +102,8 @@
     "new_house_fee": 600,
     "plots": [
       {"id": "lane_end", "name": "Lane End", "where": "by the road into town", "rect": [28, -12, 8, 10], "price": 1600},
-      {"id": "brookside", "name": "Brookside", "where": "south of your farm", "rect": [4, 14, 10, 10], "price": 2000}
+      {"id": "brookside", "name": "Brookside", "where": "south of your farm", "rect": [4, 14, 10, 10], "price": 2000},
+      {"id": "eastfield", "name": "Eastfield Acres", "where": "the meadows east of town", "rect": [92, -38, 46, 16], "price": 18000, "large": true}
     ],
     "plot_sold": ["Sold! Lane's yours, or the brook's, I lose track. Mine says SOLD now either way. I'll have the lads clear it by morning. By this afternoon. By the time you get there.", "Congratulations, you're a landowner. Foundations are on you, walls are on you, the view's on the house. Not literally. You'll need a house."]
   },
@@ -249,10 +243,12 @@
     "default": 25,
     "shop_pieces": {"bakery_counter": 60, "cafe_counter": 60, "espresso_bar": 80, "cafe_bookshelf": 70, "cafe_table": 40, "cafe_coffee_table": 30, "pouf": 20, "pendant_lamp": 25, "welcome_sign": 120, "bakery_stall": 400},
     "ground": {"dirt": 1, "gravel": 2, "cobble": 4, "pavement": 3, "sidewalk": 3, "grass": 1},
-    "_about_exclude": "What Build & Buy leaves out of its catalogue (Alex, 2026-11-24: \"God mode's list includes odd things: yes, take out things that don't make sense\"). god mode's own Place list keeps all of it. \"exclude\": Build & Buy ids (\"w_<model>\" for a world editor option, or a catalogue id), exact, or ending in * for every id that starts so: the town's buildings and the barn, the bus, the dog, the crops (she plants seeds), the tools and the lantern as props (Steve sells the real ones), the shop signs, the welcome sign, the bakery stall and the town's mailboxes (hers stands by the porch), and the house editor's doors (the Walls row's Door tools put real ones in). The pieces still exist (a save that has one keeps it); they just aren't for sale. \"prefer_scenery\": where one model is in the catalogue twice (a catalogue piece and a world editor option, or a land's own copy of a kind), a model starting with one of these keeps the world editor's option at its scenery price (flowers, tufts, bushes, rocks, trees, hedges) and the catalogue's own piece is left out; any other model keeps the catalogue piece (the picket fence, the fountain).",
-    "exclude": ["w_building_*", "w_barn", "w_maplewood_bus", "w_suitcase*", "w_dog", "w_sheep_*", "w_crop_*",
+    "_about_exclude": "What Build & Buy never sells (Alex, 2026-11-24: \"God mode's list includes odd things: yes, take out things that don't make sense\"). god mode's own Place list keeps all of it. \"exclude\": Build & Buy ids (\"w_<model>\" for a world editor option, or a catalogue id), exact, or ending in * for every id that starts so: the crops and crop stages (she plants seeds), the tools, the knitting needles and the lantern as props (Steve and Rosa sell the real ones), the dog and the sheep (Lars sells real dogs, Rosa real sheep), the suitcase (a story prop), the plaza's cobble pieces (the Ground tool paints cobbles by the square metre) and the house editor's doors (the Walls row's Door tools put real ones in). The pieces still exist (a save that has one keeps it); they just aren't for sale. \"prefer_scenery\": where one model is in the catalogue twice (a catalogue piece and a world editor option, or a land's own copy of a kind), a model starting with one of these keeps the world editor's option at its scenery price (flowers, tufts, bushes, rocks, trees, hedges) and the catalogue's own piece is left out; any other model keeps the catalogue piece (the picket fence, the fountain).",
+    "exclude": ["w_suitcase*", "w_dog", "w_sheep_*", "w_crop_*",
       "w_axe", "w_hoe", "w_scythe", "w_shears", "w_shovel", "w_watering_can", "w_knitting_needles", "w_lantern",
-      "w_sign_*", "welcome_sign", "bakery_stall", "w_market_stall", "mailbox", "w_cobble_*", "w_door_interior", "w_sliding_door"],
+      "w_cobble_*", "w_door_interior", "w_sliding_door"],
+    "_about_town": "The town pieces (Alex, 2026-11-24: \"I still want buildings and signs and mailbox as future options ... as I want the option to construct your own town from scratch. So anything town related we can have unlock when they purchase a plot of land.\"). \"town\" names them as \"exclude\" does: the town's buildings (the shops, the café, the Mayor's Office, the Bretton Oaks house), the barn, the bus, the shop signs, the welcome sign, the bakery stall and the post box (the market stall's model is the catalogue's Farm Stand, already for sale on her farm). They show in Build & Buy's Town tab (a draft name) only once Game.unlocked(\"town\") (Act 2) and she owns a large plot (\"building\" \"plots\" with \"large\": true), and go down only on a large plot of hers (build_plus.gd town_open(), town_ok()). Set dressing for now: a building can't be walked into and has no shop, and a post box takes no post.",
+    "town": ["w_building_*", "w_barn", "w_maplewood_bus", "w_sign_*", "welcome_sign", "bakery_stall", "mailbox"],
     "prefer_scenery": ["flowers_", "tuft_", "clover", "leaf_", "bush_", "red_shrub", "arborvitae", "hedge", "rock_", "tree_", "maple_"]
   },
   "forage": {

@@ -10,6 +10,11 @@ extends RefCounted
 ## mode's own records too, through a real open and close of the editor. Saves 71_buildplus_catalog.png,
 ## 71_buildplus_garden.png, 71_buildplus_paint.png and 71_buildplus_refused.png. Leaves the coins, the
 ## flags, her furniture and the road map as it found them.
+## The town pieces ("build_prices" "town"): absent in Act 1 (with a large plot or without) and in Act 2
+## without one, the Town tab hidden; listed with a toast once she buys Eastfield Acres in Act 2; a
+## building placed there and paid for, its low walls hidden, a post box there taking no post; both
+## refused on her farm; the never list ("exclude") absent every time; all of it through a save and a
+## load (an Act 1 game between hiding them again). Saves 71_buildplus_town.png. Leaves the act too.
 
 const Catalog = preload("res://scripts/catalog.gd")
 const Town = preload("res://scripts/town.gd")
@@ -86,6 +91,9 @@ func run(main_node: Node) -> void:
 	var coins0: int = Game.coins
 	var hour0: float = Game.hour
 	var flags0: Dictionary = Game.flags.duplicate(true)
+	var act0: int = Game.act
+	Game.act = 1
+	bp.sync_town()
 	var furn0: Array = m.furniture.duplicate()
 	Game.hour = 11.0
 	Game.take_item("wood", Game.count("wood")) # these count coins
@@ -99,7 +107,7 @@ func run(main_node: Node) -> void:
 	var w_items: Array = []
 	var listed: Array = Catalog.INDOOR + Catalog.OUTDOOR
 	for o in god.place_options():
-		if bp.excluded.has(str(o[0])):
+		if bp.excluded.has(str(o[0])) or bp.town.has(str(o[0])): # (the town pieces are checked below)
 			continue
 		var id := str(bp.options.get(str(o[0]), ""))
 		if id == "" or not (id in listed) or not m.hud.item_buttons.has(id) or int(Catalog.ITEMS[id].get("price", 0)) <= 0 \
@@ -126,7 +134,7 @@ func run(main_node: Node) -> void:
 	var god_keeps: bool = god_ids.has("scenery:building_cafe") and god_ids.has("scenery:maplewood_bus") and god_ids.has("scenery:axe") and god_ids.has("decor:welcome_sign")
 	var kept: bool = "lantern" in listed and "fountain" in listed and "fence" in listed and "bench" in listed and "trash_can" in listed and "hay_bale" in listed \
 		and "scarecrow" in listed and "w_tree_spruce" in listed and "w_rock_boulder" in listed and "w_bush_round" in listed and "w_tuft_tall" in listed and "w_fence_post" in listed and "cafe_table" in listed
-	_check("no building, bus, dog, crop, tool, lantern prop, sign, stall or mailbox is for sale (%d found: %s), god mode still places them (%s), and the lamp post, fountain, fence, benches, trees, rocks, bushes and tufts are (%s)" % [odd.size(), str(odd.slice(0, 8)), god_keeps, kept],
+	_check("in Act 1 no building, bus, dog, crop, tool, lantern prop, sign, stall or mailbox is for sale (%d found: %s), god mode still places them (%s), and the lamp post, fountain, fence, benches, trees, rocks, bushes and tufts are (%s)" % [odd.size(), str(odd.slice(0, 8)), god_keeps, kept],
 		odd.is_empty() and god_keeps and kept)
 	# one model, one card: the daisies at their scenery price, not the 35c flower bed too; the fountain as the catalogue's piece
 	var seen := {}
@@ -497,6 +505,8 @@ func run(main_node: Node) -> void:
 	else:
 		_check("found a rock on her farm", false)
 
+	await _town_checks(furn0)
+
 	# leave it all as it was
 	for f in m.furniture.duplicate():
 		if not furn0.has(f):
@@ -506,9 +516,210 @@ func run(main_node: Node) -> void:
 	bp.apply_saved()
 	m.forage.apply()
 	m._rebuild_grid()
+	Game.act = act0
+	m.builder.refresh_world() # her plots as they were: Eastfield's stakes gone, its scenery back
+	bp.sync_town()
 	m.set_mode(m.Mode.LIVE)
 	Game.coins = coins0
 	Game.hour = hour0
 	var bytes1 := FileAccess.get_file_as_bytes(LAYOUT)
 	_check("data/world_layout.json untouched (%d bytes, same %s), god mode's layout, undo and unsaved as before (%s, %d, %s)" % [bytes1.size(), bytes1 == bytes0, JSON.stringify(god.layout()) == lay0, god.undo_stack.size(), god.unsaved],
 		bytes1 == bytes0 and JSON.stringify(god.layout()) == lay0 and god.undo_stack.size() == undo0 and god.unsaved == unsaved0)
+
+
+## What's never for sale ("build_prices" "exclude"): the crops, tools, lantern and needles as props,
+## the dog and sheep, the suitcase, the plaza's cobbles and the house editor's doors.
+const NEVER := ["w_crop_turnip_0", "w_crop_pumpkin_3", "w_axe", "w_hoe", "w_shears", "w_shovel", "w_scythe", "w_watering_can",
+	"w_lantern", "w_knitting_needles", "w_dog", "w_sheep_woolly", "w_door_interior", "w_sliding_door", "w_cobble_plaza_0"]
+
+
+## The town pieces and the never list as Build & Buy has them now: {"town": how many listed, "tab": shown,
+## "never": any never-for-sale id listed}.
+func _town_state() -> Dictionary:
+	var bp = m.buildplus
+	bp.sync_town()
+	var lst: Array = Catalog.INDOOR + Catalog.OUTDOOR
+	var town_n := 0
+	for id in Catalog.TOWN:
+		if id in lst or m.hud.item_buttons.has(id):
+			town_n += 1
+	var never: Array = []
+	for id in lst:
+		if bp.exclude_pattern(str(id)) != "":
+			never.append(str(id))
+	for id in NEVER:
+		if id in lst or m.hud.item_buttons.has(id):
+			never.append(id)
+	return {"town": town_n, "tab": m.hud.town_tab != null and m.hud.town_tab.visible, "never": never}
+
+
+func _set_plots(ids: Array) -> void:
+	Game.set_flag("plots_owned", ids.duplicate())
+	m.builder.refresh_world()
+
+
+## A point of a plot: its centre plus `k` (each -0.5..0.5) of its size, pulled in half a metre.
+func _corner(p: Dictionary, k: Vector2) -> Vector3:
+	var r: Rect2 = m.builder.plot_rect(p).grow(-0.5)
+	var c := r.get_center() + r.size * k
+	return Vector3(c.x, 0, c.y)
+
+
+## A spot on the large plot where a piece can go down, 9 m clear of `avoid` (Vector3.INF if none).
+func _plot_spot(id: String, p: Dictionary, avoid: Array) -> Vector3:
+	var r: Rect2 = m.builder.plot_rect(p)
+	for j in range(3, int(r.size.y) - 2, 2):
+		for i in range(3, int(r.size.x) - 2, 2):
+			var q := Vector3(r.position.x + i, 0, r.position.y + j)
+			var near := false
+			for a in avoid:
+				if Vector2(a.x - q.x, a.z - q.z).length() < 9.0:
+					near = true
+			if not near and _valid_at(id, q):
+				return q
+	return Vector3.INF
+
+
+func _town_checks(furn0: Array) -> void:
+	var b = m.builder
+	var large: Dictionary = {}
+	for p in b.plots():
+		if p.get("large", false) == true:
+			large = p
+	if large.is_empty():
+		_check("a large plot is for sale", false)
+		return
+	var lr: Rect2 = b.plot_rect(large)
+	var edit_ok := true
+	for k in [Vector2(0.5, 0.5), Vector2(0.5, -0.5), Vector2(-0.5, 0.5), Vector2(-0.5, -0.5), Vector2.ZERO]:
+		if b.can_edit_at(_corner(large, k)) != "":
+			edit_ok = false
+	_check("a large plot is for sale (%s, %s, %dc), out past her farm and the town, clear of Bretton Oaks (every corner hers to edit: %s)" % [str(large.get("name", "-")), str(large.get("rect", [])), int(large.get("price", 0)), edit_ok],
+		edit_ok and not lr.intersects(m.LOT) and not lr.intersects(Town.TOWN))
+	var lid := str(large["id"])
+	var plots0: Array = (Game.flag("plots_owned", []) as Array).duplicate()
+	Game.flags.erase("town_pieces_open")
+	var n_town: int = Catalog.TOWN.size()
+	var want_ids := ["w_building_shop", "w_building_cafe", "w_barn", "w_maplewood_bus", "w_sign_yarn_barn", "welcome_sign", "bakery_stall", "mailbox"]
+	var missing: Array = want_ids.filter(func(i): return not i in Catalog.TOWN)
+	print("BUILDPLUS TOWN ", ", ".join(Catalog.TOWN.map(func(i): return "%s %dc" % [i, int(Catalog.ITEMS[i].get("price", 0))])))
+	# Act 1, with a large plot or without: none of it, no Town tab, and no picking one up
+	Game.act = 1
+	_set_plots([])
+	var a1: Dictionary = _town_state()
+	_set_plots([lid])
+	var a1p: Dictionary = _town_state()
+	m._begin_place("w_building_shop")
+	var no_ghost: bool = m.ghost == null
+	m._cancel_ghost()
+	_check("Act 1: no town piece for sale and no Town tab, without a large plot (%d, tab %s) or with one (%d, tab %s); none picked up (%s); never list absent (%s)" % [a1["town"], a1["tab"], a1p["town"], a1p["tab"], no_ghost, str(a1["never"] + a1p["never"])],
+		a1["town"] == 0 and not a1["tab"] and a1p["town"] == 0 and not a1p["tab"] and no_ghost and (a1["never"] as Array).is_empty() and (a1p["never"] as Array).is_empty())
+	# Act 2 without a large plot: still none
+	Game.act = 2
+	_set_plots(plots0.filter(func(x): return str(x) != lid))
+	var a2: Dictionary = _town_state()
+	var met0: int = m.goals.metric({"check": "large_plot"})
+	_check("Act 2 without a large plot: no town piece (%d), no Town tab (%s), the goal not met (%d), never list absent (%s)" % [a2["town"], a2["tab"], met0, str(a2["never"])],
+		a2["town"] == 0 and not a2["tab"] and (a2["never"] as Array).is_empty() and met0 == 0)
+	# buying Eastfield Acres: the town pieces come, in their own tab, with a toast
+	Game.coins = 40000
+	var c0 := Game.coins
+	var price: int = b.plot_price(large)
+	var bought: bool = b.buy_plot(lid)
+	var a3: Dictionary = _town_state()
+	var toast: String = m.hud.toast_label.text
+	var met1: int = m.goals.metric({"check": "large_plot"})
+	_check("bought %s for %dc (paid %d): all %d town pieces listed (%d; missing %s), the Town tab shows (%s), the toast ('%s'), the goal met (%d), never list absent (%s)" % [lid, price, c0 - Game.coins, n_town, a3["town"], str(missing), a3["tab"], toast, met1, str(a3["never"])],
+		bought and c0 - Game.coins == price and missing.is_empty() and a3["town"] == n_town and a3["tab"] and toast.contains("Town") and Game.flag("town_pieces_open") == true
+		and met1 == 1 and (a3["never"] as Array).is_empty() and Catalog.cat_of("w_building_shop") == Catalog.TOWN_CAT
+		and int(Catalog.ITEMS["welcome_sign"]["price"]) > 0 and int(Catalog.ITEMS["bakery_stall"]["price"]) > 0)
+	m.set_mode(m.Mode.BUILD)
+	if m.hud.town_tab != null:
+		m.hud.town_tab.pressed.emit()
+		m.hud.town_tab.button_pressed = true
+	# a building on the large plot, paid for; a post box beside it that takes no post
+	Game.coins = 40000
+	var bid := "w_building_shop"
+	var spot := _plot_spot(bid, large, [])
+	var placed = null
+	c0 = Game.coins
+	if spot != Vector3.INF:
+		await _look(spot, 30.0)
+		m._begin_place(bid)
+		_click(spot)
+		m._cancel_ghost()
+		for f in m.furniture:
+			if is_instance_valid(f) and f.item_id == bid and Vector2(f.position.x - spot.x, f.position.z - spot.z).length() < 1.5:
+				placed = f
+	var lows := 0
+	if placed != null:
+		for n in placed.find_children("*_low", "", true, false):
+			if (n as Node3D).visible:
+				lows += 1
+	_check("a shop building goes down on %s at %s for its %dc (paid %d, placed %s, low walls showing %d)" % [lid, str(spot), int(Catalog.ITEMS[bid]["price"]), c0 - Game.coins, placed != null, lows],
+		placed != null and c0 - Game.coins == int(Catalog.ITEMS[bid]["price"]) and lows == 0)
+	var mspot := _plot_spot("mailbox", large, [spot] if placed != null else [])
+	var box = null
+	c0 = Game.coins
+	if mspot != Vector3.INF:
+		await _look(mspot, 14.0)
+		m._begin_place("mailbox")
+		_click(mspot)
+		m._cancel_ghost()
+		box = _piece_at("mailbox", mspot)
+	var rows: Array = []
+	if box != null:
+		for a in m._actions_for(box):
+			rows.append(str(a.get("label", a.get("id", ""))))
+	var post := false
+	for r in rows:
+		if r.to_lower().contains("post") or r.to_lower().contains("ship") or r.to_lower().contains("letter"):
+			post = true
+	_check("a post box on the plot for %dc (paid %d), set dressing: no post or shipping on its menu (%s)" % [int(Catalog.ITEMS["mailbox"]["price"]), c0 - Game.coins, str(rows)],
+		box != null and c0 - Game.coins == int(Catalog.ITEMS["mailbox"]["price"]) and not post)
+	await _look(spot if placed != null else _corner(large, Vector2.ZERO), 26.0)
+	await m._wait(0.4)
+	await m._shot("71_buildplus_town.png")
+	# refused on her farm, with the reason
+	var farm := Vector3(20.5, 0, 6.5)
+	var f_ok := _valid_at(bid, farm)
+	var f_box := _valid_at("mailbox", farm)
+	await _look(farm, 30.0)
+	c0 = Game.coins
+	var n0: int = m.furniture.size()
+	m._begin_place(bid)
+	_click(farm)
+	var why: String = m.hud.toast_label.text
+	var still: bool = m.ghost != null
+	m._cancel_ghost()
+	_check("refused on her farm: the building (%s) and the post box (%s), nothing paid (%d), nothing placed (%s), '%s'" % [f_ok, f_box, c0 - Game.coins, m.furniture.size() == n0, why],
+		not f_ok and not f_box and still and Game.coins == c0 and m.furniture.size() == n0 and why.contains("large plot"))
+	# a save and a load: an Act 1 game between takes them out again; the save brings it all back
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
+	var entries: Array = JSON.parse_string(JSON.stringify(m.furniture.map(func(f): return m.furniture_entry(f))))
+	for f in m.furniture.duplicate():
+		if not furn0.has(f):
+			m.furniture.erase(f)
+			f.queue_free()
+	Game.act = 1
+	_set_plots([])
+	var a4: Dictionary = _town_state()
+	Game.from_dict(saved)
+	for e in entries:
+		var found_e := false
+		for f in m.furniture:
+			if m.furniture_entry(f).hash() == (e as Dictionary).hash():
+				found_e = true
+		if not found_e:
+			m._spawn_entry(e)
+	m.builder.refresh_world()
+	var a5: Dictionary = _town_state()
+	var back = null
+	for f in m.furniture:
+		if is_instance_valid(f) and f.item_id == bid and Vector2(f.position.x - spot.x, f.position.z - spot.z).length() < 1.5:
+			back = f
+	var box_back = _piece_at("mailbox", mspot) if mspot != Vector3.INF else null
+	_check("an Act 1 game hides them again (%d, tab %s); the save brings back Act %d, %s, the town pieces (%d, tab %s), the building (%s) and the post box (%s); never list absent (%s)" % [a4["town"], a4["tab"], Game.act, str(Game.flag("plots_owned", [])), a5["town"], a5["tab"], back != null, box_back != null, str(a4["never"] + a5["never"])],
+		a4["town"] == 0 and not a4["tab"] and Game.act == 2 and b.owns(lid) and a5["town"] == n_town and a5["tab"] and back != null and box_back != null
+		and (a4["never"] as Array).is_empty() and (a5["never"] as Array).is_empty())
+	m.set_mode(m.Mode.LIVE)

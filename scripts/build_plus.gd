@@ -17,6 +17,13 @@ extends Node
 ##     What's no use as a purchase ("build_prices" "exclude": buildings, the bus, the dog, crops, tools
 ##     and the lantern as props, signs, the stalls...) isn't listed, and a model in twice is listed once
 ##     ("prefer_scenery"; Alex, 2026-11-24: "take out things that don't make sense").
+##   - The town pieces ("build_prices" "town": the buildings, the barn, the bus, the signs, the stalls,
+##     the post box; Alex, 2026-11-24: "anything town related we can have unlock when they purchase a
+##     plot of land") are entries too, kept out of the catalogue's lists (Catalog.TOWN) until
+##     town_open(): Act 2 or later (Game.unlocked("town")) and a large plot of hers ("building" "plots"
+##     "large"). Then they're listed, in the HUD's Town tab, with a toast the first time
+##     (Game.flags["town_pieces_open"]); they go down only on her large plots (town_ok()), and are set
+##     dressing for now (no walking in, no shop, no post).
 ##   - Undo (Ctrl/Cmd+Z, the Paint row's Undo): her last UNDO_MAX strokes, placements, moves and
 ##     removals, each put back exactly with its coins. In memory only: not saved.
 ##   - Painting the ground with god mode's road surfaces, paid per square metre that changes
@@ -54,6 +61,9 @@ var last_cost := 0 # what the last stroke cost (the check reads it)
 var last_refusal := ""
 var excluded: Dictionary = {} # god mode's Place option id -> the "exclude" pattern that keeps it out of Build & Buy
 var hidden: Dictionary = {} # a catalogue id left out as a second copy of a model -> the one listed instead
+var town: Dictionary = {} # god mode's Place option id -> the town piece's catalogue id (also in Catalog.TOWN)
+var town_listed := false # whether the town pieces are in the catalogue's lists now (sync_town())
+var _town_t := 0.0
 var undo_stack: Array = [] # her last few strokes, placements, moves and removals in Build & Buy (undo())
 const UNDO_MAX := 10
 var _painting := false
@@ -104,6 +114,15 @@ static func exclude_pattern(id: String) -> String:
 	return ""
 
 
+## Whether a Build & Buy id is one of the town pieces ("build_prices" "town"): the pattern, or "".
+static func town_pattern(id: String) -> String:
+	for p in econ().get("town", []):
+		var pat := str(p)
+		if (pat.ends_with("*") and id.begins_with(pat.trim_suffix("*"))) or id == pat:
+			return pat
+	return ""
+
+
 ## Makes a catalogue entry for every option on god mode's Place list that isn't one already. Those
 ## "exclude" names stay out of the catalogue (an entry is still made, so a save that has one keeps it
 ## and the world's scenery of that kind can still be taken up), and a model listed twice is listed once.
@@ -114,6 +133,16 @@ func register() -> void:
 		var what := pid.get_slice(":", 1)
 		if pid.begins_with("decor:"):
 			if not Catalog.ITEMS.has(what):
+				continue
+			if town_pattern(what) != "":
+				var ti: Dictionary = Catalog.ITEMS[what]
+				ti["cat"] = Catalog.TOWN_CAT
+				ti["town"] = true
+				if int(ti.get("price", 0)) <= 0: # the welcome sign has none of its own
+					ti["price"] = int(shop_prices.get(what, econ().get("default", 25)))
+				Catalog.INDOOR.erase(what)
+				Catalog.OUTDOOR.erase(what)
+				_add_town(pid, what)
 				continue
 			var pat := exclude_pattern(what)
 			if pat != "":
@@ -152,6 +181,16 @@ func register() -> void:
 		if model.begins_with("tree_") or model.begins_with("maple_"):
 			e["trunk"] = true
 		Catalog.ITEMS[id] = e
+		if town_pattern(id) != "":
+			if small: # a building at half size is no use to a town
+				excluded[pid] = town_pattern(id)
+				continue
+			e["cat"] = Catalog.TOWN_CAT
+			e["town"] = true
+			if model.begins_with("building_") or model == "barn":
+				e["shell"] = true # Catalog.build hides the walk-in models' low walls: set dressing, not walked into
+			_add_town(pid, id)
+			continue
 		var pat := exclude_pattern(id)
 		if pat != "":
 			excluded[pid] = pat
@@ -159,6 +198,77 @@ func register() -> void:
 		Catalog.OUTDOOR.append(id)
 		options[pid] = id
 	_dedupe()
+
+
+## One town piece: listed once per model (Catalog.TOWN), the first option that draws it.
+func _add_town(pid: String, id: String) -> void:
+	for t in Catalog.TOWN:
+		if t != id and _draws(t) == _draws(id):
+			hidden[id] = t
+			town[pid] = t
+			return
+	town[pid] = id
+	if not Catalog.TOWN.has(id):
+		Catalog.TOWN.append(id)
+
+
+# --- the town pieces --------------------------------------------------------------------------
+
+## Whether the town pieces are hers to buy: Act 2 or later, and a large plot of hers.
+func town_open() -> bool:
+	return Game.unlocked("town") and main.builder != null and main.builder.owns_large()
+
+
+## Lists the town pieces in the catalogue (and its Town tab) when town_open() says so, and takes them
+## out again when it doesn't (a load of an earlier save). The first time they come, a toast says so.
+func sync_town() -> void:
+	var want := town_open()
+	if want != town_listed:
+		town_listed = want
+		for id in Catalog.TOWN:
+			var lst: Array = Catalog.INDOOR if str(Catalog.ITEMS[id].get("where", "")) == "in" else Catalog.OUTDOOR
+			if want and not lst.has(id):
+				lst.append(id)
+			elif not want:
+				lst.erase(id)
+		if main.hud != null and main.hud.has_method("show_town_tab"):
+			main.hud.show_town_tab(want)
+	if want and Game.flag("town_pieces_open") != true:
+		Game.set_flag("town_pieces_open")
+		if main.hud != null:
+			main.hud.show_toast("Town pieces are in Build & Buy now (B), in the Town tab: buildings, signs, stalls and a post box for your large plot.")
+
+
+func _process(delta: float) -> void:
+	_town_t -= delta
+	if _town_t <= 0.0: # the act, her plots and a load all change it: a cheap look twice a second
+		_town_t = 0.5
+		sync_town()
+
+
+## A town piece's footprint: all of it on a large plot of hers, and clear as any piece out there.
+func town_ok(r: Rect2, flat: bool) -> bool:
+	if not town_listed:
+		return false
+	var b = main.builder
+	var on := false
+	for id in b.owned():
+		var p: Dictionary = b.plot_def(str(id))
+		if p.get("large", false) == true and b.plot_rect(p).encloses(r):
+			on = true
+	return on and outdoor_ok(r, flat)
+
+
+## Why a town piece can't go here ("" if it can, or it isn't one).
+func town_why(f, at: Vector3) -> String:
+	if f == null or f.info().get("town", false) != true:
+		return ""
+	if not town_listed:
+		return "Town pieces come with a large plot of land, from Act 2."
+	var why: String = main.builder.can_edit_at(at)
+	if why != "":
+		return why
+	return "Town pieces go on a large plot of yours, all of them inside it." if main.builder.large_plot_at(Vector2(at.x, at.z)) == "" else "Not there: keep it clear of trees, walls and the edge of your plot."
 
 
 ## The model (and size) a catalogue piece draws, so two entries for one thing can be told apart.

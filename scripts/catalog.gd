@@ -32,13 +32,17 @@ static var OUTDOOR: Array = Data.furniture_ids("yard")
 ## 2026-11-24: build mode can buy everything god mode can place that makes sense to buy): its scenery
 ## and the shops' own fittings; its fence parts join Farm.
 const CATS := ["Living", "Kitchen", "Bed & Study", "Crafts", "Garden", "Farm", "Garden & Nature", "Shop & Town"]
+## The town pieces' tab (a draft name): build_plus.gd puts the town's buildings, signs, stalls and post
+## box here (TOWN), and lists them in INDOOR/OUTDOOR only once she has a large plot in Act 2 or later.
+const TOWN_CAT := "Town"
+static var TOWN: Array = []
 
 
 ## The tab a piece is in: its "cat", or Living for an indoor piece and Garden for the yard.
 static func cat_of(id: String) -> String:
 	var info: Dictionary = ITEMS.get(id, {})
 	var c := str(info.get("cat", ""))
-	if c in CATS:
+	if c in CATS or c == TOWN_CAT:
 		return c
 	return "Living" if str(info.get("shop", "")) == "indoors" else "Garden"
 
@@ -358,6 +362,9 @@ static func build(id: String, r: Node3D) -> void:
 			inst.scale *= float(ITEMS[id]["scale"])
 		if ITEMS.get(id, {}).get("measure", false) == true:
 			_measure(id, inst)
+		if ITEMS.get(id, {}).get("shell", false) == true: # a town building bought in Build & Buy: its outside only
+			for n in inst.find_children("*_low", "", true, false):
+				(n as Node3D).visible = false
 		if ITEMS.get(id, {}).has("hang"): # a painting: hung on the wall at this height, wherever it's placed
 			inst.position.y += float(ITEMS[id]["hang"])
 		if id == "lantern": # the lamp post model is just the iron and glass; the candle is added here

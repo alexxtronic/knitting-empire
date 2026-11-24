@@ -318,6 +318,8 @@ func metric(g: Dictionary) -> int:
 			return guide_count("seen")
 		"designs":
 			return Game.wardrobe.size()
+		"large_plot": # a large plot of land of hers (house_builder.gd owns_large()): her own town's ground
+			return 1 if main and main.builder and main.builder.owns_large() else 0
 		"best_day":
 			return maxi(int(ledger().get("best", 0)), sum(ledger()["today"]))
 		"ready":

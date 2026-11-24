@@ -3214,6 +3214,9 @@ func _begin_place(id: String) -> void:
 		builder.set_tool("") # a piece from the catalogue puts the wall tool down
 	if ghost:
 		_cancel_ghost()
+	if Catalog.ITEMS.get(id, {}).get("town", false) == true and buildplus != null and not buildplus.town_listed:
+		hud.show_toast("Town pieces come with a large plot of land, from Act 2.") # (build_plus.gd town_open())
+		return
 	if not Catalog.affordable(id, Game.coins, Game.count("wood")):
 		var w := Catalog.wood_cost(id)
 		hud.show_toast("Not enough coins for that yet." if w <= 0 else "Not enough coins or wood for that yet (%s)." % Catalog.price_text(id))
@@ -3274,6 +3277,9 @@ func _placement_valid(f, pos: Vector3) -> bool:
 	var outside := (LOT.encloses(r) and not house_rect().grow(0.25).intersects(r) and not builder.blocks(r.grow(0.25))) or in_yard
 	if not outside and not LOT.intersects(r) and buildplus != null:
 		outside = buildplus.outdoor_ok(r, f.is_flat()) # out past her farm: her plots and the open lands (build_plus.gd)
+	if f.info().get("town", false) == true: # a town piece: only on a large plot of hers, never her farm (build_plus.gd)
+		inside = false
+		outside = buildplus != null and buildplus.town_ok(r, f.is_flat())
 	match str(f.info()["where"]):
 		"in":
 			if not inside:
@@ -3303,6 +3309,8 @@ func _build_click(mpos: Vector2, keep_placing: bool) -> void:
 		_update_ghost(mpos)
 		if not ghost_valid:
 			var why: String = builder.can_edit_at(ghost.position)
+			if why == "" and buildplus != null:
+				why = buildplus.town_why(ghost, ghost.position) # a town piece off her large plot
 			hud.show_toast(why if why != "" else "Can't place that there.")
 			return
 		var id: String = ghost.item_id
