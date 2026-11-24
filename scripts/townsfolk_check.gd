@@ -165,7 +165,7 @@ func run(main: Node) -> void:
 	m._check("townsfolk: their menu is Talk, and a sweater row only when they want one (%s); a click on them finds them (%s)" % [str(acts), str(hit)],
 		(acts == ["talk"] or acts == ["talk", "sale"]) and hit)
 	m._check("townsfolk: Talk shows one of their lines (%s: \"%s\")" % [str(m.hud.dlg_name.text), str(m.hud.dlg_text.text)],
-		m.hud.dlg_panel.visible and str(m.hud.dlg_text.text) in lines)
+		m.hud.dlg_panel.visible and (str(m.hud.dlg_text.text) in lines or (tf.wants(man) and (_want_lines(tf, "none") + _want_lines(tf, "has")).has(str(m.hud.dlg_text.text)))))
 	m.hud.hide_dialogue()
 
 	# wanting a sweater: the red pin, the sale row, the haggle panel, and the pin gone once sold
@@ -194,7 +194,21 @@ func run(main: Node) -> void:
 	_look(buyer.position + Vector3(0, 1.0, 0), 5.0)
 	await m._wait(1.4)
 	await m._shot("64_townsfolk_pin.png")
+	# Talk says what they're after while the pin is up (Alex, 2026-11-24), not the usual banter
+	var held: Array = []
+	while Game.count("sweater") > 0: # none on her first: they ask her to come back with one
+		held.append(Game.remove_sweater(0))
+	m._perform(buyer, "talk")
+	await m._wait(0.3)
+	var said_none := str(m.hud.dlg_text.text)
+	m.hud.hide_dialogue()
 	Game.add_sweater(1, "")
+	m._perform(buyer, "talk")
+	await m._wait(0.3)
+	var said_has := str(m.hud.dlg_text.text)
+	m.hud.hide_dialogue()
+	m._check("townsfolk: with the pin up, Talk says they want a sweater (none on her: \"%s\"; one on her: \"%s\")" % [said_none, said_has],
+		_want_lines(tf, "none").has(said_none) and _want_lines(tf, "has").has(said_has) and not (said_none in lines))
 	var rows: Array = m._actions_for(buyer)
 	var sale_row: Array = rows.filter(func(a): return str(a["id"]) == "sale")
 	m._check("townsfolk: their menu has Talk and a sweater row (%s)" % str(rows.map(func(a): return a["label"])),
@@ -210,6 +224,9 @@ func run(main: Node) -> void:
 		panel and res == "sold" and not pin.visible and not tf.wants(buyer))
 	m.sale.close()
 	m.hud.hide_dialogue()
+	for h in held: # hers back, as she had them
+		Game.add_sweater(int(h["rarity"]), str(h["design"]))
+		Game.sweater_fibres[Game.sweater_fibres.size() - 1] = str(h["fibre"])
 
 	# a local with a request for her wears the gold star and the pin, the pin above
 	Game.set_flag("act1_done", true)
@@ -249,6 +266,13 @@ func run(main: Node) -> void:
 	_look(wren.global_position + Vector3(0, 1.4, 0), 6.0)
 	await m._wait(1.4)
 	await m._shot("64_townsfolk_villager_pin.png")
+	if m.Story.find_trigger("talk", "wren") == "" and m.Jobs.offer_scene("wren") == "":
+		m._perform(wren, "talk")
+		await m._wait(0.3)
+		var wsaid := str(m.hud.dlg_text.text)
+		m.hud.hide_dialogue()
+		m._check("townsfolk: Wren, with the pin up, says she's after a sweater when talked to (\"%s\")" % wsaid,
+			(_want_lines(tf, "none") + _want_lines(tf, "has")).has(wsaid))
 	Game.day = day0
 	await m._wait(0.6)
 	m._check("townsfolk: on a day she isn't looking, no pin over Wren", wpin == null or not wpin.visible or SweaterSale.looking("wren"))
@@ -310,3 +334,12 @@ func run(main: Node) -> void:
 	m.player.position = pos0
 	m.hud.hide_dialogue()
 	m._set_cam_lock(true)
+
+
+## Every line of `key` in the data's "want_lines" (any speaker), as the dialogue box shows it.
+func _want_lines(tf, key: String) -> Array:
+	var out: Array = []
+	var src: Variant = tf._cfg("want_lines", {})
+	for l in ((src as Dictionary).get(key, []) if src is Dictionary else []):
+		out.append(str(l["text"]))
+	return out

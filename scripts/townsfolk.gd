@@ -458,6 +458,35 @@ func line_for(p) -> String:
 	return ok[(int(roll(p.vid, "line") * ok.size()) + p.talks) % ok.size()]
 
 
+## What `v` (a townsperson or a named villager) says when talked to while their red pin is up,
+## or "" when it isn't (Alex, 2026-11-24: someone with the pin should say what they're after, not
+## the usual banter). A named villager with a request speaks of it; "want_lines" in the data.
+func want_talk(v) -> String:
+	var named: bool = not (v in people)
+	var key := ""
+	var r: Dictionary = main.empire.request() if main.empire != null else {}
+	var fill := {}
+	if named and str(r.get("who", "")) == str(v.vid):
+		key = "request_ready" if main.empire._made(r) > 0 else "request_waiting"
+		fill = {"what": main.empire._what(r), "pay": str(main.empire.payout() if key == "request_ready" else int(r.get("pay", 0)))}
+	elif named and not villager_wants(v):
+		return ""
+	elif not named and not (wants(v) or (main.house_sale != null and main.house_sale.wants_sweater(v))):
+		return ""
+	else:
+		key = "has" if Game.count("sweater") > 0 else "none"
+	var tags: Array = v.tags if not named else ["adult"] # the town's cast are all grown-ups
+	var ok := []
+	var src: Variant = _cfg("want_lines", {})
+	for l in ((src as Dictionary).get(key, []) if src is Dictionary else []):
+		var who: Array = l.get("who", [])
+		if who.all(func(t): return t in tags):
+			ok.append(str(l["text"]).format(fill))
+	if ok.is_empty():
+		return ""
+	return ok[(int(roll(v.vid, "want_line") * ok.size()) + Game.day) % ok.size()]
+
+
 ## Whether `p` wants a sweater today (and hasn't bought one or given up haggling).
 func wants(p) -> bool:
 	if int(Game.flags.get("tf_want_" + p.vid, -1)) == Game.day: # the autotest: wants one today, whatever the roll
@@ -488,7 +517,8 @@ func action(p, id: String) -> void:
 		return
 	match id:
 		"talk":
-			main.hud.show_dialogue(p.title, -1, line_for(p))
+			var want := want_talk(p) # the red pin: what they're after, not the usual line
+			main.hud.show_dialogue(p.title, -1, want if want != "" else line_for(p))
 		"sale":
 			if not SweaterSale.asked(p.vid).is_empty() or Game.count("sweater") == 0:
 				if Game.count("sweater") > 0:

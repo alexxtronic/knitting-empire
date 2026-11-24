@@ -12214,7 +12214,8 @@ func _villager_action(v, id: String) -> void:
 			var sharp := partners.talk_line(v) # a sore man: something sharp now and then
 			if scene_id == "" and argue == "" and sharp == "":
 				scene_id = Story.find_trigger("talk", v.vid)
-			var line := "" if scene_id != "" or argue != "" else (sharp if sharp != "" else _talk_line(v))
+			var want := townsfolk.want_talk(v) if townsfolk != null and scene_id == "" and argue == "" and sharp == "" else ""
+			var line := "" if scene_id != "" or argue != "" else (sharp if sharp != "" else (want if want != "" else _talk_line(v)))
 			f["n"] = int(f["n"]) + 1
 			if int(f["talk"]) != Game.day:
 				f["talk"] = Game.day
@@ -12227,6 +12228,8 @@ func _villager_action(v, id: String) -> void:
 				v.face_point(player.position, 3.0)
 				player.face_point(v.position)
 				story.play(scene_id)
+			elif sharp == "" and str(empire.due().get("who", "")) == v.vid:
+				empire.ask(v) # the red pin is a request waiting: talking to them is them asking for it
 			else:
 				_say(v, line if line != "" else _talk_line(v))
 		"sell_sweater":

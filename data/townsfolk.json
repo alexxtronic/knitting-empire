@@ -23,7 +23,28 @@
 		{"text": "You smell like sheep. That's not a complaint."},
 		{"text": "I lost a button somewhere in this town last spring. I'm still looking.", "who": ["old"]}
 	],
-	"want_lines": ["Is that a sweater you're carrying? I've been after one all week.", "You knit? I could do with something warm."],
+	"_about_want_lines": "What anyone with the red pin says when Nora talks to them, instead of their usual line (townsfolk.gd want_talk(), the named villagers too): 'none' when she has no sweater on her, 'has' when she has one to show, and for a named villager's request, 'request_waiting' (asked, not knitted yet) and 'request_ready' (she has it). {what} and {pay} are the request's sweater and coins. 'who' works as in 'lines'. Drafts until Alex approves them.",
+	"want_lines": {
+		"none": [
+			{"text": "I was looking for a sweater made of sheep's wool. Maybe come back to me when you have one?"},
+			{"text": "You're the one who knits, aren't you? I've been after a good wool sweater all week. Bring me one and we'll talk price."},
+			{"text": "This wind goes right through me. If you've a sweater to spare some day, I'm buying."},
+			{"text": "My old jumper's more holes than wool. Knit me a new one and I'll pay you properly.", "who": ["adult"]},
+			{"text": "Mum says I need a warm sweater. Do you make them? Come find me when you have one!", "who": ["kid"]}
+		],
+		"has": [
+			{"text": "Is that a sweater you're carrying? I've been after one all week. Let's see it."},
+			{"text": "You knit? I could do with something warm. Show me what you've got."},
+			{"text": "Oh, is that one of yours? I'd buy it, if the price is right."}
+		],
+		"request_waiting": [
+			{"text": "Any luck with {what}? No rush. Well, a little rush. It's getting cold."},
+			{"text": "Still hoping for {what}. I'll pay the {pay}c we said the moment you bring it."}
+		],
+		"request_ready": [
+			{"text": "Is that {what} for me? Hand it over and the {pay}c is yours."}
+		]
+	},
 	"people": [
 		{"id": "tf_theo", "name": "Theo", "tags": ["adult", "man"], "model": "res://assets/tf_theo_tripo_eyes.glb", "model_painted_eyes": "res://assets/tf_theo_tripo.glb", "scale": 1.03, "walk_anim_speed": 1.14, "brisk_anim_speed": 1.3, "run_anim_speed": 3.32, "lid_rest": 0.45, "label_height": 2.15},
 		{"id": "tf_lily", "name": "Lily", "tags": ["kid", "young"], "model": "res://assets/tf_lily_tripo_eyes.glb", "model_painted_eyes": "res://assets/tf_lily_tripo.glb", "scale": 0.65, "walk_speed": 0.75, "walk_anim_speed": 0.59, "brisk_anim_speed": 0.66, "run_anim_speed": 1.32, "lid_rest": 0.45, "label_height": 1.35},
