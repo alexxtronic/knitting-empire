@@ -32,6 +32,12 @@ var counter := 0 # their counter-offer (0: none on the table)
 var guided := "" # the villager whose sale is Act 1's guided first sale ("" for an ordinary one)
 var force_roll := -1.0 # tests: the roll an offer is judged by (0..1); below 0, a random one
 var rng := RandomNumberGenerator.new()
+## The fibre each buyer asks for (wanted_fibre()). Off in the autotest but for its own check, so the
+## other checks' sales take any sweater as before.
+static var fibre_on := true
+## Tests: the fibre every buyer wants ("wool" for sheep's wool); "" leaves it to the day's roll.
+static var force_fibre := ""
+const TIERS := ["plain", "common", "rare", "ultra_rare", "legendary", "mythic"]
 
 var _who: Label
 var _said: Label
@@ -101,28 +107,127 @@ static func itchy(vid: String) -> bool:
 	return false
 
 
-## The plain fair price of a sweater: Rosa's price for its rarity.
-func fair(rarity: int) -> int:
-	return int(main._wear_price(rarity))
+## The fair price of a sweater: Rosa's price for its rarity, times its fibre's tier "value" in
+## data/economy.json "wants" ("wool", sheep's wool, is 1).
+func fair(rarity: int, fibre: String = "wool") -> int:
+	var f := float(main._wear_price(rarity))
+	if fibre_on and fibre != "wool" and fibre != "":
+		f *= float((_wants().get("value", {}) as Dictionary).get(fibre_tier(fibre), 1.0))
+	return int(round(f))
+
+
+# --- which fibre they want (Alex, 2026-11-24: specific fibres, nothing she can't get yet) ---------
+
+static func _wants() -> Dictionary:
+	return Data.economy().get("wants", {})
+
+
+## The tier of a fibre ("plain" for sheep's wool).
+static func fibre_tier(fibre: String) -> String:
+	if fibre == "" or fibre == "wool":
+		return "plain"
+	return str(((Data.load_json("wildlife").get("fibres", {}) as Dictionary).get(fibre, {}) as Dictionary).get("tier", "plain"))
+
+
+## The fibre her i-th sweater was knitted with ("wool" for sheep's wool).
+static func fibre_of(i: int) -> String:
+	if i < 0 or i >= Game.sweater_fibres.size():
+		return "wool"
+	var f := str(Game.sweater_fibres[i])
+	return "wool" if f == "" else f
+
+
+## What players read for a fibre: "sheep's wool", "angora fluff", "fox fluff"...
+static func fibre_name(fibre: String) -> String:
+	if fibre == "" or fibre == "wool":
+		return "sheep's wool"
+	return str(((Data.load_json("wildlife").get("fibres", {}) as Dictionary).get(fibre, {}) as Dictionary).get("name", fibre)).to_lower()
+
+
+## The fibre tiers buyers may ask for now, plainest first: sheep's wool only until Act 1 is done,
+## then up to the act's tier in "by_act", and one tier more once she has combed an animal of it.
+static func open_tiers() -> Array:
+	if Game.flag("act1_done") != true:
+		return ["plain"]
+	var cap := TIERS.find(str((_wants().get("by_act", {}) as Dictionary).get(str(clampi(Game.act, 1, 4)), "common")))
+	cap = clampi(cap, 0, TIERS.size() - 1)
+	if cap + 1 < TIERS.size():
+		var animals: Dictionary = Data.load_json("wildlife").get("animals", {})
+		var guide: Dictionary = Game.flags.get("guide", {})
+		for sp in animals:
+			if str((animals[sp] as Dictionary).get("tier", "")) == TIERS[cap + 1] and guide.get(sp, {}) is Dictionary and int((guide.get(sp, {}) as Dictionary).get("combed", 0)) > 0:
+				cap += 1
+				break
+	return TIERS.slice(0, cap + 1)
+
+
+## Whether a sweater of `fibre` is one buyers may ask for now.
+static func fibre_open(fibre: String) -> bool:
+	return fibre_tier(fibre) in open_tiers()
+
+
+## The fibre `vid` wants a sweater of today ("wool" for sheep's wool; "" for any, while it's off).
+## The same all day; each open tier's "weights" share is split between its fibres.
+static func wanted_fibre(vid: String) -> String:
+	if not fibre_on:
+		return ""
+	if force_fibre != "":
+		return force_fibre
+	var w: Dictionary = _wants().get("weights", {})
+	var fibres: Dictionary = Data.load_json("wildlife").get("fibres", {})
+	var pool := [] # [fibre, weight]
+	var total := 0.0
+	for t in open_tiers():
+		var of_tier := ["wool"] if t == "plain" else fibres.keys().filter(func(f): return str((fibres[f] as Dictionary).get("tier", "")) == t)
+		for f in of_tier:
+			var wt := float(w.get(t, 1.0)) / of_tier.size()
+			pool.append([str(f), wt])
+			total += wt
+	var r := _day_roll(vid, "fibre") * total
+	for e in pool:
+		r -= float(e[1])
+		if r < 0.0:
+			return str(e[0])
+	return "wool"
+
+
+## Whether her i-th sweater is one `vid` would buy today.
+static func suits(vid: String, i: int) -> bool:
+	var want := wanted_fibre(vid)
+	return want == "" or fibre_of(i) == want
+
+
+## Whether she has a sweater `vid` would buy today.
+static func has_for(vid: String) -> bool:
+	for i in Game.sweaters.size():
+		if suits(vid, i):
+			return true
+	return false
+
+
+## "a fox fluff sweater", "a sheep's wool sweater", or "a sweater" while it's off.
+static func wanted_text(vid: String) -> String:
+	var want := wanted_fibre(vid)
+	return "a sweater" if want == "" else "a %s sweater" % fibre_name(want)
 
 
 ## The most they'd happily pay today for a sweater of `rarity`: at it the chance is even.
-func reserve(vid: String, rarity: int) -> int:
+func reserve(vid: String, rarity: int, fibre: String = "wool") -> int:
 	if guided != "" and vid == guided:
 		return guided_range(rarity).y
 	var m := lerpf(cfg("res_min", 0.95), cfg("res_max", 1.35), _day_roll(vid, "reserve")) + cfg("res_per_heart", 0.04) * Game.hearts(vid)
-	return int(round(fair(rarity) * m))
+	return int(round(fair(rarity, fibre) * m))
 
 
 ## How likely they are to say yes to `p` coins for a sweater of `rarity` (what the meter shows).
-func chance(vid: String, rarity: int, p: int) -> float:
+func chance(vid: String, rarity: int, p: int, fibre: String = "wool") -> float:
 	if guided != "" and vid == guided: # inside her range she's all but certain; above it, less and less
 		var r := guided_range(rarity)
 		if p <= r.y:
 			return lerpf(0.99, 0.9, clampf(inverse_lerp(float(r.x), float(r.y), float(p)), 0.0, 1.0))
 		return 1.8 / (1.0 + exp((float(p) - float(r.y)) / maxf(1.0, 0.05 * fair(rarity))))
-	var spread := maxf(1.0, cfg("spread", 0.12) * fair(rarity))
-	return 1.0 / (1.0 + exp((float(p) - float(reserve(vid, rarity))) / spread))
+	var spread := maxf(1.0, cfg("spread", 0.12) * fair(rarity, fibre))
+	return 1.0 / (1.0 + exp((float(p) - float(reserve(vid, rarity, fibre))) / spread))
 
 
 ## Wren's range for Act 1's first sale: [low, high] coins, in steps of 5.
@@ -162,6 +267,8 @@ func rows_for(villager) -> Array:
 		row = {"id": "noop", "label": "Not looking for a sweater today", "enabled": false}
 	elif int(a.get("tries", 0)) >= int(cfg("tries", 3)):
 		row = {"id": "noop", "label": "Done haggling for today", "enabled": false}
+	elif not has_for(vid):
+		row = {"id": "noop", "label": "Wants %s  (you have none)" % wanted_text(vid), "enabled": false}
 	else:
 		row = {"id": "sale_haggle", "label": "Show them a sweater", "enabled": true}
 	row["group"] = GROUP
@@ -180,20 +287,27 @@ func ask(villager) -> bool:
 			return false
 	elif not bool(asked(vid).get("yes", false)):
 		return false
+	if not guided_due(vid) and not has_for(vid): # they want one of a fibre she hasn't got: they say which
+		main._say(villager, "I'm after %s, if you ever have one. Come and find me then." % wanted_text(vid))
+		return false
 	open(villager)
 	return true
 
 
-## The sweaters she can show: one of each design and rarity, best first. [index, rarity, design]
-static func choices() -> Array:
+## The sweaters she can show: one of each design, rarity and fibre, best first, only those of the
+## fibre `want` ("" for any). [index, rarity, design, fibre]
+static func choices(want: String = "") -> Array:
 	Game.sync_sweaters()
 	var seen := {}
 	var out := []
 	for i in Game.sweaters.size():
-		var key := "%s/%d" % [str(Game.sweater_designs[i]), int(Game.sweaters[i])]
+		var fib := fibre_of(i)
+		if want != "" and fib != want:
+			continue
+		var key := "%s/%d/%s" % [str(Game.sweater_designs[i]), int(Game.sweaters[i]), fib]
 		if not seen.has(key):
 			seen[key] = true
-			out.append([i, int(Game.sweaters[i]), str(Game.sweater_designs[i])])
+			out.append([i, int(Game.sweaters[i]), str(Game.sweater_designs[i]), fib])
 	out.sort_custom(func(x, y): return int(x[1]) > int(y[1]))
 	return out
 
@@ -205,6 +319,7 @@ func offer() -> String:
 		return "no"
 	var vid: String = v.vid
 	var rarity := int(Game.sweaters[choice])
+	var fib := fibre_of(choice)
 	if guided != "" and vid == guided: # Act 1: inside her range she buys; above it she offers her top
 		var top := guided_range(rarity).y
 		if price <= top:
@@ -215,13 +330,13 @@ func offer() -> String:
 		_refresh()
 		return "counter"
 	var roll := force_roll if force_roll >= 0.0 else rng.randf()
-	if roll < chance(vid, rarity, price):
+	if roll < chance(vid, rarity, price, fib):
 		_sell(price)
 		return "sold"
 	var a := asked(vid)
 	a["tries"] = int(a.get("tries", 0)) + 1
 	_note(vid, a)
-	var res := reserve(vid, rarity)
+	var res := reserve(vid, rarity, fib)
 	if int(a["tries"]) >= int(cfg("tries", 3)):
 		_say(WALK[int(a["tries"]) % WALK.size()])
 		counter = 0
@@ -344,13 +459,14 @@ func open(villager) -> void:
 		guided = ""
 	v = villager
 	counter = 0
-	var cs := choices()
+	var cs := choices(_want())
 	if cs.is_empty():
 		return
 	choice = int(cs[0][0])
-	price = fair(int(cs[0][1]))
+	price = fair(int(cs[0][1]), str(cs[0][3]))
 	_who.text = "Selling to %s" % v.title
-	_say(str(YES[(Game.day + str(v.vid).length()) % YES.size()]))
+	var want := _want()
+	_say(str(YES[(Game.day + str(v.vid).length()) % YES.size()]) if want == "" else "I'm after a %s sweater. What have you got?" % fibre_name(want))
 	if hud.has_method("hide_dialogue"):
 		hud.hide_dialogue()
 	hud.click("ui_open")
@@ -363,19 +479,26 @@ func close() -> void:
 	visible = false
 
 
+## The fibre the one she's selling to wants ("" for any; Act 1's guided sale takes any).
+func _want() -> String:
+	if v == null or (guided != "" and str(v.vid) == guided):
+		return ""
+	return wanted_fibre(str(v.vid))
+
+
 func pick(i: int) -> void:
 	if i < 0 or i >= Game.sweaters.size():
 		return
 	choice = i
 	counter = 0
-	price = fair(int(Game.sweaters[i]))
+	price = fair(int(Game.sweaters[i]), fibre_of(i))
 	_refresh()
 
 
 func set_price(p: int) -> void:
 	if choice < 0 or choice >= Game.sweaters.size():
 		return
-	var f := fair(int(Game.sweaters[choice]))
+	var f := fair(int(Game.sweaters[choice]), fibre_of(choice))
 	price = clampi(p, maxi(5, f / 4), f * 4)
 	_refresh()
 
@@ -386,10 +509,10 @@ func _refresh() -> void:
 	for c in _picks.get_children():
 		_picks.remove_child(c)
 		c.queue_free()
-	for e in choices():
+	for e in choices(_want()):
 		var d := Sweaters.design(str(e[2]))
 		var dname := str(d.get("name", "Sweater"))
-		var b: Button = hud._button("%s\n%s" % [dname, RARITY[clampi(int(e[1]), 1, 5) - 1]], pick.bind(int(e[0])))
+		var b: Button = hud._button("%s\n%s · %s" % [dname, RARITY[clampi(int(e[1]), 1, 5) - 1], fibre_name(str(e[3]))], pick.bind(int(e[0])))
 		b.custom_minimum_size = Vector2(118, 56)
 		b.add_theme_font_size_override("font_size", 12)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -399,9 +522,10 @@ func _refresh() -> void:
 	if choice < 0 or choice >= Game.sweaters.size():
 		return
 	var rarity := int(Game.sweaters[choice])
-	var p := chance(v.vid, rarity, price)
+	var fib := fibre_of(choice)
+	var p := chance(v.vid, rarity, price, fib)
 	_price_label.text = "%dc" % price
-	_fair_label.text = "Rosa would give you %dc for it today." % fair(rarity)
+	_fair_label.text = ("Rosa would give you %dc for it today." % fair(rarity)) if fibre_tier(fib) == "plain" or not fibre_on else ("A fair price for %s: about %dc." % [fibre_name(fib), fair(rarity, fib)])
 	_meter_fill.size.x = 456.0 * p
 	_meter_fill.color = Color(0.85, 0.3, 0.25).lerp(Color(0.95, 0.75, 0.3), clampf(p * 2.0, 0.0, 1.0)).lerp(Color(0.45, 0.8, 0.4), clampf(p * 2.0 - 1.0, 0.0, 1.0))
 	_meter_label.text = "%s  ·  %d%% likely to say yes" % [("Happy to pay that" if p >= 0.75 else ("Thinking about it" if p >= 0.4 else ("A stretch" if p >= 0.15 else "Far too dear"))), int(round(p * 100.0))]

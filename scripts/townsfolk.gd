@@ -474,7 +474,9 @@ func want_talk(v) -> String:
 	elif not named and not (wants(v) or (main.house_sale != null and main.house_sale.wants_sweater(v))):
 		return ""
 	else:
-		key = "has" if Game.count("sweater") > 0 else "none"
+		var any_will_do: bool = not named and not wants(v) # Marcus's favour: any sweater
+		key = "has" if (Game.count("sweater") > 0 if any_will_do else SweaterSale.has_for(v.vid)) else "none"
+		fill = {"fibre": SweaterSale.fibre_name(SweaterSale.wanted_fibre(v.vid))}
 	var tags: Array = v.tags if not named else ["adult"] # the town's cast are all grown-ups
 	var ok := []
 	var src: Variant = _cfg("want_lines", {})
@@ -502,8 +504,8 @@ func _haggling(vid: String) -> bool:
 func actions(p) -> Array:
 	var acts := [{"id": "talk", "label": "Talk", "enabled": true}]
 	if wants(p):
-		var n := Game.count("sweater")
-		var row := {"id": "sale", "label": "Show them a sweater" if n > 0 else "Wants a sweater  (you have none)", "enabled": n > 0}
+		var ok := SweaterSale.has_for(p.vid) # only a sweater of the fibre they want today
+		var row := {"id": "sale", "label": "Show them a sweater" if ok else "Wants %s  (you have none)" % SweaterSale.wanted_text(p.vid), "enabled": ok}
 		row["group"] = SweaterSale.GROUP
 		acts.append(row)
 	if main.house_sale != null:
@@ -520,9 +522,10 @@ func action(p, id: String) -> void:
 			var want := want_talk(p) # the red pin: what they're after, not the usual line
 			main.hud.show_dialogue(p.title, -1, want if want != "" else line_for(p))
 		"sale":
-			if not SweaterSale.asked(p.vid).is_empty() or Game.count("sweater") == 0:
-				if Game.count("sweater") > 0:
-					main.sale.open(p)
+			if not SweaterSale.has_for(p.vid):
+				return
+			if not SweaterSale.asked(p.vid).is_empty():
+				main.sale.open(p)
 				return
 			SweaterSale._note(p.vid, {"yes": true, "tries": 0}) # they want one: no need to ask
 			main.sale.open(p)

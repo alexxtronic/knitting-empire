@@ -340,6 +340,10 @@ func run(main: Node) -> void:
 func _want_lines(tf, key: String) -> Array:
 	var out: Array = []
 	var src: Variant = tf._cfg("want_lines", {})
+	var names: Array = ["sheep's wool"] # {fibre}: whichever fibre they want today
+	for f in (Data.load_json("wildlife").get("fibres", {}) as Dictionary):
+		names.append(SweaterSale.fibre_name(str(f)))
 	for l in ((src as Dictionary).get(key, []) if src is Dictionary else []):
-		out.append(str(l["text"]))
+		for n in names:
+			out.append(str(l["text"]).format({"fibre": n}))
 	return out

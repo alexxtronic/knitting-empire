@@ -11,6 +11,7 @@ const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
 const GoalsCheck = preload("res://scripts/goals_check.gd")
+const FibreWantCheck = preload("res://scripts/fibre_want_check.gd")
 const ActsCheck = preload("res://scripts/acts_check.gd")
 const DogsCheck = preload("res://scripts/dogs_check.gd")
 const Kennel = preload("res://scripts/kennel.gd")
@@ -500,6 +501,7 @@ func _ready() -> void:
 	shepherd = Shepherd.new()
 	shepherd.main = self
 	add_child(shepherd)
+	SweaterSale.fibre_on = _autotest_dir == "" # buyers take any sweater in the autotest but in its own check (scripts/fibre_want_check.gd)
 	Partners.on = _autotest_dir == "" # no pranks, sharp lines or arguments in the autotest but its own check
 	partners = Partners.new()
 	partners.main = self
@@ -6100,6 +6102,7 @@ func _autotest() -> void:
 	if "--only=sale" in OS.get_cmdline_user_args(): # just the money: sweaters the only income, asking and haggling, jobs' drops
 		await _wait(1.5)
 		await _sale_checks()
+		await FibreWantCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -6453,6 +6456,7 @@ func _autotest() -> void:
 	await ShepherdCheck.new().run(self)
 	await HouseSaleCheck.new().run(self)
 	await _sale_checks()
+	await FibreWantCheck.new().run(self)
 	await _sweater_checks()
 	await _wardrobe_checks()
 	await _photo_checks()

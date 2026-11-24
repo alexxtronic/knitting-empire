@@ -23,19 +23,19 @@
 		{"text": "You smell like sheep. That's not a complaint."},
 		{"text": "I lost a button somewhere in this town last spring. I'm still looking.", "who": ["old"]}
 	],
-	"_about_want_lines": "What anyone with the red pin says when Nora talks to them, instead of their usual line (townsfolk.gd want_talk(), the named villagers too): 'none' when she has no sweater on her, 'has' when she has one to show, and for a named villager's request, 'request_waiting' (asked, not knitted yet) and 'request_ready' (she has it). {what} and {pay} are the request's sweater and coins. 'who' works as in 'lines'. Drafts until Alex approves them.",
+	"_about_want_lines": "What anyone with the red pin says when Nora talks to them, instead of their usual line (townsfolk.gd want_talk(), the named villagers too): 'none' when she has no sweater of the fibre they want today on her (sweater_sale.gd wanted_fibre()), 'has' when she has one to show; {fibre} is that fibre's name, and for a named villager's request, 'request_waiting' (asked, not knitted yet) and 'request_ready' (she has it). {what} and {pay} are the request's sweater and coins. 'who' works as in 'lines'. Drafts until Alex approves them.",
 	"want_lines": {
 		"none": [
-			{"text": "I was looking for a sweater made of sheep's wool. Maybe come back to me when you have one?"},
-			{"text": "You're the one who knits, aren't you? I've been after a good wool sweater all week. Bring me one and we'll talk price."},
-			{"text": "This wind goes right through me. If you've a sweater to spare some day, I'm buying."},
-			{"text": "My old jumper's more holes than wool. Knit me a new one and I'll pay you properly.", "who": ["adult"]},
-			{"text": "Mum says I need a warm sweater. Do you make them? Come find me when you have one!", "who": ["kid"]}
+			{"text": "I was looking for a sweater made of {fibre}. Maybe come back to me when you have one?"},
+			{"text": "You're the one who knits, aren't you? I've been after a {fibre} sweater all week. Bring me one and we'll talk price."},
+			{"text": "This wind goes right through me. If you've a {fibre} sweater to spare some day, I'm buying."},
+			{"text": "My old jumper's more holes than wool. Knit me a new one in {fibre} and I'll pay you properly.", "who": ["adult"]},
+			{"text": "Mum says I need a warm sweater, a {fibre} one. Do you make them? Come find me when you have one!", "who": ["kid"]}
 		],
 		"has": [
-			{"text": "Is that a sweater you're carrying? I've been after one all week. Let's see it."},
-			{"text": "You knit? I could do with something warm. Show me what you've got."},
-			{"text": "Oh, is that one of yours? I'd buy it, if the price is right."}
+			{"text": "Is that a {fibre} sweater you're carrying? I've been after one all week. Let's see it."},
+			{"text": "You knit? I'm after something in {fibre}. Show me what you've got."},
+			{"text": "Oh, is that {fibre}? I'd buy it, if the price is right."}
 		],
 		"request_waiting": [
 			{"text": "Any luck with {what}? No rush. Well, a little rush. It's getting cold."},

@@ -22,6 +22,7 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const EmpireGoals = preload("res://scripts/empire_goals.gd")
+const SweaterSale = preload("res://scripts/sweater_sale.gd")
 const LANTERN_MODEL := "res://assets/props/lantern.glb" # art/world_assets/lantern/build.py; its origin is the ring's top
 const GLOBE_DROP := 0.175 # metres from the ring's top down to the flame
 const LIGHT_OUT := 0.14 # how far out from her side the light sits, so it doesn't burn a patch on her sweater
@@ -257,6 +258,8 @@ func due() -> Dictionary:
 	var done := filled()
 	for d in request_defs():
 		if not done.has(str(d.get("id", ""))) and Game.hearts(str(d["who"])) >= int(d.get("hearts", 0)):
+			if SweaterSale.fibre_on and d.has("fibre") and not SweaterSale.fibre_open(str(d["fibre"])):
+				continue # a fibre she can't get yet (sweater_sale.gd open_tiers()): it waits
 			return d
 	return {}
 
