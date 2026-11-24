@@ -14,13 +14,16 @@ extends Node
 ##
 ## What a scarf does is data/scarves.json "tiers" by quality: a faster trot and gallop, more fright
 ## in every bark (dog.bark_power(), wildlife.barked), and warmth kept for cold lands (dog.warmth()).
+##
+## The pack (kennel.gd, from Act 2): any of her scarves goes on any of her dogs, one dog for each
+## copy she has knitted (`n`). A pack dog's scarf is the "scarf" of its row in Game.flags["dogs"];
+## its menu lists her scarves as her first dog's does.
 
 const Data = preload("res://scripts/data.gd")
 const KnitGame = preload("res://scripts/knit_game.gd")
 
 var main: Node # main.gd
 var data := {}
-var _dressed := "-" # the scarf the dog was last dressed in ("" his red one)
 
 
 func _ready() -> void:
@@ -49,10 +52,31 @@ func owned() -> Array:
 	return v if v is Array else []
 
 
-## The scarf he wears ({"q", "fibre"}), empty for his red one.
-func worn() -> Dictionary:
-	var v = Game.flag("dog_scarf", {})
+## The scarf he wears ({"q", "fibre"}), empty for his red one. `dog` a pack dog (kennel.gd), or
+## null for her first.
+func worn(dog: Node = null) -> Dictionary:
+	var v: Variant = Game.flag("dog_scarf", {})
+	if dog != null and int(dog.get("pack_index")) >= 0:
+		var list: Array = main.kennel.bought() if main and main.kennel else []
+		var i := int(dog.get("pack_index"))
+		v = (list[i] as Dictionary).get("scarf", {}) if i < list.size() and list[i] is Dictionary else {}
 	return v if v is Dictionary and int((v as Dictionary).get("q", 0)) > 0 else {}
+
+
+func _same(a: Dictionary, b: Dictionary) -> bool:
+	return int(a.get("q", 0)) == int(b.get("q", 0)) and str(a.get("fibre", "")) == str(b.get("fibre", ""))
+
+
+## How many of her dogs other than `dog` wear a scarf like `s`.
+func _worn_by_others(s: Dictionary, dog: Node) -> int:
+	var n := 0
+	if main and main.kennel:
+		for d in main.kennel.all_dogs():
+			if d != dog and _same(worn(d), s):
+				n += 1
+	elif dog != null and int(dog.get("pack_index")) >= 0 and _same(worn(), s):
+		n += 1
+	return n
 
 
 func name_of(s: Dictionary) -> String:
@@ -116,27 +140,41 @@ func knitted(rarity: int, fibre: String) -> int:
 	return q
 
 
-## Puts a scarf she has on him; an empty one gives him his red scarf back.
-func wear(s: Dictionary) -> void:
-	if s.is_empty():
+## Puts a scarf she has on him (`dog` a pack dog, or null for her first); an empty one gives him
+## his red scarf back.
+func wear(s: Dictionary, dog: Node = null) -> void:
+	var on := {} if s.is_empty() else {"q": int(s.get("q", 1)), "fibre": str(s.get("fibre", ""))}
+	if dog != null and int(dog.get("pack_index")) >= 0 and main and main.kennel:
+		var list: Array = main.kennel.bought().duplicate(true)
+		var i := int(dog.get("pack_index"))
+		if i < list.size() and list[i] is Dictionary:
+			if on.is_empty():
+				(list[i] as Dictionary).erase("scarf")
+			else:
+				list[i]["scarf"] = on
+			Game.set_flag("dogs", list)
+	elif on.is_empty():
 		Game.flags.erase("dog_scarf")
 	else:
-		Game.set_flag("dog_scarf", {"q": int(s.get("q", 1)), "fibre": str(s.get("fibre", ""))})
+		Game.set_flag("dog_scarf", on)
 	update()
 
 
-## The dog's menu: each scarf she has to put on, and his own red one back.
-func dog_rows() -> Array:
+## A dog's menu: each scarf she has to put on (greyed when every copy is on another of her dogs),
+## and his own red one back.
+func dog_rows(dog: Node = null) -> Array:
 	var list := owned()
-	var on := worn()
+	var on := worn(dog)
 	if list.is_empty() and on.is_empty():
 		return []
 	var rows: Array = []
 	for i in list.size():
 		var s: Dictionary = list[i]
 		var t := tier(int(s.get("q", 1)))
-		var wearing: bool = int(on.get("q", 0)) == int(s.get("q", 0)) and str(on.get("fibre", "")) == str(s.get("fibre", ""))
-		var row: Dictionary = main._act("scarf_on:%d" % i, "%s %s  (×%.2f gallop · ×%.2f bark)" % ["Wearing the" if wearing else "Put on the", name_of(s), float(t.get("run", 1.0)), float(t.get("bark", 1.0))], not wearing)
+		var wearing: bool = _same(on, s)
+		var free: bool = _worn_by_others(s, dog) < int(s.get("n", 1))
+		var what := "Wearing the" if wearing else ("Put on the" if free else "On another dog: the")
+		var row: Dictionary = main._act("scarf_on:%d" % i, "%s %s  (×%.2f gallop · ×%.2f bark)" % [what, name_of(s), float(t.get("run", 1.0)), float(t.get("bark", 1.0))], not wearing and free)
 		rows.append(row)
 	if not on.is_empty():
 		var off: Dictionary = main._act("scarf_off", "Take his scarf off  (his red one back)")
@@ -144,26 +182,30 @@ func dog_rows() -> Array:
 	return rows
 
 
-func perform(id: String) -> void:
+func perform(id: String, dog: Node = null) -> void:
+	var who: String = "The dog" if dog == null or int(dog.get("pack_index")) < 0 else str(dog.call("display_name"))
 	if id == "scarf_off":
-		wear({})
-		main.hud.show_toast("He has his red scarf back.")
+		wear({}, dog)
+		main.hud.show_toast("%s has his red scarf back." % who)
 	elif id.begins_with("scarf_on:"):
 		var i := int(id.trim_prefix("scarf_on:"))
 		var list := owned()
-		if i >= 0 and i < list.size():
-			wear(list[i])
-			main.hud.show_toast("The dog wears the %s now." % name_of(list[i]))
+		if i >= 0 and i < list.size() and _worn_by_others(list[i], dog) < int(list[i].get("n", 1)):
+			wear(list[i], dog)
+			main.hud.show_toast("%s wears the %s now." % [who, name_of(list[i])])
 
 
-## Dresses the dog from the flags whenever they change (a load, a new game, a check).
+## Dresses every dog from the flags whenever they change (a load, a new game, a check).
 func update() -> void:
-	var dog = main.dog if main else null
-	if dog == null:
+	if main == null:
 		return
-	var on := worn()
-	var key := "" if on.is_empty() else "%d|%s" % [int(on["q"]), str(on.get("fibre", ""))]
-	if key == _dressed:
-		return
-	_dressed = key
-	dog.wear_scarf({} if on.is_empty() else tier(int(on["q"])), float(data.get("max_rate", 1.5)))
+	var dogs: Array = main.kennel.all_dogs() if main.kennel else ([main.dog] if main.dog else [])
+	for dog in dogs:
+		if dog == null or not is_instance_valid(dog):
+			continue
+		var on := worn(dog if int(dog.pack_index) >= 0 else null)
+		var key := "" if on.is_empty() else "%d|%s" % [int(on["q"]), str(on.get("fibre", ""))]
+		if key == dog._dressed_key:
+			continue
+		dog._dressed_key = key
+		dog.wear_scarf({} if on.is_empty() else tier(int(on["q"])), float(data.get("max_rate", 1.5)))

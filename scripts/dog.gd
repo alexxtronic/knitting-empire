@@ -19,6 +19,14 @@ extends Node3D
 ## tints the scarf's red in his colour map (dog.glb has one material, so the scarf isn't a part of
 ## its own; shaders/dog_scarf.gdshader), speeds his trot and gallop, makes each bark frighten more
 ## (bark_power(), read by wildlife.barked) and keeps its warmth for cold lands (warmth()).
+##
+## The pack (scripts/kennel.gd): the dogs she buys from Act 2 are this script too, with
+## `pack_leader` set. They keep a loose formation behind it (Nora, or the dog she plays), steering
+## straight for their place on the walking grid and only asking for a path when something stands
+## in the way. They herd nothing and go after nothing: only the player herds. Each has its own coat
+## (set_coat(), the fur tinted in the same shader as the scarf) and its own knitted scarf. Far off
+## or past the first few, set_lod() has the AnimationPlayer and the steering run a few times a
+## second instead of every frame.
 
 const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
@@ -63,10 +71,21 @@ var _run_mult := 1.0
 var _bark_mult := 1.0
 var _warmth := 0.0
 var _scarf_mats := {} # the scarf shader material made for each of the model's own materials
+var _scarf_tint: Variant = null # the knitted scarf's colour (null: his own red one)
+var model_path := MODEL # a coat's own model, for the breeds to come (kennel.gd)
+var pack_index := -1 # one of the pack she bought (kennel.gd), -1 for her first dog
+var pack_name := "" # its name, for a pack dog
+var pack_leader: Node3D = null # whom a pack dog follows (Nora, or the dog she plays); null: he stays
+var pack_slot := Vector3.ZERO # his place behind the leader, in the leader's own frame (kennel.slot())
+var coat_id := "" # a pack dog's coat (data/economy.json "dogs" "coats")
+var _coat: Variant = null # its colour (null: the golden fur as the model has it)
+var lod_hz := 0.0 # 0: every frame; else the loops and the steering run this many times a second
+var _lod_acc := 0.0
+var _dressed_key := "-" # the scarf scarves.gd last dressed him in
 
 
 func _ready() -> void:
-	_model = Catalog.model(MODEL, self)
+	_model = Catalog.model(model_path, self)
 	if _model:
 		var aps := _model.find_children("*", "AnimationPlayer", true, false)
 		_anim = aps[0] if not aps.is_empty() else null
@@ -89,7 +108,7 @@ func _ready() -> void:
 
 
 func display_name() -> String:
-	return "Dog"
+	return pack_name if pack_name != "" else "Dog"
 
 
 ## Puts a knitted scarf on him (`tier` a row of data/scarves.json "tiers"; `max_rate` caps his
@@ -101,7 +120,31 @@ func wear_scarf(tier: Dictionary, max_rate := 1.5) -> void:
 	_run_mult = minf(float(tier.get("run", 1.0)), maxf(1.0, max_rate * float(STRIDE["Run"]) / run_speed))
 	_bark_mult = maxf(1.0, float(tier.get("bark", 1.0)))
 	_warmth = float(tier.get("warmth", 0.0))
-	var tint: Variant = Color.html(str(tier["color"])) if tier.has("color") else null
+	_scarf_tint = Color.html(str(tier["color"])) if tier.has("color") else null
+	_apply_look()
+
+
+## A pack dog's coat: the golden fur tinted to `c` (null for the model's own).
+func set_coat(c: Variant) -> void:
+	_coat = c
+	_apply_look()
+
+
+## The coat colour his material draws now, as hex ("" when the fur is the model's own).
+func coat_key() -> String:
+	if _model == null or _coat == null:
+		return ""
+	for m in _model.find_children("*", "MeshInstance3D", true, false):
+		var sm := (m as MeshInstance3D).get_surface_override_material(0) as ShaderMaterial
+		if sm != null and float(sm.get_shader_parameter("coat_on")) > 0.5:
+			var v: Vector3 = sm.get_shader_parameter("coat")
+			return Color(v.x, v.y, v.z).to_html(false)
+	return ""
+
+
+## The model's own material when he wears his red scarf in his own coat; else the scarf shader with
+## the knitted scarf's colour, the coat's, or both.
+func _apply_look() -> void:
 	if _model == null:
 		return
 	for m in _model.find_children("*", "MeshInstance3D", true, false):
@@ -112,7 +155,7 @@ func wear_scarf(tier: Dictionary, max_rate := 1.5) -> void:
 			var base := mi.mesh.surface_get_material(i) as BaseMaterial3D
 			if base == null:
 				continue
-			if tint == null:
+			if _scarf_tint == null and _coat == null:
 				mi.set_surface_override_material(i, null)
 				continue
 			var sm: ShaderMaterial = _scarf_mats.get(base.get_instance_id())
@@ -124,8 +167,14 @@ func wear_scarf(tier: Dictionary, max_rate := 1.5) -> void:
 				sm.set_shader_parameter("roughness_v", base.roughness)
 				sm.set_shader_parameter("normal_depth", base.normal_scale)
 				_scarf_mats[base.get_instance_id()] = sm
-			var c: Color = tint
-			sm.set_shader_parameter("tint", Vector3(c.r, c.g, c.b))
+			if _scarf_tint != null:
+				var c: Color = _scarf_tint
+				sm.set_shader_parameter("tint", Vector3(c.r, c.g, c.b))
+			sm.set_shader_parameter("scarf_on", 1.0 if _scarf_tint != null else 0.0)
+			if _coat != null:
+				var k: Color = _coat
+				sm.set_shader_parameter("coat", Vector3(k.r, k.g, k.b))
+			sm.set_shader_parameter("coat_on", 1.0 if _coat != null else 0.0)
 			mi.set_surface_override_material(i, sm)
 
 
@@ -150,12 +199,22 @@ func gallop_speed() -> float:
 
 ## A click on him: the scarf rows (scarves.gd), once she has knitted him one.
 func ke_actions() -> Array:
-	return main.scarves.dog_rows() if main and main.scarves else []
+	return main.scarves.dog_rows(self) if main and main.scarves else []
 
 
 func ke_action(id: String) -> void:
 	if main and main.scarves:
-		main.scarves.perform(id)
+		main.scarves.perform(id, self)
+
+
+## Far off or past the first few of the pack (kennel.gd): `hz` times a second, 0 for every frame.
+func set_lod(hz: float) -> void:
+	if is_equal_approx(hz, lod_hz):
+		return
+	lod_hz = hz
+	_lod_acc = 0.0
+	if _anim:
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL if hz > 0.0 else AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
 
 
 func scare_radius() -> float:
@@ -220,11 +279,25 @@ var _floor_y := 0.0 # the floor of Marcus's house under him last frame (split_ho
 ## Every frame: the step, then up or down to the floor under him (split_house.gd: the floors of
 ## Marcus's house aren't at ground level; everywhere else this is 0).
 func _process(delta: float) -> void:
-	_step(delta)
+	if lod_hz > 0.0: # drawn cheaply: he still moves every frame, but thinks and animates less often
+		_lod_acc += delta
+		var think := _lod_acc >= 1.0 / lod_hz
+		_move(delta, think)
+		if think:
+			if _anim:
+				_anim.advance(_lod_acc)
+			_lod_acc = 0.0
+	else:
+		_step(delta)
 	_floor_y = SplitHouse.follow(self, _floor_y)
 
 
 func _step(delta: float) -> void:
+	_move(delta, true)
+
+
+## The bark's breath, his path and his loop. `think` false (a cheap frame, set_lod) only moves him on.
+func _move(delta: float, think: bool) -> void:
 	if _bark_t > 0.0:
 		_bark_t -= delta
 	if _woof and _woof.visible: # the "Woof!" rises and fades in the time between barks
@@ -232,7 +305,10 @@ func _step(delta: float) -> void:
 		_woof.position.y = 1.15 + 0.5 * (1.0 - k)
 		_woof.modulate.a = k
 		_woof.visible = k > 0.02
-	if not controlled:
+	if pack_index >= 0:
+		if think:
+			_follow_leader(maxf(delta, _lod_acc))
+	elif not controlled:
 		_follow_nora(delta)
 	var walking := not path.is_empty()
 	if walking:
@@ -256,13 +332,25 @@ func _step(delta: float) -> void:
 			rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * TURN))
 	else:
 		speed = move_toward(speed, 0.0, BRAKE * delta)
-		_idle_look(delta)
-	_play_gait()
+		if think:
+			_idle_look(delta)
+	if think:
+		_play_gait()
 
 
 func _top_speed() -> float:
 	if controlled:
 		return gallop_speed() if running else trot_speed()
+	if pack_index >= 0: # keeping his place in the pack: a gallop to catch up, then the leader's pace
+		if pack_leader == null:
+			return trot_speed()
+		var gap := Vector2(_slot_point().x - position.x, _slot_point().z - position.z).length()
+		var lead_v := float(pack_leader.get("speed")) if pack_leader.get("speed") != null else 0.0
+		if gap > 6.0:
+			return maxf(gallop_speed(), lead_v + 0.6)
+		if gap > 2.0:
+			return maxf(trot_speed(), lead_v + 0.3)
+		return maxf(0.6, lead_v)
 	# keeping up with Nora: a walk beside her, a trot when she's drawn ahead, a gallop to catch up
 	var d := _to_nora().length()
 	if d > 7.0:
@@ -318,6 +406,61 @@ func _follow_nora(delta: float) -> void:
 	path = main._find_path(position, spot) if main.has_method("_find_path") else [spot]
 
 
+## A pack dog's place now: his slot behind the leader, turned with him.
+func _slot_point() -> Vector3:
+	if pack_leader == null:
+		return position
+	var b: Basis = pack_leader.global_transform.basis
+	var p: Vector3 = pack_leader.global_position + b.x.normalized() * pack_slot.x + b.z.normalized() * pack_slot.z
+	p.y = 0.0
+	return p
+
+
+## Whether the walking grid is open all along the straight line from here to `to`.
+func _line_clear(to: Vector3) -> bool:
+	if main == null or not main.has_method("_walkable"):
+		return true
+	var d := Vector2(to.x - position.x, to.z - position.z).length()
+	var n := maxi(1, int(ceil(d / 0.5)))
+	for i in range(1, n + 1):
+		if not main._walkable(main._cell(position.lerp(to, float(i) / n))):
+			return false
+	return true
+
+
+## A pack dog keeps his place behind the leader: straight there when the way is open, by the
+## walking grid's path when something's in it, asked for only every so often (staggered, so the
+## pack doesn't all ask on the same frame). He goes after nothing else: only the player herds.
+func _follow_leader(delta: float) -> void:
+	if main == null or pack_leader == null:
+		path = []
+		return
+	var target := _slot_point()
+	var lead: Vector3 = pack_leader.global_position
+	var far := Vector2(lead.x - position.x, lead.z - position.z).length()
+	if far > 25.0: # left far behind (a door, a scene, a jump): he catches up out of sight
+		if main._walkable(main._cell(target)):
+			position = target
+		else:
+			position = Vector3(lead.x, 0.0, lead.z) - pack_leader.global_transform.basis.z.normalized() * 1.5
+		path = []
+		return
+	_repath -= delta
+	var gap := Vector2(target.x - position.x, target.z - position.z).length()
+	var lead_still := float(pack_leader.get("speed")) < 0.05 if pack_leader.get("speed") != null else true
+	if gap < 0.7 or (gap < 1.4 and lead_still):
+		if lead_still:
+			path = []
+		return
+	if _line_clear(target): # the usual case: straight there, aimed afresh each time he thinks
+		path = [target]
+		return
+	if _repath > 0.0 and not path.is_empty():
+		return
+	_repath = 0.45 + 0.07 * (pack_index % 5) # round something by the grid, and not too often
+	path = main._find_path(position, target) if main.has_method("_find_path") else [target]
+
+
 ## While a story scene plays, the person within ROOM of where he is (they came to talk to her), so
 ## he can make way; null when nobody is, or no scene is on.
 func _crowding() -> Node3D:
@@ -335,7 +478,7 @@ func _idle_look(delta: float) -> void:
 	if _look_t > 0.0 or main == null or controlled:
 		return
 	_look_t = randf_range(3.0, 7.0)
-	var to := _to_nora()
+	var to := _to_nora() if pack_leader == null else Vector3(pack_leader.global_position.x - position.x, 0.0, pack_leader.global_position.z - position.z)
 	if to.length() > 0.3:
 		rotation.y = lerp_angle(rotation.y, atan2(to.x, to.z), 0.6)
 

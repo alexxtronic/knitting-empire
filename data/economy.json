@@ -298,5 +298,25 @@
       "undo_paint": "%s painted the front of your house back the way it was.",
       "itch_no": "Someone told me your sweaters itch. Maybe another day."
     }
+  },
+  "dogs": {
+    "_about": "More dogs (scripts/kennel.gd; Alex, 2026-11-24: 'purchasing additional dogs which you can use to hunt larger packs of animals at a time ... all the way up to 12 dogs maximum. Dogs are an expensive investment'; two animals per dog, data/wildlife.json herd_per_dog). Lars sells them from Act 2 (Game.unlocked('dogs')). 'max' counts her first dog too (so she can buy 11). The second dog costs 'price', and each after it 'price_mult' times the last, rounded to 'round' coins. docs/REVIEW_2026-11-24.md section 7 prices a dog at about 3 days of Act 2 income, which runs from about 1,000c to 10,000c a day: 3,000c is 3 days at the act's start, and at x1.26 the twelfth (the eleventh bought) is about 30,000c, 3 days at its end; all eleven come to about 120,000c. 'names' are given in turn to the dogs she buys, 'coats' in turn too (cream, red, chocolate, black, grey): 'tint' is the fur's colour (sRGB) in shaders/dog_scarf.gdshader, which keeps the fur's shading, and an optional 'model' per coat is for the breeds Alex will make (a GLB path; dog.glb until then). 'pack_bark_range' is how near the dog she plays a pack dog must be to bark when he does. 'lod_far' (metres from the camera) and 'lod_after' (the dogs past that many in the pack) think and animate at 'lod_hz' times a second instead of every frame. Every price and name is a draft until Alex approves it.",
+    "price": 3000,
+    "price_mult": 1.26,
+    "round": 50,
+    "max": 12,
+    "names": ["Biscuit", "Maple", "Bramble", "Clover", "Toffee", "Juniper", "Rufus", "Nutmeg", "Hazel", "Scout", "Bonnie", "Fern"],
+    "coats": {
+      "cream": {"name": "cream", "tint": "#e6d4b0"},
+      "red": {"name": "red", "tint": "#a8492a"},
+      "chocolate": {"name": "chocolate", "tint": "#5a3a26"},
+      "black": {"name": "black", "tint": "#2a2624"},
+      "grey": {"name": "grey", "tint": "#8d8f93"}
+    },
+    "coat_order": ["cream", "red", "chocolate", "black", "grey"],
+    "pack_bark_range": 12.0,
+    "lod_far": 30.0,
+    "lod_after": 5,
+    "lod_hz": 10.0
   }
 }

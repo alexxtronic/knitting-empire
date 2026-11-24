@@ -12,6 +12,8 @@ const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
 const GoalsCheck = preload("res://scripts/goals_check.gd")
 const ActsCheck = preload("res://scripts/acts_check.gd")
+const DogsCheck = preload("res://scripts/dogs_check.gd")
+const Kennel = preload("res://scripts/kennel.gd")
 const Acts = preload("res://scripts/acts.gd")
 const HouseSaleCheck = preload("res://scripts/house_sale_check.gd")
 const LightBudget = preload("res://scripts/light_budget.gd")
@@ -159,6 +161,7 @@ var empire: Empire # needles, the lantern and the locals' requests (empire.gd)
 var act_frame: Acts # the four acts: Game.act, the skip to the next, its card, her model by age (acts.gd)
 var goals: EmpireGoals # the Empire goal list, the takings ledger, the Field Guide and the Lookbook (empire_goals.gd)
 var scarves: Scarves # the dog's knitted scarves (scarves.gd)
+var kennel: Kennel # the dogs she buys from Lars in Act 2, and the pack following the one she plays (kennel.gd)
 var house_sale: HouseSale # Marcus's task, buying his house, and her edits to it (house_sale.gd)
 var shepherd: Shepherd # Rowan watching the pen for a fee, and the flags his advice waits for (shepherd.gd)
 var partners: Partners # her partner out of Rowan, Lars and Gary, the sore one and his pranks (partners.gd)
@@ -483,9 +486,13 @@ func _ready() -> void:
 	fog.main = self
 	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
 	add_child(fog)
+	kennel = Kennel.new()
+	kennel.main = self
+	add_child(kennel)
 	scarves = Scarves.new()
 	scarves.main = self
 	add_child(scarves)
+	kennel.sync()
 	scarves.update()
 	wolves = Wolves.new()
 	wolves.main = self
@@ -2143,6 +2150,8 @@ func dog_bark() -> bool:
 		wildlife.barked(dog.global_position)
 	if wolves:
 		wolves.barked(dog.global_position)
+	if kennel and dog.controlled and kennel.barked(dog.global_position) > 0: # the pack near him barks too, each frightening what's round it
+		audio.play("bark", -7.0, 0.2)
 	return true
 
 
@@ -2167,6 +2176,8 @@ func _update_dog() -> void:
 	if dog.controlled and (story.is_playing() or sleeping):
 		dog.controlled = false
 	dog.running = dog.controlled and (autotest_jog or _held(KEY_SHIFT))
+	if kennel:
+		kennel.update(get_process_delta_time())
 	if scarves:
 		scarves.update()
 
@@ -6073,6 +6084,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=dogs" in OS.get_cmdline_user_args(): # just more dogs: buying them from Lars, the pack, herd size, coats, a save
+		await _wait(1.5)
+		await DogsCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=acts" in OS.get_cmdline_user_args(): # just the four acts: the chapter rows, the skip and its card, Act 2, Gran, the save
 		await _wait(1.5)
 		await ActsCheck.new().run(self)
@@ -9181,8 +9198,9 @@ func _empire_checks() -> void:
 	await _wait(0.5)
 	var rabbits: Array = wildlife.animals.filter(func(a): return a.species == "rabbit" and not a.penned)
 	var sheep0 := Game.sheep_count
-	Game.sheep_count = 1 # room for three in the one pen
-	_check("a pen holds four animals, sheep included (%d pen, %d places, %d left with one sheep), and there are wild rabbits to catch (%d)" % [wildlife.pens().size(), wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0), wildlife.pen_room(), rabbits.size()],
+	Game.sheep_count = 2 # room for two in the one pen: all her one dog can herd
+	var hm: int = wildlife.max_herd() # two a dog (herd_per_dog), and she has only her first
+	_check("a pen holds four animals, sheep included (%d pen, %d places, %d left with two sheep), and there are wild rabbits to catch (%d)" % [wildlife.pens().size(), wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0), wildlife.pen_room(), rabbits.size()],
 		wildlife.pens().size() == 1 and wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0) == 4 and rabbits.size() >= 4)
 	if rabbits.size() < 4:
 		wildlife.clear()
@@ -9219,9 +9237,9 @@ func _empire_checks() -> void:
 	await _shot("60_bark.png")
 	_check("as the dog, a right click barks (%d bark) and Space doesn't (%d): the rabbit's meter was up, empty, as he came near (%s); it takes fright (meter %.2f, shown %s, it says '%s') and bolts (%s), and he can't bark again at once (%s)" % [dog.barks - barks0, space_barks, waiting, fright1, meter, word, bolted, not dog_bark()],
 		dog.barks - barks0 == 1 and space_barks == 0 and waiting and fright1 > 0.3 and fright1 < 1.0 and meter and word == "Fright" and bolted)
-	# he keeps after them, barking: up to three give in and follow him
+	# he keeps after them, barking: up to two (one dog's herd) give in and follow him
 	var tw := 0.0
-	while wildlife.following().size() < 3 and tw < 45.0:
+	while wildlife.following().size() < hm and tw < 45.0:
 		var near = null
 		var best := INF
 		for a in rabbits.slice(0, 4):
@@ -9252,16 +9270,16 @@ func _empire_checks() -> void:
 			fourth = a
 	var f4 := 0.0
 	Game.sheep_count = 0 # a place free in the pen, so it's the herd's size that stops a fourth
-	if fourth != null: # a fourth won't join: three is all he can herd
+	if fourth != null: # another won't join: two is all one dog can herd
 		f4 = fourth.fright
 		dog.position = fourth.position + Vector3(1.5, 0, 0)
 		dog.path = []
 		for i in 4:
 			await _wait(BARK_WAIT)
 			dog_bark()
-	_check("barking fills their meters and three give in and follow him (%d after %.1f s; the full meter says '%s'); a fourth only bolts (caught %s, fright %.2f -> %.2f, '%s')" % [herd.size(), tw, gave_in, fourth.caught if fourth != null else true, f4, fourth.fright if fourth != null else -1.0, wildlife.round_up_problem(fourth) if fourth != null else "?"],
-		herd.size() == 3 and gave_in == "Following!" and fourth != null and not fourth.caught and fourth.fright <= f4 + 0.001 and wildlife.round_up_problem(fourth).contains("3 at a time"))
-	Game.sheep_count = 1
+	_check("one dog herds %d: barking fills their meters and two give in and follow him (%d after %.1f s; the full meter says '%s'); a third only bolts (caught %s, fright %.2f -> %.2f, '%s')" % [hm, herd.size(), tw, gave_in, fourth.caught if fourth != null else true, f4, fourth.fright if fourth != null else -1.0, wildlife.round_up_problem(fourth) if fourth != null else "?"],
+		hm == 2 and herd.size() == 2 and gave_in == "Following!" and fourth != null and not fourth.caught and fourth.fright <= f4 + 0.001 and wildlife.round_up_problem(fourth).contains("2 at a time"))
+	Game.sheep_count = 2
 	# home: he runs back to the pen and they follow him in
 	var pen: Rect2 = wildlife.pen()
 	var gate := Vector3(pen.get_center().x, 0, pen.end.y + 9.0)
@@ -9282,7 +9300,7 @@ func _empire_checks() -> void:
 	tw = 0.0
 	var followed := 0.0
 	var p_was: Vector3 = herd[0].position if not herd.is_empty() else Vector3.ZERO
-	while wildlife.penned().size() < 3 and tw < 40.0:
+	while wildlife.penned().size() < hm and tw < 40.0:
 		await _wait(0.2)
 		tw += 0.2
 		if not herd.is_empty():
@@ -9301,8 +9319,8 @@ func _empire_checks() -> void:
 	await _wait(0.8)
 	await _shot("60_penned.png")
 	var inside: int = wildlife.penned().filter(func(a): return pen.grow(0.3).has_point(Vector2(a.position.x, a.position.z))).size()
-	_check("they follow him home (%.1f m on their own legs) and move into the pen (%d penned, %d inside it, %d on her list); with her one sheep the pen is full (%d places left, Rosa: %s)" % [followed, wildlife.penned().size(), inside, wildlife.penned_list().size(), wildlife.pen_room(), str(_villager_actions(rosa).filter(func(a): return str(a["label"]).begins_with("Buy a sheep")).map(func(a): return a["label"]))],
-		wildlife.penned().size() == 3 and inside == 3 and followed > 2.0 and wildlife.penned_list().size() == 3 and (Game.flag("wild_gone", {}) as Dictionary).has(key0)
+	_check("they follow him home (%.1f m on their own legs) and move into the pen (%d penned, %d inside it, %d on her list); with her two sheep the pen is full (%d places left, Rosa: %s)" % [followed, wildlife.penned().size(), inside, wildlife.penned_list().size(), wildlife.pen_room(), str(_villager_actions(rosa).filter(func(a): return str(a["label"]).begins_with("Buy a sheep")).map(func(a): return a["label"]))],
+		wildlife.penned().size() == 2 and inside == 2 and followed > 2.0 and wildlife.penned_list().size() == 2 and (Game.flag("wild_gone", {}) as Dictionary).has(key0)
 		and (wildlife.pen_room() == 0 or wildlife.stalls_rented()))
 	rabbit = wildlife.penned()[0] if not wildlife.penned().is_empty() else rabbit
 	var a0 := Game.count("angora")
@@ -9317,13 +9335,13 @@ func _empire_checks() -> void:
 	var second := Rect2(pen.position + Vector2(pen.size.x + 4.0, 0.0), Vector2(3.0, 3.0))
 	homestead.pens = [pen, second]
 	var cap2: int = wildlife.pen_capacity() - (4 if wildlife.stalls_rented() else 0)
-	Game.sheep_count = 2 # two sheep in the first pen: one caught rabbit has to move to the second
+	Game.sheep_count = 3 # three sheep in the first pen: one caught rabbit has to move to the second
 	wildlife._assign_pens()
 	var in_second: int = wildlife.penned().filter(func(a): return second.grow(0.3).has_point(Vector2(a.position.x, a.position.z))).size()
-	_check("another pen makes room for four more (%d places with two pens), and her animals spread over them (%d of 3 moved to the second with two sheep in the first)" % [cap2, in_second],
+	_check("another pen makes room for four more (%d places with two pens), and her animals spread over them (%d of 2 moved to the second with three sheep in the first)" % [cap2, in_second],
 		cap2 == 8 and in_second == 1)
 	homestead.pens = pens0
-	Game.sheep_count = 1
+	Game.sheep_count = 2
 	wildlife._assign_pens()
 	# only the player herds: from Nora's side there's no sending him, and beside her he frightens nothing
 	var wild_one = null
@@ -9355,7 +9373,7 @@ func _empire_checks() -> void:
 	await _wait(0.4)
 	var again: Array = wildlife.penned()
 	_check("another rabbit turns up in its place after a few days (%d there before, %d after); the penned ones are back after a reload (%d, all rabbits %s)" % [wild_now.size(), wild_later.size(), again.size(), again.all(func(a): return a.species == "rabbit")],
-		wild_now.is_empty() and wild_later.size() == 1 and again.size() == 2 and again.all(func(a): return a.species == "rabbit"))
+		wild_now.is_empty() and wild_later.size() == 1 and again.size() == 1 and again.all(func(a): return a.species == "rabbit"))
 	wildlife.clear()
 	Game.sheep_count = sheep0
 	# a local's request: nobody asks until they like her; then Steve wants a better-than-plain one
@@ -11997,6 +12015,7 @@ func _villager_actions(v) -> Array:
 					acts.append(_act("noop", "Barn rent's paid. Next %dc on day %d" % [homestead.econ("barn_rent", 60), int(Game.flag("barn_rent_due", 0))], false))
 	acts.append_array(shepherd.rows_for(v)) # Rowan: hire him to watch the pen (shepherd.gd)
 	acts.append_array(partners.rows_for(v)) # Rowan, Lars or Gary: ask him out (partners.gd)
+	acts.append_array(kennel.rows_for(v)) # Lars: a dog for the pack, from Act 2 (kennel.gd)
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
 	acts.append_array(sale.rows_for(v)) # ask if they want a sweater, and haggle (sweater_sale.gd)
@@ -12041,6 +12060,9 @@ func _villager_action(v, id: String) -> void:
 		return
 	if id == "partner_ask": # asking him out (partners.gd)
 		partners.action(v, id)
+		return
+	if id.begins_with("dog_"): # buying a dog from Lars (kennel.gd)
+		kennel.action(v, id)
 		return
 	if id == "sale_ask" or id == "sale_haggle":
 		sale.ask(v)

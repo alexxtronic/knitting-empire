@@ -18,6 +18,9 @@ extends RefCounted
 ## each effect and each of the frame-rate pass's changes by switching it off and on again in turn
 ## (back to back, so the machine's load hits both halves alike); --perftoggles=a,b keeps only those.
 ## --notownsfolk leaves the townsfolk (townsfolk.gd) out of the world, to time the town without them.
+## --perfdogs=N times each spot (at the default level, or --perflevels) with her one dog and then
+## with N dogs (kennel.gd's pack), twice each and alternating, Nora walking so the pack runs after her; it prints
+## those rows instead of the usual table.
 ## Every line starts with PERF.
 
 const Interiors = preload("res://scripts/interiors.gd")
@@ -88,6 +91,10 @@ func run(m: Node) -> void:
 		if a.begins_with("--perfspots="):
 			only = a.substr(12).split(",")
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--perfdogs="):
+			await dogs(int(a.substr(11)), only, levels if levels.size() < 4 else [main.default_graphics()])
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+			return
 		if a.begins_with("--perfsoak="):
 			await soak(float(a.substr(11)))
 			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
@@ -166,6 +173,37 @@ func soak(minutes: float) -> void:
 			Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, "" if r.ok else " covered"])
 		await main._wait(27.0)
 	Game.time_running = false
+
+
+## --perfdogs=N: each spot with her one dog, then with N (the pack following her as she walks).
+func dogs(n: int, only: PackedStringArray, levels: Array) -> void:
+	var keep: Variant = Game.flag("dogs", [])
+	await _calibrate("start")
+	print("PERF %-11s %-6s %5s %7s %6s %7s %6s %7s %7s %6s %s" % ["spot", "level", "dogs", "med ms", "fps", "p95 ms", "cpu ms", "draws", "prims k", "objs", "frames"])
+	for spot in spots():
+		if not only.is_empty() and not (str(spot[0]) in only):
+			continue
+		for lv in levels:
+			_set_level(lv)
+			for count in [1, n, 1, n]: # twice each, alternating, so a change in the machine's load hits both
+				var l: Array = []
+				for i in count - 1:
+					l.append({"name": "Perf%d" % i, "coat": ["cream", "red", "chocolate", "black", "grey"][i % 5]})
+				Game.set_flag("dogs", l)
+				main.kennel.sync()
+				_stand(spot)
+				await main._wait(SETTLE)
+				var p: Vector3 = spot[1]
+				var there: Vector3 = main._open_near(p + Vector3(12.0, 0.0, 0.0), 1.0)
+				main.player.walk(main._find_path(p, there))
+				await main._wait(0.6)
+				var r := await measure()
+				print("PERF %-11s %-6s %5d %7.2f %6.1f %7.2f %6.2f %7d %7d %6d %d%s" % [spot[0], main.GFX_NAMES[lv], count, r.med, 1000.0 / r.med, r.p95, r.cpu, r.draws, r.prims / 1000, r.objs, r.frames, "" if r.ok else " covered"])
+				if count == n:
+					await main._shot("74_perf_dogs_%s.png" % spot[0])
+	await _calibrate("end")
+	Game.set_flag("dogs", keep)
+	main.kennel.sync()
 
 
 func _set_level(lv: int) -> void:

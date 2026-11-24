@@ -16,8 +16,10 @@ extends Node3D
 ## Catching (Alex, 2026-11-15: the game's core loop): play the dog (Tab) and bark (right click). A bark
 ## frightens every wild animal within BARK_RANGE: each has a fright meter, and the rarer it is the
 ## more barks fill it (`barks` in the data); it bolts, so he has to keep after it, and it calms
-## down if he lets up. At full fright it gives in and follows the dog, up to `max_herd` (three) at
-## a time. He brings them to a pen and they move in for good (Game.flags["penned"]). Only the player
+## down if he lets up. At full fright it gives in and follows the dog, up to max_herd() at a time:
+## `herd_per_dog` (two) for each dog she owns (Alex, 2026-11-24; her first, and the pack she buys
+## from Lars in Act 2, kennel.gd), so one dog herds 2 and twelve herd 24. Each pack dog near the
+## dog she plays barks when he does, and frightens what's round it (barked(at, power)). He brings them to a pen and they move in for good (Game.flags["penned"]). Only the player
 ## herds (Alex, 2026-11-16): the dog never rounds anything up by himself.
 ## A pen holds `pen_size` (four) animals, her sheep included, and she can build as many pens as
 ## she likes (homestead.gd's fences; every closed patch with a gate is one); Lars's barn adds
@@ -44,7 +46,7 @@ var data: Dictionary = {}
 var animals: Array = [] # wild_animal.gd nodes
 var flocks: Array = [] # bird.gd nodes
 var built := false
-var _said_t := 0.0 # seconds before "he can only herd three" may be said again
+var _said_t := 0.0 # seconds before "he can only herd so many" may be said again
 var _cull_t := 0.0
 var _spots := {} # wild animal key -> [species, n, where it was placed], to put another there later
 
@@ -206,8 +208,10 @@ func barks_for(a: Node3D) -> float:
 	return maxf(1.0, _tier_value(a, "barks", 3.0))
 
 
+## How many can follow the dogs at once: `herd_per_dog` for each dog she owns (kennel.gd).
 func max_herd() -> int:
-	return int(data.get("max_herd", 3))
+	var dogs: int = main.kennel.count() if main and main.kennel else 1
+	return int(data.get("herd_per_dog", 2)) * dogs
 
 
 func penned_list() -> Array:
@@ -283,10 +287,11 @@ func round_up_problem(a: Node3D) -> String:
 	return ""
 
 
-## The dog barked at `at` (main.dog_bark): every wild animal near enough takes fright and bolts,
-## and one whose meter fills gives in and follows him. With three behind him already, or the pens
-## full, they only bolt. Returns how many it reached.
-func barked(at: Vector3) -> int:
+## A dog barked at `at` (main.dog_bark, and each pack dog near him, kennel.barked): every wild
+## animal near enough takes fright and bolts, and one whose meter fills gives in and follows him.
+## With max_herd() behind him already, or the pens full, they only bolt. `power` is that dog's
+## scarf (dog.bark_power()); below 0, the dog she plays. Returns how many it reached.
+func barked(at: Vector3, power: float = -1.0) -> int:
 	var reached := 0
 	var blocked := ""
 	for a in animals:
@@ -306,8 +311,8 @@ func barked(at: Vector3) -> int:
 			blocked = "He can only herd %d at a time. Take these home first." % max_herd()
 		else:
 			var near := lerpf(1.0, BARK_FAR_GAIN, smoothstep(BARK_NEAR, BARK_RANGE, d))
-			var power: float = main.dog.bark_power() if main and main.dog else 1.0 # his knitted scarf (scarves.gd)
-			if a.frighten(near * power / barks_for(a) + 0.0001):
+			var pw: float = power if power >= 0.0 else (main.dog.bark_power() if main and main.dog else 1.0) # his knitted scarf (scarves.gd)
+			if a.frighten(near * pw / barks_for(a) + 0.0001):
 				frightened(a)
 	if blocked != "" and _said_t <= 0.0 and not (main.wolves and main.wolves.active()): # not over the wolves' warning
 		_said_t = 6.0
