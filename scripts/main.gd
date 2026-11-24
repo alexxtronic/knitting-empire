@@ -7653,7 +7653,6 @@ func _god_checks() -> void:
 	await _wait(0.3)
 	_check("god mode: 'Edit the world' is in the settings for the admin only (shown %s, admin %s)" % [hud.god_edit_check.visible, GodMode.is_admin()],
 		hud.god_edit_check.visible == GodMode.is_admin() and GodMode.is_admin())
-	var blades0: int = grass.blade_count
 	hud.god_edit_check.button_pressed = true
 	await _wait(0.4)
 	_check("god mode: switching it on opens the editor's toolbar, closes the settings and stops the clock",
@@ -7735,18 +7734,20 @@ func _god_checks() -> void:
 	await _god_look(patch, 20.0)
 	var in_patch := func(e) -> bool: return GodMode.SMALL.has(e.kind) and not e.deleted and Vector2(e.xf.origin.x - patch.x, e.xf.origin.z - patch.z).length() < 1.9
 	var plants0: int = god.els.filter(in_patch).size()
+	var blades0: int = grass.blades_near(patch.x, patch.z, 1.8) # the farm's blades under the patch (the lands' streamed squares come and go with the camera)
 	god.set_tool("cobble")
 	god.set_brush(2.0)
 	god.press(cam.unproject_position(patch))
 	god.release()
 	await _wait(0.3)
 	var plants1: int = god.els.filter(in_patch).size()
+	var blades1: int = grass.blades_near(patch.x, patch.z, 1.8)
 	var round_ok: bool = god.road_at(patch.x, patch.z) == "cobble" and god.road_at(patch.x + 1.3, patch.z + 1.3) == "cobble" and god.road_at(patch.x + 1.6, patch.z + 1.6) == ""
 	var stock_gone: bool = find_children("Cobbles_*", "MultiMeshInstance3D", false, false).is_empty() and not find_children("PaintedCobbles_*", "MultiMeshInstance3D", false, false).is_empty()
 	_check("god mode: a click of the cobblestone brush lays a round patch of paving (4 m across, corners clear %s), and the plaza and paths are still there (plaza %s, farm path %s, %d tiles)" % [round_ok, god.road_at(47.0, 0.0), god.road_at(12.0, 3.0), god.painted_tiles()],
 		round_ok and stock_gone and god.road_at(47.0, 0.0) == "cobble" and god.road_at(12.0, 3.0) == "dirt" and god.painted_tiles() > 20)
-	_check("god mode: no grass grows through the new paving, and the tufts and flowers it covered are cleared (grass %.2f there, %d blades before, %d now; small plants on it %d to %d)" % [grass.grass_at(patch.x, patch.z), blades0, grass.blade_count, plants0, plants1],
-		grass.grass_at(patch.x, patch.z) < 0.2 and grass.blade_count < blades0 and plants1 == 0)
+	_check("god mode: no grass grows through the new paving, and the tufts and flowers it covered are cleared (grass %.2f there, %d blades before, %d now; small plants on it %d to %d)" % [grass.grass_at(patch.x, patch.z), blades0, blades1, plants0, plants1],
+		grass.grass_at(patch.x, patch.z) < 0.2 and blades0 > 0 and blades1 < blades0 / 4 and plants1 == 0)
 	god.set_tool("gravel")
 	god.set_brush(0.6)
 	god.press(cam.unproject_position(Vector3(11.0, 0, 8.5)))
