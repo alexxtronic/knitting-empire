@@ -60,15 +60,11 @@ PORCH = 1.45     # the entry wing's gable reaches out over a covered porch (the 
 # with the garage door, stands GARAGE_D in front of where the rooms end (HOUSE_FRONT)
 HOUSE_FRONT = -4.4
 GARAGE_D = 5.6
-# the right wing and the upper wing run on BACK past the entry wing (Alex, 2026-11-20: "not enough room
-# on upper floor, expand internally a bit ... shouldn't be visible from the street"): BACK_EXT more
-# toward the back yard, so the street front is as it was
-BACK_EXT = 2.0
-R = (-1.44, 6.54, HOUSE_FRONT - GARAGE_D, 4.2 + BACK_EXT, 2.6, 17.0)
+R = (-1.44, 6.54, HOUSE_FRONT - GARAGE_D, 4.2, 2.6, 17.0)
 # the upper wing (Alex, 2026-11-17: "the top floor needs more square footage ... extended a bit more
 # into the air"): over the whole right wing, front to back, standing just behind its brick gable, so
 # Marcus's bedroom floor (data/split_house.json) has full-height walls everywhere under it
-M = (-1.44, 6.54, -4.3, 4.2 + BACK_EXT, 4.0, 20.0)
+M = (-1.44, 6.54, -4.3, 4.2, 4.0, 20.0)
 # the entry wing: its apex just left of the upper wing, under that wing's eave corner, the rake rising
 # to meet it (Alex, 2026-11-17: "increase tilt of bottom roof to be flush with top wing"), then coming
 # down again to the right wing's rake, the whole upside-down V of the photo (Alex, 2026-11-17: "put
@@ -265,7 +261,7 @@ def window(Mt, side, plane, c, w, zb, zt, bars=1, out=0.03):
 
 # the side and back windows (inferred): (block, side, centre along the wall, width, sill, head)
 SIDE_WINDOWS = [("L", "left", -1.0, 1.2, 1.0, 2.1), ("L", "left", 2.4, 1.2, 1.0, 2.1),
-                ("R", "right", -2.4, 1.3, 1.0, 2.2), ("R", "right", 1.6, 1.3, 1.0, 2.2), ("R", "right", 4.9, 1.3, 1.0, 2.2),
+                ("R", "right", -2.4, 1.3, 1.0, 2.2), ("R", "right", 1.6, 1.3, 1.0, 2.2),
                 ("R", "right", HOUSE_FRONT - 3.9, 1.0, 1.2, 2.0),
                 ("L", "back", -5.0, 1.4, 1.0, 2.1), ("L", "back", -2.8, 1.0, 1.2, 2.1),
                 ("R", "back", 0.6, 1.4, 1.0, 2.2), ("R", "back", 4.8, 1.2, 1.0, 2.2)]
@@ -383,15 +379,13 @@ def wall_back(Mt, low):
             ops[blk].append((c, w, zb, zt))
     lined_wall(Mt, "back", L[3], L[0], R[0], L[4], ops["L"], low)
     lined_wall(Mt, "back", R[3], R[0], R[1], R[4], ops["R"], low)
-    # the right wing's left wall where it runs on past the entry wing's back
-    lined_wall(Mt, "left", R[0], L[3], R[3] - T, R[4], [], low)
     if low:
         return
     gable(Mt, L, L[3], "brick", -1, upto=R[0])
     # (the right wing's back gable is inside the upper wing's back wall)
     for blk, side, c, w, zb, zt in SIDE_WINDOWS:
         if side == "back":
-            window(Mt, "back", L[3] if blk == "L" else R[3], c, w, zb, zt)
+            window(Mt, "back", L[3], c, w, zb, zt)
     # the back door (inferred) in the right wing: a white leaf, shut
     K.box("back_door", (0.95, 0.06, 2.05), (BACK_DOOR, R[3] + 0.02, 1.03), Mt["door"], bevel=0.0)
     K.box("casing", (1.15, 0.06, 0.1), (BACK_DOOR, R[3] + 0.04, 2.1), Mt["trim"], bevel=0.0)

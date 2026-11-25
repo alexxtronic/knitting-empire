@@ -34,7 +34,7 @@ const SIGN_KIND := "bretton_oaks_sign"
 const VINYL_BASE := Color("#d8ccac") # the siding's colour in its own texture (build.py VINYL)
 ## The house in its own space (x right, its front toward +z): the entry wing, the right wing, the
 ## porch post (art/world_assets/suburb_house/build.py, L and R, Blender y turned to Godot z).
-const FOOTPRINT := [Rect2(-6.6, -4.2, 5.16, 7.2), Rect2(-1.44, -6.2, 7.98, 10.6), Rect2(-6.6, 3.85, 0.25, 0.25)]
+const FOOTPRINT := [Rect2(-6.6, -4.2, 5.16, 7.2), Rect2(-1.44, -4.2, 7.98, 8.6), Rect2(-6.6, 3.85, 0.25, 0.25)]
 const GARAGE := Rect2(-1.44, 4.4, 7.98, 5.6) # the right wing run out to the street as a garage (Alex, 2026-11-17), in front of Marcus's walk-in footprint
 const HOUSE_LOT := Rect2(-10.0, -9.0, 20.0, 25.0) # a house's own ground kept clear of scenery, in its space (the shell, the garage, the yard and drive in front)
 const DOOR_AT := Vector3(-2.5, 0, 4.6) # where to stand to go in: in front of the stoop
