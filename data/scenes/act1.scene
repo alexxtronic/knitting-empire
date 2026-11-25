@@ -9,7 +9,7 @@
 # The cast is Alex's of 2026-11-12: Rosa has the Yarn Barn and the market stall, Gary Willow Homes,
 #   Giorgio Heart Bakery, Steve Builder's Delight, Sabrina the Coffee Shop, Barbara the post.
 # act1_note (inside): Gran's note on the coffee table (she's gone to Florida and Nora minds the farm;
-#   Alex, 2026-11-13: Gran is alive), kept in her bag; 100 coins; rent to Gran's tin.
+#   Alex, 2026-11-13: Gran is alive), kept in her bag; 3 wool and her needles, no coins; rent to Gran's tin.
 # The guided opening (Alex, 2026-11-16, docs/DIRECTION.md): Gran leaves her yarn and needles, not
 #   coins → knit in the rocking chair → act1_knit (memory thread #1, then a knock: Wren, who wants
 #   to buy it; the haggle panel opens in its guided form, scripts/sweater_sale.gd open_guided) →
@@ -143,6 +143,8 @@ Rosa (wry): Your gran was my best customer for thirty years. And my worst payer.
 @camera between giorgio nora 6
 Giorgio (warm): New face. Here, this one's on the house. Don't argue, cara, I've already buttered it.
 Nora (warm): Thank you. It smells incredible.
+@give pastry 1
+@toast A pastry from Giorgio is in your bag. Click it in the hotbar to eat it when you're hungry.
 Giorgio (warm): Eat. You've come a long way, I can see it. Whatever it was, it's a long way behind you now.
 @set met_giorgio
 @camera player
@@ -264,6 +266,18 @@ Nora (warm): Seeds, then yarn. Thank you, Wren. Really.
 @home wren off
 @set act1_sold
 @camera player
+@goal Buy turnip seeds from Steve at Builder's Delight | 47.7 -9.4
+
+== act1_sold_elsewhere
+# the first sweater sold to someone other than Wren (Rosa, or anyone asked in town): the story goes on
+@trigger event first_sale_other
+@requires act1_wren_asked !act1_sold
+@once
+@goal
+@home wren off
+Nora (happy): Sold. Somebody actually paid for something I made.
+Nora (warm): Wren had a point, though. Seed from Steve at Builder's Delight, so I can feed myself, and more yarn from Rosa. Seeds first.
+@set act1_sold
 @goal Buy turnip seeds from Steve at Builder's Delight | 47.7 -9.4
 
 == act1_seeds
@@ -411,7 +425,7 @@ Nora (warm): Welcome home, you two. That makes three of us.
 
 == act1_sheared
 @trigger event sheared
-@requires act1_flock_in !act1_done
+@requires act1_flock_in !act1_knit3 !act1_done
 @once
 Nora (wry): Warm, greasy, and mine. Gran would be so proud. Also she'd say I did it wrong.
 @goal Rowan 3/4. Knit a sweater from their wool in Gran's rocking chair | 2.4 3.6
@@ -454,7 +468,7 @@ Nora (happy): Sold. From grass to coins, and I never paid for a single skein.
 @face nora rosa
 @camera between rosa nora 6 low
 Rosa (surprised): Hold on. Hold ON. Is that hand-knit?
-Nora (worried): It's nothing. It's a first try, the tension's all over the place—
+Nora (worried): It's nothing. It's only my second, the tension's all over the place—
 Rosa (happy): Honey, I've sold factory jumpers for eleven years. I know nothing when I see it, and this isn't it.
 > Rosa turns the sweater inside out, the way you'd check a melon.
 Rosa (happy): Look at those floats. Look at them! Steve! Come and look at this! Steve!
@@ -465,7 +479,7 @@ Rosa (warm): You've sold it already? Then bring me the next one, before anybody 
 @take sweater 1
 @give coins 60
 Rosa (warm): Sixty coins, and I want the next one before anybody else sees it.
-@toast Sold your first sweater: +60 coins
+@toast Sold to Rosa: +60 coins
 @label credit
 @place steve by market_stall 5.0 3.4
 @walk steve by market_stall 1.9 1.6

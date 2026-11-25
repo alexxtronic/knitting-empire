@@ -2431,7 +2431,16 @@ func sell_sweater_to(v, i: int, price: int) -> bool:
 	hud.show_toast("Sold %s to %s for %dc.%s" % [str(d.get("name", "a sweater")), v.title, price, " They're wearing it!" if wearing else ""])
 	if Game.flag("act1_knit3") == true:
 		_story_event_soon("sweater_sold") # Act 1: Rowan's fourth task (any sale in town)
+	if str(v.vid) != "wren": # Wren's own sale is the guided one (sweater_sale.gd fires first_sale)
+		_first_sale_elsewhere()
 	return true
+
+
+## Act 1: the first sweater sold to someone other than Wren still moves the story on
+## (act1_sold_elsewhere), rather than leaving "Name your price for Wren" with nothing to sell.
+func _first_sale_elsewhere() -> void:
+	if Game.flag("act1_wren_asked") == true and Game.flag("act1_sold") != true:
+		_story_event_soon("first_sale_other")
 
 
 ## Shows the hotbar's tool in her fist (once that tool has a model), and takes it away while she
@@ -3132,6 +3141,8 @@ func _ship(kind: String) -> void:
 		Game.coins += earned
 		EmpireGoals.took("mailbox", earned)
 		hud.show_toast("Shipped! +%dc" % earned)
+		_story_event_soon("sweater_sold") # Act 1: shipping counts for Rowan's fourth task too
+		_first_sale_elsewhere()
 
 
 func _go_to_sleep(passed_out: bool, rest := -1.0) -> void: # rest >= 0: only that much energy back (a bonfire)
@@ -4050,6 +4061,61 @@ Rowan (happy): You're alright, {player}.
 ## Act 1 from a fresh story: the rain bus, Wren's tour of the town, Gran's basket, knitting and the
 ## first memory thread, Rowan at the broken fence, market day in Maplewood, and the porch at
 ## night. The heroine walks between the triggers for real.
+## Act 1 done out of order (2026-11-25 review): a step done early is kept and plays when its turn
+## comes, one that lands during a scene isn't lost, and a first sale to someone other than Wren
+## carries the story on. Runs on a copy of the flags, put back after.
+func _act1_order_checks() -> void:
+	var saved: Dictionary = Game.flags.duplicate(true)
+	var coins0 := Game.coins
+	var wait_for := func(id: String) -> bool:
+		var t := 0.0
+		while story.playing != id and t < 8.0:
+			await _wait(0.1)
+			t += 0.1
+		return story.playing == id
+	var wait_free := func() -> void:
+		var t := 0.0
+		while story.is_playing() and t < 30.0:
+			await _wait(0.1)
+			t += 0.1
+	# yarn before planting: kept, then played right after the planting scene
+	for f in ["act1_done", "act1_planted", "act1_yarn", "seen_act1_planted", "seen_act1_yarn", "missed_events"]:
+		Game.flags.erase(f)
+	Game.set_flag("act1_seeds", true)
+	story.trigger("event", "yarn_bought")
+	var kept: bool = "yarn_bought" in (Game.flag("missed_events", []) as Array) and not story.is_playing()
+	story.trigger("event", "planted")
+	var planted_ok: bool = await wait_for.call("act1_planted")
+	var yarn_ok: bool = await wait_for.call("act1_yarn")
+	await wait_free.call()
+	_check("yarn bought before planting is kept (%s) and its scene plays right after the planting one (%s, %s, goal '%s')" % [kept, planted_ok, yarn_ok, hud.goal_label.text],
+		kept and planted_ok and yarn_ok and Game.flag("act1_yarn") == true and (Game.flag("missed_events", []) as Array).is_empty())
+	# an event during a scene: the last stray penned while the pen's scene plays
+	for f in ["act1_flock_in", "seen_act1_flock", "missed_events"]:
+		Game.flags.erase(f)
+	Game.set_flag("act1_wood", true)
+	Game.flags.erase("seen_act1_pen")
+	story.trigger("event", "pen_built")
+	var pen_ok: bool = await wait_for.call("act1_pen")
+	story.trigger("event", "sheep_penned") # dropped before 2026-11-25: Act 1 could never finish
+	var flock_ok: bool = await wait_for.call("act1_flock")
+	await wait_free.call()
+	_check("a stray penned while the pen's scene plays still brings Rowan's next task (%s, %s, act1_flock_in %s)" % [pen_ok, flock_ok, Game.flag("act1_flock_in")],
+		pen_ok and flock_ok and Game.flag("act1_flock_in") == true)
+	# the first sweater sold to Rosa, not Wren
+	for f in ["act1_sold", "seen_act1_sold", "seen_act1_sold_elsewhere", "missed_events"]:
+		Game.flags.erase(f)
+	Game.set_flag("act1_wren_asked", true)
+	_first_sale_elsewhere()
+	var else_ok: bool = await wait_for.call("act1_sold_elsewhere")
+	await wait_free.call()
+	_check("a first sweater sold to someone other than Wren carries the story on (%s, goal '%s')" % [else_ok, hud.goal_label.text],
+		else_ok and Game.flag("act1_sold") == true and hud.goal_label.text.begins_with("Buy turnip seeds"))
+	Game.flags = saved
+	Game.coins = coins0
+	_show_goal()
+
+
 func _act1_checks() -> void:
 	Game.flags = {}
 	Game.hour = 9.0
@@ -4508,6 +4574,7 @@ func _act1_checks() -> void:
 	_check("Act 1 progress and the pen survive a save (journal %d, fences %d, pen %d cells, sheep %d)" % [Game.journal().size(), homestead.fences.size(), homestead.pen_cells.size(), Game.sheep_count],
 		Game.flag("act1_done") == true and Game.flag("seen_act1_porch") == true and Game.journal().size() == journal0 + 3
 		and homestead.fences.size() == 12 and homestead.pen_cells.size() == 9 and Game.sheep_count == homestead.econ("strays", 2))
+	await _act1_order_checks()
 	story.auto = false
 	story.auto_line = 0.08
 	homestead.reset_sandbox() # the rest of the autotest plays on the old farm: its pen and three sheep
@@ -11371,6 +11438,7 @@ func _setup_story_staging() -> void:
 ## After a load (or a fresh start): goal, weather and villagers a scene moved.
 func _restore_story_state() -> void:
 	_show_goal()
+	story.retry_kept.call_deferred() # an Act 1 step done early, kept in the save
 	rain = 1.0 if str(Game.flag("weather", "clear")) == "rain" else 0.0
 	for v in villagers:
 		var h = Game.flag("home_" + v.vid, null)
@@ -11381,8 +11449,7 @@ func _restore_story_state() -> void:
 ## Fires a story event a moment after an action, once its line has shown.
 func _story_event_soon(event: String) -> void:
 	get_tree().create_timer(0.8).timeout.connect(func():
-		if not story.is_playing():
-			story.trigger("event", event))
+		story.trigger("event", event)) # during a scene, Act 1's steps are kept for after it
 
 
 ## A new game opens on Act 1, if a scene has "@trigger start"; otherwise on the help card.
@@ -12248,6 +12315,7 @@ func _villager_action(v, id: String) -> void:
 				_say(v, "%s Here's %dc for %d sweater%s." % [praise[Game.day % 3], worth, n, "s" if n > 1 else ""])
 				hud.show_toast("Sold %d sweater%s for %dc!" % [n, "s" if n > 1 else "", worth])
 				_story_event_soon("sweater_sold") # Act 1: Rowan's fourth task, Rosa counts
+				_first_sale_elsewhere()
 		"buy_wool":
 			if _wool_packs_left() > 0 and Game.spend(_yarn_price(Game.WOOL_PACK_PRICE)):
 				Game.set_flag("wool_bought", [Game.day, _wool_packs_bought() + 1])

@@ -43,7 +43,9 @@
     "max_return_days": 3,
     "barn_rent": 120,
     "barn_rent_days": 28,
-    "strays": 2
+    "strays": 2,
+    "first_sale_min": 75,
+    "_about_first_sale_min": "Wren never pays less than this for the first sweater (sweater_sale.gd guided_range): it is her only money, and seed (25c) and yarn (36c) come next. A draft, 2026-11-25."
   },
   "marcus_house": {
     "_about": "Buying Marcus's house in Bretton Oaks (scripts/house_sale.gd; Alex, 2026-11-20): after his task (a hand-knit sweater, any, paid at its fair price) he offers it for `price` coins. Bought, she edits its walls, doors, windows and floors from Build & Buy while inside it, paid at \"building\"'s prices: a wall by the metre (half its 2 m `wall`), each opening at its `openings` price, a floor by the square metre (its `floors` price over four); half back for a piece she paid for and takes out, nothing for Marcus's own. A draft until Alex approves it.",

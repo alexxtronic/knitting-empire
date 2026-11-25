@@ -231,9 +231,14 @@ func chance(vid: String, rarity: int, p: int, fibre: String = "wool") -> float:
 
 
 ## Wren's range for Act 1's first sale: [low, high] coins, in steps of 5.
+## Never under the story's `first_sale_min` (data/economy.json "story"): this is her only money,
+## and it has to cover Steve's seed and Rosa's yarn, the next two steps, with a little over.
 func guided_range(rarity: int) -> Vector2i:
 	var step := maxi(1, int(cfg("step", 5)))
-	return Vector2i(int(round(fair(rarity) * GUIDED_LOW / step)) * step, int(round(fair(rarity) * GUIDED_HIGH / step)) * step)
+	var least := int(main.homestead.econ("first_sale_min", 75)) if main and main.homestead else 75
+	var lo := maxi(int(round(fair(rarity) * GUIDED_LOW / step)) * step, least)
+	var hi := maxi(int(round(fair(rarity) * GUIDED_HIGH / step)) * step, lo + 3 * step)
+	return Vector2i(lo, hi)
 
 
 ## Whether Act 1 is waiting on her first sale to `vid` (Wren, after the knock at the door).
@@ -247,6 +252,8 @@ func open_guided(villager) -> void:
 	open(villager)
 	if visible and choice >= 0:
 		var r := guided_range(int(Game.sweaters[choice]))
+		price = r.x # start inside her range, so the price she's shown is always enough
+		_refresh()
 		_say("Anywhere from %dc to %dc and it's a deal. Go on, name your price." % [r.x, r.y])
 
 

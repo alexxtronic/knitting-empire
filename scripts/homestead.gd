@@ -1,6 +1,6 @@
 extends Node
 ## Act 1's farm work (Alex's design, 2026-11-12). A new game starts Nora at Gran's farm with no
-## pen, no sheep and no money. Gran's note (on the table in the house) leaves her 100 coins and
+## pen, no sheep and no money. Gran's note (on the table in the house) leaves her 3 wool and her needles and
 ## asks for a little rent in the tin each week. Two stray sheep graze past the pond; to keep them
 ## she buys wood from Steve at Builder's Delight, builds a pen panel by panel (the fence builder, F) and
 ## crafts a gate (G), then herds them in. Sheep shy away from whoever is herding them: Nora for
@@ -34,9 +34,9 @@ So the house is yours to look after while I'm gone: the third stair that creaks,
 
 Put a little in the tin each week, for the house. Not because it needs the money. Because a home you pay into is a home you stay in.
 
-There's a hundred coins under the lid to start you off. Go and see Rosa at the Yarn Barn for some good yarn, and make something with your hands. It always helped me. It will help you.
+My needles are by the rocking chair, with the last of my wool. Make something with your hands. It always helped me. It will help you. When the wool runs out, Rosa at the Yarn Barn has more.
 
-My seed tin is on the kitchen counter, with what's left of last year's. Grow yourself some supper.
+The beds out front are still dug. Steve at Builder's Delight sells seed: grow yourself some supper.
 
 Whatever happened out there, love, it stays out there. In here it's just you and the kettle.
 
@@ -47,7 +47,7 @@ Gran"""
 ## The note folded inside Gran's seed tin. A DRAFT for Alex.
 const SEED_NOTE := """Nora love,
 
-These are the last of my seeds. The turnips are quick: dig a bed, plant them in the morning and they're ready by supper. The pumpkins take their time but fetch a good price. Rosa buys whatever you grow.
+These are the last of my seeds. The turnips are quick: dig a bed, plant them in the morning and they're ready by supper. The pumpkins take their time but keep all winter.
 
 You'll need a hoe to break the ground. Mine finally went to pieces, so see Steve at Builder's Delight. He has everything for the house, and he won't overcharge you.
 

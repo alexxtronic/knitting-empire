@@ -35,14 +35,53 @@ func play(id: String) -> bool:
 	return true
 
 
+## Act 1's step events that are kept when nothing can play them yet: one that comes during a scene
+## (the last stray penned while the pen's scene plays), or a step done early (yarn before planting,
+## wood before the strays, a stray sheared before it's penned). Each is tried again whenever a scene
+## ends, until a scene takes it (Game.flags["missed_events"], so a save keeps them; dropped once
+## Act 1 is done).
+const KEPT_EVENTS := ["seeds_bought", "planted", "yarn_bought", "wood_bought", "pen_built", "sheep_penned", "sheared"]
+
+
 ## Plays the first scene with a matching @trigger, if any. Returns its id or "".
 func trigger(kind: String, target := "") -> String:
 	if playing != "":
+		_keep(kind, target)
 		return ""
 	var id := Story.find_trigger(kind, target)
 	if id != "":
 		play(id)
+	else:
+		_keep(kind, target)
 	return id
+
+
+func _keep(kind: String, target: String) -> void:
+	if kind != "event" or not target in KEPT_EVENTS or Game.flag("act1_done") == true:
+		return
+	var kept: Array = (Game.flag("missed_events", []) as Array).duplicate()
+	if not target in kept:
+		kept.append(target)
+		Game.set_flag("missed_events", kept)
+
+
+## Plays the first kept event a scene now takes (after a scene ends, and after a load).
+func retry_kept() -> void:
+	if playing != "":
+		return
+	var kept: Array = (Game.flag("missed_events", []) as Array).duplicate()
+	if kept.is_empty():
+		return
+	if Game.flag("act1_done") == true:
+		Game.set_flag("missed_events", [])
+		return
+	for ev in kept:
+		var id := Story.find_trigger("event", str(ev))
+		if id != "":
+			kept.erase(ev)
+			Game.set_flag("missed_events", kept)
+			play(id)
+			return
 
 
 func _run(id: String) -> void:
@@ -111,6 +150,8 @@ func _run(id: String) -> void:
 			n.body.set_eyes_closed(false)
 	playing = ""
 	scene_finished.emit(id)
+	if playing == "":
+		retry_kept.call_deferred()
 
 
 # --- lines and choices ----------------------------------------------------------
