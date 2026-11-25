@@ -43,15 +43,15 @@ import patterns as PT  # noqa: E402
 
 CHARS = {
     "nora": dict(blend="tools/character_build/nora_tripo_eyes/nora_tripo_eyes.blend", rig="Nora", body="nora_tripoMesh"),
-    "steve": dict(blend="tools/character_build/steve_tripo_eyes/steve_tripo_eyes.blend", rig="Rowan", body="steve_tripoMesh", neck=0.075),
-    "barbara": dict(blend="tools/character_build/barbara_tripo_eyes/barbara_tripo_eyes.blend", rig="Nora", body="barbara_tripoMesh"),
-    "rowan": dict(blend="tools/character_build/rowan_tripo_eyes/rowan_tripo_eyes.blend", rig="Rowan", body="rowan_tripoMesh", neck=0.075),
+    "steve": dict(blend="tools/character_build/steve_tripo_eyes/steve_tripo_eyes.blend", rig="Rowan", body="steve_tripoMesh", neck=0.075, collar_up=0.04),
+    "barbara": dict(blend="tools/character_build/barbara_tripo_eyes/barbara_tripo_eyes.blend", rig="Nora", body="barbara_tripoMesh", collar_up=0.05, collar_h=0.035, collar_head=True),
+    "rowan": dict(blend="tools/character_build/rowan_tripo_eyes/rowan_tripo_eyes.blend", rig="Rowan", body="rowan_tripoMesh", neck=0.075, collar_up=0.04),
     "wren": dict(blend="tools/character_build/wren_tripo_eyes/wren_tripo_eyes.blend", rig="Nora", body="wren_tripoMesh"),
     "gary": dict(blend="tools/character_build/gary_tripo_eyes/gary_tripo_eyes.blend", rig="Rowan", body="gary_tripoMesh", neck=0.075),
-    "giorgio": dict(blend="tools/character_build/giorgio_tripo_eyes/giorgio_tripo_eyes.blend", rig="Rowan", body="giorgio_tripoMesh", neck=0.075),
-    "sabrina": dict(blend="tools/character_build/sabrina_tripo_eyes/sabrina_tripo_eyes.blend", rig="Nora", body="sabrina_tripoMesh"),
-    "rosa": dict(blend="tools/character_build/rosa_tripo_eyes/rosa_tripo_eyes.blend", rig="Rosa", body="rosa_tripoMesh"),
-    "lars": dict(blend="tools/character_build/lars_tripo_eyes/lars_tripo_eyes.blend", rig="Lars", body="lars_tripoMesh", neck=0.075),
+    "giorgio": dict(blend="tools/character_build/giorgio_tripo_eyes/giorgio_tripo_eyes.blend", rig="Rowan", body="giorgio_tripoMesh", neck=0.12, neck_dy=0.07, collar_up=0.04, collar_h=0.055, collar_head=True, hair_r=0.25, dip=0.015, collar_back=0.04),
+    "sabrina": dict(blend="tools/character_build/sabrina_tripo_eyes/sabrina_tripo_eyes.blend", rig="Nora", body="sabrina_tripoMesh", collar_up=0.03),
+    "rosa": dict(blend="tools/character_build/rosa_tripo_eyes/rosa_tripo_eyes.blend", rig="Rosa", body="rosa_tripoMesh", collar_up=0.04, collar_h=0.035, collar_head=True),
+    "lars": dict(blend="tools/character_build/lars_tripo_eyes/lars_tripo_eyes.blend", rig="Lars", body="lars_tripoMesh", neck=0.075, collar_up=0.04),
 }
 
 NC = 64          # points round the body
@@ -164,7 +164,7 @@ def smooth_ring(r, passes=1):
 
 # --- the shape ---------------------------------------------------------------------------------------
 
-def torso_rows(co, dom, B, neck_r=0.06):
+def torso_rows(co, dom, B, neck_r=0.06, collar_h=COLLAR_H, neck_dy=0.0, dip=0.04, collar_back=0.0):
     """The body of the sweater as rows of NC points, top (collar's turned-in edge) to bottom (hem's
     turned-in edge). Returns (rows: list of (NC, 3) arrays, tags: one per row)."""
     hips = B["Hips"][0].z
@@ -213,9 +213,12 @@ def torso_rows(co, dom, B, neck_r=0.06):
         print("[torso] neck middle %.3f from the torso's" % np.linalg.norm(mid - c2)) if os.environ.get("SW_DEBUG") else None
         if np.linalg.norm(mid - c2) > 0.05:
             nc = mid
+    nc = nc + np.array([0.0, neck_dy])      # a neck set well back (Giorgio's, in his jacket's collar)
     r_neck = np.full(NC, neck_r)
     col_r = np.einsum("ij,ij->i", nc - c2 + dirs * (r_neck + 0.012 + 0.016 * front ** 2)[:, None], dirs)
-    col_z = neck_z - 0.006 - 0.04 * front ** 2
+    col_z = neck_z - 0.006 - dip * front ** 2
+    # the collar: higher at the back where a jacket's collar stands up behind the neck
+    collar_h = collar_h + collar_back * np.clip(dirs[:, 1], 0, 1) ** 2
 
     # slices of the torso, 1 cm apart: each one's outline, how far out it reaches in each column
     T = T[T[:, 2] < neck_z + 0.012]
@@ -297,8 +300,8 @@ def torso_rows(co, dom, B, neck_r=0.06):
     pts = []
     # top first: collar lip (inside), collar top, collar, then the dome and body down, the hem, hem lip
     cr, cz = rows[-1]
-    collar = [ring(cr - THICK, cz + 0.006), ring(cr - THICK * 0.6, cz + COLLAR_H + 0.002),
-              ring(cr - 0.002, cz + COLLAR_H), ring(cr, cz + COLLAR_H * 0.5)]
+    collar = [ring(cr - THICK, cz + 0.006), ring(cr - THICK * 0.6, cz + collar_h + 0.002),
+              ring(cr - 0.002, cz + collar_h), ring(cr, cz + collar_h * 0.5)]
     for p in collar:
         pts.append(p)
         tags.append("collar")
@@ -311,7 +314,9 @@ def torso_rows(co, dom, B, neck_r=0.06):
     for p in (ring(br - THICK * 0.6, bz - 0.003), ring(br - THICK, bz + LIP * 0.5), ring(br - THICK, bz + LIP)):
         pts.append(p)
         tags.append("hem")
-    marks = {"zc": zc, "yc": yc, "neck_z": neck_z, "n_dome": n_dome, "collar_rows": len(collar)}
+    marks = {"zc": zc, "yc": yc, "neck_z": neck_z, "n_dome": n_dome, "collar_rows": len(collar),
+             "c2": (float(c2[0]), float(c2[1])), "col_theta": thetas % (2 * math.pi),
+             "col_top": cz + collar_h, "col_in": cr - THICK, "col_base": cz}
     return pts, tags, marks
 
 
@@ -577,6 +582,15 @@ def skin(ob, rig, co, dom, weights, piece_of):
             f = 1.0 / max(dist, 0.004) ** 2
             for g, w in weights[i].items():
                 acc[g] = acc.get(g, 0.0) + w * f
+        part = piece_of[v.index]
+        if part != "torso":
+            # a sleeve follows its own arm and the chest, never the head or neck: some rigs (Rosa's,
+            # Mixamo's) give a few arm points stray Head weights, which tore the sleeve at the shoulder
+            other = [sd for sd in SIDES if sd != part]
+            keep = {g: w for g, w in acc.items()
+                    if g not in ("Head", "Neck") and not any(g.startswith(o) for o in other)}
+            if keep:
+                acc = keep
         top = sorted(acc.items(), key=lambda kv: -kv[1])[:4]
         tot = sum(w for _, w in top)
         for g, w in top:
@@ -588,11 +602,31 @@ def skin(ob, rig, co, dom, weights, piece_of):
     m.object = rig
 
 
-def tuck_key(body, sweater, co, dom, marks, lip):
-    """The body's `under_sweater` key, for the game to turn on with the sweater: the skin it covers
-    goes in by TUCK along its normal, and anything that would still reach the knit (a satchel, a
-    jacket's collar, braces) is pulled in to MARGIN inside it. Not the head, hands or legs below the
-    hem."""
+def _closest_on(chain, p):
+    """The closest point to p on a chain of segments (a bone line)."""
+    best, bd = None, 1e9
+    for u, v in zip(chain[:-1], chain[1:]):
+        e = v - u
+        t = max(0.0, min(1.0, (p - u).dot(e) / max(e.length_squared, 1e-9)))
+        q = u + e * t
+        d = (p - q).length
+        if d < bd:
+            best, bd = q, d
+    return best
+
+
+def tuck_key(body, sweater, co, dom, marks, lip, B, extra=()):
+    """The body's `under_sweater` key, for the game to turn on with the sweater. Every body point the
+    knit covers goes under it, however far out it stands (a stiff collar, an apron's bib, a chef's
+    jacket, a belt, a satchel): a ray from the middle of that part of the body (the torso's upright
+    axis, or the arm's bone) out through the point finds the knit, and the point goes in along it to
+    MARGIN inside (more on the arms, which swing). Skin already inside still goes in by TUCK along its
+    normal. Not the head, hands or legs below the hem.
+
+    The collar band: from the knit collar's top up to `collar_up` above it (per character in CHARS),
+    anything standing off the neck (a shirt or jacket collar) is folded down inside the knit collar.
+    `extra` are more boxes (x0, x1, y0, y1, z0, z1, in the rest pose) whose points go in under the knit
+    the same way even where the usual height limits would leave them (Rosa's apron bib, say)."""
     from mathutils.bvhtree import BVHTree
     if not body.data.shape_keys:
         body.shape_key_add(name="Basis")
@@ -602,33 +636,209 @@ def tuck_key(body, sweater, co, dom, marks, lip):
     verts = [mw @ v.co for v in me.vertices]
     polys = [tuple(p.vertices) for p in me.polygons if not any(i in lip for i in p.vertices)]
     tree = BVHTree.FromPolygons(verts, polys)
+    names = dom.astype(str)
     skip = np.isin(dom, ["Head", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "LeftToes", "RightToes"])
     # the hands, and on a Mixamo rig every finger bone (LeftHandIndex1 ...)
-    skip |= np.char.startswith(dom.astype(str), "LeftHand") | np.char.startswith(dom.astype(str), "RightHand")
+    skip |= np.char.startswith(names, "LeftHand") | np.char.startswith(names, "RightHand")
+    arms = {s: [B[s + "UpperArm"][0], B[s + "LowerArm"][0], B[s + "Hand"][0]] for s in SIDES}
+    yc, zc = marks["yc"], marks["zc"]
+    up = marks.get("collar_up", 0.0)
+    head_ok = marks.get("collar_head", False)   # a collar bound to the head (the rigid head reaches it)
+    cx, cy = marks["c2"]
+    th = np.asarray(marks["col_theta"])
+
+    def col_top(a):      # the knit collar's top, and its inner radius, round the neck by angle
+        return float(np.interp(a, th, marks["col_top"], period=2 * math.pi))
+
+    def col_in(a):
+        return float(np.interp(a, th, marks["col_in"], period=2 * math.pi))
+    # the neck's own skin: per angle, the narrowest the neck gets between the knit collar and the jaw
+    # (a collar standing off it is wider)
+    ct_max = float(np.max(marks["col_top"]))
+    ct_min = float(np.min(marks["col_top"]))
+    nth = np.arange(72) * 2 * math.pi / 72
+    nr = np.full(72, 1.0)
+    neckish = co[np.isin(dom, ["Neck", "Head", "UpperChest"])]
+    for z in np.arange(ct_min, ct_max + up + 0.06, 0.006):
+        sl = neckish[np.abs(neckish[:, 2] - z) < 0.004]
+        sl = sl[np.hypot(sl[:, 0] - cx, sl[:, 1] - cy) < 0.16]
+        if len(sl) < 12:
+            continue
+        h = hull2(sl[:, :2])
+        rs = [reach(h, np.array([cx, cy]), (math.sin(a), -math.cos(a))) for a in nth]
+        if any(r is None or r < 0.03 for r in rs):
+            continue                      # the slab doesn't go round the neck (the front's dip)
+        nr = np.minimum(nr, rs)
+    nr[nr > 0.5] = 0.05
+    if os.environ.get("SW_DEBUG"):
+        print("[tuck] collar top %.3f..%.3f, inner r %.3f..%.3f, neck skin r %.3f..%.3f" % (
+            ct_min, ct_max, np.min(marks["col_in"]), np.max(marks["col_in"]), nr.min(), nr.max()))
+
+    def neck_skin(a):
+        return float(np.interp(a, nth, nr, period=2 * math.pi))
     bw = body.matrix_world
     bwi = bw.inverted()
-    moved = 0
+    pulled = folded = 0
     for v in body.data.vertices:
         i = v.index
-        if skip[i] or not (marks["hem_z"] - 0.06 < co[i, 2] < marks["collar_z"]):
-            continue
         p = bw @ v.co
-        hit = tree.find_nearest(p, 0.25)
-        if hit[0] is None:
+        boxed = any(x0 <= p.x <= x1 and y0 <= p.y <= y1 and z0 <= p.z <= z1 for x0, x1, y0, y1, z0, z1 in extra)
+        if not (boxed or marks["hem_z"] - 0.06 < p.z < ct_max + up):
             continue
-        loc, n = hit[0], hit[1]
-        if (p - loc).dot(n) < -0.08:          # well inside already, or under some other part
+        if skip[i] and not (head_ok and names[i] == "Head" and p.z < ct_max + up):
             continue
-        d = p - loc
-        if d.length > 0.01 and abs(d.dot(n)) < 0.8 * d.length:
-            continue                          # past a cuff or the hem: the knit is beside it, not over it
-        q = p - (bw.to_3x3() @ v.normal).normalized() * (ARM_TUCK if "Arm" in str(dom[i]) else TUCK)
-        if (q - loc).dot(n) > -MARGIN:
-            q = q - n * ((q - loc).dot(n) + MARGIN)
-            moved += 1
+        q = p.copy()
+        ang = math.atan2(p.x - cx, -(p.y - cy))
+        ct = col_top(ang)
+        base = float(np.interp(ang, th, marks["col_base"], period=2 * math.pi))
+        rad = math.hypot(p.x - cx, p.y - cy)
+        if names[i] == "Head" and (p.z < base or rad > col_in(ang) + marks.get("hair_r", 0.035)):
+            continue                      # the hair, falling over the collar from behind
+        if p.z >= base:
+            # the collar band: a collar standing off the neck goes in inside the knit's collar, and
+            # down under it where it stood above
+            if p.z >= ct + up:
+                continue
+            if rad > neck_skin(ang) + 0.004:
+                k = min(1.0, (col_in(ang) - MARGIN) / max(rad, 1e-6))
+                z = p.z if p.z < ct - 0.01 else ct - 0.012 - 0.4 * (p.z - ct)
+                q = Vector((cx + (p.x - cx) * k, cy + (p.y - cy) * k, z))
+                folded += 1
+                key.data[i].co = bwi @ q
+            continue
+        side = next((s for s in SIDES if names[i].startswith(s) and "Arm" in names[i]), None)
+        nt = ARM_TUCK if side else TUCK
+        q = p - (bw.to_3x3() @ v.normal).normalized() * nt
+        # the axes it may hang from: its arm's bone, then the torso's. Covered by either, it stays as
+        # the plain tuck leaves it; otherwise it goes in along whichever asks the smallest move (so the
+        # broad back of a shoulder, under the body's knit, isn't dragged into the sleeve)
+        axes = [(_closest_on(arms[side], p), 0.022)] if side else []
+        axes.append((Vector((0.0, yc, min(p.z, zc))), MARGIN))
+        best, ok, hit_any = None, False, False
+        for a, margin in axes:
+            d = p - a
+            if d.length < 1e-4:
+                continue
+            d.normalize()
+            hit = tree.ray_cast(a, d, 1.0)
+            if hit[0] is None:
+                continue
+            hit_any = True
+            R = (hit[0] - a).length
+            if (q - a).length <= R - margin:
+                ok = True
+                break
+            c = a + d * max(R - margin, 0.01)
+            if best is None or (c - p).length < (best - p).length:
+                best = c
+        if hit_any:
+            if not ok and best is not None:
+                q = best
+                pulled += 1
+        else:
+            # past the hem or a cuff: only what the knit is over goes in
+            near = tree.find_nearest(p, 0.25)
+            if near[0] is None:
+                continue
+            loc, n = near[0], near[1]
+            dd = p - loc
+            if (p - loc).dot(n) < -0.08 or (dd.length > 0.01 and abs(dd.dot(n)) < 0.8 * dd.length):
+                continue
+            if (q - loc).dot(n) > -MARGIN:
+                q = q - n * ((q - loc).dot(n) + MARGIN)
+                pulled += 1
         key.data[i].co = bwi @ q
-    print("[sweater] under_sweater: %d points pulled in under the knit" % moved)
+    mv = np.array([(bw @ key.data[i].co - bw @ v.co).length for i, v in enumerate(body.data.vertices)])
+    mv = mv[mv > 1e-5]
+    print("[sweater] under_sweater: %d points pulled in under the knit, %d collar points folded down; "
+          "moved 95%% %.3f m, most %.3f m" % (pulled, folded, np.percentile(mv, 95), mv.max()))
     return key
+
+
+def posed_tuck(body, sweater, rig, dom, lip, marks, piece_of, poses=(("idle", 0.0), ("idle", 0.25), ("idle", 0.5), ("idle", 0.75),
+                                                                       ("walk", 0.05), ("walk", 0.3), ("walk", 0.55), ("walk", 0.8),
+                                                                       ("talk", 0.0), ("talk", 0.5), ("brisk", 0.3), ("brisk", 0.8))):
+    """The rest pose's key isn't enough where the body and the knit follow different bones (an apron's
+    straps riding the upper arms while the sleeve follows the arm differently): in each of these
+    frames, any skin the knit should cover that still reaches it is pushed in under it, and the push,
+    taken back through the point's own skinning, is added to the key."""
+    from mathutils.bvhtree import BVHTree
+    sc = bpy.context.scene
+    kb = body.data.shape_keys.key_blocks
+    key = kb["under_sweater"]
+    key.value = 1.0
+    rig.data.pose_position = "POSE"
+    rig.animation_data_create()
+    names = [g.name for g in body.vertex_groups]
+    vw = [[(names[g.group], g.weight) for g in v.groups if g.weight > 0] for v in body.data.vertices]
+    nm = dom.astype(str)
+    skip = np.isin(dom, ["Head", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "LeftToes", "RightToes"])
+    skip |= np.char.startswith(nm, "LeftHand") | np.char.startswith(nm, "RightHand")
+    base = kb[0].data
+    # the skin the knit covers: what the rest pose's key already moved
+    covered = [(key.data[i].co - base[i].co).length > 1e-5 for i in range(len(base))]
+    total = 0
+    for _ in range(3):
+        for name, at in poses:
+            act = next((x for x in bpy.data.actions if x.name.lower().startswith(name)), None)
+            if not act:
+                continue
+            rig.animation_data.action = act
+            f0, f1 = act.frame_range
+            sc.frame_set(int(f0 + (f1 - f0) * at))
+            dg = bpy.context.evaluated_depsgraph_get()
+            se = sweater.evaluated_get(dg)
+            sm = se.to_mesh()
+            sv = [sweater.matrix_world @ v.co for v in sm.vertices]
+            # each part of the body against its own piece of the knit, so the torso's skin is never
+            # pushed toward a sleeve that hangs beside it (or out through the other side)
+            trees = {}
+            for part in ("torso", "Left", "Right"):
+                trees[part] = BVHTree.FromPolygons(sv, [tuple(p.vertices) for p in sm.polygons
+                                                        if not any(i in lip for i in p.vertices)
+                                                        and piece_of[p.vertices[0]] == part])
+            se.to_mesh_clear()
+            be = body.evaluated_get(dg)
+            bm_ = be.to_mesh()
+            bp = [body.matrix_world @ v.co for v in bm_.vertices]
+            be.to_mesh_clear()
+            mats = {}
+            moved = 0
+            for i in range(len(bp)):
+                if skip[i] or not covered[i] or "Leg" in nm[i]:
+                    continue
+                p = bp[i]
+                part = next((sd for sd in SIDES if nm[i].startswith(sd) and "Arm" in nm[i]), "torso")
+                # an arm's skin may be under its sleeve or, up at the shoulder, under the body's knit:
+                # whichever is nearer. The torso's skin only ever goes under the body's knit
+                hits = [trees[part].find_nearest(p, 0.3)]
+                if part != "torso":
+                    hits.append(trees["torso"].find_nearest(p, 0.3))
+                hits = [h for h in hits if h[0] is not None]
+                if not hits:
+                    continue
+                loc, n = min(hits, key=lambda h: h[3])[:2]
+                depth = (p - loc).dot(n)
+                if depth < -MARGIN:
+                    continue
+                push = (loc - p) - n * (MARGIN + 0.004)
+                m = Matrix(((0, 0, 0), (0, 0, 0), (0, 0, 0)))
+                for g, w in vw[i]:
+                    if g not in mats:
+                        pb = rig.pose.bones.get(g)
+                        mats[g] = (pb.matrix @ pb.bone.matrix_local.inverted()).to_3x3() if pb else Matrix.Identity(3)
+                    m += mats[g] * w
+                try:
+                    r = m.inverted() @ push
+                except ValueError:
+                    continue
+                key.data[i].co = key.data[i].co + body.matrix_world.inverted().to_3x3() @ r
+                moved += 1
+            total += moved
+    rig.animation_data.action = None
+    rig.data.pose_position = "REST"
+    sc.frame_set(1)
+    print("[sweater] under_sweater in the poses: %d pushes" % total)
 
 
 # --- textures and materials ---------------------------------------------------------------------------
@@ -879,7 +1089,9 @@ def main(cid, render):
     tex = os.path.join(out, "textures")
     os.makedirs(tex, exist_ok=True)
 
-    trows, ttags, marks = torso_rows(co, dom, B, CHARS[cid].get("neck", 0.06))
+    trows, ttags, marks = torso_rows(co, dom, B, CHARS[cid].get("neck", 0.06), CHARS[cid].get("collar_h", COLLAR_H),
+                                     CHARS[cid].get("neck_dy", 0.0), CHARS[cid].get("dip", 0.04),
+                                     CHARS[cid].get("collar_back", 0.0))
     mat = bpy.data.materials.new("tmp")
     tor, tU, tD, tparts, text_ = build_piece("Body", trows, ttags, None, mat)
     sleeves = {}
@@ -959,7 +1171,11 @@ def main(cid, render):
     skin(sw_ob, rig, co, dom, weights, piece_of)
     marks["collar_z"] = marks["neck_z"] + 0.01
     marks["hem_z"] = B["Hips"][0].z - 0.05
-    tuck_key(body, sw_ob, co, dom, marks, lip)
+    marks["collar_up"] = CHARS[cid].get("collar_up", 0.0)
+    marks["collar_head"] = CHARS[cid].get("collar_head", False)
+    marks["hair_r"] = CHARS[cid].get("hair_r", 0.035)
+    tuck_key(body, sw_ob, co, dom, marks, lip, B, [tuple(b) for b in CHARS[cid].get("tuck_boxes", ())])
+    posed_tuck(body, sw_ob, rig, dom, lip, marks, piece_of)
 
     tris = sum(len(p.vertices) - 2 for p in sw_ob.data.polygons)
     print("[sweater] %s: %d points, %d triangles, regions %s" % (cid, len(sw_ob.data.vertices), tris,

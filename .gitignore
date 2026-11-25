@@ -9,3 +9,6 @@
 __pycache__/
 tools/character_build/_mixamo_upload/
 tools/character_build/*_eyes/_front_*.npy
+
+# fit_review.py renders (about 80 MB); review/fit_sheet.jpg is the kept copy
+art/world_assets/sweater/review/fit/

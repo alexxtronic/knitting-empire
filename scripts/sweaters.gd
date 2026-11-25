@@ -250,6 +250,21 @@ static func _key(v: Vector3) -> Vector3i:
 	return Vector3i(roundi(v.x * GRID), roundi(v.y * GRID), roundi(v.z * GRID))
 
 
+## The key itself, or else a neighbouring cell's: a point lying on a cell's edge can round one way
+## in the build's file and the other in the imported mesh (about 3% did, and those points stayed
+## where they were and poked through the knit).
+static func _near_key(grid: Dictionary, k: Vector3i) -> Vector3i:
+	if grid.has(k):
+		return k
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			for dz in [-1, 0, 1]:
+				var n := k + Vector3i(dx, dy, dz)
+				if grid.has(n):
+					return n
+	return k
+
+
 ## Swaps each body mesh for a copy with the under_sweater key (once per mesh; every NPC with the
 ## same model shares the copy). Meshes none of whose points are in the tuck list are left alone.
 static func _add_tuck(body: Node3D) -> void:
@@ -288,7 +303,7 @@ static func _with_tuck(src: ArrayMesh, grid: Dictionary) -> ArrayMesh:
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var tucked := verts.duplicate()
 		for i in verts.size():
-			var k := _key(verts[i])
+			var k := _near_key(grid, _key(verts[i]))
 			if grid.has(k):
 				tucked[i] = verts[i] + grid[k]
 				matched += 1
