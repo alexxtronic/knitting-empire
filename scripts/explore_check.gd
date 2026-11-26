@@ -184,6 +184,17 @@ func run(main: Node) -> void:
 		await m._wait(0.25)
 		waited += 0.25
 	m._check("from 20 m off, G whistles her over (%.1f s, %.1f m off now)" % [waited, hz.position.distance_to(m.player.position)], hz._coming.is_empty() and hz.position.distance_to(m.player.position) < 4.0)
+	# a game without a horse, loaded while she rides: on foot, at her own speed, no horse about
+	hz.key()
+	var horse_flag = Game.flags.get("horse")
+	var mounted: bool = hz.riding and m.player.riding
+	Game.flags.erase("horse")
+	hz.apply()
+	await m._wait(1.2)
+	m._check("a horseless game loaded while she rides: on foot at her own speed, no horse (was riding: %s)" % str(mounted),
+		mounted and not hz.owned and not hz.visible and not m.player.riding and is_equal_approx(m.player.ride_mult, 1.0) and not Game.flags.has("horse"))
+	Game.flags["horse"] = horse_flag
+	hz.apply()
 	# --- the far lands' animals, the crabs, and who wants their fibre
 	m.wildlife.build()
 	await m._wait(0.6)

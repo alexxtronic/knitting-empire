@@ -1,5 +1,5 @@
 {
-	"_about": "The lands round the farm and Maple Grove (scripts/regions.gd builds them). walk: where Nora may go, [x, z, width, depth] in metres. grass: how its grass blades differ from the farm's (scripts/grass.gd set_lands): density and height as shares of the farm's, seed_heads the share of stems gone to seed, tint a colour to multiply the farm's blades by (else the land's colours against the farm's grass), tint_share how much of that tint they take; the beach's 0 leaves only the fringe where its sand meets the grass. ground: the patch of ground drawn under it (wider than walk, so its edge fades out of sight into the grass), with three colours mixed by noise. scatter: [model in assets/props or tree:<kind>, how many, scale min, scale max, gap between them in metres, blocker half-size in metres (0 = walk through)]. Each region's scenery is its own kind in the world editor (swamp-rock_cluster and so on), so it can be moved and saved like the rest. A scatter entry may end with a tint colour (multiplied into the model's colours: the dunes' sun-bleached rocks). seeded: each scatter entry draws from its own random numbers (seeded by the land and the model), so adding, removing or filling in a model never moves the rest; every land added from 2026-11-26 is seeded. extra: more scatter for a land made before then, placed after everything else, seeded the same way, so the scenery already there stays where it was. relief (Alex, 2026-11-26: dunes and rolling hills): [x, z, half-width, half-length, height, turn in degrees] mounds raised in the land's ground; where one stands more than 12 cm high the walking grid is blocked (scripts/regions.gd mark_relief), so she walks the valleys and passes between them. The ground she walks on is still flat: true terrain she can climb is a later step. A dune (dunes: true) is steeper on its east, lee side. deep_mire (the swamp): an island ringed by deep black water (centre, size, moat width in metres) that blocks the walking grid until she owns mire waders from Steve (scripts/explore.gd).",
+	"_about": "The lands round the farm and Maple Grove (scripts/regions.gd builds them). walk: where Nora may go, [x, z, width, depth] in metres. grass: how its grass blades differ from the farm's (scripts/grass.gd set_lands): density and height as shares of the farm's, seed_heads the share of stems gone to seed, tint a colour to multiply the farm's blades by (else the land's colours against the farm's grass), tint_share how much of that tint they take; the beach's 0 leaves only the fringe where its sand meets the grass. ground: the patch of ground drawn under it (wider than walk, so its edge fades out of sight into the grass), with three colours mixed by noise. scatter: [model in assets/props or tree:<kind>, how many, scale min, scale max, gap between them in metres, blocker half-size in metres (0 = walk through)]. Each region's scenery is its own kind in the world editor (swamp-rock_cluster and so on), so it can be moved and saved like the rest. A scatter entry may end with a tint colour (multiplied into the model's colours: the dunes' sun-bleached rocks). seeded: each scatter entry draws from its own random numbers (seeded by the land and the model), so adding, removing or filling in a model never moves the rest; every land added from 2026-11-26 is seeded. extra: more scatter for a land made before then, placed after everything else, seeded the same way, so the scenery already there stays where it was. relief (Alex, 2026-11-26: dunes and rolling hills): [x, z, half-width, half-length, height, turn in degrees] mounds raised in the land's ground; where one stands more than 12 cm high the walking grid is blocked (scripts/regions.gd mark_relief), so she walks the valleys and passes between them. The ground she walks on is still flat: true terrain she can climb is a later step. A dune (dunes: true) is steeper on its east, lee side. Until the swamp's own models exist (cattails, lily pads, snags, toadstools, ferns), stand-ins from the models there are (dark hedges, berry bushes, clover, short tufts; tinted) fill it; take them out when the real ones land. deep_mire (the swamp): an island ringed by deep black water (centre, size, moat width in metres) that blocks the walking grid until she owns mire waders from Steve (scripts/explore.gd).",
 	"trails": [
 		[-31.0, -0.6, 26.5, 2.2],
 		[8.4, -47.0, 2.2, 28.5],
@@ -29,13 +29,21 @@
 				["lily_pads", 0, 0.8, 1.2, 0.0, 0.0],
 				["snag_tree", 22, 0.8, 1.3, 4.0, 0.35],
 				["toadstools", 60, 0.8, 1.3, 0.0, 0.0],
-				["fern", 140, 0.8, 1.4, 0.0, 0.0]
+				["fern", 140, 0.8, 1.4, 0.0, 0.0],
+				["hedge", 30, 0.6, 1.0, 3.0, 0.5, "#6f7d5a"],
+				["bush_berry", 26, 0.8, 1.2, 2.5, 0.45, "#8a9a70"],
+				["clover_patch", 220, 0.9, 1.5, 0.0, 0.0, "#7f9068"],
+				["tuft_small", 420, 0.9, 1.4, 0.0, 0.0]
 			],
 			"deep_mire": {"centre": [-74.0, -22.0], "size": [22.0, 17.0], "moat": 4.5, "scatter": [
 				["snag_tree", 10, 0.9, 1.4, 4.0, 0.35],
 				["cattails", 70, 0.9, 1.4, 0.0, 0.0],
 				["toadstools", 30, 0.9, 1.4, 0.0, 0.0],
-				["fern", 50, 0.9, 1.5, 0.0, 0.0]
+				["fern", 50, 0.9, 1.5, 0.0, 0.0],
+				["tree:maple_green", 8, 1.0, 1.4, 4.5, 0.45],
+				["hedge", 12, 0.6, 1.0, 3.0, 0.5, "#55613f"],
+				["tuft_tall", 160, 1.0, 1.7, 0.0, 0.0],
+				["clover_patch", 60, 0.9, 1.5, 0.0, 0.0, "#6c7c55"]
 			]}
 		},
 		"mountains": {

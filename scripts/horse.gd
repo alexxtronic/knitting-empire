@@ -46,6 +46,12 @@ func econ(key: String, fallback):
 ## From the save: hers, and where she left it.
 func apply() -> void:
 	riding = false
+	_coming = []
+	if main != null and main.player != null: # on foot, whatever the last game had her doing
+		main.player.riding = false
+		main.player.ride_mult = 1.0
+		if main.player.body:
+			main.player.body.position.y = 0.0
 	var e = Game.flags.get("horse", null)
 	owned = e is Array and (e as Array).size() >= 3
 	visible = owned
