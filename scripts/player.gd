@@ -45,6 +45,8 @@ var _model: Node3D
 var _arms: Array[MeshInstance3D] = []
 var body: Body
 var anim_override := "" # a story scene can hold her in a loop ("Work", "SitIdle"...)
+var riding := false # on her horse (horse.gd): sat in the saddle whether it walks or not
+var ride_mult := 1.0 # her speeds times this while she rides
 var _talk_t := 0.0
 var _ring: MeshInstance3D
 var _ring_on := true # off while she's busy with an activity
@@ -450,7 +452,7 @@ func _step(delta: float) -> void:
 		var d := to.length()
 		# She eases up to speed and slows into her last step, and takes a corner at the pace her
 		# turning allows, so she never snaps to full speed or pivots on the spot mid-stride.
-		var top := run_speed if running else walk_speed
+		var top := (run_speed if running else walk_speed) * ride_mult
 		var off := absf(angle_difference(rotation.y, atan2(to.x, to.z))) if d > 0.01 else 0.0
 		var want := top * clampf(1.15 - off / 1.6, 0.35, 1.0)
 		want = minf(want, maxf(0.5, sqrt(2.0 * BRAKE * _path_left())))
@@ -480,7 +482,7 @@ func _step(delta: float) -> void:
 ## One frame of walking by the keys (first person): she eases up to speed the way steer points
 ## and slides along whatever stops her. Returns whether she's taking steps.
 func _steer_step(delta: float) -> bool:
-	var top := (run_speed if running else walk_speed) * (0.7 if steer_back else 1.0)
+	var top := (run_speed if running else walk_speed) * (0.7 if steer_back else 1.0) * ride_mult
 	speed = move_toward(speed, top, ACCEL * delta)
 	var step := steer * speed * delta
 	var to := position + step
@@ -500,7 +502,9 @@ func _steer_step(delta: float) -> bool:
 func _animate(delta: float, walking: bool) -> void:
 	_talk_t = maxf(0.0, _talk_t - delta)
 	var want := "Idle"
-	if anim_override != "" and not walking:
+	if riding:
+		want = "SitIdle" # in the saddle: the horse does the walking (horse.gd)
+	elif anim_override != "" and not walking:
 		want = anim_override
 	elif busy:
 		if _lying:
@@ -515,7 +519,7 @@ func _animate(delta: float, walking: bool) -> void:
 		want = "Run" if running else "Walk"
 	elif _talk_t > 0.0:
 		want = "Talk"
-	body.play(want, speed)
+	body.play(want, 0.0 if riding else speed)
 	if walking and steer_back and steer != Vector3.ZERO:
 		body.anim.speed_scale = -absf(body.anim.speed_scale) # stepping backward
 	_sound_cues(delta)

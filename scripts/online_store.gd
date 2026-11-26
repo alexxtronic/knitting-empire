@@ -275,9 +275,9 @@ func place_order(at := -1.0, fibre := "", stars := 0) -> Dictionary:
 	var tier := ""
 	if fibre == "" or not fibres.has(fibre):
 		tier = _pick_tier()
-		var pool: Array = fibres.keys().filter(func(k): return str(fibres[k].get("tier", "")) == tier)
+		var pool: Array = fibres.keys().filter(func(k): return str(fibres[k].get("tier", "")) == tier and EmpireGoals.fibre_open(str(k)))
 		if pool.is_empty():
-			pool = fibres.keys()
+			pool = fibres.keys().filter(func(k): return EmpireGoals.fibre_open(str(k)))
 		pool.sort()
 		fibre = str(pool[_rng.randi() % pool.size()])
 	tier = str(fibres[fibre].get("tier", "common"))

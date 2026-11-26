@@ -33,6 +33,7 @@ const ACTIONS := [
 	["rotate", "Turn a piece while placing", ["world"], KEY_R],
 	["sell", "Sell the piece in hand", ["world"], KEY_X],
 	["dog", "Play the dog / Nora", ["world"], KEY_TAB],
+	["ride", "Ride the horse / get off", ["world"], KEY_G],
 	["first_person", "First person on / off", ["world", "fps"], KEY_V],
 	["use", "Use (first person)", ["fps"], KEY_E],
 	["cinematic", "Cinematic camera on / off", ["world", "cine"], KEY_P],

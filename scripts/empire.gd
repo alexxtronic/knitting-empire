@@ -22,6 +22,7 @@ const Sweaters = preload("res://scripts/sweaters.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const EmpireGoals = preload("res://scripts/empire_goals.gd")
+const Explore = preload("res://scripts/explore.gd")
 const SweaterSale = preload("res://scripts/sweater_sale.gd")
 const LANTERN_MODEL := "res://assets/props/lantern.glb" # art/world_assets/lantern/build.py; its origin is the ring's top
 const GLOBE_DROP := 0.175 # metres from the ring's top down to the flame
@@ -66,13 +67,17 @@ func needle_rank() -> int:
 
 func needle_name() -> String:
 	var r := needle_rank()
+	var bought := clampi(int(needle_defs()[r].get("floor", 1)), 1, 5) if r >= 0 else 1
+	if Explore.found_floor() > bought:
+		return Explore.found_name()
 	return str(needle_defs()[r].get("name", "")) if r >= 0 else str(_gear.get("first_needles", "Gran's bamboo needles"))
 
 
 ## The least a sweater she knits can be (1..5) with the needles she has.
 func needle_floor() -> int:
 	var r := needle_rank()
-	return clampi(int(needle_defs()[r].get("floor", 1)), 1, 5) if r >= 0 else 1
+	var bought := clampi(int(needle_defs()[r].get("floor", 1)), 1, 5) if r >= 0 else 1
+	return clampi(maxi(bought, Explore.found_floor()), 1, 5) # or a pair she found out in the world (explore.gd)
 
 
 ## Rosa's rows: the next pair up, or what she already knits with.

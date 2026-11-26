@@ -144,6 +144,7 @@ func _render() -> void:
 		vp.add_child(holder)
 		var m := Catalog.model(str(all[id].get("model", "")), holder)
 		if m != null:
+			preload("res://scripts/wild_animal.gd").restyle(m, all[id]) # a stand-in's size and tint
 			var ap := m.find_children("*", "AnimationPlayer", true, false)
 			if not ap.is_empty():
 				var p := ap[0] as AnimationPlayer

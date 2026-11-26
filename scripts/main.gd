@@ -11,6 +11,7 @@ const WalkinCheck = preload("res://scripts/walkin_check.gd")
 const TownsfolkCheck = preload("res://scripts/townsfolk_check.gd")
 const ShepherdCheck = preload("res://scripts/shepherd_check.gd")
 const GoalsCheck = preload("res://scripts/goals_check.gd")
+const ExploreCheck = preload("res://scripts/explore_check.gd")
 const FibreWantCheck = preload("res://scripts/fibre_want_check.gd")
 const ActsCheck = preload("res://scripts/acts_check.gd")
 const DogsCheck = preload("res://scripts/dogs_check.gd")
@@ -73,11 +74,13 @@ const HouseBuilder = preload("res://scripts/house_builder.gd")
 const BuildPlus = preload("res://scripts/build_plus.gd")
 const BuildPlusCheck = preload("res://scripts/build_plus_check.gd")
 const Bonfire = preload("res://scripts/bonfire.gd")
+const Explore = preload("res://scripts/explore.gd")
+const Horse = preload("res://scripts/horse.gd")
 const FogOfWar = preload("res://scripts/fog_of_war.gd")
 
 const CELL := 0.5
 const GRID_ORIGIN := Vector2(-96.0, -100.0)
-const GRID_SIZE := Vector2i(480, 324) # covers x -96..144, z -100..62: the farm, Maple Grove and the lands round them (Regions.BOUNDS)
+const GRID_SIZE := Vector2i(720, 324) # covers x -96..264, z -100..62: the farm, Maple Grove and the lands round them (Regions.BOUNDS)
 const HOUSE_W := 8.0
 const HOUSE_FRONT := 6.0
 const WALL_H := 2.6
@@ -140,6 +143,8 @@ var wardrobe_ui: WardrobePanel # Nora's wardrobe: which of her sweaters she wear
 var barista: Barista # working the Coffee Shop's counter in first person (barista.gd)
 var store: OnlineStore # the online sweater store on her computer (online_store.gd)
 var bonfire: Bonfire # the bonfires she lights after dark, burning till dawn (bonfire.gd)
+var explore: Explore # treasure patches, huts with chests, waders and the tent (explore.gd)
+var horse: Horse # her horse, a stand-in from Lars: G to ride (horse.gd)
 var fog: FogOfWar # the fog over land she hasn't explored yet (fog_of_war.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
@@ -292,6 +297,10 @@ func _ready() -> void:
 	suburb = Suburb.new()
 	add_child(suburb)
 	grid_blockers.append_array(suburb.build(self))
+	explore = Explore.new()
+	explore.main = self
+	add_child(explore)
+	grid_blockers.append_array(explore.build()) # the huts, before god mode lists Town.built
 	grid_blockers.append_array(World.build_barn(self, Vector3(21.5, 0, -9.5)))
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
@@ -453,6 +462,7 @@ func _ready() -> void:
 	forage.main = self
 	add_child(forage)
 	forage.apply()
+	explore.apply() # the treasure patches on open ground, what she has dug and opened, her tent
 	buildplus.apply_saved() # her ground paint over the layout's road map
 	_setup_dog()
 	wildlife = Wildlife.new()
@@ -483,6 +493,10 @@ func _ready() -> void:
 	bonfire.main = self
 	add_child(bonfire)
 	bonfire.apply()
+	horse = Horse.new()
+	horse.main = self
+	add_child(horse)
+	horse.apply()
 	fog = FogOfWar.new()
 	fog.main = self
 	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
@@ -1512,6 +1526,9 @@ func _rebuild_grid() -> void:
 			rects.append(f.footprint())
 	for r in rects:
 		_mark_rect((r as Rect2).grow(0.2))
+	regions.mark_relief() # the dunes' and the downs' slopes (regions.gd)
+	if not Game.has_item("waders"):
+		regions.mark_moat() # the Deep Mire's deep water, till Steve's waders (explore.gd)
 	if suburb != null and suburb.walk_in != null:
 		suburb.walk_in.mark_grid() # Marcus's house: its own walls, on the floor she's on (split_house.gd)
 	grid_stamp += 1 # reading seats work out again where she can stand (interiors.gd ReadSpot)
@@ -1992,6 +2009,9 @@ func _input(e: InputEvent) -> void:
 			walls_up = not walls_up
 		KEY_TAB:
 			toggle_dog()
+		KEY_G:
+			if horse != null:
+				horse.key() # on her horse, off, or whistle her over (horse.gd)
 		KEY_P:
 			cinema.enter()
 		KEY_V:
@@ -2311,6 +2331,8 @@ func _ground_action(id: String, g: Vector3, at: Vector3) -> void:
 		dig_bed(at)
 	elif id == "bonfire":
 		bonfire.start(g)
+	elif id.begins_with("ex_"):
+		explore.ground_action(id, g) # pitching the tent (explore.gd)
 	else:
 		player.walk(_find_path(player.position, g))
 		_click_marker(g)
@@ -2323,6 +2345,8 @@ func ground_actions(g: Vector3) -> Array:
 		acts.append(_act("dig", "Dig bed"))
 	if bonfire != null:
 		acts.append_array(bonfire.rows_for(g)) # from dusk: "Start a bonfire" (bonfire.gd)
+	if explore != null:
+		acts.append_array(explore.rows_for(g)) # "Pitch your tent here" (explore.gd)
 	return acts
 
 
@@ -2513,6 +2537,9 @@ func _tool_click(tool: String, t, mpos: Vector2) -> bool:
 				_tool_walk(at, at + side * (0.6 + plant.radius * 0.4), 1.5, "Trimming", 1.2, _finish_trim.bind(plant))
 				return true
 		"shovel":
+			if t != null and t is Node and t.has_meta("treasure"): # a patch of lusher turf (explore.gd)
+				explore.dig(t)
+				return true
 			if t is Plot and t.crop == "":
 				if not t.tilled:
 					hud.show_toast("Gran dug these beds. They stay.")
@@ -6204,6 +6231,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=explore" in OS.get_cmdline_user_args(): # the bigger world: treasure, huts, waders, the tent, the horse, crabs (explore_check.gd)
+		await _wait(1.5)
+		await ExploreCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=goals" in OS.get_cmdline_user_args(): # just the Empire goals, the Field Guide, the Lookbook and the morning ledger
 		await _wait(1.5)
 		await GoalsCheck.new().run(self)
@@ -6554,6 +6587,10 @@ func _world_checks() -> void:
 	for id in regions.defs:
 		var walk: Rect2 = Regions._rect(regions.defs[id]["walk"])
 		var goal := Vector3(walk.get_center().x, 0, walk.get_center().y)
+		for r in 40: # the open ground nearest its middle (the downs' middle is a hill, 2026-11-26)
+			if _walkable(_cell(goal)):
+				break
+			goal = Vector3(walk.get_center().x + 0.5 * r * cos(r * 1.3), 0, walk.get_center().y + 0.5 * r * sin(r * 1.3))
 		var path := _find_path(home, goal)
 		var end: Vector3 = path[path.size() - 1] if not path.is_empty() else home
 		var off := Vector2(end.x, end.z).distance_to(Vector2(goal.x, goal.z))
@@ -6600,10 +6637,11 @@ func _grass_land_checks() -> void:
 	for id in regions.defs:
 		var walk: Rect2 = Regions._rect(regions.defs[id]["walk"])
 		var n := 0 # the most at its middle or a quarter of the way in from a corner (the middle may be a pool or Bretton Oaks)
-		for f in [Vector2(0.5, 0.5)] if id == "beach" else [Vector2(0.5, 0.5), Vector2(0.25, 0.25), Vector2(0.75, 0.25), Vector2(0.25, 0.75), Vector2(0.75, 0.75)]:
+		var bare: bool = float((regions.defs[id].get("grass", {}) as Dictionary).get("density", 1.0)) <= 0.0 # sand: the beach, the dunes
+		for f in [Vector2(0.5, 0.5)] if bare else [Vector2(0.5, 0.5), Vector2(0.25, 0.25), Vector2(0.75, 0.25), Vector2(0.25, 0.75), Vector2(0.75, 0.75)]:
 			var c: Vector2 = walk.position + walk.size * f
-			n = maxi(n, grass.blades_near(c.x, c.y, 4.0 if id == "beach" else 8.0)) # the beach: its sand, clear of the grassy fringe
-		var ok: bool = n == 0 if id == "beach" else n > 400
+			n = maxi(n, grass.blades_near(c.x, c.y, 4.0 if bare else 8.0)) # the sand, clear of any grassy fringe
+		var ok: bool = n == 0 if bare else n > 400
 		all_ok = all_ok and ok
 		lands_ok.append("%s %d" % [id, n])
 	var pool_n := 0
@@ -8974,13 +9012,16 @@ func _wildlife_checks() -> void:
 	for id in by:
 		if not by[id][0].ok():
 			bad.append(id)
-	_check("every wild animal has its model and loops (%d species; without: %s)" % [by.size(), str(bad)], by.size() == 10 and bad.is_empty())
+	var kinds: Dictionary = wildlife.data.get("animals", {})
+	_check("every wild animal has its model and loops (%d species of %d; without: %s)" % [by.size(), kinds.size(), str(bad)], by.size() == kinds.size() and bad.is_empty())
 	var bare := by.keys().filter(func(id): return not by[id][0].shorn_ok())
-	_check("every wild animal has its shorn model with its loops too (without: %s)" % str(bare), by.size() == 10 and bare.is_empty())
+	_check("every wild animal has its shorn model with its loops too (without: %s)" % str(bare), by.size() == kinds.size() and bare.is_empty())
 	var farm := Vector3(10.0, 0, -3.0)
 	var n := [0, 0, 0, 0, 0]
 	var far := [0.0, 0.0, 0.0, 0.0, 0.0]
 	for a in wildlife.animals:
+		if (kinds[a.species] as Dictionary).has("land"):
+			continue # a far land's own: its own ladder, below
 		var r: int = wildlife.tier_rank(a.tier())
 		n[r] += 1
 		far[r] += Vector2(a.position.x - farm.x, a.position.z - farm.z).length()
@@ -8993,12 +9034,35 @@ func _wildlife_checks() -> void:
 			further = further and far[i] > far[i - 1]
 	_check("the rarer the tier, the fewer the animals (%s) and the further from the farm (%s m)" % [str(n), str(far.map(func(x): return int(x)))],
 		n.min() > 0 and fewer and further)
+	# each far land (2026-11-26): its own animals, the rarer the fewer and the further from where its trail comes in
+	var entries: Dictionary = wildlife.data.get("lands", {})
+	for land in entries:
+		var e: Array = entries[land]
+		var ln := [0, 0, 0, 0, 0]
+		var lf := [0.0, 0.0, 0.0, 0.0, 0.0]
+		for a in wildlife.animals:
+			if str((kinds[a.species] as Dictionary).get("land", "")) != land:
+				continue
+			var r: int = wildlife.tier_rank(a.tier())
+			ln[r] += 1
+			lf[r] += Vector2(a.position.x - float(e[0]), a.position.z - float(e[1])).length()
+		var ok := true
+		var last := -1
+		for i in 5:
+			if ln[i] == 0:
+				continue
+			lf[i] = lf[i] / float(ln[i])
+			if last >= 0:
+				ok = ok and ln[i] <= ln[last] and lf[i] > lf[last]
+			last = i
+		_check("%s: the rarer, the fewer (%s) and the further in (%s m)" % [land, str(ln), str(lf.map(func(x): return int(x)))], last >= 0 and ok)
 	var most := 0
 	for id in by:
 		if id != "sheep":
 			most = maxi(most, by[id].size())
 	_check("sheep are the commonest animal (%d wild, %d in the pen; next %d)" % [by.get("sheep", []).size(), sheep_list.size(), most], by.get("sheep", []).size() > most)
-	_check("every animal stands on open ground in its habitat", wildlife.animals.all(func(a): return _walkable(_cell(a.position)) and a._at_home(a.position)))
+	var off_ground: Array = wildlife.animals.filter(func(a): return not (_walkable(_cell(a.position)) and a._at_home(a.position))).map(func(a): return "%s@%d,%d%s" % [a.species, int(a.position.x), int(a.position.z), "" if _walkable(_cell(a.position)) else " (solid)"])
+	_check("every animal stands on open ground in its habitat (off: %s)" % str(off_ground), off_ground.is_empty())
 	# combing a rabbit
 	var rab = by["rabbit"][0]
 	player.position = _open_near(rab.position, 3.0)
@@ -12171,6 +12235,7 @@ func _villager_actions(v) -> Array:
 				var pack: Array = seeds[crop]
 				acts.append(_act("buy_seeds_" + crop, "Buy %d %s seeds  (%dc)" % [int(pack[0]), crop, int(pack[1])], Game.coins >= int(pack[1])))
 			acts.append_array(empire.lantern_rows())
+			acts.append_array(explore.steve_rows()) # waders and the tent (explore.gd)
 		"giorgio":
 			var pp := _pastry_price()
 			var room: bool = Game.count("pastry") < int(pastry().get("max", 6))
@@ -12209,6 +12274,8 @@ func _villager_actions(v) -> Array:
 	acts.append_array(shepherd.rows_for(v)) # Rowan: hire him to watch the pen (shepherd.gd)
 	acts.append_array(partners.rows_for(v)) # Rowan, Lars or Gary: ask him out (partners.gd)
 	acts.append_array(kennel.rows_for(v)) # Lars: a dog for the pack, from Act 2 (kennel.gd)
+	if v.vid == "lars" and horse != null:
+		acts.append_array(horse.rows_for(v)) # and a horse to ride, once Act 1 is done (horse.gd)
 	acts.append_array(jobs.actions_for(v.vid)) # take a job, work a shift (jobs.gd)
 	acts.append_array(empire.rows_for(v)) # a request for a rare knit: ask, or hand it over
 	acts.append_array(sale.rows_for(v)) # ask if they want a sweater, and haggle (sweater_sale.gd)
@@ -12253,6 +12320,12 @@ func _villager_action(v, id: String) -> void:
 		return
 	if id == "partner_ask": # asking him out (partners.gd)
 		partners.action(v, id)
+		return
+	if id.begins_with("horse_"): # Lars's horse (horse.gd)
+		horse.action(v, id)
+		return
+	if id.begins_with("ex_"): # Steve's waders and tent (explore.gd)
+		explore.action(v, id)
 		return
 	if id.begins_with("dog_"): # buying a dog from Lars (kennel.gd)
 		kennel.action(v, id)

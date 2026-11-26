@@ -75,6 +75,26 @@ func _ready() -> void:
 	_build_quad()
 
 
+## The grid was 140 cells wide until the map grew east (2026-11-26: the dunes and the downs). The
+## origin and the rows' count didn't change, so a save's narrower grid is copied in row by row.
+const OLD_WIDTH := 140
+
+
+## `old` (a grid `w0` cells wide, as many rows as now) widened to this one; empty if it doesn't fit.
+func _widened(old: PackedByteArray, w0: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize((cells.x * cells.y + 7) / 8)
+	if w0 <= 0 or w0 > cells.x or old.size() != (w0 * cells.y + 7) / 8:
+		return out # none yet, or a grid we can't read: start again
+	for y in cells.y:
+		for x in w0:
+			var i := y * w0 + x
+			if old[i >> 3] & (1 << (i & 7)):
+				var j := y * cells.x + x
+				out[j >> 3] = out[j >> 3] | (1 << (j & 7))
+	return out
+
+
 ## The explored cells from the save (or none), and the texture drawn from them.
 func load_from_flags() -> void:
 	var n := (cells.x * cells.y + 7) / 8
@@ -82,9 +102,9 @@ func load_from_flags() -> void:
 	var s: Variant = Game.flags.get("explored", "")
 	if s is String and s != "":
 		_bits = Marshalls.base64_to_raw(s)
-	if _bits.size() != n: # none yet, or a grid of another size: start again
-		_bits = PackedByteArray()
-		_bits.resize(n)
+	if _bits.size() != n: # none yet, or a grid of another size
+		_bits = _widened(_bits, int(Game.flags.get("explored_w", OLD_WIDTH)))
+	Game.flags["explored_w"] = cells.x
 	_saved = str(s) if s is String else ""
 	for i in cells.x * cells.y:
 		_img.set_pixel(i % cells.x, i / cells.x, Color(1, 1, 1, _fog_byte(i) / 255.0))

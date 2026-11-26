@@ -209,5 +209,11 @@ Alex makes these, in Tripo and in the game's style. The game uses stand-ins unti
 | Nora at 100 | Act 4 | today's Nora | `nora_ages` |
 | A granny who knits (or a few) | Act 2's hired knitters | none yet: the workers aren't built | the workers step (review section 6, step 5) |
 | A kid who shears (or a few) | Act 2's hired shearers | none yet | the workers step |
+| A horse (rigged, Walk, Trot and Run) | riding (2026-11-26) | the dog scaled up and tinted chestnut | `model` in `data/horse.json` (and the strides in `horse.gd`) |
+| Nutria, muskrat, river otter, sea otter | the swamp, the Deep Mire, the beach | the beaver and the mink, resized and tinted | each species' `model` in `data/wildlife.json` |
+| Desert hare, fennec fox, golden jackal, sand cat | Sunscald Dunes | the rabbit, fox, coyote and lynx, resized and tinted | the same |
+| Angora goat, cashmere goat, alpaca, vicuna | Larkspur Downs | the sheep, resized and tinted | the same |
+| Beach hut, stilt hut, desert ruin, stone bothy, chest, tent, crab | `scripts/explore.gd`, `crabs.gd` | plain shapes built in code | ChatGPT reference sheets, then kiln assets in `assets/props` |
+| Cattails, lily pads, snag tree, toadstools, fern, saguaro, barrel cactus, dead bush | the swamp's and the dunes' scatter | none: those rows are skipped until the GLB is there | single-mesh GLBs in `assets/props` under those names (`data/regions.json`) |
 
 Each character model must be rigged like Nora, with real eyes (`tools/add_eyes.py`) and a rigid head (`tools/rigid_head.py`). Nora's also need her fitted sweater (`art/world_assets/sweater/build.py`) and her tool grip (`tools/add_grip.py`). Also wanted later: more dog breeds (the pack uses tinted coats of the retriever until then), the God Sweater's look, and the ultra rare animal of the cold mountains.

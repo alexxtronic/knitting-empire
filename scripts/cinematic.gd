@@ -12,7 +12,7 @@ extends Node
 const Keys = preload("res://scripts/keybinds.gd")
 const MAX_HEIGHT := 300.0
 const GROUND_CLEAR := 0.15 # how close to the ground it may go
-const BOUNDS := Rect2(-90, -100, 260, 220) # x and z: the map (x -8..92, z -22..20) with plenty of sky round it
+const BOUNDS := Rect2(-90, -100, 380, 220) # x and z: the map (x -8..92, z -22..20) with plenty of sky round it
 const SPEED := 5.0 # metres a second at speed x1
 const FAST := 6.0 # Shift
 const SLOW := 0.2 # Alt

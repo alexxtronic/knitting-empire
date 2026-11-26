@@ -103,8 +103,9 @@ func run(main: Node) -> void:
 			unseen = str(id)
 	var pic := m.hud.guide.find_child("Pic_" + unseen, true, false) as TextureRect
 	var count_text: String = m.hud.guide._count.text
+	var kinds: int = (m.wildlife.data.get("animals", {}) as Dictionary).size()
 	m._check("the Field Guide lists every species (%d pictures), counts '%s', and a %s not yet seen is a silhouette" % [m.hud.guide.pics.size(), count_text, unseen],
-		m.hud.guide.pics.size() == 10 and count_text.begins_with("Seen 3 of 10") and count_text.contains("Caught 2") and pic != null and pic.modulate.r < 0.01 and pic.texture != null)
+		m.hud.guide.pics.size() == kinds and count_text.begins_with("Seen 3 of %d" % kinds) and count_text.contains("Caught 2") and pic != null and pic.modulate.r < 0.01 and pic.texture != null)
 	await m._shot("70_field_guide.png")
 	m.hud.guide.call("close")
 	# --- the Lookbook

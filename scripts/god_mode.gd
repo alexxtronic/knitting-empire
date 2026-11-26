@@ -64,10 +64,10 @@ const ROAD_COLOURS := {"dirt": Color(1, 0, 0), "gravel": Color(0, 1, 0), "cobble
 ## The road brush's surfaces, in its dropdown (Alex, 2026-11-17: pavement and sidewalk added)
 const ROADS := [["dirt", "Dirt road"], ["gravel", "Gravel road"], ["cobble", "Cobblestones"], ["pavement", "Pavement"], ["sidewalk", "Sidewalk"], ["grass", "Grass"]]
 const TOOLS := [["select", "Select & move"], ["place", "Place"], ["road", "Paint road"], ["erase", "Erase road"]]
-## Where roads can be painted: the whole map (main.gd's walking grid, x -96..144, z -100..62;
+## Where roads can be painted: the whole map (main.gd's walking grid, x -96..264, z -100..62;
 ## Alex, 2026-11-17: "god mode should apply to the entire game space"). The map was Grass.REGION
 ## alone before; a layout saved then is pasted into this one where it lay (_load_roads).
-const ROAD_RECT := Rect2(-96.0, -100.0, 240.0, 162.0)
+const ROAD_RECT := Rect2(-96.0, -100.0, 360.0, 162.0) # the walking grid (east to 144 until 2026-11-26; a narrower saved map is pasted where it lay)
 const BRUSH_MAX := 15.0 # metres (radius)
 const SIZE_STEP := 1.1 # how much bigger one press of + makes a thing (and - smaller)
 const SIZE_MIN := 0.2
@@ -86,7 +86,7 @@ const TILE := Vector2(4.0, 2.0)
 const TILE_ORIGIN := Vector2(1.0, 0.0)
 const BEDS := Rect2(10.25, -1.75, 5.1, 3.9) # worn earth under the crop plots where the code puts them
 const BEDS_NO_BUILD := Rect2(10.4, -1.6, 4.8, 3.6) # main.gd keeps furniture off the plots
-const ROAM := Rect2(-104, -108, 256, 178) # how far the camera may go while editing: every land (Regions.BOUNDS) and a margin
+const ROAM := Rect2(-104, -108, 376, 178) # how far the camera may go while editing: every land (Regions.BOUNDS) and a margin
 const SMALL := ["tuft_small", "tuft_mid", "tuft_tall", "flowers_daisy", "flowers_buttercup", "flowers_wild", "flowers_poppy", "clover_patch"]
 const TITLES := {
 	"tree_maple_autumn": "Maple tree (autumn)", "tree_maple_green": "Maple tree (green)", "tree_spruce": "Spruce tree",

@@ -205,6 +205,22 @@ static func guide_entry(species: String) -> Dictionary:
 	return ((Game.flags.get("guide", {}) as Dictionary).get(species, {}) as Dictionary)
 
 
+## Whether buyers and the online store may ask for a sweater of fibre `f`: always for the first four
+## lands' animals; for a far land's own (a species with a "land" in data/wildlife.json), once she has
+## seen one of them (2026-11-26), so nobody asks for vicuna before she has been to the downs.
+static func fibre_open(f: String) -> bool:
+	var animals: Dictionary = Data.load_json("wildlife").get("animals", {})
+	var any := false
+	for id in animals:
+		var info: Dictionary = animals[id]
+		if str(info.get("fibre", "")) != f:
+			continue
+		any = true
+		if not info.has("land") or guide_entry(str(id)).has("seen"):
+			return true
+	return not any
+
+
 ## Marks a species seen, caught or combed (caught and combed count; both also mean seen).
 static func mark(species: String, what: String) -> void:
 	var g: Dictionary = (Game.flags.get("guide", {}) as Dictionary).duplicate()

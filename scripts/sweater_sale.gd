@@ -8,6 +8,7 @@ extends PanelContainer
 
 const Data = preload("res://scripts/data.gd")
 const Sweaters = preload("res://scripts/sweaters.gd")
+const EmpireGoals = preload("res://scripts/empire_goals.gd")
 const GOLD := Color(0.95, 0.80, 0.46) # hud.gd's colours
 const TEXT := Color(0.97, 0.93, 0.85)
 const RARITY := ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
@@ -178,7 +179,7 @@ static func wanted_fibre(vid: String) -> String:
 	var pool := [] # [fibre, weight]
 	var total := 0.0
 	for t in open_tiers():
-		var of_tier := ["wool"] if t == "plain" else fibres.keys().filter(func(f): return str((fibres[f] as Dictionary).get("tier", "")) == t)
+		var of_tier := ["wool"] if t == "plain" else fibres.keys().filter(func(f): return str((fibres[f] as Dictionary).get("tier", "")) == t and EmpireGoals.fibre_open(str(f)))
 		for f in of_tier:
 			var wt := float(w.get(t, 1.0)) / of_tier.size()
 			pool.append([str(f), wt])

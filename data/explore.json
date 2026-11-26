@@ -1,0 +1,54 @@
+{
+  "_about": "Things to find out in the world (scripts/explore.gd, 2026-11-26, docs/REVIEW_2026-11-26.md section 6). patches: lush green patches of turf with a faint glint; dug with the shovel (a click with it in hand, or the patch's own menu) they give one roll of their loot table: [id, x, z, table, refill days (0 = once only)]; a patch is moved to the nearest open ground when the world is built. Its 'note' is shown instead of the usual line. loot: tables of [kind, a, b, weight]: coins a..b, an item a (id) times b, or a pair of found needles a (once: a pair she has is coins instead). Coins found are not sweater money, so the ledger leaves them out. needles: pairs found out in the world; the best she owns sets the least a sweater can be, like Rosa's (empire.needle_floor()). huts: little buildings with a chest each (opened once): at [x, z], yaw in degrees, the chest's loot as a list of [kind, a, b]. waders: Steve's, for the deep water round the Deep Mire (regions.gd: the grid's moat opens once she has them). tent: Steve's; pitched from the ground ring anywhere open outside town; sleeping in it with a bonfire of hers within fire_radius fills every bar, without one it gives rest energy like sleeping by a fire. Both are for sale once Act 1 is done. Every line, name, place and number is a DRAFT.",
+  "waders": {"price": 350, "line": "Chest waders. Rubber, the real thing. Mind the Mirewood: past the reeds it's deeper than it looks."},
+  "tent": {"price": 400, "fire_radius": 9.0, "rest": 50.0, "line": "Canvas tent, poles, pegs, the lot. Pitch it by a good fire and you'll sleep like a log."},
+  "needles": {
+    "driftwood_needles": {"name": "Driftwood needles", "floor": 2, "color": "#b8a488"},
+    "bog_oak_needles": {"name": "Bog oak needles", "floor": 3, "color": "#3a2c22"},
+    "bone_needles": {"name": "Bone needles", "floor": 3, "color": "#e8e0cc"},
+    "horn_needles": {"name": "Ram's horn needles", "floor": 4, "color": "#8a7050"}
+  },
+  "loot": {
+    "near": [["coins", 15, 40, 6], ["item", "wool", 2, 3], ["item", "turnip_seeds", 4, 2], ["item", "angora", 1, 2], ["needles", "driftwood_needles", 1, 1]],
+    "swamp": [["coins", 30, 80, 5], ["item", "beaver_fibre", 1, 2], ["item", "nutria_fibre", 1, 2], ["needles", "bog_oak_needles", 1, 1]],
+    "beach": [["coins", 25, 70, 5], ["item", "mink_fibre", 1, 1], ["needles", "driftwood_needles", 1, 2], ["item", "wood", 4, 2]],
+    "hills": [["coins", 30, 90, 5], ["item", "coyote_fibre", 1, 2], ["item", "lynx_fibre", 1, 1]],
+    "meadow": [["coins", 30, 90, 5], ["item", "sable_fibre", 1, 1], ["item", "pumpkin_seeds", 3, 2]],
+    "dunes": [["coins", 60, 160, 5], ["item", "fennec_fibre", 1, 2], ["item", "jackal_fibre", 1, 1], ["needles", "bone_needles", 1, 1]],
+    "downs": [["coins", 60, 160, 5], ["item", "mohair", 2, 2], ["item", "cashmere", 1, 1], ["needles", "horn_needles", 1, 1]]
+  },
+  "patches": [
+    ["gran_first", -14.0, 12.0, "near", 0],
+    ["near_woods", 14.0, -38.0, "near", 10],
+    ["near_fields", -22.0, -10.0, "near", 10],
+    ["town_edge", 48.0, 24.0, "near", 10],
+    ["swamp_reeds", -44.0, 14.0, "swamp", 12],
+    ["swamp_pools", -62.0, -2.0, "swamp", 0],
+    ["deep_mire", -79.0, -24.0, "swamp", 0],
+    ["beach_west", 4.0, 50.0, "beach", 12],
+    ["beach_mid", 30.0, 53.0, "beach", 0],
+    ["beach_east", 90.0, 48.0, "beach", 0],
+    ["hills_low", 12.0, -72.0, "hills", 12],
+    ["hills_high", 55.0, -88.0, "hills", 0],
+    ["hills_east", 82.0, -58.0, "hills", 0],
+    ["meadow_north", 104.0, -24.0, "meadow", 12],
+    ["meadow_south", 128.0, 22.0, "meadow", 0],
+    ["dunes_west", 172.0, 46.0, "dunes", 0],
+    ["dunes_mid", 226.0, 10.0, "dunes", 0],
+    ["dunes_east", 256.0, 46.0, "dunes", 0],
+    ["downs_west", 164.0, -82.0, "downs", 0],
+    ["downs_mid", 212.0, -40.0, "downs", 0],
+    ["downs_east", 255.0, -92.0, "downs", 0]
+  ],
+  "notes": {"gran_first": "Under the turf, a biscuit tin in Gran's handwriting: \"For a rainy day, love. There are more of these about. Keep your eyes on the grass.\""},
+  "huts": [
+    {"id": "beach_hut_1", "kind": "beach_hut", "at": [58.0, 43.0], "yaw": 180, "colour": "#e86a5a"},
+    {"id": "beach_hut_2", "kind": "beach_hut", "at": [64.0, 43.0], "yaw": 180, "colour": "#5aa0d8"},
+    {"id": "beach_hut_3", "kind": "beach_hut", "at": [70.0, 43.0], "yaw": 180, "colour": "#f0c040"},
+    {"id": "beach_hut_4", "kind": "beach_hut", "at": [76.0, 43.0], "yaw": 180, "colour": "#7cc49a"},
+    {"id": "beach_hut_5", "kind": "beach_hut", "at": [82.0, 43.0], "yaw": 180, "colour": "#c890d8", "chest": [["needles", "driftwood_needles", 1], ["coins", 60, 60], ["item", "wool", 2]]},
+    {"id": "mire_hut", "kind": "stilt_hut", "at": [-74.0, -16.0], "yaw": 180, "chest": [["needles", "bog_oak_needles", 1], ["item", "otter_fibre", 1], ["coins", 150, 150]]},
+    {"id": "dune_ruin", "kind": "ruin", "at": [244.0, 32.0], "yaw": 15, "chest": [["needles", "bone_needles", 1], ["item", "jackal_fibre", 1], ["coins", 300, 300]]},
+    {"id": "downs_bothy", "kind": "bothy", "at": [242.0, -82.0], "yaw": 160, "chest": [["needles", "horn_needles", 1], ["item", "cashmere", 2], ["coins", 300, 300]]}
+  ]
+}

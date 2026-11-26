@@ -13,8 +13,8 @@ extends Node3D
 ## blades take its own colour, height and density (data/regions.json "grass").
 
 const REGION := Rect2(-14.0, -28.0, 92.0, 48.0) # where blades are planted up front: the farm, the road and town
-const OUTER := Rect2(-96.0, -100.0, 240.0, 162.0) # Regions.BOUNDS, the whole walkable map: blades stream in here
-const ROAD_RECT := Rect2(-96.0, -100.0, 240.0, 162.0) # GodMode.ROAD_RECT, what god mode's road map covers
+const OUTER := Rect2(-96.0, -100.0, 360.0, 162.0) # Regions.BOUNDS, the whole walkable map: blades stream in here
+const ROAD_RECT := Rect2(-96.0, -100.0, 360.0, 162.0) # GodMode.ROAD_RECT, what god mode's road map covers
 const ROAD_PX := 8.0 # GodMode.ROAD_PX
 var plant_reach := VIEW_RANGE + CHUNK + 2.0 # outer squares whose nearest corner is this close to the camera are planted (the level's range and a square)
 const DROP_REACH := 100.0 # ... and freed again past this

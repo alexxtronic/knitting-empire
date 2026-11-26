@@ -85,6 +85,10 @@ func _ready() -> void:
 		_shorn = Catalog.model(str(info["shorn_model"]), self)
 		_anim_shorn = _loops_of(_shorn)
 	_anim = _anim_fur
+	# a stand-in made from another species' model (2026-11-26, until Tripo is back): resized and tinted
+	for m in [_model, _shorn]:
+		if m != null:
+			restyle(m, info)
 	if _anim == null: # no model: a soft ball in its colour, so it is still there to find
 		_model = Node3D.new()
 		add_child(_model)
@@ -227,11 +231,41 @@ func _show_coat() -> void:
 		_anim.speed_scale = was.speed_scale
 
 
-## The ground each loop of the model showing covers a second at speed 1.
+## The ground each loop of the model showing covers a second at speed 1 (times `model_scale`: a
+## model drawn twice as big covers twice the ground).
 func stride() -> Dictionary:
+	var st: Dictionary = info.get("stride", {})
 	if _anim != null and _anim == _anim_shorn:
-		return info.get("shorn_stride", info.get("stride", {}))
-	return info.get("stride", {})
+		st = info.get("shorn_stride", st)
+	var k := float(info.get("model_scale", 1.0))
+	if is_equal_approx(k, 1.0):
+		return st
+	var out := {}
+	for n in st:
+		out[n] = float(st[n]) * k
+	return out
+
+
+## A stand-in's look (data/wildlife.json): `model_scale` resizes the model and `tint` multiplies its
+## colours (each surface's material is copied, so the species it was borrowed from keeps its own).
+## Static, so the Field Guide's pictures can match.
+static func restyle(m: Node3D, info: Dictionary) -> void:
+	var k := float(info.get("model_scale", 1.0))
+	if not is_equal_approx(k, 1.0):
+		m.scale *= k
+	if not info.has("tint"):
+		return
+	var tint := Color.html(str(info["tint"]))
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		var inst := mi as MeshInstance3D
+		if inst.mesh == null:
+			continue
+		for i in inst.mesh.get_surface_count():
+			var mat := inst.get_active_material(i)
+			if mat is StandardMaterial3D:
+				var own := (mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+				own.albedo_color = own.albedo_color * tint
+				inst.set_surface_override_material(i, own)
 
 
 ## Its menu: comb it (or wait for its coat), or just watch it. Opening the menu holds it still.

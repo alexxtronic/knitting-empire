@@ -1,0 +1,13 @@
+{
+  "_about": "Her horse (scripts/horse.gd, 2026-11-26: Alex wants a horse she can ride to get places faster; a placeholder until there are Tripo models again). Lars sells it once Act 1 is done (price). G gets on when it's within mount_reach metres, and off again; from further away G whistles it over (within call_reach). Riding, her walk and run are speed times faster. It's the dog's model scaled up and tinted (model, scale, tint): a STAND-IN until a horse is made. saddle: how high she sits. It never herds. Every number and line is a DRAFT.",
+  "price": 1200,
+  "speed": 2.5,
+  "mount_reach": 4.0,
+  "call_reach": 90.0,
+  "model": "res://assets/props/dog.glb",
+  "scale": 2.35,
+  "saddle": 0.95,
+  "tint": "#9a5a34",
+  "name": "Chestnut",
+  "line": "She's an old cob, but she'll go all day. Feed her, brush her, don't race her up the foothills."
+}

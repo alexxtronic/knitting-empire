@@ -32,6 +32,7 @@ extends Node3D
 const Data = preload("res://scripts/data.gd")
 const WildAnimal = preload("res://scripts/wild_animal.gd")
 const Bird = preload("res://scripts/bird.gd")
+const Crabs = preload("res://scripts/crabs.gd")
 const Hud = preload("res://scripts/hud.gd")
 const KnitGame = preload("res://scripts/knit_game.gd")
 const EmpireGoals = preload("res://scripts/empire_goals.gd")
@@ -45,6 +46,7 @@ var main: Node # main.gd
 var data: Dictionary = {}
 var animals: Array = [] # wild_animal.gd nodes
 var flocks: Array = [] # bird.gd nodes
+var crabs: Array = [] # crabs.gd groups on the beach
 var built := false
 var _said_t := 0.0 # seconds before "he can only herd so many" may be said again
 var _cull_t := 0.0
@@ -107,7 +109,11 @@ func build() -> void:
 				centre = _open_spot(rng, rects[floori(float(n) / herd) % rects.size()] if not rects.is_empty() else Rect2(0, 0, 10, 10))
 				p = centre
 			else: # the rest of a herd graze close by
-				p = _open_spot(rng, Rect2(centre.x - 3.0, centre.z - 3.0, 6.0, 6.0), centre)
+				var near := Rect2(centre.x - 3.0, centre.z - 3.0, 6.0, 6.0)
+				p = _open_spot(rng, near, centre)
+				var hr: Rect2 = rects[floori(float(n) / herd) % rects.size()] if not rects.is_empty() else near
+				if not hr.grow(0.5).has_point(Vector2(p.x, p.z)): # a herd by its habitat's edge: keep it inside
+					p = _open_spot(rng, near.intersection(hr), centre)
 			_spots["%s_%d" % [id, n]] = [str(id), n, p]
 			if _gone("%s_%d" % [id, n]):
 				continue # caught, and nothing has taken its place yet
@@ -126,6 +132,15 @@ func build() -> void:
 			add_child(b)
 			flocks.append(b)
 			i += 1
+	var cr: Dictionary = data.get("crabs", {}) # shore crabs on the beach (crabs.gd)
+	var ci := 0
+	for g in cr.get("groups", []):
+		var zone := habitat(str(g[0]))
+		var c := Crabs.new()
+		c.setup(main, self, ci, zone, int(g[1]), _open_spot(rng, zone), float(cr.get("flush", 3.0)))
+		add_child(c)
+		crabs.append(c)
+		ci += 1
 	built = true
 	_cull(true)
 
@@ -144,11 +159,12 @@ func _spawn(id: String, n: int, p: Vector3) -> Node3D:
 
 
 func clear() -> void:
-	for n in animals + flocks:
+	for n in animals + flocks + crabs:
 		if is_instance_valid(n):
 			n.queue_free()
 	animals = []
 	flocks = []
+	crabs = []
 	_spots = {}
 	built = false
 
@@ -181,7 +197,7 @@ func _cull(force: bool) -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam:
 		eyes.append(cam.global_position)
-	for n in animals + flocks:
+	for n in animals + flocks + crabs:
 		if not is_instance_valid(n):
 			continue
 		var near: bool = n.get("caught") == true or n.get("penned") == true # hers: never asleep

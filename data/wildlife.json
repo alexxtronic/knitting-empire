@@ -19,7 +19,21 @@
     "foothills_low": [-16.0, -60.0, 100.0, 11.0],
     "foothills_mid": [-16.0, -82.0, 100.0, 20.0],
     "meadow_far": [114.0, -36.0, 24.0, 66.0],
-    "high_foothills": [70.0, -96.0, 18.0, 8.0]
+    "high_foothills": [70.0, -96.0, 18.0, 8.0],
+    "swamp_east": [-58.0, -18.0, 22.0, 36.0],
+    "mire_east": [-72.0, -25.0, 7.0, 6.0],
+    "mire_west": [-82.0, -25.0, 8.0, 6.0],
+    "dunes_near": [152.0, 0.0, 30.0, 46.0],
+    "dunes_mid": [182.0, 0.0, 34.0, 46.0],
+    "dunes_far": [216.0, 0.0, 30.0, 46.0],
+    "dunes_deep": [246.0, 4.0, 12.0, 44.0],
+    "downs_near": [152.0, -50.0, 34.0, 36.0],
+    "downs_mid": [186.0, -70.0, 36.0, 50.0],
+    "downs_far": [222.0, -80.0, 30.0, 40.0],
+    "downs_top": [240.0, -94.0, 18.0, 14.0],
+    "beach_point": [-10.0, 44.0, 10.0, 10.0],
+    "beach_shore_w": [-10.0, 49.0, 30.0, 6.0],
+    "beach_shore_e": [40.0, 49.0, 48.0, 6.0]
   },
   "fibres": {
     "angora": {"name": "Angora fluff", "tier": "common", "price": 14, "knit_floor": 2, "color": "#eed8b8"},
@@ -30,7 +44,19 @@
     "mink_fibre": {"name": "Mink down", "tier": "ultra_rare", "price": 66, "knit_floor": 4, "color": "#5a3020"},
     "sable_fibre": {"name": "Sable down", "tier": "legendary", "price": 125, "knit_floor": 5, "color": "#c08040"},
     "lynx_fibre": {"name": "Lynx fluff", "tier": "legendary", "price": 130, "knit_floor": 5, "color": "#d8b894"},
-    "chinchilla_fibre": {"name": "Chinchilla cloud", "tier": "mythic", "price": 320, "knit_floor": 5, "color": "#c4cad6"}
+    "chinchilla_fibre": {"name": "Chinchilla cloud", "tier": "mythic", "price": 320, "knit_floor": 5, "color": "#c4cad6"},
+    "nutria_fibre": {"name": "Nutria down", "tier": "rare", "price": 30, "knit_floor": 3, "color": "#8a6a4a"},
+    "muskrat_fibre": {"name": "Muskrat down", "tier": "ultra_rare", "price": 58, "knit_floor": 4, "color": "#6a5040"},
+    "otter_fibre": {"name": "Otter down", "tier": "legendary", "price": 128, "knit_floor": 5, "color": "#5c4634"},
+    "hare_fibre": {"name": "Desert hare fluff", "tier": "common", "price": 14, "knit_floor": 2, "color": "#e0c090"},
+    "fennec_fibre": {"name": "Fennec fluff", "tier": "rare", "price": 34, "knit_floor": 3, "color": "#f0d4a4"},
+    "jackal_fibre": {"name": "Jackal fluff", "tier": "ultra_rare", "price": 62, "knit_floor": 4, "color": "#d8a868"},
+    "sandcat_fibre": {"name": "Sand cat fluff", "tier": "legendary", "price": 132, "knit_floor": 5, "color": "#ecd8ac"},
+    "mohair": {"name": "Mohair", "tier": "rare", "price": 34, "knit_floor": 3, "color": "#f4eee0"},
+    "cashmere": {"name": "Cashmere", "tier": "ultra_rare", "price": 66, "knit_floor": 4, "color": "#b8a890"},
+    "alpaca_fibre": {"name": "Alpaca fleece", "tier": "legendary", "price": 130, "knit_floor": 5, "color": "#e8d0b0"},
+    "vicuna_fibre": {"name": "Vicuna fleece", "tier": "mythic", "price": 330, "knit_floor": 5, "color": "#d09a60"},
+    "sea_otter_fibre": {"name": "Sea otter down", "tier": "mythic", "price": 340, "knit_floor": 5, "color": "#7a6454"}
   },
   "animals": {
     "sheep": {"name": "Wild sheep", "tier": "common", "fibre": "wool", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "shorn_model": "res://assets/props/sheep_sheared.glb", "shorn_stride": {"Walk": 0.462}, "walk": 0.38, "run": 1.0, "click": 0.9, "count": 16, "habitats": ["fields_west", "fields_south"], "shy": 3.5, "regrow_days": 1, "herd": 4},
@@ -42,11 +68,35 @@
     "coyote": {"name": "Coyote", "tier": "ultra_rare", "fibre": "coyote_fibre", "model": "res://assets/wildlife/coyote.glb", "stride": {"Walk": 0.694, "Run": 2.298}, "shorn_model": "res://assets/wildlife/coyote_shorn.glb", "shorn_stride": {"Walk": 0.677, "Run": 2.243}, "walk": 0.69, "run": 3.2, "click": 0.75, "count": 3, "habitats": ["foothills_low"], "shy": 7.0, "regrow_days": 3},
     "sable": {"name": "Sable", "tier": "legendary", "fibre": "sable_fibre", "model": "res://assets/wildlife/sable.glb", "stride": {"Walk": 0.421, "Run": 2.01}, "shorn_model": "res://assets/wildlife/sable_shorn.glb", "shorn_stride": {"Walk": 0.4, "Run": 1.911}, "walk": 0.42, "run": 2.6, "click": 0.4, "count": 2, "habitats": ["meadow_far"], "shy": 7.5, "regrow_days": 4},
     "lynx": {"name": "Lynx", "tier": "legendary", "fibre": "lynx_fibre", "model": "res://assets/wildlife/lynx.glb", "stride": {"Walk": 0.726, "Run": 2.405}, "shorn_model": "res://assets/wildlife/lynx_shorn.glb", "shorn_stride": {"Walk": 0.71, "Run": 2.352}, "walk": 0.73, "run": 3.0, "click": 0.8, "count": 2, "habitats": ["foothills_mid"], "shy": 8.0, "regrow_days": 4},
-    "chinchilla": {"name": "Wild chinchilla", "tier": "mythic", "fibre": "chinchilla_fibre", "model": "res://assets/wildlife/chinchilla.glb", "stride": {"Walk": 0.311, "Run": 0.903}, "shorn_model": "res://assets/wildlife/chinchilla_shorn.glb", "shorn_stride": {"Walk": 0.332, "Run": 0.965}, "walk": 0.31, "run": 1.3, "click": 0.4, "count": 1, "habitats": ["high_foothills"], "shy": 9.0, "regrow_days": 7}
+    "chinchilla": {"name": "Wild chinchilla", "tier": "mythic", "fibre": "chinchilla_fibre", "model": "res://assets/wildlife/chinchilla.glb", "stride": {"Walk": 0.311, "Run": 0.903}, "shorn_model": "res://assets/wildlife/chinchilla_shorn.glb", "shorn_stride": {"Walk": 0.332, "Run": 0.965}, "walk": 0.31, "run": 1.3, "click": 0.4, "count": 1, "habitats": ["high_foothills"], "shy": 9.0, "regrow_days": 7},
+    "nutria": {"name": "Nutria", "tier": "rare", "fibre": "nutria_fibre", "land": "swamp", "model": "res://assets/wildlife/beaver.glb", "stride": {"Walk": 0.274, "Run": 0.78}, "shorn_model": "res://assets/wildlife/beaver_shorn.glb", "shorn_stride": {"Walk": 0.274, "Run": 0.78}, "model_scale": 0.85, "tint": "#c0a080", "stand_in": "beaver", "walk": 0.24, "run": 0.9, "click": 0.42, "count": 5, "habitats": ["swamp_east"], "shy": 5.5, "regrow_days": 2},
+    "muskrat": {"name": "Muskrat", "tier": "ultra_rare", "fibre": "muskrat_fibre", "land": "swamp", "model": "res://assets/wildlife/beaver.glb", "stride": {"Walk": 0.274, "Run": 0.78}, "shorn_model": "res://assets/wildlife/beaver_shorn.glb", "shorn_stride": {"Walk": 0.274, "Run": 0.78}, "model_scale": 0.62, "tint": "#8a7060", "stand_in": "beaver", "walk": 0.18, "run": 0.7, "click": 0.31, "count": 3, "habitats": ["mire_east"], "shy": 6.0, "regrow_days": 3},
+    "otter": {"name": "River otter", "tier": "legendary", "fibre": "otter_fibre", "land": "swamp", "model": "res://assets/wildlife/mink.glb", "stride": {"Walk": 0.393, "Run": 1.651}, "shorn_model": "res://assets/wildlife/mink_shorn.glb", "shorn_stride": {"Walk": 0.371, "Run": 1.769}, "model_scale": 1.4, "tint": "#c8b0a0", "stand_in": "mink", "walk": 0.55, "run": 3.0, "click": 0.56, "count": 2, "habitats": ["mire_west"], "shy": 7.5, "regrow_days": 4},
+    "desert_hare": {"name": "Desert hare", "tier": "common", "fibre": "hare_fibre", "land": "dunes", "model": "res://assets/wildlife/rabbit.glb", "stride": {"Walk": 0.352, "Run": 1.024}, "shorn_model": "res://assets/wildlife/rabbit_shorn.glb", "shorn_stride": {"Walk": 0.352, "Run": 1.024}, "model_scale": 1.15, "tint": "#ffe4b8", "stand_in": "rabbit", "walk": 0.4, "run": 1.9, "click": 0.52, "count": 8, "habitats": ["dunes_near"], "shy": 5.0, "regrow_days": 1},
+    "fennec": {"name": "Fennec fox", "tier": "rare", "fibre": "fennec_fibre", "land": "dunes", "model": "res://assets/wildlife/fox.glb", "stride": {"Walk": 0.524, "Run": 1.737}, "shorn_model": "res://assets/wildlife/fox_shorn.glb", "shorn_stride": {"Walk": 0.502, "Run": 1.663}, "model_scale": 0.7, "tint": "#fff0d0", "stand_in": "fox", "walk": 0.36, "run": 1.8, "click": 0.42, "count": 4, "habitats": ["dunes_mid"], "shy": 6.0, "regrow_days": 2},
+    "jackal": {"name": "Golden jackal", "tier": "ultra_rare", "fibre": "jackal_fibre", "land": "dunes", "model": "res://assets/wildlife/coyote.glb", "stride": {"Walk": 0.694, "Run": 2.298}, "shorn_model": "res://assets/wildlife/coyote_shorn.glb", "shorn_stride": {"Walk": 0.677, "Run": 2.243}, "model_scale": 0.9, "tint": "#ffd8a0", "stand_in": "coyote", "walk": 0.62, "run": 2.9, "click": 0.68, "count": 3, "habitats": ["dunes_far"], "shy": 7.0, "regrow_days": 3},
+    "sand_cat": {"name": "Sand cat", "tier": "legendary", "fibre": "sandcat_fibre", "land": "dunes", "model": "res://assets/wildlife/lynx.glb", "stride": {"Walk": 0.726, "Run": 2.405}, "shorn_model": "res://assets/wildlife/lynx_shorn.glb", "shorn_stride": {"Walk": 0.71, "Run": 2.352}, "model_scale": 0.6, "tint": "#fff0d8", "stand_in": "lynx", "walk": 0.44, "run": 1.8, "click": 0.48, "count": 2, "habitats": ["dunes_deep"], "shy": 8.0, "regrow_days": 4},
+    "mohair_goat": {"name": "Angora goat", "tier": "rare", "fibre": "mohair", "land": "downs", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "shorn_model": "res://assets/props/sheep_sheared.glb", "shorn_stride": {"Walk": 0.462}, "model_scale": 1.0, "tint": "#fffaf0", "stand_in": "sheep", "walk": 0.38, "run": 1.1, "click": 0.9, "count": 6, "habitats": ["downs_near"], "shy": 5.0, "regrow_days": 2, "herd": 3},
+    "cashmere_goat": {"name": "Cashmere goat", "tier": "ultra_rare", "fibre": "cashmere", "land": "downs", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "shorn_model": "res://assets/props/sheep_sheared.glb", "shorn_stride": {"Walk": 0.462}, "model_scale": 0.9, "tint": "#c8b8a0", "stand_in": "sheep", "walk": 0.36, "run": 1.2, "click": 0.81, "count": 3, "habitats": ["downs_mid"], "shy": 6.5, "regrow_days": 3},
+    "alpaca": {"name": "Alpaca", "tier": "legendary", "fibre": "alpaca_fibre", "land": "downs", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "shorn_model": "res://assets/props/sheep_sheared.glb", "shorn_stride": {"Walk": 0.462}, "model_scale": 1.4, "tint": "#f0dcc0", "stand_in": "sheep", "walk": 0.53, "run": 1.4, "click": 1.26, "count": 2, "habitats": ["downs_far"], "shy": 7.5, "regrow_days": 4},
+    "vicuna": {"name": "Vicuna", "tier": "mythic", "fibre": "vicuna_fibre", "land": "downs", "model": "res://assets/props/sheep_woolly.glb", "loops": {"idle": "Idle", "walk": "Walk", "run": "Walk", "graze": "Graze"}, "stride": {"Walk": 0.315}, "shorn_model": "res://assets/props/sheep_sheared.glb", "shorn_stride": {"Walk": 0.462}, "model_scale": 1.2, "tint": "#e0a868", "stand_in": "sheep", "walk": 0.45, "run": 1.5, "click": 1.08, "count": 1, "habitats": ["downs_top"], "shy": 9.0, "regrow_days": 7},
+    "sea_otter": {"name": "Sea otter", "tier": "mythic", "fibre": "sea_otter_fibre", "land": "beach", "model": "res://assets/wildlife/mink.glb", "stride": {"Walk": 0.393, "Run": 1.651}, "shorn_model": "res://assets/wildlife/mink_shorn.glb", "shorn_stride": {"Walk": 0.371, "Run": 1.769}, "model_scale": 1.6, "tint": "#d8c0b0", "stand_in": "mink", "walk": 0.62, "run": 2.4, "click": 0.64, "count": 1, "habitats": ["beach_point"], "shy": 9.0, "regrow_days": 7}
   },
   "birds": {
-    "sparrow": {"name": "Sparrow", "model": "res://assets/wildlife/sparrow.glb", "flocks": [["fields_south", 5], ["fields_west", 4], ["town_edge", 5], ["woods_north", 4]], "flush": 4.5, "speed": 6.0},
+    "sparrow": {"name": "Sparrow", "model": "res://assets/wildlife/sparrow.glb", "flocks": [["fields_south", 5], ["fields_west", 4], ["town_edge", 5], ["woods_north", 4], ["downs_near", 5], ["downs_mid", 4]], "flush": 4.5, "speed": 6.0},
     "robin": {"name": "Robin", "model": "res://assets/wildlife/robin.glb", "flocks": [["fields_south", 2], ["woods_north", 3], ["swamp", 3]], "flush": 4.0, "speed": 5.5},
     "gull": {"name": "Gull", "model": "res://assets/wildlife/gull.glb", "flocks": [["beach", 6], ["beach", 5]], "flush": 6.0, "speed": 7.0}
+  },
+  "_about_lands": "The lands past the first four (2026-11-26, docs/REVIEW_2026-11-26.md section 6): a species with a land is one of that land's own; each land has its own ladder, the rarer the fewer and the further from where its trail comes in (lands: [x, z] of that entry), and a fibre of a land's own is wanted by buyers and the online store only once she has seen that animal in the Field Guide (EmpireGoals.fibre_open). model_scale and tint dress a borrowed model (stand_in names whose): every new species is a STAND-IN until its own model is made. Names and numbers are drafts.",
+  "lands": {
+    "swamp": [-30.0, 0.5],
+    "dunes": [150.0, 22.5],
+    "downs": [150.0, -27.5],
+    "beach": [42.0, 38.6]
+  },
+  "crabs": {
+    "_about": "Shore crabs (scripts/crabs.gd): groups of [habitat, how many] that scuttle about on the sand and dig in when she or the dog comes within flush metres. A STAND-IN from plain shapes.",
+    "flush": 3.0,
+    "groups": [["beach_shore_w", 4], ["beach_shore_e", 4], ["beach_shore_e", 3]]
   }
 }

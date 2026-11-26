@@ -20,7 +20,7 @@ const World = preload("res://scripts/world.gd")
 const Nature = preload("res://scripts/nature.gd")
 
 ## The whole walkable world: main.gd's walking grid and the camera's reach cover this.
-const BOUNDS := Rect2(-96.0, -100.0, 240.0, 162.0) # x -96..144, z -100..62
+const BOUNDS := Rect2(-96.0, -100.0, 360.0, 162.0) # x -96..264, z -100..62 (east to 144 until 2026-11-26: the dunes and the downs)
 const SEA_Y := -0.3
 const SAND_FLAT_TO := 55.0 # the beach starts to slope into the sea here (z)
 const SAND_SLOPE := 18.0 # ... and is this many metres further out at its lowest
@@ -45,6 +45,12 @@ var blockers: Array = []
 var ground_mats: Array[ShaderMaterial] = []
 var pool_mats: Array[ShaderMaterial] = []
 var sea_mat: ShaderMaterial
+## The dunes' and the downs' mounds (data "relief"): [cx, cz, rx, rz, height, cos, sin, dune].
+var mounds: Array = []
+var mire := {} # the swamp's Deep Mire: centre (Vector2), half (Vector2, the island), moat (metres)
+var moat: MeshInstance3D
+var _relief_cells: Array = [] # walking-grid cells the mounds block (worked out once)
+var _moat_cells: Array = [] # ... and the Deep Mire's moat, open only with waders
 
 
 static func _rect(a: Array) -> Rect2:
@@ -60,13 +66,22 @@ func build(m: Node) -> Array:
 		trails.append(_rect(t))
 	defs = d.get("regions", {})
 	shore_z = _find_shore()
+	for id in defs:
+		var dune: bool = defs[id].get("dunes", false) == true
+		for md in defs[id].get("relief", []):
+			var a := deg_to_rad(float(md[5]))
+			mounds.append([float(md[0]), float(md[1]), float(md[2]), float(md[3]), float(md[4]), cos(a), sin(a), dune])
+	if defs.has("swamp") and defs["swamp"].has("deep_mire"):
+		var dm: Dictionary = defs["swamp"]["deep_mire"]
+		mire = {"centre": Vector2(float(dm["centre"][0]), float(dm["centre"][1])),
+			"half": Vector2(float(dm["size"][0]), float(dm["size"][1])) * 0.5, "moat": float(dm.get("moat", 4.0))}
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2611
 	var k := 0
 	for id in defs:
 		# each land's patch a couple of millimetres over the last, so where they overlap they don't
 		# sit flush and flicker (the trails still lie over all of them)
-		_ground(id, defs[id], GROUND_Y + 0.002 * mini(k, 3))
+		_ground(id, defs[id], GROUND_Y + (0.002 * mini(k, 3) if k < 4 else 0.001)) # the lands added later lie under the first four where they meet
 		k += 1
 	for t in trails:
 		_trail(t)
@@ -79,6 +94,17 @@ func build(m: Node) -> Array:
 		_mountains()
 	for id in defs:
 		_scatter_region(id, defs[id], rng)
+	# added later: each kind from its own seed, so the scenery above never moves (2026-11-26)
+	for id in defs:
+		if defs[id].has("extra"):
+			_scatter_region(id, {"walk": defs[id]["walk"], "ground": defs[id]["ground"], "scatter": defs[id]["extra"], "seeded": true}, rng)
+	if not mire.is_empty():
+		_build_moat()
+		var island := Rect2(mire["centre"] - mire["half"], mire["half"] * 2.0)
+		var dm: Dictionary = defs["swamp"]["deep_mire"]
+		_scatter_region("mire", {"walk": [island.position.x, island.position.y, island.size.x, island.size.y],
+			"ground": [island.position.x - 7.0, island.position.y - 7.0, island.size.x + 14.0, island.size.y + 14.0],
+			"scatter": dm.get("scatter", []), "seeded": true}, rng)
 	return blockers
 
 
@@ -124,7 +150,135 @@ func trunk_blocks() -> Array:
 func height(_x: float, z: float) -> float:
 	if defs.has("beach") and z > SAND_FLAT_TO and _rect(defs["beach"]["ground"]).has_point(Vector2(_x, z)):
 		return -SAND_DEPTH * smoothstep(SAND_FLAT_TO, SAND_FLAT_TO + SAND_SLOPE, z)
-	return 0.0
+	return relief(_x, z)
+
+
+## The dunes and hills (data "relief"): the highest mound over a point, 0 off them. Each is a smooth
+## bump, (1 - d²)² of its height, d the distance in its own turned, stretched frame; a dune is
+## steeper on its east (lee) side.
+func relief(x: float, z: float) -> float:
+	var best := 0.0
+	for m in mounds:
+		var dx := x - float(m[0])
+		var dz := z - float(m[1])
+		var c: float = m[5]
+		var sn: float = m[6]
+		var lx := dx * c + dz * sn
+		var lz := -dx * sn + dz * c
+		if m[7] and lx > 0.0:
+			lx *= 1.7
+		var d2 := (lx / float(m[2])) * (lx / float(m[2])) + (lz / float(m[3])) * (lz / float(m[3]))
+		if d2 < 1.0:
+			best = maxf(best, float(m[4]) * (1.0 - d2) * (1.0 - d2))
+	return best
+
+
+## Blocks the walking grid wherever a mound stands more than RELIEF_BLOCK high (main._rebuild_grid).
+const RELIEF_BLOCK := 0.12
+
+func mark_relief() -> void:
+	if _relief_cells.is_empty() and not mounds.is_empty():
+		var seen := {}
+		for m in mounds:
+			var r := maxf(float(m[2]), float(m[3]))
+			var c0: Vector2i = main._cell(Vector3(float(m[0]) - r, 0, float(m[1]) - r))
+			var c1: Vector2i = main._cell(Vector3(float(m[0]) + r, 0, float(m[1]) + r))
+			for x in range(c0.x, c1.x + 1):
+				for y in range(c0.y, c1.y + 1):
+					var id := Vector2i(x, y)
+					if seen.has(id) or not main.astar.is_in_boundsv(id):
+						continue
+					var cc: Vector3 = main._cell_center(id)
+					if relief(cc.x, cc.z) > RELIEF_BLOCK:
+						seen[id] = true
+		_relief_cells = seen.keys()
+	for id in _relief_cells:
+		main.astar.set_point_solid(id, true)
+
+
+# --- the Deep Mire: an island in the swamp behind deep water (waders from Steve, explore.gd) ----
+
+## How far out the moat's edge is at angle `a` (1 = the island's own ellipse), a little wobbly.
+static func _wobble(a: float) -> float:
+	return 1.0 + 0.07 * sin(a * 3.0 + 0.7) + 0.05 * sin(a * 5.0 + 2.1)
+
+
+## 0 on the island, 1 out in the moat, 2 beyond it (the rest of the swamp).
+func mire_zone(x: float, z: float) -> int:
+	if mire.is_empty():
+		return 2
+	var d: Vector2 = Vector2(x, z) - mire["centre"]
+	var h: Vector2 = mire["half"]
+	var a := atan2(d.y / h.y, d.x / h.x)
+	var w := _wobble(a)
+	var e := sqrt((d.x / h.x) * (d.x / h.x) + (d.y / h.y) * (d.y / h.y)) / w
+	if e <= 1.0:
+		return 0
+	var mo: float = mire["moat"]
+	var out := sqrt((d.x / (h.x + mo)) * (d.x / (h.x + mo)) + (d.y / (h.y + mo)) * (d.y / (h.y + mo))) / w
+	return 1 if out <= 1.0 else 2
+
+
+## The island's rect, for the habitat and the hut's chest.
+func mire_rect() -> Rect2:
+	if mire.is_empty():
+		return Rect2()
+	return Rect2(mire["centre"] - mire["half"], mire["half"] * 2.0)
+
+
+func mark_moat() -> void:
+	if mire.is_empty():
+		return
+	if _moat_cells.is_empty():
+		var h: Vector2 = mire["half"] + Vector2.ONE * (float(mire["moat"]) * 1.2 + 1.0)
+		var c0: Vector2i = main._cell(Vector3(mire["centre"].x - h.x, 0, mire["centre"].y - h.y))
+		var c1: Vector2i = main._cell(Vector3(mire["centre"].x + h.x, 0, mire["centre"].y + h.y))
+		for x in range(c0.x, c1.x + 1):
+			for y in range(c0.y, c1.y + 1):
+				var cc: Vector3 = main._cell_center(Vector2i(x, y))
+				if mire_zone(cc.x, cc.z) == 1:
+					_moat_cells.append(Vector2i(x, y))
+	for id in _moat_cells:
+		main.astar.set_point_solid(id, true)
+
+
+## The moat's water: a ring between the island's wobbly edge and the moat's, dark and still.
+func _build_moat() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	var c: Vector2 = mire["centre"]
+	var h: Vector2 = mire["half"]
+	var mo: float = mire["moat"]
+	var n := 72
+	var inner: Array[Vector3] = []
+	var outer: Array[Vector3] = []
+	for i in n + 1:
+		var a := TAU * float(i) / float(n)
+		var w := _wobble(a)
+		inner.append(Vector3(cos(a) * h.x * w * 0.97, 0.0, sin(a) * h.y * w * 0.97))
+		outer.append(Vector3(cos(a) * (h.x + mo) * w * 1.02, 0.0, sin(a) * (h.y + mo) * w * 1.02))
+	for i in n:
+		st.add_vertex(inner[i])
+		st.add_vertex(outer[i + 1])
+		st.add_vertex(outer[i])
+		st.add_vertex(inner[i])
+		st.add_vertex(inner[i + 1])
+		st.add_vertex(outer[i + 1])
+	moat = MeshInstance3D.new()
+	moat.name = "DeepMireMoat"
+	moat.mesh = st.commit()
+	moat.position = Vector3(c.x, 0.035, c.y)
+	moat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var wm := ShaderMaterial.new()
+	wm.shader = preload("res://shaders/water.gdshader")
+	wm.set_shader_parameter("centre", Vector3(c.x, 0, c.y))
+	wm.set_shader_parameter("radius", maxf(h.x, h.y) + mo)
+	wm.set_shader_parameter("shallow", Color(0.09, 0.11, 0.07))
+	wm.set_shader_parameter("deep", Color(0.03, 0.045, 0.03))
+	moat.material_override = wm
+	pool_mats.append(wm)
+	add_child(moat)
 
 
 func _find_shore() -> float:
@@ -174,7 +328,7 @@ func _ground(id: String, r: Dictionary, lift: float) -> void:
 	var rect := _rect(r["ground"])
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var step := 2.0
+	var step := 1.5 if r.has("relief") else 2.0
 	var nx := ceili(rect.size.x / step)
 	var nz := ceili(rect.size.y / step)
 	for j in nz + 1:
@@ -428,6 +582,10 @@ func _scatter_region(id: String, r: Dictionary, rng: RandomNumberGenerator) -> v
 		var smax := float(entry[3])
 		var gap := float(entry[4])
 		var block := float(entry[5])
+		var tint := Color(str(entry[6])) if entry.size() > 6 else Color.WHITE
+		if r.get("seeded", false) == true: # its own random numbers: nothing else moves when it changes
+			rng = RandomNumberGenerator.new()
+			rng.seed = hash(id + "/" + model)
 		var mesh: Mesh = null
 		var kind := id + "-" + model
 		if model.begins_with("tree:"):
@@ -438,14 +596,25 @@ func _scatter_region(id: String, r: Dictionary, rng: RandomNumberGenerator) -> v
 		else:
 			mesh = main.nature._mesh(model)
 		if mesh == null:
-			push_warning("regions: no model for %s" % model)
+			if not r.get("seeded", false): # a seeded land's models may still be on their way
+				push_warning("regions: no model for %s" % model)
 			continue
+		if tint != Color.WHITE:
+			mesh = _tint_all(mesh as ArrayMesh, tint)
 		var items: Array = []
 		var tries := 0
 		while items.size() < count and tries < count * 30:
 			tries += 1
 			var x := rng.randf_range(area.position.x, area.end.x)
 			var z := rng.randf_range(area.position.y, area.end.y)
+			if model == "lily_pads": # out on the pools' water
+				if pools.is_empty():
+					break
+				var lp: Vector3 = pools[rng.randi() % pools.size()]
+				var la := rng.randf() * TAU
+				var ld := lp.z * sqrt(rng.randf()) * 0.7
+				x = lp.x + cos(la) * ld
+				z = lp.y + sin(la) * ld
 			# reeds crowd round the swamp's pools
 			if id == "swamp" and model == "tuft_tall" and not pools.is_empty() and rng.randf() < 0.65:
 				var p: Vector3 = pools[rng.randi() % pools.size()]
@@ -453,10 +622,13 @@ func _scatter_region(id: String, r: Dictionary, rng: RandomNumberGenerator) -> v
 				var d := p.z * rng.randf_range(0.85, 1.25)
 				x = p.x + cos(a) * d
 				z = p.y + sin(a) * d
-			if not _clear_at(x, z, gap, taken):
+			if model != "lily_pads" and not _clear_at(x, z, gap, taken):
 				continue
 			var s := rng.randf_range(smin, smax)
-			items.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(x, height(x, z), z)))
+			var y := 0.04 if model == "lily_pads" else height(x, z)
+			if id != "mire" and model != "lily_pads" and mire_zone(x, z) == 1: # nothing grows in the Deep Mire's moat
+				continue
+			items.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(x, y, z)))
 			if gap > 0.0:
 				taken.append(Vector3(x, z, gap * 0.5))
 			if block > 0.0 and walk.grow(1.0).has_point(Vector2(x, z)):
@@ -464,6 +636,25 @@ func _scatter_region(id: String, r: Dictionary, rng: RandomNumberGenerator) -> v
 				blockers.append(b)
 				main.nature.block_at[Vector2i(roundi(x * 100.0), roundi(z * 100.0))] = b
 		_add_kind(kind, mesh, items, gap > 0.0, _view_for(model))
+
+
+## A copy of a model with every surface's colour multiplied by `tint` (the dunes' bleached rocks).
+static func _tint_all(mesh: ArrayMesh, tint: Color) -> ArrayMesh:
+	var m := mesh.duplicate() as ArrayMesh
+	for i in m.get_surface_count():
+		var sm := m.surface_get_material(i)
+		if sm is StandardMaterial3D:
+			var own := (sm as StandardMaterial3D).duplicate() as StandardMaterial3D
+			own.albedo_color = own.albedo_color * tint
+			m.surface_set_material(i, own)
+		elif sm is ShaderMaterial and (sm as ShaderMaterial).shader != null:
+			var own2 := (sm as ShaderMaterial).duplicate() as ShaderMaterial
+			for u in (own2.shader as Shader).get_shader_uniform_list():
+				if str(u["name"]) in ["tint", "albedo", "albedo_color", "colour", "color"] and int(u["type"]) == TYPE_COLOR:
+					var c0: Variant = own2.get_shader_parameter(u["name"])
+					own2.set_shader_parameter(u["name"], (c0 as Color) * tint if c0 is Color else tint)
+			m.surface_set_material(i, own2)
+	return m
 
 
 ## A copy of a tree with its leaves tinted (they still sway and wet in the rain with the rest).
