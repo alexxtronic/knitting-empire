@@ -125,7 +125,7 @@
 			"name": "Sunscald Dunes",
 			"grass": {"density": 0.0, "height": 1.1, "tint": "#c9b06a", "tint_share": 0.75},
 			"walk": [150.0, -4.0, 110.0, 54.0],
-			"ground": [142.0, -10.0, 126.0, 66.0],
+			"ground": [141.0, -10.0, 128.0, 66.0],
 			"colours": ["#dcbb7c", "#cfa767", "#e8cd93"],
 			"seeded": true,
 			"dunes": true,
