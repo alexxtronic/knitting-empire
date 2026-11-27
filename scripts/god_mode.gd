@@ -704,17 +704,22 @@ func _block_rects(el: El) -> Array:
 		if not Regions.BOUNDS.has_point(o): # the whole map is walkable now, so anything on it stands in the way
 			return out
 		var s: Vector3 = el.xf.basis.get_scale()
-		if el.kind.begins_with("tree_"):
-			out.append(Rect2(o.x - 0.35, o.y - 0.35, 0.7, 0.7))
-		elif el.kind == "hedge":
+		# a land's own scenery is "<land>-<kind>" (meadow-tree_maple_green, swamp-bush_tall): the kind
+		# decides what blocks, or every tree in a land the layout lists blocked by its whole crown
+		# (8 m of invisible wall) and its bushes and flowers stood solid
+		var kind: String = el.kind.get_slice("-", 1) if "-" in el.kind else el.kind
+		if kind.begins_with("tree_"):
+			var t := 0.35 * maxf(1.0, s.x * 0.5)
+			out.append(Rect2(o.x - t, o.y - t, t * 2.0, t * 2.0))
+		elif kind == "hedge":
 			out.append(_turned(Rect2(-1.0 * s.x, -0.45, 2.0 * s.x, 0.9), _yaw(el.xf), o))
-		elif el.kind == "fence_picket":
+		elif kind == "fence_picket":
 			out.append(_turned(Rect2(-0.5 * s.x, -0.12, 1.0 * s.x, 0.24), _yaw(el.xf), o))
-		elif el.kind.begins_with("rock_"):
+		elif kind.begins_with("rock_"):
 			for k in Nature.ROCKS.values():
-				if k[0] == el.kind:
+				if k[0] == kind:
 					out.append(Rect2(o.x - float(k[2]) * s.x, o.y - float(k[3]) * s.x, float(k[2]) * s.x * 2.0, float(k[3]) * s.x * 2.0))
-		elif not _starts(el.kind, SOFT) and el.bounds.size.y * s.y > 0.5:
+		elif not _starts(kind, SOFT) and el.bounds.size.y * s.y > 0.5:
 			# any other solid model: the box round its footprint
 			var b := el.bounds
 			out.append(_turned(Rect2(b.position.x * s.x, b.position.z * s.z, b.size.x * s.x, b.size.z * s.z), _yaw(el.xf), o))

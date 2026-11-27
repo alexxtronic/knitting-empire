@@ -420,8 +420,13 @@ func _swamp_pools(r: Dictionary, rng: RandomNumberGenerator) -> void:
 		mi.material_override = wm
 		pool_mats.append(wm)
 		add_child(mi)
-		var h := rad * 0.75
-		blockers.append(Rect2(x - h, z - h, h * 2.0, h * 2.0))
+		# five strips that follow the water's round edge (one square stood its corners out on dry
+		# ground, an invisible wall beside the pool)
+		var pr := rad * 0.82
+		for k in 5:
+			var zc := (-0.8 + 0.4 * k) * pr
+			var hw := sqrt(maxf(0.0, pr * pr - zc * zc))
+			blockers.append(Rect2(x - hw, z + zc - 0.2 * pr, hw * 2.0, 0.4 * pr))
 
 
 ## A flat, lumpy disc of radius about r (a pool's water).
