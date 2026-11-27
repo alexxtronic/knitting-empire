@@ -81,14 +81,17 @@ func run(main: Node) -> void:
 	Game.set_flag("sweater_asked", flags_ask)
 	var rows: Array = m.sale.rows_for(wren)
 	var row_label := str(rows[0]["label"]) if rows.size() > 0 else ""
-	m._check("fibre wants: with only a wool sweater, Wren's row names fox fluff and is greyed (\"%s\")" % row_label,
-		rows.size() == 1 and not bool(rows[0]["enabled"]) and "fox fluff" in row_label)
+	m._check("fibre wants: with only a wool sweater, Wren's row names fox fluff and offers to show her another for less (\"%s\")" % row_label,
+		rows.size() == 1 and bool(rows[0]["enabled"]) and "fox fluff" in row_label and "pay less" in row_label)
 	m.hud.hide_dialogue()
 	var opened: bool = m.sale.ask(wren)
 	await m._wait(0.3)
-	var said := str(m.hud.dlg_text.text) if m.hud.dlg_panel.visible else ""
-	m._check("fibre wants: asked without one, the panel stays shut and she says she's after fox fluff (\"%s\")" % said,
-		not opened and not m.sale.visible and "fox fluff" in said)
+	var said := str(m.sale._said.text)
+	var wool_res: int = m.sale.reserve("wren", 3, "wool")
+	var fox_res: int = m.sale.reserve("wren", 3, "fox_fibre")
+	m._check("fibre wants: shown a wool one, she says she's after fox fluff and would take it for less (\"%s\"; her top for it %dc, %dc if it were what she wanted)" % [said, wool_res, int(round(wool_res / SweaterSale.cfg("casual_mult", 0.82)))],
+		opened and m.sale.visible and "fox fluff" in said and not SweaterSale.keen("wren", "wool") and SweaterSale.keen("wren", "fox_fibre") and fox_res > wool_res)
+	m.sale.close()
 	m.hud.hide_dialogue()
 	Game.add_sweater(3, "")
 	Game.sync_sweaters()

@@ -22,6 +22,9 @@ const SOLD := ["Done! I'm putting it on right now.", "Lovely. Worth every coin."
 ## any price inside it and counters above it at her top. She never walks away, so it can't stick.
 const GUIDED_LOW := 0.9
 const GUIDED_HIGH := 1.25
+## Not looking for one today, but they'll look at what she has (and pay less): Alex, 2026-11-27.
+const CASUAL := ["I wasn't looking for one, but go on, show me. I won't pay top coin, mind.", "Not on my list today. Let's see them anyway: if the price is right...", "I've no need of one, but I've a weakness for a bargain. What have you got?"]
+const LATELY := ["I've only just bought one from you, love. Give it a few days.", "The one you sold me is still new! Ask me again next week."]
 const WALK := ["I think I'll leave it, thanks. Maybe another day.", "No, I've talked myself out of it. Sorry, love."]
 
 var hud: Node # hud.gd, for its labels, buttons and sounds
@@ -42,6 +45,8 @@ static var force_fibre := ""
 ## wants one of their own fibres (any of them buyers may ask for now and she has seen; sheep's
 ## wool when none is) and will pay up to `mult` times what anyone else would.
 static var themed := {}
+## The townsfolk's own "wants one today" (townsfolk.gd sets it): vid -> bool.
+static var tf_looking := Callable()
 const TIERS := ["plain", "common", "rare", "ultra_rare", "legendary", "mythic"]
 
 var _who: Label
@@ -97,7 +102,36 @@ static func _day_roll(vid: String, what: String) -> float:
 static func looking(vid: String) -> bool:
 	if itchy(vid):
 		return false
+	if themed.has(vid):
+		return true # a hamlet's keeper always wants one of their own fibres
+	if vid.begins_with("tf_") and tf_looking.is_valid():
+		return bool(tf_looking.call(vid)) # the townsfolk roll their own day (townsfolk.gd, the red pin)
 	return _day_roll(vid, "ask") < yes_chance(vid)
+
+
+## Whether they bought one from her within the last `rebuy_days`: then, unless they're looking again
+## already, they won't look at another yet (and say so).
+static func bought_lately(vid: String) -> bool:
+	var last := int((Game.flag("npc_sweater_day", {}) as Dictionary).get(vid, -99))
+	return Game.day - last < int(cfg("rebuy_days", 3))
+
+
+## Whether `vid` will look at her sweaters today at all. Nearly everyone will (Alex, 2026-11-27:
+## "most will consider buying if the price is right. They just won't pay as much if they're not
+## actively looking for a specific sweater"): not after a sore man's itch, nor days after buying one.
+static func considers(vid: String) -> bool:
+	if itchy(vid):
+		return false
+	return looking(vid) or not bought_lately(vid)
+
+
+## Whether a sweater of `fibre` is the one `vid` is after today: they're looking, and for that fibre.
+## Then they pay their full price; for anything else, `casual_mult` of it.
+static func keen(vid: String, fibre: String = "wool") -> bool:
+	if not looking(vid):
+		return false
+	var want := wanted_fibre(vid)
+	return want == "" or want == ("wool" if fibre == "" else fibre)
 
 
 ## A sore man told `vid` her sweaters itch, today (scripts/partners.gd's "itch" prank, read straight
@@ -226,7 +260,9 @@ func reserve(vid: String, rarity: int, fibre: String = "wool") -> int:
 	if guided != "" and vid == guided:
 		return guided_range(rarity).y
 	var m := lerpf(cfg("res_min", 0.95), cfg("res_max", 1.35), _day_roll(vid, "reserve")) + cfg("res_per_heart", 0.04) * Game.hearts(vid)
-	if themed.has(vid): # a hamlet's keeper pays more (data/hamlets.json "mult")
+	if not keen(vid, fibre):
+		m *= cfg("casual_mult", 0.82) # not what they're after today: they'll take it for less
+	elif themed.has(vid): # a hamlet's keeper pays more for their own fibres (data/hamlets.json "mult")
 		m *= float((themed[vid] as Dictionary).get("mult", 1.0))
 	return int(round(fair(rarity, fibre) * m))
 
@@ -280,14 +316,16 @@ func rows_for(villager) -> Array:
 		row = {"id": "sale_guided", "label": "Name your price for your sweater", "enabled": true}
 	elif bought_today(vid):
 		row = {"id": "noop", "label": "Bought a sweater from you today", "enabled": false}
+	elif a.is_empty() and not itchy(vid) and not considers(vid):
+		row = {"id": "noop", "label": "Bought a sweater from you lately", "enabled": false}
 	elif a.is_empty():
-		row = {"id": "sale_ask", "label": "Ask if they're looking for a sweater", "enabled": true}
+		row = {"id": "sale_ask", "label": "Offer them a sweater", "enabled": true}
 	elif not bool(a.get("yes", false)):
-		row = {"id": "noop", "label": "Not looking for a sweater today", "enabled": false}
+		row = {"id": "noop", "label": "Won't buy a sweater today", "enabled": false}
 	elif int(a.get("tries", 0)) >= int(cfg("tries", 3)):
 		row = {"id": "noop", "label": "Done haggling for today", "enabled": false}
-	elif not has_for(vid):
-		row = {"id": "noop", "label": "Wants %s  (you have none)" % wanted_text(vid), "enabled": false}
+	elif looking(vid) and not has_for(vid):
+		row = {"id": "sale_haggle", "label": "Wants %s: show them another  (they'd pay less)" % wanted_text(vid), "enabled": true}
 	else:
 		row = {"id": "sale_haggle", "label": "Show them a sweater", "enabled": true}
 	row["group"] = GROUP
@@ -298,16 +336,16 @@ func rows_for(villager) -> Array:
 func ask(villager) -> bool:
 	var vid: String = villager.vid
 	if asked(vid).is_empty():
-		var yes := looking(vid)
+		var yes := guided_due(vid) or considers(vid)
 		_note(vid, {"yes": yes, "tries": 0})
 		if not yes:
 			var itch_no := str((Data.economy().get("partners", {}).get("lines", {}) as Dictionary).get("itch_no", ""))
-			main._say(villager, itch_no if itchy(vid) and itch_no != "" else str(NO[(Game.day + vid.length()) % NO.size()]))
+			if itchy(vid):
+				main._say(villager, itch_no if itch_no != "" else str(NO[(Game.day + vid.length()) % NO.size()]))
+			else:
+				main._say(villager, str(LATELY[(Game.day + vid.length()) % LATELY.size()]))
 			return false
 	elif not bool(asked(vid).get("yes", false)):
-		return false
-	if not guided_due(vid) and not has_for(vid): # they want one of a fibre she hasn't got: they say which
-		main._say(villager, "I'm after %s, if you ever have one. Come and find me then." % wanted_text(vid))
 		return false
 	open(villager)
 	return true
@@ -329,6 +367,13 @@ static func choices(want: String = "") -> Array:
 			out.append([i, int(Game.sweaters[i]), str(Game.sweater_designs[i]), fib])
 	out.sort_custom(func(x, y): return int(x[1]) > int(y[1]))
 	return out
+
+
+## Every sweater she can show `vid`, the ones they're after today first (then best first).
+static func choices_for(vid: String) -> Array:
+	var all := choices("")
+	var first := all.filter(func(e): return keen(vid, str(e[3])))
+	return first + all.filter(func(e): return not keen(vid, str(e[3])))
 
 
 ## She offers the sweater on the table at `price`. "sold", "counter" (they name theirs), "no", or
@@ -478,16 +523,24 @@ func open(villager) -> void:
 		guided = ""
 	v = villager
 	counter = 0
-	var cs := choices(_want())
+	var cs := _shown()
 	if cs.is_empty():
 		return
 	choice = int(cs[0][0])
-	price = fair(int(cs[0][1]), str(cs[0][3]))
-	if themed.has(str(villager.vid)): # a hamlet's keeper: start at what they'd pay anyone, and up
-		price = int(round(price * float((themed[str(villager.vid)] as Dictionary).get("mult", 1.0))))
+	price = _start_price(choice)
 	_who.text = "Selling to %s" % v.title
 	var want := _want()
-	_say(str(YES[(Game.day + str(v.vid).length()) % YES.size()]) if want == "" else "I'm after a %s sweater. What have you got?" % fibre_name(want))
+	var vid := str(v.vid)
+	if guided != "" and vid == guided:
+		_say(str(YES[(Game.day + vid.length()) % YES.size()]))
+	elif not looking(vid):
+		_say(str(CASUAL[(Game.day + vid.length()) % CASUAL.size()]))
+	elif want == "":
+		_say(str(YES[(Game.day + vid.length()) % YES.size()]))
+	elif keen(vid, str(cs[0][3])):
+		_say("I'm after a %s sweater. What have you got?" % fibre_name(want))
+	else:
+		_say("I'm after a %s sweater, really. Show me what you have, though: I'd take another for less." % fibre_name(want))
 	if hud.has_method("hide_dialogue"):
 		hud.hide_dialogue()
 	hud.click("ui_open")
@@ -498,6 +551,30 @@ func open(villager) -> void:
 
 func close() -> void:
 	visible = false
+
+
+## The sweaters on the table: all of hers, the ones they're after first (Act 1's guided sale: any).
+func _shown() -> Array:
+	if v == null:
+		return []
+	if guided != "" and str(v.vid) == guided:
+		return choices("")
+	return choices_for(str(v.vid))
+
+
+## Where the price starts for her i-th sweater: its fair price; a hamlet keeper's own fibre at their
+## premium; a sweater they aren't after at the lower price they'd think about.
+func _start_price(i: int) -> int:
+	var f := fair(int(Game.sweaters[i]), fibre_of(i))
+	if v == null or (guided != "" and str(v.vid) == guided):
+		return f
+	var vid := str(v.vid)
+	var step := maxi(1, int(cfg("step", 5)))
+	if not keen(vid, fibre_of(i)):
+		return maxi(step, int(round(f * cfg("casual_start", 0.9) / step)) * step)
+	if themed.has(vid):
+		return int(round(f * float((themed[vid] as Dictionary).get("mult", 1.0))))
+	return f
 
 
 ## The fibre the one she's selling to wants ("" for any; Act 1's guided sale takes any).
@@ -512,9 +589,7 @@ func pick(i: int) -> void:
 		return
 	choice = i
 	counter = 0
-	price = fair(int(Game.sweaters[i]), fibre_of(i))
-	if v != null and themed.has(str(v.vid)):
-		price = int(round(price * float((themed[str(v.vid)] as Dictionary).get("mult", 1.0))))
+	price = _start_price(i)
 	_refresh()
 
 
@@ -532,10 +607,13 @@ func _refresh() -> void:
 	for c in _picks.get_children():
 		_picks.remove_child(c)
 		c.queue_free()
-	for e in choices(_want()):
+	var is_guided := guided != "" and str(v.vid) == guided
+	var after := _want() != "" and looking(str(v.vid))
+	for e in _shown():
 		var d := Sweaters.design(str(e[2]))
 		var dname := str(d.get("name", "Sweater"))
-		var b: Button = hud._button("%s\n%s · %s" % [dname, RARITY[clampi(int(e[1]), 1, 5) - 1], fibre_name(str(e[3]))], pick.bind(int(e[0])))
+		var wanted: bool = after and not is_guided and keen(str(v.vid), str(e[3]))
+		var b: Button = hud._button("%s%s\n%s · %s" % ["★ " if wanted else "", dname, RARITY[clampi(int(e[1]), 1, 5) - 1], fibre_name(str(e[3]))], pick.bind(int(e[0])))
 		b.custom_minimum_size = Vector2(118, 56)
 		b.add_theme_font_size_override("font_size", 12)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -549,6 +627,14 @@ func _refresh() -> void:
 	var p := chance(v.vid, rarity, price, fib)
 	_price_label.text = "%dc" % price
 	_fair_label.text = ("Rosa would give you %dc for it today." % fair(rarity)) if fibre_tier(fib) == "plain" or not fibre_on else ("A fair price for %s: about %dc." % [fibre_name(fib), fair(rarity, fib)])
+	if not is_guided:
+		# which kind of buyer this is today, so the price makes sense
+		if keen(str(v.vid), fib):
+			_fair_label.text += "\nJust what they're after today: they'll pay well for it."
+		elif looking(str(v.vid)):
+			_fair_label.text += "\nNot the %s they're after: they'd pay less for this one." % fibre_name(_want())
+		else:
+			_fair_label.text += "\nNot looking for one today: they'd pay less than someone who is."
 	_meter_fill.size.x = 456.0 * p
 	_meter_fill.color = Color(0.85, 0.3, 0.25).lerp(Color(0.95, 0.75, 0.3), clampf(p * 2.0, 0.0, 1.0)).lerp(Color(0.45, 0.8, 0.4), clampf(p * 2.0 - 1.0, 0.0, 1.0))
 	_meter_label.text = "%s  ·  %d%% likely to say yes" % [("Happy to pay that" if p >= 0.75 else ("Thinking about it" if p >= 0.4 else ("A stretch" if p >= 0.15 else "Far too dear"))), int(round(p * 100.0))]

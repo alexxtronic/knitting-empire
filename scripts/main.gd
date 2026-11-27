@@ -9292,9 +9292,17 @@ func _sale_checks() -> void:
 	Game.day = no_day
 	var ask_row: Array = sale.rows_for(wren)
 	_villager_action(wren, "sale_ask")
+	await _wait(0.3)
 	var after_no: Array = sale.rows_for(wren)
-	_check("asked on a day she isn't looking, Wren says no and the panel stays shut ('%s' -> '%s', panel %s, %d%% chance)" % [str(ask_row[0]["label"]) if not ask_row.is_empty() else "?", str(after_no[0]["label"]) if not after_no.is_empty() else "?", sale.visible, int(SweaterSale.yes_chance("wren") * 100)],
-		not ask_row.is_empty() and ask_row[0]["id"] == "sale_ask" and not after_no.is_empty() and not after_no[0]["enabled"] and not sale.visible)
+	# most people will look at a sweater even on a day they aren't after one (Alex, 2026-11-27): they pay less
+	var full_m: float = lerpf(SweaterSale.cfg("res_min", 0.95), SweaterSale.cfg("res_max", 1.35), SweaterSale._day_roll("wren", "reserve")) + SweaterSale.cfg("res_per_heart", 0.04) * Game.hearts("wren")
+	var casual_res := sale.reserve("wren", 3)
+	var full_res := int(round(sale.fair(3) * full_m))
+	var said_casual: String = sale._said.text
+	_check("offered one on a day she isn't looking, Wren still looks at it, for less ('%s' -> '%s', panel %s, her top %dc against %dc on a day she's after one; \"%s\")" % [str(ask_row[0]["label"]) if not ask_row.is_empty() else "?", str(after_no[0]["label"]) if not after_no.is_empty() else "?", sale.visible, casual_res, full_res, said_casual],
+		not ask_row.is_empty() and ask_row[0]["id"] == "sale_ask" and not after_no.is_empty() and after_no[0]["enabled"] and sale.visible
+		and casual_res == int(round(sale.fair(3) * full_m * SweaterSale.cfg("casual_mult", 0.82))) and casual_res < full_res and "pay less" in sale._fair_label.text)
+	sale.close()
 	hud.hide_dialogue()
 	# a day she is: the panel, the meter, and haggling
 	Game.day = yes_day
@@ -9324,6 +9332,18 @@ func _sale_checks() -> void:
 	hud.hide_dialogue()
 	_check("far too dear she turns it down ('%s'); a little dear and she names her own price ('%s', %dc under her %dc); taking it sells the Rare (+%dc, bag %d -> %d, panel %s, '%s')" % [r1, r2, countered, res, Game.coins - c0, n0, Game.sweaters.size(), sale.visible, str(sale.rows_for(wren)[0]["label"]) if not sale.rows_for(wren).is_empty() else "-"],
 		r1 == "no" and r2 == "counter" and countered > 0 and countered < int(res * 1.15) and Game.coins - c0 == countered and Game.sweaters.size() == n0 - 1 and not Game.sweaters.has(3) and not sale.visible and SweaterSale.bought_today("wren"))
+	# days after buying one she won't look at another yet (unless she's after one again), and says so
+	var lately_day := -1
+	for d in range(yes_day + 1, yes_day + int(SweaterSale.cfg("rebuy_days", 3))):
+		Game.day = d
+		if not SweaterSale.looking("wren"):
+			lately_day = d
+			break
+	if lately_day > 0:
+		var late_row: Array = sale.rows_for(wren)
+		_check("the day after buying one, Wren isn't offered another ('%s')" % (str(late_row[0]["label"]) if not late_row.is_empty() else "?"),
+			not late_row.is_empty() and not late_row[0]["enabled"] and not SweaterSale.considers("wren"))
+	Game.day = yes_day
 	# three refusals and they walk away for the day
 	var stv := _villager("steve")
 	var asked: Dictionary = (Game.flag("sweater_asked", {}) as Dictionary).duplicate()

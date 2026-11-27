@@ -58,6 +58,7 @@ static func roll(id: String, what: String, day := -1) -> float:
 
 
 func build() -> void:
+	SweaterSale.tf_looking = looking_today # the sale's price follows the same "wants one today" as the pin
 	clear()
 	data = Data.load_json("townsfolk")
 	for d in data.get("people", []):
@@ -489,6 +490,14 @@ func want_talk(v) -> String:
 	return ok[(int(roll(v.vid, "want_line") * ok.size()) + Game.day) % ok.size()]
 
 
+## Whether townsperson `vid` is looking for a sweater today (their own roll, or the flag a check
+## sets): what SweaterSale.looking() asks for a "tf_" id, so the pin and the price agree.
+func looking_today(vid: String) -> bool:
+	if int(Game.flag("tf_want_" + vid, -1)) == Game.day:
+		return true
+	return roll(vid, "want") < float(_cfg("want_chance", 0.3))
+
+
 ## Whether `p` wants a sweater today (and hasn't bought one or given up haggling).
 func wants(p) -> bool:
 	if int(Game.flags.get("tf_want_" + p.vid, -1)) == Game.day: # the autotest: wants one today, whatever the roll
@@ -504,10 +513,17 @@ func _haggling(vid: String) -> bool:
 func actions(p) -> Array:
 	var acts := [{"id": "talk", "label": "Talk", "enabled": true}]
 	if wants(p):
-		var ok := SweaterSale.has_for(p.vid) # only a sweater of the fibre they want today
-		var row := {"id": "sale", "label": "Show them a sweater" if ok else "Wants %s  (you have none)" % SweaterSale.wanted_text(p.vid), "enabled": ok}
+		# the red pin: a sweater of the fibre they want today at their full price, any other for less
+		var ok := SweaterSale.has_for(p.vid)
+		var row := {"id": "sale", "label": "Show them a sweater" if ok else "Wants %s: show them another  (they'd pay less)" % SweaterSale.wanted_text(p.vid), "enabled": Game.count("sweater") > 0}
 		row["group"] = SweaterSale.GROUP
 		acts.append(row)
+	elif Game.count("sweater") > 0 and not SweaterSale.bought_today(p.vid) and _haggling(p.vid):
+		# not looking for one: most will still look at hers, and pay less (Alex, 2026-11-27)
+		var will := SweaterSale.considers(p.vid)
+		var row2 := {"id": "sale", "label": "Offer them a sweater" if will else "Bought a sweater from you lately", "enabled": will}
+		row2["group"] = SweaterSale.GROUP
+		acts.append(row2)
 	if main.house_sale != null:
 		acts.append_array(main.house_sale.rows_for(p)) # Marcus's task and his house (house_sale.gd)
 	return acts
@@ -522,7 +538,7 @@ func action(p, id: String) -> void:
 			var want := want_talk(p) # the red pin: what they're after, not the usual line
 			main.hud.show_dialogue(p.title, -1, want if want != "" else line_for(p))
 		"sale":
-			if not SweaterSale.has_for(p.vid):
+			if Game.count("sweater") == 0 or not SweaterSale.considers(p.vid):
 				return
 			if not SweaterSale.asked(p.vid).is_empty():
 				main.sale.open(p)

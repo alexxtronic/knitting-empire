@@ -115,11 +115,12 @@ func run(main: Node) -> void:
 	m._check("she wears the red pin", pin != null and pin.visible)
 	var mult := float(SweaterSale.themed[th.vid]["mult"])
 	var with_premium: int = m.sale.reserve(th.vid, 1, "wool")
-	var saved = SweaterSale.themed[th.vid]
-	SweaterSale.themed.erase(th.vid)
-	var without: int = m.sale.reserve(th.vid, 1, "wool")
-	SweaterSale.themed[th.vid] = saved
-	m._check("she'd pay x%.1f what anyone else would (%dc against %dc)" % [mult, with_premium, without], absf(float(with_premium) / maxf(1.0, float(without)) - mult) < 0.05)
+	# what anyone in town who was after one would pay at most today, on her roll
+	var town_m: float = lerpf(SweaterSale.cfg("res_min", 0.95), SweaterSale.cfg("res_max", 1.35), SweaterSale._day_roll(th.vid, "reserve")) + SweaterSale.cfg("res_per_heart", 0.04) * Game.hearts(th.vid)
+	var without: int = int(round(m.sale.fair(1, "wool") * town_m))
+	var other: int = m.sale.reserve(th.vid, 1, "fox_fibre") # not one of today's: no premium, and less
+	m._check("she'd pay x%.1f what anyone else would for the one she's after (%dc against %dc), and less than its worth for another (%dc, a fox one's fair price %dc)" % [mult, with_premium, without, other, m.sale.fair(1, "fox_fibre")],
+		absf(float(with_premium) / maxf(1.0, float(without)) - mult) < 0.05 and SweaterSale.keen(th.vid, "wool") and not SweaterSale.keen(th.vid, "fox_fibre"))
 	th.ke_action("sale")
 	await m._wait(0.6)
 	var start_price: int = m.sale.price

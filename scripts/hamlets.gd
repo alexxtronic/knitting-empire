@@ -760,7 +760,7 @@ func actions(k) -> Array:
 	var acts := [{"id": "talk", "label": "Talk", "enabled": true}]
 	if wants(k):
 		var ok := SweaterSale.has_for(k.vid)
-		var row := {"id": "sale", "label": ("Show them a sweater  (pays up to x%.1f)" % float(SweaterSale.themed.get(k.vid, {}).get("mult", 1.0))) if ok else "Wants %s  (you have none)" % SweaterSale.wanted_text(k.vid), "enabled": ok}
+		var row := {"id": "sale", "label": ("Show them a sweater  (pays up to x%.1f)" % float(SweaterSale.themed.get(k.vid, {}).get("mult", 1.0))) if ok else "Wants %s: show them another  (they'd pay less)" % SweaterSale.wanted_text(k.vid), "enabled": Game.count("sweater") > 0}
 		row["group"] = SweaterSale.GROUP
 		acts.append(row)
 	elif SweaterSale.bought_today(k.vid):
@@ -787,7 +787,7 @@ func action(k, id: String) -> void:
 					text += "  Today I'm after %s." % SweaterSale.wanted_text(k.vid)
 			main.hud.show_dialogue(k.title, -1, text)
 		"sale":
-			if not SweaterSale.has_for(k.vid):
+			if Game.count("sweater") == 0:
 				return
 			if SweaterSale.asked(k.vid).is_empty():
 				SweaterSale._note(k.vid, {"yes": true, "tries": 0}) # they want one: no need to ask
