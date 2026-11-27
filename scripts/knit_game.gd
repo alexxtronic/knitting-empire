@@ -18,6 +18,7 @@ const Keys = preload("res://scripts/keybinds.gd")
 const LANES := 4
 const LANE_KEYS := [[KEY_D, KEY_LEFT], [KEY_F, KEY_DOWN], [KEY_G, KEY_UP], [KEY_H, KEY_RIGHT]] # D F G H (Alex, 2026-11-20; it was D F J K)
 const LANE_LETTERS := ["D", "F", "G", "H"]
+const YARN_ICON: Texture2D = preload("res://assets/icons/wool.png") # the falling notes are balls of our yarn
 const LANE_COLORS := [Color("a12b26"), Color("596b8c"), Color("9eae8f"), Color("e8b23a")] # plaid, denim, sage, sunflower
 const CREAM := Color("edddbd")
 const CHARCOAL := Color("2b2826")
@@ -511,7 +512,13 @@ func _felt(r: Rect2, c: Color, border: Color) -> void:
 		x += 14.0
 
 
+## A ball of our own yarn (the inventory's wool icon, assets/icons/wool.png, tinted to `col`) with
+## its ball centred on `c`, `r` its radius; the flat painted ball if the icon is missing.
 func _yarn_ball(c: Vector2, r: float, col: Color, a := 1.0) -> void:
+	if YARN_ICON != null:
+		var s := r * 2.0 / 0.7 # the ball fills about 70% of the icon's width, its strand hangs below
+		draw_texture_rect(YARN_ICON, Rect2(c - Vector2(0.5 * s, 0.37 * s), Vector2(s, s)), false, Color(col.r, col.g, col.b, a) * Color(1.12, 1.12, 1.12, 1.0))
+		return
 	var base := Color(col.r, col.g, col.b, a)
 	draw_circle(c, r, base)
 	draw_circle(c + Vector2(-r * 0.3, -r * 0.3), r * 0.45, Color(1, 1, 1, 0.16 * a))
