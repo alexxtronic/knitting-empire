@@ -29,7 +29,7 @@ func run(m: Node) -> void:
 			if n.has_meta("item_id") and n.get_child_count() > 0:
 				pieces += 1
 	var want: int = (wi.cfg["furniture"] as Array).size()
-	main._check("its three floors are laid with their rooms' floors (%d) and furnished (%d of %d)" % [rooms, pieces, want], rooms >= (wi.cfg["rooms"] as Array).size() and pieces == want)
+	main._check("its three floors are laid with their rooms' floors (%d) and furnished (%d of %d)" % [rooms, pieces, want], rooms >= (wi.cfg["rooms"] as Array).size() and pieces >= want) # a saved layout may add pieces of Alex's own
 	var nora0: Vector3 = main.player.position
 	var dog0: Vector3 = main.dog.position if main.dog else Vector3.ZERO
 	var hour0: float = Game.hour
@@ -86,9 +86,9 @@ func run(m: Node) -> void:
 		for r in room["rects"]:
 			a += float(r[2]) * float(r[3])
 		areas[str(room["id"])] = a
-	# the same size in Alex's plan; the rec room has run on 2 m with the house's back (2026-11-20)
-	main._check("the basement's black-tile rec room is the den's size and 2 m deeper (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
-		areas.has("den") and absf(float(areas["den"]) + 5.84 * 2.0 - float(areas.get("rec_room", 0.0))) < 0.5)
+	# the same size in Alex's plan (the 2 m the rec room ran on with the house's back went again on 2026-11-25)
+	main._check("the basement's black-tile rec room is the den's size (%.1f and %.1f m2)" % [areas.get("den", 0.0), areas.get("rec_room", 0.0)],
+		areas.has("den") and absf(float(areas["den"]) - float(areas.get("rec_room", 0.0))) < 0.5)
 	# the bathroom, to the right at the foot of the stairs: its door swings open as she comes up to it
 	ok = await _walk(Vector3(2.9, 0, 2.8))
 	await main._wait(0.8)
@@ -104,7 +104,28 @@ func run(m: Node) -> void:
 	await _picture(Vector3(3.4, -2.4, 0.0), 13.0, 64.0, "67_walkin_basement.png")
 	# and back up: to the top of the flight, then the living room
 	ok = await _walk(Vector3(0.75, 0, 2.7))
-	main._check("back up the stairs, the main floor shown again and the ground whole", ok and wi.level == wi.UPPER and (wi.roots["main"] as Node3D).visible and not wi._hole_on)
+	var well_only: bool = wi.hole_rects.size() == 1 and (wi.hole_rects[0] as Rect2).get_area() < 4.0
+	main._check("back up the stairs, the main floor shown again and the ground whole but for the flight down (%s)" % str(wi.hole_rects), ok and wi.level == wi.UPPER and (wi.roots["main"] as Node3D).visible and well_only)
+	# the model's own floor is open over the flight (she used to sink through a flat brown floor), every tread has its nosing, and no roof or low ceiling of the model's hangs in the bedrooms
+	var noses := 0
+	for n in (wi.roots["all"] as Node3D).get_children() + (wi.roots["main"] as Node3D).get_children():
+		if str(n.name).begins_with("Nose_"):
+			noses += 1
+	var low := 0
+	var rf: MeshInstance3D = wi.parts["roof"]
+	var rxf: Transform3D = wi.house.global_transform.affine_inverse() * rf.global_transform
+	for si in rf.mesh.get_surface_count():
+		var arr: Array = rf.mesh.surface_get_arrays(si)
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var ix: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		for t in range(0, ix.size(), 3):
+			var cen: Vector3 = rxf * ((vs[ix[t]] + vs[ix[t + 1]] + vs[ix[t + 2]]) / 3.0)
+			if cen.x > 0.8 and cen.x < 6.0 and cen.z > -3.7 and cen.z < 3.9 and cen.y > 2.41 and cen.y < 3.4:
+				low += 1
+	var up_steps: int = int(wi._ramp("up").get("steps", 5))
+	var down_steps: int = int(wi._ramp("down").get("steps", 10))
+	main._check("the stairs: a nosing on every tread (%d of %d), and nothing of the model's roof or ceiling hanging in the bedrooms (%d faces)" % [noses, up_steps + down_steps, low],
+		noses >= up_steps + down_steps and low == 0)
 	ok = await _walk(Vector3(-2.0, 0, -1.0))
 	main._check("and on into the living room", ok and absf(main.player.position.y) < 0.05)
 	# out through the sliding door at the back of the dining room, and in again

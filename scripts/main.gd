@@ -6242,6 +6242,18 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=houselook" in OS.get_cmdline_user_args(): # Marcus's house from her eyes, room by room (houselook_check.gd)
+		await _wait(1.5)
+		await preload("res://scripts/houselook_check.gd").new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=walkmap" in OS.get_cmdline_user_args(): # a picture of the walking grid, coloured by what blocks it (walkmap_check.gd)
+		await _wait(1.5)
+		preload("res://scripts/walkmap_check.gd").new().run(self, _autotest_dir)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=hamlets" in OS.get_cmdline_user_args(): # the hidden hamlets: discovery, the keepers' sales (hamlets_check.gd)
 		await _wait(1.5)
 		await HamletsCheck.new().run(self)

@@ -69,6 +69,7 @@ var selected_wall := -1 # the world editor's house tools: the wall picked (an in
 # underside, or down at the basement's floor) and the windows in the bedroom floor's outer walls are
 # authored for those base heights and moved at build time (_wy(), _window_span()), never rewritten.
 const RISER := 0.18
+const NOSE_W := 0.035 # a tread's nosing strip
 const UP_HEADROOM := 2.2 # the bedroom floor under the upper wing's eave (upper_ceiling)
 const WELL_HEADROOM := 1.7 # going down the basement flight under the ensuite's floor
 const DOWN_HEADROOM := DOOR_HEAD + 0.12 # the basement under its ceiling (basement_ceiling): a door must fit
@@ -129,6 +130,8 @@ func build(m: Node, node: Node3D) -> void:
 		r.name = (k as String).capitalize()
 		interior.add_child(r)
 		roots[k] = r
+	_cut_model_ceiling()
+	_cut_model_floor()
 	_floors()
 	_well_ceilings()
 	_walls()
@@ -142,6 +145,40 @@ func build(m: Node, node: Node3D) -> void:
 
 
 # --- building ---------------------------------------------------------------------------------
+
+## What the model has inside the upper wing that Marcus's rooms can't have: the right wing's own
+## low gable roof (eave 2.6 m, its shingles' underside as little as 1.75 m over the bedroom floor)
+## and the flat ceiling at 2.42 m, a hand above her eyes upstairs and over both stairwells. Where
+## the model names that ceiling apart (`lining_upper`) build() hides it; the model as built since
+## 2026-11-25 doesn't, so both are cut out of the roof's mesh here, inside the upper wing's walls
+## (`upper_wing` in the data: [x, z, width, depth], its inside faces) from the low ceiling up to
+## the wing's own eave. The house's own ceilings (main_ceiling, upper_ceiling) stand in.
+func _cut_model_ceiling() -> void:
+	if not parts.has("roof"):
+		return
+	# the front reaches 6 cm into the wing's front wall: its inside skin (siding) stands 5 cm proud of
+	# the house's own liner wall there, and showed above the bedroom's wall
+	var w: Array = cfg.get("upper_wing", [-1.22, -3.98, 7.54, 8.14])
+	var top := float(cfg.get("upper_wing_eave", 3.98))
+	_cut_box(parts["roof"], AABB(Vector3(float(w[0]), 2.405, float(w[1])), Vector3(float(w[2]), top - 2.405, float(w[3]))))
+
+
+## The model's floor ran on over the basement flight: from above the stairs were a flat brown floor
+## she sank through. Cut open over the flight (the "down" ramp's rect), so the steps show going down.
+func _cut_model_floor() -> void:
+	var rp := _ramp("down")
+	if rp.is_empty() or not parts.has("base"):
+		return
+	var r: Array = rp["rect"]
+	_cut_box(parts["base"], AABB(Vector3(float(r[0]) + 0.01, -0.2, float(r[1]) + 0.01), Vector3(float(r[2]) - 0.02, 0.6, float(r[3]) - 0.02)))
+	# _cut_box makes the mesh again: the floor surfaces' own materials, for _show()
+	_floor_surfaces.clear()
+	var b: MeshInstance3D = parts["base"]
+	for i in b.mesh.get_surface_count():
+		var mat: Material = b.get_active_material(i)
+		if mat != null and "floor" in str(mat.resource_name).to_lower():
+			_floor_surfaces.append([b, i, b.get_surface_override_material(i)])
+
 
 func _level_y(lv: String) -> float:
 	return upper_y if lv == "upper" else (basement_y if lv == "basement" else 0.0)
@@ -588,6 +625,8 @@ func _box(parent: Node3D, size: Vector3, at: Vector3, mat: Material) -> MeshInst
 func rebuild() -> void:
 	for n in _built:
 		if is_instance_valid(n):
+			if (n as Node).get_parent() != null:
+				(n as Node).get_parent().remove_child(n) # out of the tree now, so what's built next keeps its name (Floor_<room>, Step_down_3)
 			(n as Node).queue_free()
 	_built.clear()
 	walls.clear()
@@ -820,6 +859,7 @@ func _slab(parent: Node3D, r: Rect2, y0: float, y1: float, mat: Material, nm: St
 func _stairs() -> void:
 	var tread := _floor_mat("carpet_grey")
 	var riser := _flat_mat(Color("#d9cfc0"))
+	var nose := _flat_mat(Color(str(cfg.get("stair_nosing", "#b08f66")))) # an oak nosing on every tread: the steps read from above
 	for k in ["up", "down"]:
 		var rp: Dictionary = cfg.get("ramps", {}).get(k, {})
 		if rp.is_empty():
@@ -831,6 +871,7 @@ func _stairs() -> void:
 		var n := int(rp.get("steps", 6))
 		var parent: Node3D = roots["main"] if k == "up" else roots["all"]
 		var run := rect.size.x / n
+		var falls := y_to < y_from
 		for i in n:
 			# step i's top: the height a little past its front edge
 			var top := y_from + (y_to - y_from) * float(i + 1) / float(n)
@@ -838,9 +879,67 @@ func _stairs() -> void:
 			var bottom := minf(y_to, y_from) - 0.05
 			var st := Rect2(x0, rect.position.y, run, rect.size.y)
 			_built.append(_slab(parent, st, bottom, top + 0.045, tread, "Step_%s_%d" % [k, i]))
+			if i == n - 1 and falls:
+				continue # the last one down is the floor itself
+			# the nosing on the edge she steps off (going down) or up to (going up)
+			var nx := x0 + run - NOSE_W if falls else x0
+			_built.append(_slab(parent, Rect2(nx, rect.position.y, NOSE_W, rect.size.y), top + 0.045, top + 0.06, nose, "Nose_%s_%d" % [k, i]))
+		if falls:
+			# the edge of the floor she steps off at the top
+			_built.append(_slab(parent, Rect2(rect.position.x - NOSE_W, rect.position.y, NOSE_W, rect.size.y), y_from + 0.045, y_from + 0.06, nose, "Nose_%s_top" % k))
 		if k == "down":
-			# the stairwell's front side below the ground, so you can't see out under the house
-			_built.append(_wall_box(parent, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y), y_to, 0.0, riser.albedo_color))
+			# the stairwell's front side, from the basement floor up to the bedroom floor laid over it
+			# (or the ground), so you can't see out under the house or into the gap under that floor
+			var side_top := 0.0
+			for room in cfg.get("rooms", []):
+				if str(room["level"]) != "upper":
+					continue
+				for rr in room["rects"]:
+					var ur := Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3]))
+					if ur.grow(0.05).intersects(Rect2(rect.position.x, rect.end.y, rect.size.x, 0.3)):
+						side_top = upper_y - 0.16
+			var side := _wall_box(parent, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y), y_to, side_top, riser.albedo_color)
+			side.scale.z = 0.8 # inside any wall the house has on that line, never flush with its faces
+			_built.append(side)
+			_well_guards(rect)
+			# a light over the flight, so the steps aren't a dark hole
+			var lamp := Catalog.omni(parent, Vector3(rect.position.x + rect.size.x * 0.45, 0.55, rect.get_center().y), Color(1.0, 0.86, 0.66), 4.0, 0.5, 0.9)
+			lamp.shadow_enabled = false
+			lamp.set_meta("no_shadow", true)
+			lamp.remove_from_group("lamp_shadow")
+			_built.append(lamp)
+
+
+## A bedroom-floor room laid part way over the basement flight (the ensuite) ends in the air over
+## the stairs: from the top of the flight you looked up into it, past the edge of its floor. Where
+## no wall of the house's own stands on that edge, one is built here from the floor's underside to
+## the ceiling. It stands over the flight, so it doesn't block the way down (like the data's own
+## ensuite wall, which a layout saved before it doesn't have).
+func _well_guards(well: Rect2) -> void:
+	for room in cfg.get("rooms", []):
+		if str(room["level"]) != "upper":
+			continue
+		for rr in room["rects"]:
+			var ur := Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3]))
+			var x := ur.position.x
+			if x < well.position.x + 0.1 or x > well.end.x - 0.1:
+				continue # its edge isn't over the flight
+			var z0 := maxf(ur.position.y, well.position.y)
+			var z1 := minf(ur.end.y, well.end.y)
+			if z1 - z0 < 0.3:
+				continue
+			var walled := false
+			for w in cfg.get("walls", []):
+				var seg: Array = w["wall"]
+				var lv := str(w.get("level", "main"))
+				var top := float(w["to"]) if w.has("to") else _ceiling_y("upper")
+				if (lv == "upper" or lv == "all") and absf(float(seg[0]) - x) < 0.08 and absf(float(seg[2]) - x) < 0.08 and top > upper_y + 1.2 \
+						and minf(float(seg[1]), float(seg[3])) < z0 + 0.3 and maxf(float(seg[1]), float(seg[3])) > z1 - 0.3:
+					walled = true
+			if walled:
+				continue
+			# the stairwell's own plaster (it's seen from the stairs far more than from the room behind it)
+			_built.append(_wall_box(roots["upper"], Vector2(x, z0), Vector2(x, z1), upper_y - 0.16, _ceiling_y("upper"), Color(str(cfg.get("stairwell_wall", "#e4ddd0")))))
 
 
 func _lights() -> void:
@@ -1224,7 +1323,16 @@ func mark_grid() -> void:
 		var fs: Vector2 = Data.vec2(item.get("size", [1.0, 1.0]))
 		if absi(int(roundf(rad_to_deg(n.rotation.y) / 90.0))) % 2 == 1:
 			fs = Vector2(fs.y, fs.x)
-		_block(Rect2(Vector2(n.position.x, n.position.z) - fs * 0.5, fs))
+		var fr := Rect2(Vector2(n.position.x, n.position.z) - fs * 0.5, fs)
+		if n.get_parent() == roots.get("upper") and well.has_area() and fr.intersects(well):
+			# a bedroom-floor piece moved over the basement flight (the ensuite's vanity, in the world
+			# editor) stands on the floor laid over the stairs: the flight runs on under it, like the tub
+			for c in _cells([fr], GROW):
+				var cc: Vector3 = _inv * (main._cell_center(c) as Vector3)
+				if not well.has_point(Vector2(cc.x, cc.z)):
+					main.astar.set_point_solid(c, true)
+			continue
+		_block(fr)
 
 
 ## Where a catalogue piece set down at `p` (world) in the world editor goes: [the level's node, the
@@ -1417,9 +1525,11 @@ func _show() -> void:
 			(parts["roof"] as Node3D).visible = false
 		return
 	var near := inside or (main.player as Node3D).position.distance_to(house.global_position) < 24.0
-	(roots["main"] as Node3D).visible = near and level == UPPER
-	(roots["upper"] as Node3D).visible = inside and level == UPPER
-	(roots["basement"] as Node3D).visible = inside and level == BASEMENT
+	# from her eyes in the basement the floors above stay (she looks up the flight into the house,
+	# not into the sky); from above they're hidden so the basement can be seen
+	(roots["main"] as Node3D).visible = near and (level == UPPER or fp)
+	(roots["upper"] as Node3D).visible = inside and (level == UPPER or fp)
+	(roots["basement"] as Node3D).visible = inside and (level == BASEMENT or fp)
 	(roots["all"] as Node3D).visible = near
 	for c in ceilings:
 		(c as Node3D).visible = inside and fp
@@ -1427,7 +1537,7 @@ func _show() -> void:
 		# from above it lifts off while she's in; from her eyes it stays on, like every roof
 		(parts["roof"] as Node3D).visible = not inside or fp
 	for fs in _floor_surfaces:
-		(fs[0] as MeshInstance3D).set_surface_override_material(fs[1], _invisible() if level == BASEMENT and inside else fs[2])
+		(fs[0] as MeshInstance3D).set_surface_override_material(fs[1], _invisible() if level == BASEMENT and inside and not fp else fs[2])
 	# the walls toward the camera, the shell's and the house's own, drop to stubs while she's in
 	var cut_on: bool = inside and not fp and not main.walls_up
 	var cdir := Vector3(sin(main.cam_yaw), 0, cos(main.cam_yaw))
@@ -1453,7 +1563,14 @@ func _show() -> void:
 	var night := clampf(1.0 - Game.daylight(), 0.0, 1.0)
 	for l in lights:
 		(l as OmniLight3D).light_energy = 0.55 + 0.75 * night
-	_ground_hole(inside and level == BASEMENT)
+	# the ground isn't drawn over the basement while she's down there, nor over the flight down while
+	# she's in the house above it (the steps go down through it)
+	var well: Array = []
+	var rp := _ramp("down")
+	if not rp.is_empty():
+		var wr: Array = rp["rect"]
+		well = [Rect2(float(wr[0]), float(wr[1]), float(wr[2]), float(wr[3]))]
+	_ground_hole(bfoot if inside and level == BASEMENT else (well if near else []))
 	_hide_upstairs(inside and level == BASEMENT)
 
 
@@ -1467,11 +1584,17 @@ func _invisible() -> Material:
 
 
 var _hole_on := false
+var _hole_key := ""
+var hole_rects: Array = [] # what the ground is cut for now: the basement's footprint, the flight down, or nothing
 
-func _ground_hole(on: bool) -> void:
-	if on == _hole_on and not on:
+func _ground_hole(rects: Array) -> void:
+	var on := not rects.is_empty()
+	var key := str(rects) + str(house.global_transform) if on else ""
+	if key == _hole_key:
 		return
+	_hole_key = key
 	_hole_on = on
+	hole_rects = rects.duplicate()
 	var a := Vector4(0, 0, 1, 0)
 	var b := Vector4.ZERO
 	var c := Vector4.ZERO
@@ -1479,10 +1602,10 @@ func _ground_hole(on: bool) -> void:
 		var xf := house.global_transform
 		var yaw := xf.basis.get_euler().y
 		a = Vector4(xf.origin.x, xf.origin.z, cos(yaw), sin(yaw))
-		var r0: Rect2 = hole[0]
+		var r0: Rect2 = rects[0]
 		b = Vector4(r0.position.x, r0.position.y, r0.end.x, r0.end.y)
-		if hole.size() > 1:
-			var r1: Rect2 = hole[1]
+		if rects.size() > 1:
+			var r1: Rect2 = rects[1]
 			c = Vector4(r1.position.x, r1.position.y, r1.end.x, r1.end.y)
 	RenderingServer.global_shader_parameter_set("ground_hole_a", a)
 	RenderingServer.global_shader_parameter_set("ground_hole_b", b)
