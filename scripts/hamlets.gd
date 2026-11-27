@@ -243,10 +243,11 @@ func _window(n: Node3D, pos: Vector3, size: Vector2, st: Dictionary, rot := Vect
 	holder.position = pos
 	holder.rotation_degrees = rot
 	n.add_child(holder)
-	_box(holder, Vector3(size.x + 0.14, size.y + 0.14, 0.06), Vector3.ZERO, frame)
-	_box(holder, Vector3(size.x, size.y, 0.08), Vector3(0, 0, 0.01), _glow(Color(str(st.get("window", "#ffd28a"))), 0.9))
-	_box(holder, Vector3(0.05, size.y, 0.1), Vector3(0, 0, 0.02), frame) # the glazing bar
-	_box(holder, Vector3(size.x + 0.24, 0.07, 0.16), Vector3(0, -size.y * 0.5 - 0.06, 0.05), frame) # the sill
+	# each part's back is sunk into the wall (holder z -0.03) by its own amount, so no two faces share a plane
+	_box(holder, Vector3(size.x + 0.14, size.y + 0.14, 0.06), Vector3(0, 0, 0.01), frame) # [-0.02, 0.04]
+	_box(holder, Vector3(size.x, size.y, 0.09), Vector3(0, 0, 0.005), _glow(Color(str(st.get("window", "#ffd28a"))), 0.9)) # [-0.04, 0.05]
+	_box(holder, Vector3(0.05, size.y - 0.02, 0.105), Vector3(0, 0, 0.0175), frame) # the glazing bar [-0.035, 0.07]
+	_box(holder, Vector3(size.x + 0.24, 0.07, 0.16), Vector3(0, -size.y * 0.5 - 0.06, 0.045), frame) # the sill [-0.035, 0.125]
 
 
 ## A cottage: walls of the style's map on a stone footing, a timber frame at the corners, a door

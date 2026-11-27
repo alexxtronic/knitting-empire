@@ -63,6 +63,12 @@ func run(main: Node) -> void:
 	m._check("the hidden hamlets stand (%s), each in the world editor (%d), every building solid on the grid (%s)" % [str(ids), listed, str(solid)],
 		ids.size() == 4 and listed == 4 and solid and ids.has("hexwood") and ids.has("rimefall") and ids.has("sunwell") and ids.has("larkhill"))
 	m._check("each has its keeper on open ground, every one walkable to from the farm (not: %s)" % str(unreachable), keepers_ok and unreachable.is_empty() and hm.keepers.size() == 4)
+	for h in hm.hamlets: # all four in sight for a moment (far ones are hidden by distance)
+		(h["node"] as Node3D).visible = true
+	var flush: Array = m.coplanar_faces()
+	for f in flush:
+		print("      flush: ", f)
+	m._check("no two surfaces sit flush in the same plane, the hamlets in sight (%d)" % flush.size(), flush.is_empty())
 	# --- Rimefall's snow
 	var rime: Node3D = hm.node_of("rimefall")
 	var hex: Node3D = hm.node_of("hexwood")
