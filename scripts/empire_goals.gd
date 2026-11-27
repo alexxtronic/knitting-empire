@@ -315,6 +315,9 @@ func metric(g: Dictionary) -> int:
 	match str(g.get("check", "")):
 		"caught", "combed", "fibre_knits", "face_sales":
 			return stat(str(g["check"]))
+		"hamlets": # hidden hamlets found (hamlets.gd)
+			var hf = Game.flags.get("hamlets", {})
+			return (hf as Dictionary).size() if hf is Dictionary else 0
 		"penned":
 			return int(Game.flag("pen_n", 0))
 		"requests":

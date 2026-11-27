@@ -38,6 +38,10 @@ var rng := RandomNumberGenerator.new()
 static var fibre_on := true
 ## Tests: the fibre every buyer wants ("wool" for sheep's wool); "" leaves it to the day's roll.
 static var force_fibre := ""
+## The hamlets' keepers (hamlets.gd, data/hamlets.json): vid -> {"fibres": [...], "mult": x}. Each
+## wants one of their own fibres (any of them buyers may ask for now and she has seen; sheep's
+## wool when none is) and will pay up to `mult` times what anyone else would.
+static var themed := {}
 const TIERS := ["plain", "common", "rare", "ultra_rare", "legendary", "mythic"]
 
 var _who: Label
@@ -174,6 +178,11 @@ static func wanted_fibre(vid: String) -> String:
 		return ""
 	if force_fibre != "":
 		return force_fibre
+	if themed.has(vid): # a hamlet's keeper: one of their theme's fibres
+		var own: Array = (themed[vid] as Dictionary).get("fibres", []).filter(func(f): return str(f) == "wool" or (fibre_open(str(f)) and EmpireGoals.fibre_open(str(f))))
+		if own.is_empty():
+			return "wool"
+		return str(own[int(_day_roll(vid, "fibre") * own.size()) % own.size()])
 	var w: Dictionary = _wants().get("weights", {})
 	var fibres: Dictionary = Data.load_json("wildlife").get("fibres", {})
 	var pool := [] # [fibre, weight]
@@ -217,6 +226,8 @@ func reserve(vid: String, rarity: int, fibre: String = "wool") -> int:
 	if guided != "" and vid == guided:
 		return guided_range(rarity).y
 	var m := lerpf(cfg("res_min", 0.95), cfg("res_max", 1.35), _day_roll(vid, "reserve")) + cfg("res_per_heart", 0.04) * Game.hearts(vid)
+	if themed.has(vid): # a hamlet's keeper pays more (data/hamlets.json "mult")
+		m *= float((themed[vid] as Dictionary).get("mult", 1.0))
 	return int(round(fair(rarity, fibre) * m))
 
 
@@ -472,6 +483,8 @@ func open(villager) -> void:
 		return
 	choice = int(cs[0][0])
 	price = fair(int(cs[0][1]), str(cs[0][3]))
+	if themed.has(str(villager.vid)): # a hamlet's keeper: start at what they'd pay anyone, and up
+		price = int(round(price * float((themed[str(villager.vid)] as Dictionary).get("mult", 1.0))))
 	_who.text = "Selling to %s" % v.title
 	var want := _want()
 	_say(str(YES[(Game.day + str(v.vid).length()) % YES.size()]) if want == "" else "I'm after a %s sweater. What have you got?" % fibre_name(want))
@@ -500,6 +513,8 @@ func pick(i: int) -> void:
 	choice = i
 	counter = 0
 	price = fair(int(Game.sweaters[i]), fibre_of(i))
+	if v != null and themed.has(str(v.vid)):
+		price = int(round(price * float((themed[str(v.vid)] as Dictionary).get("mult", 1.0))))
 	_refresh()
 
 

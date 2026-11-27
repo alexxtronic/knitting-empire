@@ -1,0 +1,175 @@
+{
+  "_about": "Tiny hidden hamlets out in the lands (scripts/hamlets.gd, 2026-11-27: Alex wants 'little towns scattered throughout that you can also discover ... extremely small ... different themes like witchy theme or ice theme'). Each is a handful of buildings, a landmark and one keeper. at: the hamlet's centre [x, z] in the world; yaw: its turn in degrees (its front looks down +Z). discover: how close Nora (or the dog while played) must come to find it; finding one is Game.flags[\"hamlets\"][id] = the day, with a toast and the journal chime. clear: metres round the centre where the world's scenery is cut. snow: a snowfield of that radius (no grass) and snow falling. buildings: [kind, x, z, yaw, w, d, h] in the hamlet's own space, kinds drawn by hamlets.gd (cottage, tower, adobe, tent, windmill); a cottage's look is the hamlet's `style`. props: [kind, x, z, yaw] (cauldron, toadstools, lantern, snowman, ice_pond, firepit, pool, palm, hay, fence). keeper: one villager (a borrowed townsfolk body with a hat of the theme, `model` and `hat`) who stands at `spot`, says `lines`, and buys a sweater a day: of one of `wants` (picked like any buyer's fibre, only among the ones buyers may ask for now and she has seen; sheep's wool when none is open), paying up to `mult` times what anyone else would (SweaterSale.themed, applied in reserve()). Every name, line and number is a DRAFT until Alex approves it. Buildings, keepers and hats are STAND-INS (docs/DIRECTION.md 'Models still needed'); the keepers borrow Maple Grove's townsfolk bodies.",
+  "cull": 150.0,
+  "hamlets": [
+    {
+      "id": "hexwood",
+      "name": "Hexwood Hollow",
+      "theme": "witchy",
+      "blurb": "a witchy hollow deep in the dark woods",
+      "at": [-60.0, -62.0],
+      "yaw": 0.0,
+      "discover": 18.0,
+      "clear": 15.0,
+      "style": {"wall": "plaster", "wall_tint": "#8a7f96", "frame": "#4a3c34", "roof": "shingles", "roof_tint": "#5d6b4c", "pitch": 54.0, "lean": 4.0, "window": "#7dff8a"},
+      "light": "#a46cff",
+      "buildings": [
+        ["cottage", -6.5, -3.5, 18.0, 4.2, 3.6, 2.3],
+        ["tower", 6.5, -4.5, -22.0, 3.0, 3.0, 4.4],
+        ["cottage", 0.5, -9.0, 4.0, 3.4, 3.0, 2.1]
+      ],
+      "props": [
+        ["cauldron", 0.0, 1.5, 0.0],
+        ["toadstools", 6.0, 6.0, 0.0],
+        ["lantern", -4.0, 4.0, 0.0],
+        ["lantern", 4.5, 1.0, 0.0],
+        ["lantern", -1.0, -5.5, 0.0]
+      ],
+      "keeper": {
+        "id": "hm_thistle",
+        "name": "Thistle",
+        "job": "Hedge-witch",
+        "model": "tf_theo",
+        "hat": "witch",
+        "spot": [1.8, 3.4],
+        "yaw": 20.0,
+        "wants": ["raccoon_fibre", "mink_fibre", "sable_fibre", "muskrat_fibre", "otter_fibre", "coyote_fibre", "wool"],
+        "mult": 1.5,
+        "greet": "Few find the Hollow, and fewer come back with wool on their needles. Bring me something dark and soft, knitted by your own hand, and I'll pay half again what the town would.",
+        "lines": [
+          "The cauldron? Nettle broth. Mostly.",
+          "The woods are kinder at night, if you knock before you enter them.",
+          "Raccoon, mink, sable, the river folk's fur. Dark wool keeps a charm better.",
+          "Tell nobody in Maple Grove the way. They'd want a gift shop."
+        ]
+      }
+    },
+    {
+      "id": "rimefall",
+      "name": "Rimefall",
+      "theme": "ice",
+      "blurb": "a frosted hamlet where the foothills meet the mountains",
+      "at": [30.0, -90.0],
+      "yaw": 0.0,
+      "discover": 18.0,
+      "clear": 16.0,
+      "snow": 15.0,
+      "style": {"wall": "stone", "wall_tint": "#c9d4e2", "frame": "#3d4652", "roof": "shingles", "roof_tint": "#4b5260", "pitch": 40.0, "lean": 0.0, "window": "#ffd28a", "snowcap": true},
+      "light": "#ffd6a0",
+      "buildings": [
+        ["cottage", -7.0, -2.5, 14.0, 4.0, 3.4, 2.2],
+        ["cottage", 7.0, -3.0, -12.0, 3.6, 3.2, 2.1],
+        ["cottage", 0.0, -8.5, 0.0, 5.0, 3.6, 2.5]
+      ],
+      "props": [
+        ["ice_pond", 0.5, 5.0, 0.0],
+        ["snowman", 6.0, 5.5, 210.0],
+        ["firepit", -3.5, 2.5, 0.0],
+        ["lantern", 3.5, -1.0, 0.0]
+      ],
+      "keeper": {
+        "id": "hm_bramwell",
+        "name": "Bramwell",
+        "job": "Old trapper",
+        "model": "tf_hank",
+        "hat": "fur",
+        "spot": [-1.5, 3.0],
+        "yaw": -20.0,
+        "wants": ["wool", "alpaca_fibre", "cashmere", "lynx_fibre", "sable_fibre", "vicuna_fibre"],
+        "mult": 1.4,
+        "greet": "Visitors! Up here! Come by the fire. Winter never quite leaves Rimefall, so a warm sweater's worth more here than anywhere down the hill.",
+        "lines": [
+          "The snow's never melted on that pond in forty years. I skate on it on my birthday.",
+          "Alpaca, cashmere, lynx: warm as a hearth. I'll pay well for any of them.",
+          "The mountains go on forever behind us. Nobody's been over. Nobody sensible.",
+          "Mind the snowman. He bites."
+        ]
+      }
+    },
+    {
+      "id": "sunwell",
+      "name": "Sunwell",
+      "theme": "desert",
+      "blurb": "an oasis hamlet in the deep dunes",
+      "at": [246.0, 8.0],
+      "yaw": 0.0,
+      "discover": 18.0,
+      "clear": 13.0,
+      "style": {"wall": "plaster", "wall_tint": "#e8c08a", "frame": "#6b4a2c", "roof": "flat", "roof_tint": "#d9ad74", "window": "#ffcc7a"},
+      "light": "#ffb35c",
+      "buildings": [
+        ["adobe", -7.0, -5.0, 10.0, 4.2, 3.6, 2.6],
+        ["adobe", 7.0, -5.5, -8.0, 3.6, 3.4, 2.3],
+        ["tent", -6.5, 5.5, 25.0, 3.0, 2.8, 2.0],
+        ["tent", 6.5, 5.0, -20.0, 2.8, 2.6, 1.9]
+      ],
+      "props": [
+        ["pool", 0.0, 0.5, 0.0],
+        ["palm", -3.0, -1.5, 0.0],
+        ["palm", 3.4, 2.4, 140.0],
+        ["palm", 1.5, -3.0, 260.0],
+        ["lantern", 0.0, 4.5, 0.0]
+      ],
+      "keeper": {
+        "id": "hm_idris",
+        "name": "Idris",
+        "job": "Caravan trader",
+        "model": "tf_dev",
+        "hat": "wrap",
+        "spot": [-2.0, 5.4],
+        "yaw": 10.0,
+        "wants": ["hare_fibre", "fennec_fibre", "sandcat_fibre", "jackal_fibre", "angora", "wool"],
+        "mult": 1.5,
+        "greet": "Sunwell is a well, three houses and whoever the wind brings. The caravans pay in gold for light knits: hare, fennec, sand cat. Cool by day, warm by night.",
+        "lines": [
+          "The water's sweet. Nobody knows why. We don't ask.",
+          "Light fibres, light knits. The dunes are cold after dark.",
+          "The ruin to the north? Older than the sand. Dig carefully round it.",
+          "If you hear bells at night, it's a caravan. Or the jackals."
+        ]
+      }
+    },
+    {
+      "id": "larkhill",
+      "name": "Larkhill",
+      "theme": "windmill",
+      "blurb": "a windmill hamlet on the downs",
+      "at": [168.0, -36.0],
+      "yaw": 0.0,
+      "discover": 20.0,
+      "clear": 15.0,
+      "style": {"wall": "stone", "wall_tint": "#d8cdb8", "frame": "#4a3a2a", "roof": "tiles", "roof_tint": "#6c7078", "pitch": 38.0, "lean": 0.0, "window": "#ffd28a"},
+      "light": "#ffd08a",
+      "buildings": [
+        ["windmill", 0.0, -6.0, 0.0, 4.6, 4.6, 7.0],
+        ["cottage", -8.5, 2.5, 12.0, 4.0, 3.4, 2.2],
+        ["cottage", 8.5, 3.0, -15.0, 3.6, 3.2, 2.1]
+      ],
+      "props": [
+        ["hay", -3.0, 6.5, 20.0],
+        ["hay", -1.6, 7.4, 75.0],
+        ["fence", 3.0, 8.0, 0.0],
+        ["fence", 6.0, 8.0, 0.0],
+        ["lantern", 2.5, -1.5, 0.0]
+      ],
+      "keeper": {
+        "id": "hm_wyn",
+        "name": "Wyn",
+        "job": "Miller",
+        "model": "tf_jake",
+        "hat": "cap",
+        "spot": [2.6, 1.6],
+        "yaw": -10.0,
+        "wants": ["mohair", "cashmere", "alpaca_fibre", "wool"],
+        "mult": 1.35,
+        "greet": "Welcome to Larkhill. The mill grinds for the whole downs. My goats' cousins run wild out there. Knit me mohair or cashmere and I'll pay better than the town ever will.",
+        "lines": [
+          "The sails turn whether there's grain or not. I've stopped arguing with them.",
+          "Mohair keeps its shape in the wind. Cashmere's for Sundays.",
+          "From the top of the mill you can see the sea. On a clear day, the dunes too.",
+          "Mind the hills. They look gentle until you're halfway up one."
+        ]
+      }
+    }
+  ]
+}

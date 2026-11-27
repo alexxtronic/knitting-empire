@@ -76,6 +76,8 @@ const BuildPlusCheck = preload("res://scripts/build_plus_check.gd")
 const Bonfire = preload("res://scripts/bonfire.gd")
 const Explore = preload("res://scripts/explore.gd")
 const Horse = preload("res://scripts/horse.gd")
+const Hamlets = preload("res://scripts/hamlets.gd")
+const HamletsCheck = preload("res://scripts/hamlets_check.gd")
 const FogOfWar = preload("res://scripts/fog_of_war.gd")
 
 const CELL := 0.5
@@ -145,6 +147,7 @@ var store: OnlineStore # the online sweater store on her computer (online_store.
 var bonfire: Bonfire # the bonfires she lights after dark, burning till dawn (bonfire.gd)
 var explore: Explore # treasure patches, huts with chests, waders and the tent (explore.gd)
 var horse: Horse # her horse, a stand-in from Lars: G to ride (horse.gd)
+var hamlets: Hamlets # the hidden hamlets out in the lands, and their keepers (hamlets.gd)
 var fog: FogOfWar # the fog over land she hasn't explored yet (fog_of_war.gd)
 var wview: WardrobeView # the wardrobe from her eyes: her sweaters on hangers (wardrobe_view.gd)
 var sale: SweaterSale # selling a sweater to anyone in town, haggling over the price (sweater_sale.gd)
@@ -301,6 +304,10 @@ func _ready() -> void:
 	explore.main = self
 	add_child(explore)
 	grid_blockers.append_array(explore.build()) # the huts, before god mode lists Town.built
+	hamlets = Hamlets.new()
+	hamlets.main = self
+	add_child(hamlets)
+	grid_blockers.append_array(hamlets.build()) # the hidden hamlets' buildings (hamlets.gd)
 	grid_blockers.append_array(World.build_barn(self, Vector3(21.5, 0, -9.5)))
 	pond_rect = World.build_pond(self, Vector3(2.5, 0, -16.0), 2.0)
 	grid_blockers.append(pond_rect)
@@ -497,6 +504,8 @@ func _ready() -> void:
 	horse.main = self
 	add_child(horse)
 	horse.apply()
+	Hamlets.on = _autotest_dir == "" # keepers and discovery: off in the autotest but for its own check (hamlets_check.gd)
+	hamlets.apply()
 	fog = FogOfWar.new()
 	fog.main = self
 	fog.enabled = _autotest_dir == "" # the autotest clears none of it but for its own check (_fog_checks)
@@ -1022,6 +1031,8 @@ func _rebuild_grass(replant := true) -> void:
 				clear.append(quad) # turned with the house: grass.gd draws it into its whole-map mask
 	var roads: Image = god.roads_over(Grass.REGION) if painted else null # the grass's mask covers less than the road map
 	var pond: Array = god.pond_circles() if god != null else [Vector3(2.5, -16.0, 2.55)]
+	if hamlets != null:
+		pond = pond + hamlets.grass_holes() # Rimefall's snowfield (hamlets.gd)
 	# the blades out in the lands (grass.gd streams them); Bretton Oaks' lawns stay short farm lawn, not meadow
 	var lawn: Array = [Vector3(suburb.centre.x, suburb.centre.z, float(suburb.cfg.get("ring", 21.0)) + 8.0)] if suburb != null else []
 	grass.set_lands(regions.defs, regions.pools, regions.shore_z, lawn)
@@ -6228,6 +6239,12 @@ func _autotest() -> void:
 	if "--only=partners" in OS.get_cmdline_user_args(): # just her partner: asking, switching, the sore one's pranks, the proposal and the wedding
 		await _wait(1.5)
 		await PartnersCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=hamlets" in OS.get_cmdline_user_args(): # the hidden hamlets: discovery, the keepers' sales (hamlets_check.gd)
+		await _wait(1.5)
+		await HamletsCheck.new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

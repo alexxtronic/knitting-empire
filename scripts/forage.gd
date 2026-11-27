@@ -94,7 +94,7 @@ func apply() -> void:
 	for el in main.god.els:
 		if not el.scenery:
 			continue
-		var on: bool = kept.has(key_of(el)) or cleared.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) or (main.suburb != null and main.suburb.clears(el.xf.origin)) or (main.explore != null and main.explore.clears(el.xf.origin)) # a plot she bought is cleared (and Bretton Oaks' ground)
+		var on: bool = kept.has(key_of(el)) or cleared.has(key_of(el)) or (main.builder != null and main.builder.clears(el.xf.origin)) or (main.suburb != null and main.suburb.clears(el.xf.origin)) or (main.explore != null and main.explore.clears(el.xf.origin)) or (main.hamlets != null and main.hamlets.clears(el.xf.origin)) # a plot she bought is cleared (and Bretton Oaks' ground)
 		if el.cut != on:
 			_set_cut(el, on)
 			grid = true # trees, rocks and the rest stand in the walking grid's way
