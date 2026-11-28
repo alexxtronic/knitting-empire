@@ -167,6 +167,8 @@ func _draw() -> void:
 		draw_texture_rect(_sv.get_texture(), r, false)
 		if main.fog != null: # unexplored land, fogged as in the world (fog_of_war.gd)
 			main.fog.draw_on_map(self, _centre, _yaw, _span, SIZE)
+	if main.objectives != null: # the tracked objective's route and badge (objectives.gd)
+		main.objectives.draw_on_map(self)
 	# villagers
 	for v in main.villagers:
 		var n := v as Node3D

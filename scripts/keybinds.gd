@@ -25,6 +25,7 @@ const ACTIONS := [
 	["move_right", "Walk right", ["move"], KEY_D],
 	["run", "Run (hold)", ["move", "cine"], KEY_SHIFT],
 	["bag", "Open the bag", ["world"], KEY_I],
+	["objectives", "Objectives", ["world"], KEY_O],
 	["turn_left", "Turn the camera left", ["world"], KEY_Q],
 	["turn_right", "Turn the camera right", ["world"], KEY_E],
 	["follow", "Camera follows / stays", ["world"], KEY_SPACE],
