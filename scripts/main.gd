@@ -4211,6 +4211,16 @@ func _act1_order_checks() -> void:
 	await wait_free.call()
 	_check("a first sweater sold to someone other than Wren carries the story on (%s, goal '%s')" % [else_ok, hud.goal_label.text],
 		else_ok and Game.flag("act1_sold") == true and hud.goal_label.text.begins_with("Buy turnip seeds"))
+	# the second sweater sold from Rosa's menu (or to anyone) before the market scene: the goal moves on
+	for f in ["act1_market", "seen_act1_knit2_sold", "missed_events"]:
+		Game.flags.erase(f)
+	Game.set_flag("act1_knit2", true)
+	hud.set_goal("Take your sweater to Rosa at the Maple Grove market")
+	story.trigger("event", "sweater_sold")
+	var second_ok: bool = await wait_for.call("act1_knit2_sold")
+	await wait_free.call()
+	_check("a second sweater sold before the market moves the goal on to Rosa's stall (%s, goal '%s')" % [second_ok, hud.goal_label.text],
+		second_ok and hud.goal_label.text.begins_with("Go and see Rosa") and Game.flag("act1_market") != true)
 	Game.flags = saved
 	Game.coins = coins0
 	_show_goal()
