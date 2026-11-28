@@ -10337,6 +10337,40 @@ func _hud_checks() -> void:
 	await _key_tap(KEY_ESCAPE)
 	_check("bag: I opens it (%s), clicking two slots swaps them (%s) and back, Esc shuts it" % [bag_open, moved],
 		bag_open and moved and Game.slots[wool_at] == "wool" and not hud.bag_panel.visible)
+	# every thing she can carry has its picture (Alex, 2026-11-28: "make anything we can hold in our bag
+	# have a corresponding icon"): Slot.ITEM_INFO and what the data adds (fibres, found needles, waders, tent)
+	var carried: Array = Hud.Slot.ITEM_INFO.keys() + Hud.Slot.extra.keys()
+	var no_icon: Array = carried.filter(func(id): return Hud.Slot.icon(str(id)) == null)
+	_check("bag: every item she can carry has an icon (%d items, missing %s)" % [carried.size(), str(no_icon)], no_icon.is_empty())
+	# the bag full of them, for the picture
+	var inv_keep: Dictionary = Game.inv.duplicate()
+	var slots_keep: Array = Game.slots.duplicate()
+	var sw_keep := [Game.sweaters.duplicate(), Game.sweater_designs.duplicate(), Game.sweater_fibres.duplicate()]
+	var bag_ids: Array = carried.filter(func(id): return not Game.TOOLS.has(id) and id != "sweater" and id != "test_thing")
+	var page := 0
+	while page * 30 < bag_ids.size(): # 36 slots: the bag a page at a time
+		Game.inv = {}
+		for t in Game.TOOLS:
+			Game.inv[t] = 1
+		Game.slots = []
+		for id in bag_ids.slice(page * 30, page * 30 + 30):
+			Game.inv[str(id)] = 1 + (str(id).length() % 4)
+		if page == 0:
+			Game.add_sweater(2)
+		Game.sync_slots()
+		await _wait(0.1)
+		await _key_tap(KEY_I)
+		await _wait(0.2)
+		await _shot("46_bag_icons_%d.png" % page)
+		await _key_tap(KEY_ESCAPE)
+		page += 1
+	Game.inv = inv_keep
+	Game.sweaters = sw_keep[0]
+	Game.sweater_designs = sw_keep[1]
+	Game.sweater_fibres = sw_keep[2]
+	Game.slots = slots_keep
+	Game.sync_slots()
+	await _wait(0.1)
 	# Esc with nothing else open is the menu
 	await _key_tap(KEY_ESCAPE)
 	var menu_open := hud.game_menu.visible
