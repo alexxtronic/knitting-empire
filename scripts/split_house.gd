@@ -898,9 +898,17 @@ func _stairs() -> void:
 					var ur := Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3]))
 					if ur.grow(0.05).intersects(Rect2(rect.position.x, rect.end.y, rect.size.x, 0.3)):
 						side_top = upper_y - 0.16
-			var side := _wall_box(parent, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.end.y), y_to, side_top, riser.albedo_color)
+			# up to the ground with the basement; above it with the main floor, so from above in the
+			# basement (the floors over it hidden) it doesn't stand up over the cutaway
+			var a := Vector2(rect.position.x, rect.end.y)
+			var b := Vector2(rect.end.x, rect.end.y)
+			var side := _wall_box(parent, a, b, y_to, 0.0, riser.albedo_color)
 			side.scale.z = 0.8 # inside any wall the house has on that line, never flush with its faces
 			_built.append(side)
+			if side_top > 0.05:
+				var over := _wall_box(roots["main"], a, b, 0.0, side_top, riser.albedo_color)
+				over.scale.z = 0.8
+				_built.append(over)
 			_well_guards(rect)
 			# a light over the flight, so the steps aren't a dark hole
 			var lamp := Catalog.omni(parent, Vector3(rect.position.x + rect.size.x * 0.45, 0.55, rect.get_center().y), Color(1.0, 0.86, 0.66), 4.0, 0.5, 0.9)
