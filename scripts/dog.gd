@@ -28,6 +28,7 @@ extends Node3D
 ## or past the first few, set_lod() has the AnimationPlayer and the steering run a few times a
 ## second instead of every frame.
 
+const Keys = preload("res://scripts/keybinds.gd")
 const SplitHouse = preload("res://scripts/split_house.gd")
 const Catalog = preload("res://scripts/catalog.gd")
 const SCARF_SHADER := preload("res://shaders/dog_scarf.gdshader")
@@ -197,12 +198,22 @@ func gallop_speed() -> float:
 	return run_speed * _run_mult
 
 
-## A click on him: the scarf rows (scarves.gd), once she has knitted him one.
+## A click on him: "Play as the dog" on her own dog (Alex, 2026-11-27: the switch has to be easy to
+## find; Tab still does it), then the scarf rows (scarves.gd) once she has knitted him one.
 func ke_actions() -> Array:
-	return main.scarves.dog_rows(self) if main and main.scarves else []
+	var rows: Array = []
+	if main and main.dog == self and not controlled and main.has_method("dog_playable") and main.dog_playable():
+		rows.append({"id": "play_dog", "label": "Play as the dog  (%s)" % Keys.key_name(Keys.bound("dog")), "enabled": true})
+	if main and main.scarves:
+		rows.append_array(main.scarves.dog_rows(self))
+	return rows
 
 
 func ke_action(id: String) -> void:
+	if id == "play_dog":
+		if main:
+			main.toggle_dog(true)
+		return
 	if main and main.scarves:
 		main.scarves.perform(id, self)
 

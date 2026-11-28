@@ -22,6 +22,7 @@ extends Node
 ## Every line players see here is a DRAFT until Alex approves it.
 
 const Data = preload("res://scripts/data.gd")
+const Coach = preload("res://scripts/coach.gd")
 const FieldGuide = preload("res://scripts/field_guide.gd")
 const Lookbook = preload("res://scripts/lookbook.gd")
 
@@ -408,12 +409,20 @@ func _refresh() -> void:
 	if _panel == null:
 		return
 	var w := window()
-	var key := ",".join(w.map(func(g): return label(g)))
+	var next: Array = Coach.next_step(main)
+	var key := ",".join(w.map(func(g): return label(g))) + "|" + str(next[1])
 	if key == _shown:
 		return
 	_shown = key
 	for c in _rows.get_children():
 		c.queue_free()
+	if str(next[1]) != "": # what to do right now, from what she has (coach.gd)
+		_rows.add_child(main.hud._label("Next", 13, GOLD))
+		var nl: Label = main.hud._label(str(next[1]), 14, TEXT)
+		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nl.custom_minimum_size = Vector2(330, 0)
+		nl.name = "CoachLine"
+		_rows.add_child(nl)
 	var title: Label = main.hud._label("Empire goals", 13, GOLD)
 	_rows.add_child(title)
 	for g in w:
@@ -436,6 +445,7 @@ func _process(delta: float) -> void:
 		_t = 0.5
 		_mark_seen()
 		check_now()
+		_refresh() # the "Next" line follows what she holds
 	if _card_t > 0.0:
 		_card_t -= delta
 		if _card_t <= 0.0:

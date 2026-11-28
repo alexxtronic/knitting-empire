@@ -578,6 +578,9 @@ func _ready() -> void:
 func _connect_hud() -> void:
 	hud.mode_selected.connect(func(b): set_mode(Mode.BUILD if b else Mode.LIVE))
 	hud.expand_pressed.connect(_expand_house)
+	hud.dog_pressed.connect(func():
+		if dog_playable() or (dog and dog.controlled):
+			toggle_dog())
 	hud.walls_pressed.connect(func(): walls_up = not walls_up)
 	hud.graphics_pressed.connect(_cycle_graphics)
 	hud.render_scale_changed.connect(set_render_scale)
@@ -2167,6 +2170,12 @@ func _setup_dog() -> void:
 
 ## Tab: the player's clicks move the dog (Shift gallops him) and the camera follows him; Tab again
 ## gives them back to Nora. A story scene or bedtime always hands them back.
+## Whether the player can become the dog right now: he's about, and nothing else has the screen.
+func dog_playable() -> bool:
+	return dog != null and dog.visible and mode == Mode.LIVE and not story.is_playing() and not sleeping and not title_on \
+		and not knit.active and not fps.active and not cinema.active and not (god != null and god.active)
+
+
 func toggle_dog(on = null) -> void:
 	if dog == null or not dog.visible:
 		return
@@ -2174,7 +2183,7 @@ func toggle_dog(on = null) -> void:
 	dog.path = []
 	if dog.controlled:
 		player.walk([])
-		hud.show_toast("You're the dog now. Click to run about, Shift to gallop, right-click to bark at wild animals, Tab to go back to Nora.")
+		hud.show_toast("You're the dog now. Bark (right-click) at a wild animal until its Fright bar fills, then lead it home to your pen.")
 	_set_cam_lock(true)
 
 
@@ -2204,7 +2213,12 @@ func _update_dog() -> void:
 			dog.position = player.position + Vector3(-9.0, 0, 6.0)
 	if not here:
 		dog.controlled = false
+		hud.set_dog(false, false, "")
 		return
+	# the Dog button on the bar, and what the keys do for as long as she's him
+	var dk := Keys.key_name(Keys.bound("dog"))
+	hud.set_dog(dog_playable() or dog.controlled, dog.controlled,
+		"%s|You're the dog   ·   Click: run   ·   %s: gallop   ·   Right-click: bark   ·   %s: back to Nora" % [dk, Keys.key_name(Keys.bound("run")), dk])
 	if homestead:
 		var herds := dog_herds() and dog.controlled
 		if herds and not homestead.herders.has(dog):
@@ -3638,11 +3652,23 @@ func _tips() -> Array:
 		["click", after_act1, "Click anything (sheep, the rocking chair, soil, people) to see what you can do with it."],
 		["shear", after_act1 and Game.count("wool") < 3, "Sheep grow wool every day. Click a woolly one to shear it: three wool knit one sweater."],
 		["knit", after_act1 and Game.has_item("wool", 3), "Enough wool for a sweater. Click the rocking chair and choose Knit Sweater."],
-		["sell", after_act1 and Game.count("sweater") > 0, "Sell sweaters to Rosa at the Maple Grove market (her price changes daily), ship them from the mailbox, or give one as a gift."],
+		["sell", after_act1 and Game.count("sweater") > 0, "Offer a sweater to anyone: click them and choose Offer them a sweater. A red pin means they want one today and pay well; the rest pay a little less. Rosa always buys at her price, and the mailbox ships for less."],
+		["pen", after_act1 and wildlife != null and wildlife.pen_room() <= 0, "Your pens are full. Every pen keeps four animals: press F to fence another patch of the farm, and set a gate in it (G)."],
+		["dog", after_act1 and dog != null and dog.visible and not dog.controlled and wildlife != null and wildlife.pen_room() > 0 and _wild_near(12.0), "A wild animal! Click your dog and choose Play as the dog (or press %s), then bark at it (right-click) until it follows you home." % _key("dog")],
 		["night", after_act1 and Game.hour >= 21.0, "It's getting late. Click the bed to sleep: crops grow, prices change, and the game saves."],
 		["rowan", after_act1 and Game.hearts("rowan") >= 1, "Rowan has more to say than he lets on. Talk to him once a day and a little more comes out."],
 		["build", mode == Mode.BUILD, "Pick a piece from the catalog and click to place it. R rotates, right-click cancels. Click a placed piece to move, recolour or sell it. Walls builds onto your house."],
 	]
+
+
+## Whether a wild animal she could catch is within `r` metres of her.
+func _wild_near(r: float) -> bool:
+	if wildlife == null:
+		return false
+	for a in wildlife.animals:
+		if is_instance_valid(a) and a.visible and not a.penned and not a.caught and a.position.distance_to(player.position) < r:
+			return true
+	return false
 
 
 func _update_tips(delta: float) -> void:
@@ -6239,6 +6265,12 @@ func _autotest() -> void:
 	if "--only=partners" in OS.get_cmdline_user_args(): # just her partner: asking, switching, the sore one's pranks, the proposal and the wedding
 		await _wait(1.5)
 		await PartnersCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=coach" in OS.get_cmdline_user_args(): # Play as the dog, the Dog button, the Next line (coach_check.gd)
+		await _wait(1.5)
+		await preload("res://scripts/coach_check.gd").new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return

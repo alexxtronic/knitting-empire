@@ -37,9 +37,11 @@ func run(main: Node) -> void:
 	Game.set_flag("act1_done")
 	await m._wait(1.0)
 	var w: Array = _ids(g.window())
-	var first_row := ""
-	if g._rows.get_child_count() > 1:
-		first_row = (g._rows.get_child(1) as Label).text
+	var first_row := "" # the first goal: the row after the "Empire goals" heading (the "Next" line comes before it, coach.gd)
+	var labels: Array = g._rows.get_children().filter(func(c): return c is Label and not c.is_queued_for_deletion())
+	for i in labels.size() - 1:
+		if (labels[i] as Label).text == "Empire goals":
+			first_row = (labels[i + 1] as Label).text
 	m._check("after act1_done the list shows %s, first '%s'" % [str(w), first_row],
 		g.live() and g._panel.visible and w == ["catch", "pen", "comb"] and first_row.contains("Catch a wild animal") and g.defs.size() >= 12 and str(g.defs[-1]["id"]) == "ready")
 	m._check("every goal has a line, a check and a reward of 0 to 150c", g.defs.all(func(d): return str(d.get("line", "")) != "" and str(d.get("check", "")) != "" and int(d.get("reward", -1)) >= 0 and int(d.get("reward", 0)) <= 150))

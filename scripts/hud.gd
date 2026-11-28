@@ -651,6 +651,26 @@ func toggle_game_menu() -> void:
 # --- hotbar and bag ------------------------------------------------------------
 
 const HOTBAR := 9
+signal dog_pressed
+var dog_btn: Button
+var dog_banner: PanelContainer
+var _dog_banner_label: Label
+
+
+## The Dog button on the bar (shown while he's about) and the banner while the player is him.
+func set_dog(here: bool, playing: bool, banner: String) -> void:
+	if dog_btn:
+		dog_btn.visible = here
+		dog_btn.text = "Nora" if playing else "Dog"
+		dog_btn.tooltip_text = ("Back to Nora (%s)" if playing else "Play as the dog (%s)") % banner.get_slice("|", 0)
+	if dog_banner:
+		dog_banner.visible = playing and hotbar != null and hotbar.visible
+		if playing and _dog_banner_label.text != banner.get_slice("|", 1):
+			_dog_banner_label.text = banner.get_slice("|", 1)
+		if playing: # centred over the bar, whatever its words' width
+			var w := dog_banner.get_combined_minimum_size().x
+			dog_banner.offset_left = -w * 0.5
+			dog_banner.offset_right = w * 0.5
 
 
 ## One square of the hotbar or the bag: a token for the thing in it, how many, and (on the bar)
@@ -776,10 +796,24 @@ func _build_hotbar() -> void:
 	build_btn.toggle_mode = true
 	build_btn.tooltip_text = "Build & Buy (B)"
 	hb.add_child(build_btn)
-	for b in [bag, build_btn]:
+	# the dog: one click to play him and back (Alex, 2026-11-27: Tab alone was too hard to find)
+	dog_btn = _button("Dog", func(): dog_pressed.emit())
+	dog_btn.tooltip_text = "Play as the dog, and back (Tab)"
+	dog_btn.visible = false
+	hb.add_child(dog_btn)
+	for b in [bag, build_btn, dog_btn]:
 		b.custom_minimum_size = Vector2(0, 48)
 	hotbar.add_child(hb)
 	root.add_child(hotbar)
+	# while she plays him: what the keys do, on show the whole time
+	dog_banner = PanelContainer.new()
+	dog_banner.add_theme_stylebox_override("panel", _sb(Color(BG, 0.9), 12, Color(GOLD, 0.6), 10.0))
+	dog_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dog_banner_label = _label("", 15)
+	dog_banner.add_child(_dog_banner_label)
+	dog_banner.visible = false
+	root.add_child(dog_banner)
+	_place(dog_banner, 0.5, 1.0, Vector2(0, 84))
 	_place(hotbar, 0.5, 1.0, Vector2(0, 14))
 
 

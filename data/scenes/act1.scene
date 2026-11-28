@@ -384,8 +384,8 @@ Rowan (warm): I'll talk you through it. It's your pen, though. That matters, wit
 @home rowan off
 @set act1_strays
 @camera player
-@toast Rowan's task 1 of 4: get wood and build a pen.
-@goal Rowan 1/4. Get wood: buy it from Steve at Builder's Delight, or fell a farm tree with an axe | 47.7 -9.4
+@toast Rowan's task 1 of 4: build a pen to keep the strays in. First, wood: Steve sells it at Builder's Delight.
+@goal Rowan 1/4. Get wood for a pen to keep your animals in: buy it from Steve at Builder's Delight, or fell a farm tree with an axe | 47.7 -9.4
 
 == act1_wood
 @trigger event wood_bought
@@ -394,8 +394,8 @@ Rowan (warm): I'll talk you through it. It's your pen, though. That matters, wit
 @goal
 Nora (neutral): Right. A pen. Panels, posts and a gate. How hard can it be.
 @set act1_wood
-@toast Press F (or Build pen) to lay fence panels: 1 wood each. Craft a gate (G) from 2 wood and set it in the fence.
-@goal Rowan 1/4. Build a pen with a gate, near the strays | 13.5 -14
+@toast Build the pen: press F (or Build pen) and click to lay fence panels round a patch of grass, 1 wood each. Then craft a gate (G) from 2 wood and set it in the fence. A closed fence with a gate is a pen.
+@goal Rowan 1/4. Build a pen near the strays: press F and fence in a patch, then set a gate in it (G). Your animals will live in it | 13.5 -14
 
 == act1_pen
 @trigger event pen_built
@@ -405,8 +405,8 @@ Nora (neutral): Right. A pen. Panels, posts and a gate. How hard can it be.
 Nora (happy): A pen. An actual pen, with an actual gate. Gran, are you seeing this?
 > Now the hard part. The strays are still out by the pond, and they don't look like they're in any hurry.
 > Rowan's whistle carries down from the hill: two notes, then a third. Job done. Next job.
-@toast Rowan's task 2 of 4: press Tab and play the dog. The sheep shy from him, so come round behind them and steer them in through the gate. (They shy from you on foot too, a little.)
-@goal Rowan 2/4. Herd the two strays into your pen with the dog (Tab)
+@toast Rowan's task 2 of 4: click your dog and choose Play as the dog (or press Tab, or the Dog button). The sheep shy from him, so come round behind them and steer them in through the gate. (They shy from you on foot too, a little.)
+@goal Rowan 2/4. Herd the two strays into your pen: play the dog (click him, or Tab) and drive them in through the gate
 
 == act1_flock
 @trigger event sheep_penned
