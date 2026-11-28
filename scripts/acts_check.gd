@@ -52,7 +52,8 @@ func run(main: Node) -> void:
 	var g: Node = m.goals
 	var af: Node = m.act_frame
 	var keep := {"flags": Game.flags.duplicate(true), "day": Game.day, "hour": Game.hour, "coins": Game.coins, "clock": Game.time_running,
-		"act": Game.act, "sheep": Game.sheep_count, "pos": m.player.position, "worn": Game.worn_design, "wardrobe": Game.wardrobe.duplicate()}
+		"act": Game.act, "sheep": Game.sheep_count, "pos": m.player.position, "worn": Game.worn_design, "wardrobe": Game.wardrobe.duplicate(),
+		"sweaters": Game.sweaters.duplicate(), "designs": Game.sweater_designs.duplicate(), "fibres": Game.sweater_fibres.duplicate(), "n": Game.count("sweater")}
 	Game.time_running = false
 	Game.hour = 11.0
 	m.hud.hide_dialogue()
@@ -138,9 +139,10 @@ func run(main: Node) -> void:
 	m._check("everything she owns carried over: coins %d (%d), sheep %d (%d), pens %d (%d), wild %d (%d)" % [Game.coins, c0, Game.sheep_count, sheep0, m.wildlife.pens().size(), pens0, m.wildlife.penned_list().size(), wild0],
 		Game.coins == c0 and Game.sheep_count == sheep0 and m.wildlife.pens().size() == pens0 and m.wildlife.penned_list().size() == wild0)
 	var w: Array = g.window().map(func(x): return str(x["id"]))
-	var first_row := ""
-	if g._rows.get_child_count() > 1:
-		first_row = (g._rows.get_child(1) as Label).text
+	var first_row := "" # the act's first goal among the rows (the coach's Next line comes before them)
+	for r in g._rows.get_children():
+		if r is Label and (r as Label).text.contains("Catch three wild animals"):
+			first_row = (r as Label).text
 	m._check("Act 2's goals show (%s, first '%s', panel %s), none of them done, and no chapter row now" % [str(w), first_row, str(g._panel.visible)],
 		not w.is_empty() and str(w[0]) == "a2_catch3" and first_row.contains("Catch three wild animals") and g._panel.visible and not g.is_done("a2_catch3") and _row(bed).is_empty())
 	m._check("her model is the act's from nora_ages ('%s', body %s)" % [af.used_model, m.player.body.model_path],
@@ -176,7 +178,7 @@ func run(main: Node) -> void:
 	# --- her model swapped for real, and back: eyes, grip and sweater kept
 	var ds: Array = Sweaters.designs()
 	var design := str(ds[0]["id"])
-	Game.wardrobe[design] = 1
+	Game.add_sweater(1, design)
 	Game.wear(design)
 	await m._wait(0.3)
 	var body0: Node = m.player.body
@@ -202,6 +204,10 @@ func run(main: Node) -> void:
 	Game.act = keep["act"]
 	Game.sheep_count = keep["sheep"]
 	Game.wardrobe = keep["wardrobe"]
+	Game.sweaters = keep["sweaters"]
+	Game.sweater_designs = keep["designs"]
+	Game.sweater_fibres = keep["fibres"]
+	Game.inv["sweater"] = keep["n"]
 	Game.wear(str(keep["worn"]))
 	Game.time_running = keep["clock"]
 	g.sync_act()

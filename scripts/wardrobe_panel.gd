@@ -1,5 +1,6 @@
-## Nora's wardrobe (from the wardrobe in her house, or Menu > Wardrobe): every design she has knit,
-## kept to wear (Game.wardrobe), best stars first, and her city coat. Picking one puts it on at once,
+## Nora's wardrobe (from the wardrobe in her house, or Menu > Wardrobe): the sweaters she has now
+## (Game.stored(): every one she knits hangs there until she sells it), one row a design, best stars
+## first, and her own clothes. Picking one puts it on at once,
 ## so she changes in the room behind the panel (main.gd's _update_sweater).
 extends PanelContainer
 
@@ -30,7 +31,7 @@ func setup(h: Node) -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(_list)
 	vb.add_child(sc)
-	_empty = hud._label("Nothing knitted yet. Every sweater you knit, you knit one like it for yourself, and it hangs here.", 14, Color(TEXT, 0.75))
+	_empty = hud._label("Nothing hanging here yet. Every sweater you knit hangs here until you sell it.", 14, Color(TEXT, 0.75))
 	_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_empty.custom_minimum_size = Vector2(440, 0)
 	vb.add_child(_empty)
@@ -53,10 +54,10 @@ func close() -> void:
 	visible = false
 
 
-## Her wardrobe's designs, best stars first, then by name.
+## Her wardrobe's designs (the sweaters she has now), best stars first, then by name.
 static func entries() -> Array:
 	var out := []
-	for id in Game.wardrobe:
+	for id in Game.stored():
 		var d := Sweaters.design(str(id))
 		if not d.is_empty():
 			out.append(d)
@@ -81,7 +82,8 @@ func refresh() -> void:
 	_list.add_child(_row("No sweater", "just her own clothes", Color(0.6, 0.6, 0.62), Game.worn_design == "", ""))
 	for d in es:
 		var s := clampi(int(d["stars"]), 1, 4)
-		_list.add_child(_row(str(d["name"]), "%s  %s" % ["★".repeat(s), TIER[s - 1]], Color(str(d["colours"][0])), Game.worn_design == str(d["id"]), str(d["id"]), TIER_COLOUR[s - 1], d["colours"]))
+		var n := Game.sweater_designs.count(str(d["id"]))
+		_list.add_child(_row(str(d["name"]), "%s  %s%s" % ["★".repeat(s), TIER[s - 1], ("  ×%d" % n) if n > 1 else ""], Color(str(d["colours"][0])), Game.worn_design == str(d["id"]), str(d["id"]), TIER_COLOUR[s - 1], d["colours"]))
 
 
 func _row(title: String, sub: String, swatch: Color, on: bool, design: String, sub_colour := Color(TEXT, 0.7), colours: Array = []) -> Control:

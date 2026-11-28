@@ -231,6 +231,13 @@ Max: Don't make that face. It's sweet. It's just not... me.
 @memory off 1.6
 @journal memory The navy sweater | Four months of evenings. A thin cream band, because cream made him look soft. It ended up in the bin under the coffee grounds and I didn't knit again for three years. Today I did.
 Nora (sad): ...Okay. That one still stings.
+# Gran's wardrobe (Alex, 2026-11-28): every sweater she knits hangs there until she sells it
+@walk nora by wardrobe 0 1.0
+@face nora by wardrobe 0 0
+> Gran's old oak wardrobe stands against the front wall. Inside, a row of empty hangers.
+Nora (neutral): Gran kept every sweater she ever made in here.
+Nora (happy): Mine can live in here too. Every one I knit hangs here until somebody buys it.
+@toast Your wardrobe: every sweater you knit hangs here until you sell it. Open it to choose what to wear.
 @set act1_knit
 > Three quick raps at the door, like someone with somewhere else to be.
 @place wren 5.4 3.0 270

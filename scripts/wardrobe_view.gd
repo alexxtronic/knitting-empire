@@ -1,6 +1,7 @@
 ## The wardrobe from her eyes (Alex, 2026-11-14): "Choose a sweater…" on the wardrobe in her house
 ## opens its doors and hands the camera to first person (first_person.gd, locked: no walking, no
-## mouse look) looking in. Every sweater in her wardrobe (Game.wardrobe) hangs face out on its own
+## mouse look) looking in. Every sweater she has (Game.stored(): one she knits hangs here until she
+## sells it; Alex, 2026-11-28), a hanger a design, hangs face out on its own
 ## wooden hanger on the brass rail, in its own design; the one in front faces her and the rest fan
 ## out either side, turned toward the middle.
 ##
@@ -484,7 +485,7 @@ func _update_pick(delta: float) -> void:
 func _refresh_text() -> void:
 	if hangers.is_empty():
 		_title.text = "Wardrobe"
-		_sub.text = "Nothing knitted yet. Every sweater you knit, you knit one like it for yourself, and it hangs here."
+		_sub.text = "Nothing hanging here yet. Every sweater you knit hangs here until you sell it."
 		_hint.text = "Esc  close"
 		return
 	var d := Sweaters.design(str(hangers[focus]["design"]))

@@ -3601,11 +3601,19 @@ func _spawn_entry(e: Dictionary) -> void:
 		f.set_meta("w", true)
 
 
+## Gran's wardrobe, in every new game's house (Alex, 2026-11-28: every sweater she knits hangs there
+## until she sells it). Against the front wall between its windows, facing in; the world editor can
+## move it, and then the layout's "house" list has it.
+const START_WARDROBE := [Vector3(4.0, 0, 5.72), 2]
+
+
 func _new_world() -> void:
 	if god != null and not god.house_list.is_empty():
 		# her house as arranged in god mode (data/world_layout.json's "house" list)
 		for e in god.house_list:
 			_spawn_entry(e)
+		if _wardrobe_piece() == null: # a layout saved before the house came with one
+			_spawn_furniture("wardrobe", START_WARDROBE[0], START_WARDROBE[1])
 		_new_world_crops()
 		return
 	_spawn_furniture("fireplace", Vector3(0.6, 0, 2.5), 1)
@@ -3625,6 +3633,7 @@ func _new_world() -> void:
 	_spawn_furniture("scarecrow", Vector3(13.0, 0, -2.6), 0)
 	_spawn_furniture("hay_bale", Vector3(15.5, 0, -3.0), 0)
 	_spawn_furniture("lantern", Vector3(9.4, 0, 1.6), 0)
+	_spawn_furniture("wardrobe", START_WARDROBE[0], START_WARDROBE[1])
 	_new_world_crops()
 
 
@@ -6954,6 +6963,8 @@ func _house_checks(showcase: bool) -> void:
 		return
 	for extra in [["sofa", Vector3(5.5, 0, 3.0), 3], ["armchair", Vector3(3.5, 0, 5.0), 2], ["dining_table", Vector3(6.0, 0, 5.0), 0],
 			["wardrobe", Vector3(7.5, 0, 3.0), 3], ["spinning_wheel", Vector3(5.0, 0, 1.5), 0]]:
+		if extra[0] == "wardrobe" and _wardrobe_piece() != null: # every house starts with Gran's
+			continue
 		_spawn_furniture(extra[0], extra[1], extra[2])
 	_set_cam_lock(false)
 	player.position = Vector3(4.2, 0, 4.2)
@@ -9931,12 +9942,15 @@ func _sweater_checks() -> void:
 	await _wait(0.2)
 	_check("with no sweater on she wears nothing over her own clothes (coat %s)" % Sweaters.coat_on(player.body), Sweaters.worn(player.body) == "" and not Sweaters.coat_on(player.body))
 	var xp0 := Game.knit_xp
+	_hang_sweaters({}) # her own come back at the end
 	var q := Game.knit_sweater(4)
 	var knitted: String = str(Game.sweater_designs[-1])
-	_check("a sweater she knits has a design of its stars, one like it hangs in her wardrobe and she puts it on (%s, %s)" % [knitted, Game.worn_design],
-		Sweaters.stars_for(q) == int(Sweaters.design(knitted).get("stars", 0)) and Game.wardrobe.has(knitted) and Game.worn_design == knitted)
+	_check("a sweater she knits has a design of its stars, hangs in her wardrobe and she puts it on (%s, %s)" % [knitted, Game.worn_design],
+		Sweaters.stars_for(q) == int(Sweaters.design(knitted).get("stars", 0)) and Game.stored().has(knitted) and Game.wardrobe.has(knitted) and Game.worn_design == knitted)
+	Game.remove_sweater(Game.sweater_designs.rfind(knitted))
+	_check("sold, it's gone from her wardrobe and off her back (wearing '%s')" % Game.worn_design, not Game.stored().has(knitted) and Game.worn_design == "" and Game.wardrobe.has(knitted))
 	Game.knit_xp = xp0
-	Game.wardrobe = {"flock": 4, "cranberry": 2, "northern_lights": 5, "snowfall_yoke": 3}
+	_hang_sweaters({"flock": 4, "cranberry": 2, "northern_lights": 5, "snowfall_yoke": 3})
 	Game.wear("flock")
 	await _wait(0.2)
 	var sw := player.body.skeleton.get_node_or_null(Sweaters.NODE) as MeshInstance3D
@@ -9957,7 +9971,7 @@ func _sweater_checks() -> void:
 	var picked := str(rows[3].get_meta("design")) # rows: the coat, then Northern Lights, Flock, Snowfall Yoke, Cranberry
 	(rows[3] as Button).pressed.emit()
 	await _wait(0.3)
-	_check("picking one there puts it on (%s, warmth from %s)" % [Game.worn_design, Game.stars(Game.worn_quality)], Game.worn_design == picked and Sweaters.worn(player.body) == Game.worn_design and Game.worn_quality == int(Game.wardrobe[Game.worn_design]))
+	_check("picking one there puts it on (%s, warmth from %s)" % [Game.worn_design, Game.stars(Game.worn_quality)], Game.worn_design == picked and Sweaters.worn(player.body) == Game.worn_design and Game.worn_quality == int(Game.stored()[Game.worn_design]))
 	await _shot("55_wardrobe.png")
 	(wardrobe_ui._list.get_child(0) as Button).pressed.emit()
 	await _wait(0.2)
@@ -10069,8 +10083,9 @@ func _wardrobe_checks() -> void:
 	hud.tip_panel.visible = false
 	hud.hide_dialogue()
 	Game.hour = 11.0
-	var keep := {"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate()}
-	Game.wardrobe = {"flock": 4, "cranberry": 1, "northern_lights": 5, "snowfall_yoke": 3, "oatmeal_stripe": 2, "forest": 1}
+	var keep := {"q": Game.worn_quality, "d": Game.worn_design, "w": Game.wardrobe.duplicate(), "s": Game.sweaters.duplicate(),
+		"sd": Game.sweater_designs.duplicate(), "sf": Game.sweater_fibres.duplicate(), "n": Game.count("sweater")}
+	_hang_sweaters({"flock": 4, "cranberry": 1, "northern_lights": 5, "snowfall_yoke": 3, "oatmeal_stripe": 2, "forest": 1})
 	Game.wear("cranberry")
 	var w = _wardrobe_piece()
 	var made: bool = w == null
@@ -10194,6 +10209,10 @@ func _wardrobe_checks() -> void:
 	await _wait(1.2)
 	await _shot("57_wardrobe_worn.png")
 	Game.wardrobe = keep["w"]
+	Game.sweaters = keep["s"]
+	Game.sweater_designs = keep["sd"]
+	Game.sweater_fibres = keep["sf"]
+	Game.inv["sweater"] = keep["n"]
 	Game.worn_design = keep["d"]
 	Game.worn_quality = keep["q"]
 	if made:
@@ -10210,6 +10229,20 @@ func _wardrobe_settle(opened: bool) -> void:
 		await get_tree().process_frame
 		t += get_process_delta_time()
 	await _wait(0.1)
+
+
+## For the checks: her sweaters are just these (design -> rarity), one each, so they're what hangs
+## in her wardrobe. The check puts her own back after.
+func _hang_sweaters(ws: Dictionary) -> void:
+	Game.sweaters = []
+	Game.sweater_designs = []
+	Game.sweater_fibres = []
+	for d in ws:
+		Game.sweaters.append(clampi(int(ws[d]), 1, 5))
+		Game.sweater_designs.append(str(d))
+		Game.sweater_fibres.append("")
+		Game.wardrobe[str(d)] = maxi(int(ws[d]), int(Game.wardrobe.get(str(d), 0)))
+	Game.inv["sweater"] = Game.sweaters.size()
 
 
 ## The wardrobe piece in her house, if there is one.
@@ -11960,9 +11993,9 @@ func _spot_at(at: Dictionary) -> Dictionary:
 		var talk: Vector3 = xf * Vector3(t.x, 0, t.y)
 		var front: Vector3 = xf.basis.z
 		return {"pos": Vector3(pos.x, 0, pos.z), "talk": Vector3(talk.x, 0, talk.z), "yaw": atan2(front.x, front.z), "roam": Vector2.ZERO}
-	# not a building: a single piece of town decor by its id ("by welcome_sign 0 3"), wherever the
-	# world editor has put it
-	for f in decor:
+	# not a building: a single piece of town decor by its id ("by welcome_sign 0 3"), or of her own
+	# furniture ("by wardrobe 0 1"), wherever the world editor or she has put it
+	for f in decor + furniture:
 		if not is_instance_valid(f) or f.item_id != str(at["building"]) or not f.visible:
 			continue
 		var dx: Transform3D = f.global_transform

@@ -79,8 +79,9 @@ var sweater_designs: Array = []
 ## The wild fibre each of those sweaters was knitted with (a data/wildlife.json "fibres" id, "" for
 ## plain wool), in the same order. The online store's orders want a fibre (scripts/online_store.gd).
 var sweater_fibres: Array = []
-## Her wardrobe: every design she has knit, kept to wear (design id -> the best rarity she knit it in).
-## She knits one like it for herself; the sweaters in her bag are for selling.
+## Every design she has ever knit (design id -> the best rarity she knit it in): the Lookbook's count.
+## Not what's in the wardrobe in her house: that holds the sweaters she has now (stored()), and one
+## she sells is gone from it (Alex, 2026-11-28).
 var wardrobe: Dictionary = {}
 ## Quality of the warmest thing she owns to wear: 1 = the thin city coat she arrived in.
 var worn_quality: int = 1
@@ -198,8 +199,8 @@ func knit_quality() -> int:
 
 
 ## Records a finished sweater of this rarity (the knitting game's result; 0 = by skill alone) and adds
-## it to what she carries, in a design of its stars. Returns its rarity. One like it goes in her
-## wardrobe, and she puts it on if it's warmer than what she's wearing.
+## it to her sweaters, in a design of its stars, so it hangs in her wardrobe until she sells it.
+## Returns its rarity. She puts it on if it's warmer than what she's wearing.
 func knit_sweater(rarity := 0) -> int:
 	var q := clampi(rarity, 1, 5) if rarity > 0 else knit_quality()
 	knit_xp += 1
@@ -211,17 +212,37 @@ func knit_sweater(rarity := 0) -> int:
 	return q
 
 
-## Puts on a design from her wardrobe, or her city coat for "". False if it isn't in her wardrobe.
+## Puts on a design from her wardrobe (a sweater she has now), or nothing for "". False if she
+## hasn't one in that design.
 func wear(design: String) -> bool:
 	if design == "":
 		worn_design = ""
 		worn_quality = 1
 		return true
-	if not wardrobe.has(design):
+	var have := stored()
+	if not have.has(design):
 		return false
 	worn_design = design
-	worn_quality = clampi(int(wardrobe[design]), 1, 5)
+	worn_quality = clampi(int(have[design]), 1, 5)
 	return true
+
+
+## What hangs in her wardrobe: the sweaters she has now, by design (design id -> the best rarity of
+## those she has in it). Selling, posting or giving one away takes it out (Alex, 2026-11-28).
+func stored() -> Dictionary:
+	_sync_designs()
+	var out := {}
+	for i in sweaters.size():
+		var d := str(sweater_designs[i])
+		out[d] = maxi(int(sweaters[i]), int(out.get(d, 0)))
+	return out
+
+
+## The sweater she wears came off with the last one of its design (sold, posted, given): she takes it off.
+func _check_worn() -> void:
+	if worn_design != "" and not stored().has(worn_design):
+		worn_design = ""
+		worn_quality = 1
 
 
 static func stars(q: int) -> String:
@@ -330,6 +351,7 @@ func remove_sweater(i: int) -> Dictionary:
 	sweater_designs.remove_at(i)
 	sweater_fibres.remove_at(i)
 	inv["sweater"] = sweaters.size()
+	_check_worn()
 	return out
 
 
@@ -421,6 +443,7 @@ func take_item(id: String, n: int = 1) -> bool:
 	inv[id] = count(id) - n
 	if id == "sweater":
 		sync_sweaters() # the lowest rarities go first
+		_check_worn()
 	return true
 
 
@@ -655,9 +678,11 @@ func from_dict(d: Dictionary) -> void:
 	if wd is Dictionary:
 		for k in wd:
 			wardrobe[str(k)] = clampi(int(wd[k]), 1, 5)
-	if worn_design != "" and not wardrobe.has(worn_design): # what she wears is always in her wardrobe
+	if worn_design != "" and not wardrobe.has(worn_design): # what she has knit is always in the Lookbook
 		wardrobe[worn_design] = worn_quality
 	sync_sweaters()
+	if worn_design != "" and not stored().has(worn_design): # a save from before the wardrobe held her sweaters: the one she has on is hers
+		add_sweater(worn_quality, worn_design)
 	day = int(d.get("day", 1))
 	hour = float(d.get("hour", 8.0))
 	house_level = int(d.get("house_level", 0))
