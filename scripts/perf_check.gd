@@ -304,7 +304,9 @@ func _probe(spot: Array) -> void:
 			main.light_budget.update(main.get_tree(), main.cam_target, 0.0, true),
 		# the effects themselves
 		"sdfgi": func(on: bool) -> void: env.sdfgi_enabled = on,
-		"vol_fog": func(on: bool) -> void: env.volumetric_fog_enabled = on,
+		"vol_fog": func(on: bool) -> void:
+			main.lighting.fog_hold = not on
+			env.volumetric_fog_enabled = on and env.volumetric_fog_enabled,
 		"ssao": func(on: bool) -> void: env.ssao_enabled = on,
 		"ssil": func(on: bool) -> void: env.ssil_enabled = on,
 		"ssr": func(on: bool) -> void: env.ssr_enabled = on,
@@ -368,6 +370,12 @@ func _probe(spot: Array) -> void:
 			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx] if on else 0.3, main.GRASS_THIN_NEAR[main.gfx]),
 		"grass_near_16v12": func(on: bool) -> void:
 			main.grass.set_quality(main.GRASS_FRAC[main.gfx], main.GRASS_RANGE[main.gfx], main.GRASS_THIN[main.gfx], 16.0 if on else 12.0),
+		# the map under the coins: its own camera draws the world (and the sun's shadow) a few times a second
+		"minimap": func(on: bool) -> void:
+			main.minimap.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED,
+		# the sky's uniforms are written every frame: does that re-filter its radiance map each frame?
+		"sky_realtime": func(on: bool) -> void:
+			main.env.sky.process_mode = Sky.PROCESS_MODE_AUTOMATIC if on else Sky.PROCESS_MODE_INCREMENTAL,
 		"3d_res_x0.7": func(on: bool) -> void:
 			main.render_scale = 1.0 if on else 0.7
 			main._fit_3d_resolution(),
@@ -395,7 +403,10 @@ func _probe(spot: Array) -> void:
 			await main._wait(0.6)
 			off = await measure(1.5)
 			toggles[k].call(true)
-			await main._wait(0.5)
+			# back to this level's own settings: "on" switches some effects on (SDFGI, SSIL, SSR)
+			# that this level has off, and they must not stay on for the next toggle's numbers
+			main.apply_graphics()
+			await main._wait(0.8)
 			if off.ok and with.ok:
 				savings.append(float(with.med) - float(off.med))
 		savings.sort()

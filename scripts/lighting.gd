@@ -47,6 +47,7 @@ var mist := 0.0 # 0..1, how much morning mist there is now
 var local_fog := false # regions.gd: the camera is near the swamp, whose mist needs volumetric fog on
 var bodies := SkyBodies.new() # the sun and the moon (sky_bodies.gd)
 var mist_enabled := true # the frame-cost probe (--fpsprobe) switches it off to time it
+var fog_hold := false # perf_check.gd: holds the volumetric fog off, which update() would turn back on every frame
 var gfx := 2
 var _sun_fog_energy := 1.3
 var _anisotropy := 0.6
@@ -133,7 +134,7 @@ func update(rain: float, dl: float) -> void:
 	mist_mat.set_shader_parameter("albedo", tint)
 	mist_volume.visible = mist > 0.01
 	env.volumetric_fog_density += SHAFT_FOG * mist
-	env.volumetric_fog_enabled = gfx >= 1 and (env.volumetric_fog_density > 0.0006 or mist > 0.01 or local_fog)
+	env.volumetric_fog_enabled = gfx >= 1 and not fog_hold and (env.volumetric_fog_density > 0.0006 or mist > 0.01 or local_fog)
 	# shafts: the low sun lights the mist strongly, mostly forward (towards the camera when you look at the sun)
 	sun.light_volumetric_fog_energy = lerpf(_sun_fog_energy, 4.5, mist * lit)
 	env.volumetric_fog_anisotropy = lerpf(_anisotropy, 0.72, mist)

@@ -6,7 +6,7 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform vec3 tint : source_color = vec3(0.9, 0.96, 0.95);
 uniform float warp : hint_range(0.0, 0.1) = 0.022; // how far the ripples bend what's behind, in metres
