@@ -41,6 +41,8 @@ var rng := RandomNumberGenerator.new()
 static var fibre_on := true
 ## Tests: the fibre every buyer wants ("wool" for sheep's wool); "" leaves it to the day's roll.
 static var force_fibre := ""
+## Tests: vids looking for a sweater today whatever their day's roll (the roll differs day to day).
+static var force_looking: Array = []
 ## The hamlets' keepers (hamlets.gd, data/hamlets.json): vid -> {"fibres": [...], "mult": x}. Each
 ## wants one of their own fibres (any of them buyers may ask for now and she has seen; sheep's
 ## wool when none is) and will pay up to `mult` times what anyone else would.
@@ -102,6 +104,8 @@ static func _day_roll(vid: String, what: String) -> float:
 static func looking(vid: String) -> bool:
 	if itchy(vid):
 		return false
+	if force_looking.has(vid):
+		return true
 	if themed.has(vid):
 		return true # a hamlet's keeper always wants one of their own fibres
 	if vid.begins_with("tf_") and tf_looking.is_valid():

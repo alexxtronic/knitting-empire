@@ -72,6 +72,7 @@ func run(main: Node) -> void:
 	Game.act = 2
 	var wren: Node = m._villager("wren")
 	SweaterSale.force_fibre = "fox_fibre"
+	SweaterSale.force_looking = ["wren"] # her own day's roll may say she isn't looking today
 	while Game.sweaters.size() > 0:
 		Game.remove_sweater(0)
 	Game.add_sweater(3, "")
@@ -118,6 +119,8 @@ func run(main: Node) -> void:
 	m.hud.hide_dialogue()
 	m.sale.close()
 
+	SweaterSale.force_looking = []
+
 	# a townsperson's row and Talk name the fibre
 	var tf: Node = m.townsfolk
 	if tf != null and tf.people.size() > 0:
@@ -142,6 +145,7 @@ func run(main: Node) -> void:
 		not lynx_open and not fox_open and not (due.has("fibre") and not SweaterSale.fibre_open(str(due["fibre"]))))
 
 	# put it all back
+	SweaterSale.force_looking = []
 	SweaterSale.force_fibre = ""
 	SweaterSale.fibre_on = on0
 	Game.flags = keep["flags"]
