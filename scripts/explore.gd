@@ -329,6 +329,7 @@ func apply() -> void:
 		p.table = str(a[3])
 		p.refill = int(a[4])
 		p.position = _open_spot(Vector3(float(a[1]), 0, float(a[2])))
+		p.position.y = main.regions.relief(p.position.x, p.position.z) if main.regions else 0.0 # on a hillside, on the hill
 		main.add_child(p)
 		p.build()
 		patches.append(p)
@@ -567,7 +568,7 @@ func _apply_tent() -> void:
 		return
 	var t := Tent.new()
 	t.home = self
-	t.position = Vector3(float(e[0]), 0, float(e[1]))
+	t.position = Vector3(float(e[0]), main.regions.relief(float(e[0]), float(e[1])) if main.regions else 0.0, float(e[1]))
 	t.rotation.y = float(e[2])
 	main.add_child(t)
 	t.build()

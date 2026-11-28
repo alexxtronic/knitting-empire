@@ -338,6 +338,8 @@ func outdoor_ok(r: Rect2, flat: bool) -> bool:
 	var c := r.get_center()
 	if not main._walkable(main._cell(Vector3(c.x, 0, c.y))):
 		return false
+	if main.regions and main.regions.relief(c.x, c.y) > main.regions.RELIEF_BLOCK:
+		return false # a hillside: the piece would stand half in the hill
 	if not flat:
 		for p in [r.position, r.end]:
 			if not main._walkable(main._cell(Vector3(p.x, 0, p.y))):

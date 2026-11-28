@@ -224,6 +224,53 @@ func run(main: Node) -> void:
 		var w: Vector3 = spot2[0]
 		await _look(w, 34.0, 34.0, 2.5)
 		await m._shot(spot2[1])
+	# --- over the hills (Alex, 2026-11-27: the hills and dunes were invisible walls)
+	var rg = m.regions
+	var hill: Array = []
+	for md in rg.mounds: # the gentlest tall one
+		if float(md[4]) > 2.5 and (hill.is_empty() or float(md[4]) / minf(float(md[2]), float(md[3])) < float(hill[4]) / minf(float(hill[2]), float(hill[3]))):
+			hill = md
+	var top := Vector3(float(hill[0]), 0, float(hill[1]))
+	var foot: Vector3 = m._open_near(top + Vector3(-maxf(float(hill[2]), float(hill[3])) - 3.0, 0, 0), 6.0)
+	var open_top: Vector3 = m._open_near(top, 3.0)
+	var blocked_cells := 0
+	var hill_cells := 0
+	var steep_open := 0
+	for gx in range(0, m.GRID_SIZE.x, 2):
+		for gy in range(0, m.GRID_SIZE.y, 2):
+			var cc: Vector3 = m._cell_center(Vector2i(gx, gy))
+			if rg.relief(cc.x, cc.z) > rg.RELIEF_BLOCK:
+				hill_cells += 1
+				if not m._walkable(Vector2i(gx, gy)):
+					blocked_cells += 1
+				elif rg.slope(cc.x, cc.z) > rg.RELIEF_STEEP:
+					steep_open += 1
+	m._check("the hills and dunes can be walked over: a path from a hill's foot to its top (%.1f m up), %d%% of the hills' ground blocked (it was all of it), no face steeper than %.1f open (%d)" % [float(hill[4]), int(100.0 * blocked_cells / maxi(1, hill_cells)), rg.RELIEF_STEEP, steep_open],
+		_reaches(foot, open_top) and float(blocked_cells) / maxf(1.0, float(hill_cells)) < 0.3 and steep_open == 0)
+	m.player.position = foot
+	m.player.walk(m._find_path(foot, open_top))
+	m.autotest_jog = true
+	m.cam_glide = {"pos": top, "dist": 26.0, "pitch": 28.0}
+	var climb_t := 0.0
+	while climb_t < 25.0 and Vector2(m.player.position.x - open_top.x, m.player.position.z - open_top.z).length() > 0.8:
+		await m._wait(0.5)
+		climb_t += 0.5
+	m.autotest_jog = false
+	await m._wait(0.6)
+	var want_y: float = rg.relief(m.player.position.x, m.player.position.z)
+	m._check("walking up it she stands on the hill, not in it (at %.2f m, the ground there %.2f m), the dog with her (%.2f m)" % [m.player.position.y, want_y, m.dog.position.y],
+		want_y > 1.5 and absf(m.player.position.y - want_y) < 0.1 and m.dog.position.y > 0.3)
+	await m._shot("75_explore_hilltop.png")
+	# a click on the hillside lands on the hill, not on the flat ground behind it
+	m.cam_glide = {}
+	await m._wait(1.2)
+	var side := Vector3(float(hill[0]) - float(hill[2]) * 0.45, 0, float(hill[1]))
+	side.y = rg.relief(side.x, side.z)
+	var sp: Vector2 = m.cam.unproject_position(side)
+	var gp: Variant = m._ground_point(sp)
+	var flat: Variant = Plane(Vector3.UP, 0.0).intersects_ray(m.cam.project_ray_origin(sp), m.cam.project_ray_normal(sp))
+	m._check("a click on the hillside lands on it (%.1f m from the spot; the flat ground behind is %.1f m off)" % [Vector2(gp.x - side.x, gp.z - side.z).length() if gp != null else -1.0, Vector2(flat.x - side.x, flat.z - side.z).length() if flat != null else -1.0],
+		gp != null and Vector2(gp.x - side.x, gp.z - side.z).length() < 1.2)
 	# --- the save keeps it
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(Game.to_dict()))
 	var sf: Dictionary = saved.get("flags", {})

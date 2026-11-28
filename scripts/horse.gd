@@ -267,7 +267,7 @@ func _process(delta: float) -> void:
 		to.y = 0.0
 		var spd := 4.0
 		if to.length() <= spd * delta:
-			position = Vector3(next.x, 0, next.z)
+			position = Vector3(next.x, main.regions.relief(next.x, next.z) if main.regions else 0.0, next.z)
 			_coming.remove_at(0)
 			if _coming.is_empty():
 				_save()

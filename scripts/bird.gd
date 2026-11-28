@@ -130,6 +130,7 @@ func take_off(from: Vector3) -> void:
 	for b in birds:
 		starts.append((b["node"] as Node3D).global_position)
 	position = best
+	position.y = main.regions.relief(best.x, best.z) if main and main.regions else 0.0
 	var speed := float(info.get("speed", 6.0))
 	var up := randf_range(4.0, 8.0)
 	for i in birds.size():

@@ -136,7 +136,7 @@ func light(g: Vector3, until := -1.0) -> Node3D:
 	var f := Fire.new()
 	f.home = self
 	f.until = until
-	f.position = Vector3(g.x, 0.0, g.z)
+	f.position = Vector3(g.x, main.regions.relief(g.x, g.z) if main.regions else 0.0, g.z)
 	main.add_child(f)
 	f.build(float(econ("light_range", 15.0)), float(econ("light_energy", 3.4)))
 	fires.append(f)

@@ -20,6 +20,8 @@ func run(m: Node, dir: String) -> void:
 			var id := Vector2i(x, y)
 			var cc: Vector3 = m._cell_center(id)
 			var col := Color(0.42, 0.52, 0.38)
+			if m.regions.relief(cc.x, cc.z) > Regions.RELIEF_BLOCK:
+				col = Color(0.62, 0.66, 0.42) # a hill she can walk over
 			var why := ""
 			if not m._walkable(id):
 				if not whole.has_point(Vector2(cc.x, cc.z)):

@@ -303,6 +303,7 @@ func _ready() -> void:
 	explore = Explore.new()
 	explore.main = self
 	add_child(explore)
+	preload("res://scripts/split_house.gd").terrain = regions.relief # walkers follow the hills' and dunes' height (split_house.gd follow())
 	grid_blockers.append_array(explore.build()) # the huts, before god mode lists Town.built
 	hamlets = Hamlets.new()
 	hamlets.main = self
@@ -1540,7 +1541,7 @@ func _rebuild_grid() -> void:
 			rects.append(f.footprint())
 	for r in rects:
 		_mark_rect((r as Rect2).grow(0.2))
-	regions.mark_relief() # the dunes' and the downs' slopes (regions.gd)
+	regions.mark_relief() # only the faces too steep to climb: she walks over the hills and dunes (regions.gd)
 	if not Game.has_item("waders"):
 		regions.mark_moat() # the Deep Mire's deep water, till Steve's waders (explore.gd)
 	if suburb != null and suburb.walk_in != null:
@@ -2107,7 +2108,31 @@ func _ground_point(mpos: Vector2) -> Variant:
 		return lp
 	if suburb != null and suburb.walk_in != null and suburb.walk_in.inside:
 		return suburb.walk_in.pick(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos)) # its floors aren't at ground level
-	return Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(mpos), cam.project_ray_normal(mpos))
+	var o := cam.project_ray_origin(mpos)
+	var d := cam.project_ray_normal(mpos)
+	var p: Variant = Plane(Vector3.UP, 0.0).intersects_ray(o, d)
+	if p != null and regions != null and not regions.mounds.is_empty():
+		# a click on a hillside lands where the ray meets the hill, not on the flat ground behind it:
+		# walk the ray down until it's under the ground (the answer stays a ground point, y 0)
+		var hit: Variant = null
+		var top := 8.0
+		var t0 := (top - o.y) / d.y if d.y < -0.001 and o.y > top else 0.0
+		var t1 := (0.0 - o.y) / d.y if d.y < -0.001 else 0.0
+		if t1 > t0:
+			var steps := 48
+			var last := o + d * t0
+			for i in range(1, steps + 1):
+				var q: Vector3 = o + d * lerpf(t0, t1, float(i) / steps)
+				var h: float = regions.relief(q.x, q.z)
+				if q.y <= h:
+					if h > 0.02:
+						var mid: Vector3 = last.lerp(q, 0.5)
+						hit = Vector3(mid.x, 0.0, mid.z)
+					break
+				last = q
+		if hit != null:
+			return hit
+	return p
 
 
 func _update_hover(mpos: Vector2) -> void:

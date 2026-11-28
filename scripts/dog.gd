@@ -388,6 +388,7 @@ func _follow_nora(delta: float) -> void:
 	var d := _to_nora().length()
 	if d > 25.0: # left far behind (she went through a door, a scene moved her): he catches up out of sight
 		position = main.player.position - main.player.global_transform.basis.z * 1.5 + main.player.global_transform.basis.x * 0.8
+		position.y = 0.0 # her height isn't his: follow() stands him on the ground where he is (a hillside, a floor)
 		path = []
 		return
 	var crowd := _crowding()
@@ -451,7 +452,7 @@ func _follow_leader(delta: float) -> void:
 	var far := Vector2(lead.x - position.x, lead.z - position.z).length()
 	if far > 25.0: # left far behind (a door, a scene, a jump): he catches up out of sight
 		if main._walkable(main._cell(target)):
-			position = target
+			position = Vector3(target.x, 0.0, target.z)
 		else:
 			position = Vector3(lead.x, 0.0, lead.z) - pack_leader.global_transform.basis.z.normalized() * 1.5
 		path = []

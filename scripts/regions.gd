@@ -173,8 +173,23 @@ func relief(x: float, z: float) -> float:
 	return best
 
 
-## Blocks the walking grid wherever a mound stands more than RELIEF_BLOCK high (main._rebuild_grid).
+## She walks over the hills and dunes now (Alex, 2026-11-27: "I still can't walk freely in the outer
+## parts of the map, kept feeling like I was hitting an invisible wall": every mound over 12 cm was
+## solid, 38% of the downs and 27% of the dunes). Walkers are lifted to the ground's height
+## (SplitHouse.follow() asks `relief`, as do the wild animals, the birds and the horse), and only a
+## face too steep to climb still blocks the grid: steeper than RELIEF_STEEP (rise over run; 1.1 is
+## about 48 degrees, a dune's slip face), which reads as a wall. RELIEF_BLOCK is the height from
+## which the ground counts as a hill at all (walkmap_check.gd, Build & Buy).
 const RELIEF_BLOCK := 0.12
+const RELIEF_STEEP := 1.1
+
+
+## How steep the ground is at a point: rise over run, the steepest way.
+func slope(x: float, z: float) -> float:
+	var e := 0.2
+	var gx := (relief(x + e, z) - relief(x - e, z)) / (2.0 * e)
+	var gz := (relief(x, z + e) - relief(x, z - e)) / (2.0 * e)
+	return sqrt(gx * gx + gz * gz)
 
 func mark_relief() -> void:
 	if _relief_cells.is_empty() and not mounds.is_empty():
@@ -189,7 +204,7 @@ func mark_relief() -> void:
 					if seen.has(id) or not main.astar.is_in_boundsv(id):
 						continue
 					var cc: Vector3 = main._cell_center(id)
-					if relief(cc.x, cc.z) > RELIEF_BLOCK:
+					if relief(cc.x, cc.z) > RELIEF_BLOCK and slope(cc.x, cc.z) > RELIEF_STEEP:
 						seen[id] = true
 		_relief_cells = seen.keys()
 	for id in _relief_cells:

@@ -306,9 +306,14 @@ func ke_action(id: String) -> void:
 
 # --- moving ------------------------------------------------------------------------------------
 
+var _grounded := false # stood on the ground's height once (the hills, regions.relief)
+
 func _process(delta: float) -> void:
 	if main == null:
 		return
+	if not _grounded and main.regions: # where it was put down (a hillside, perhaps), before its first step
+		_grounded = true
+		position.y = main.regions.relief(position.x, position.z)
 	_coat_t -= delta
 	if _coat_t <= 0.0 and _shorn != null:
 		_coat_t = randf_range(1.5, 2.5)
@@ -360,7 +365,7 @@ func _process(delta: float) -> void:
 	if dir != Vector3.ZERO and speed > 0.01:
 		var step := dir * speed * delta
 		position += step
-		position.y = 0.0
+		position.y = main.regions.relief(position.x, position.z) if main.regions else 0.0 # up over the hills and dunes
 		walked += step.length()
 		rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-delta * TURN))
 	_play_gait()

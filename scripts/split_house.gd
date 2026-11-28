@@ -1224,6 +1224,10 @@ static func covers(p: Vector3) -> bool:
 
 
 ## The floor's height under `p` (world), for whoever stands there: 0 anywhere outside the house.
+## The ground's own height out in the lands (main sets it to regions.relief): 0 on flat ground.
+static var terrain := Callable()
+
+
 static func y_at(p: Vector3) -> float:
 	if current == null or not is_instance_valid(current):
 		return 0.0
@@ -1246,6 +1250,8 @@ static func follow(n: Node3D, prev: float) -> float:
 		var lf: Variant = Interiors.floor_for(n.position, prev)
 		if lf != null:
 			f = lf
+	if f == 0.0 and terrain.is_valid():
+		f = float(terrain.call(n.position.x, n.position.z)) # the downs' hills and the dunes (regions.gd relief)
 	if f == 0.0 and prev == 0.0:
 		return 0.0
 	# what's above the floor: the walk puts her back on the ground (0) each step, so a floor below the
