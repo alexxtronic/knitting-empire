@@ -178,7 +178,7 @@ func _say(op: Dictionary) -> void:
 		actor.talk(2.5)
 	elif actor and actor.has_method("hold"):
 		actor.hold(2.5)
-	main.hud.story_say(name_text, text, tex)
+	main.hud.story_say(name_text, text, tex, char_id if who != "" else "")
 	if auto:
 		if pause_on != "" and pause_on in text:
 			pause_on = ""

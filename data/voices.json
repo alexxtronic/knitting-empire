@@ -1,0 +1,26 @@
+{
+	"_about": "The cartoon mumble each character makes as their line comes up (Alex, 2026-11-28, chose 'B · Mumbles' from art/voice_mumbles/review). scripts/audio.gd speak() strings syllables from assets/audio/voice/mumble_N.wav (dodrio, CC0, made by tools/make_voice.py), one about every 9 letters of the line, at least 3 and at most 'max', 'gap' seconds apart (each gap 0.85 to 1.2 of it, now and then a pause), each syllable at 'pitch' (higher is also quicker, like a tape sped up) give or take a little, the last one dropping. 'like' gives someone another's voice. Anyone not listed gets 'default'. All drafts.",
+	"default": {"pitch": 1.0, "gap": 0.13, "max": 7},
+	"voices": {
+		"nora": {"pitch": 1.15, "gap": 0.131, "max": 8, "why": "warm, a little unsure"},
+		"rosa": {"pitch": 1.30, "gap": 0.106, "max": 10, "why": "bubbly, talks fast"},
+		"wren": {"pitch": 1.20, "gap": 0.125, "max": 9, "why": "bright and brisk"},
+		"sabrina": {"pitch": 1.08, "gap": 0.15, "max": 7, "why": "cool, unhurried"},
+		"barbara": {"pitch": 1.02, "gap": 0.138, "max": 8, "why": "older, chatty"},
+		"rebecca": {"pitch": 1.06, "gap": 0.125, "max": 7, "why": "crisp, matter-of-fact"},
+		"rowan": {"pitch": 0.86, "gap": 0.156, "max": 7, "why": "gentle, easy"},
+		"giorgio": {"pitch": 0.95, "gap": 0.106, "max": 10, "why": "jolly, rattles on"},
+		"gary": {"pitch": 1.00, "gap": 0.113, "max": 9, "why": "smooth salesman"},
+		"lars": {"pitch": 0.80, "gap": 0.163, "max": 7, "why": "slow, solid"},
+		"steve": {"pitch": 0.72, "gap": 0.20, "max": 4, "why": "few words, gruff"},
+		"max": {"pitch": 0.70, "gap": 0.138, "max": 7, "why": "low, pushy"},
+		"kid": {"pitch": 1.60, "gap": 0.094, "max": 11, "why": "tiny and quick"},
+		"teen": {"pitch": 1.10, "gap": 0.119, "max": 8, "why": "light, a bit mumbly"},
+		"man": {"pitch": 0.92, "gap": 0.138, "max": 7, "why": "everyday grown-up"},
+		"old": {"pitch": 0.80, "gap": 0.188, "max": 6, "why": "slow, creaky"}
+	},
+	"like": {
+		"tf_lily": "kid", "tf_pip": "kid", "tf_jake": "teen", "tf_theo": "man", "tf_marcus": "man", "tf_dev": "man", "tf_hank": "old",
+		"hm_thistle": "man", "hm_bramwell": "old", "hm_idris": "man", "hm_wyn": "teen"
+	}
+}

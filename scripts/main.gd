@@ -426,6 +426,7 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self, _autotest_dir != "")
 	hud.sfx = audio.play
+	hud.voice = audio.speak
 	player.footstep.connect(func(): audio.footstep(player.position))
 	player.needle_click.connect(audio.needle)
 	knit = KnitGame.new()
@@ -600,6 +601,7 @@ func _connect_hud() -> void:
 	hud.title_new_game.connect(_title_new_game)
 	hud.title_quit.connect(func(): get_tree().quit())
 	hud.volumes_changed.connect(audio.set_volumes)
+	hud.voice_volume_changed.connect(audio.set_voice_volume)
 	hud.music_slider.get_parent().visible = GameAudio.MUSIC_ON
 	hud.fullscreen_toggled.connect(set_fullscreen)
 	hud.hud_option.connect(_save_hud_option)
@@ -610,6 +612,7 @@ func _connect_hud() -> void:
 		if hud.settings_panel.visible:
 			hud.music_slider.set_value_no_signal(audio.music_volume)
 			hud.sound_slider.set_value_no_signal(audio.sound_volume)
+			hud.voice_slider.set_value_no_signal(audio.voice_volume)
 			hud.show_god_state(Game.hour, str(Game.flag("weather", "clear")), Game.clock_frozen)
 			hud.show_god_edit(GodMode.is_admin(), god.active))
 	hud.god_edit.connect(func(on: bool):
@@ -6311,6 +6314,12 @@ func _autotest() -> void:
 	if "--only=partners" in OS.get_cmdline_user_args(): # just her partner: asking, switching, the sore one's pranks, the proposal and the wedding
 		await _wait(1.5)
 		await PartnersCheck.new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
+	if "--only=voice" in OS.get_cmdline_user_args(): # the characters' mumbles (voice_check.gd)
+		await _wait(1.5)
+		await preload("res://scripts/voice_check.gd").new().run(self)
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
@@ -12479,7 +12488,7 @@ func _villager_actions(v) -> Array:
 
 
 func _say(v, text: String) -> void:
-	hud.show_dialogue(v.title, Game.hearts(v.vid), text)
+	hud.show_dialogue(v.title, Game.hearts(v.vid), text, v.vid)
 
 
 func _talk_line(v) -> String:

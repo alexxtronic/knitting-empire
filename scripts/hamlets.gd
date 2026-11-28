@@ -785,7 +785,7 @@ func action(k, id: String) -> void:
 				text = str(lines[(Game.day + k.talks) % maxi(1, lines.size())])
 				if wants(k):
 					text += "  Today I'm after %s." % SweaterSale.wanted_text(k.vid)
-			main.hud.show_dialogue(k.title, -1, text)
+			main.hud.show_dialogue(k.title, -1, text, k.vid)
 		"sale":
 			if Game.count("sweater") == 0:
 				return

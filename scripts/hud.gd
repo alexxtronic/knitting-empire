@@ -19,6 +19,7 @@ signal title_continue
 signal title_new_game
 signal title_quit
 signal volumes_changed(music: float, sound: float)
+signal voice_volume_changed(voice: float)
 signal fullscreen_toggled(on: bool)
 signal god_time(hour: float) # god mode (settings): jump the clock
 signal god_weather(weather: String) # "clear" or "rain"
@@ -258,6 +259,7 @@ var minimap: Minimap # under the coins (minimap.gd); main.gd makes it and hands 
 var _fps_t := 0.0
 var music_slider: HSlider
 var sound_slider: HSlider
+var voice_slider: HSlider
 var fullscreen_check: CheckButton
 var title_layer: Control
 var tip_panel: PanelContainer
@@ -540,6 +542,7 @@ func set_graphics_label(level: String) -> void:
 
 
 var sfx := Callable() # main.gd's audio.play(name, db): a soft click for buttons
+var voice := Callable() # main.gd's audio.speak(id, text): the speaker's mumble as a line comes up
 
 
 func click(sound := "ui_click") -> void:
@@ -1424,7 +1427,9 @@ func _build_dialogue() -> void:
 
 
 ## A villager speaks: name, 0..5 friendship hearts and their line.
-func show_dialogue(speaker: String, hearts: int, text: String) -> void:
+func show_dialogue(speaker: String, hearts: int, text: String, voice_id := "") -> void:
+	if voice_id != "" and voice.is_valid():
+		voice.call(voice_id, text)
 	dlg_name.text = speaker
 	dlg_text.text = text
 	for i in dlg_hearts.size():
@@ -1811,7 +1816,9 @@ func story_end() -> void:
 
 
 ## Shows a line. name_text "" = narration (no tab, no portrait); tex null = no portrait.
-func story_say(name_text: String, text: String, tex: Texture2D) -> void:
+func story_say(name_text: String, text: String, tex: Texture2D, voice_id := "") -> void:
+	if voice.is_valid():
+		voice.call(voice_id, text) # "" (narration) hushes the last line
 	story_clear_choices()
 	story_box.visible = true
 	story_name_tab.visible = name_text != ""
@@ -2196,6 +2203,8 @@ func _build_settings() -> void:
 	sound_slider = _slider_row(vb, "Sound", 0.8)
 	for s in [music_slider, sound_slider]:
 		s.value_changed.connect(func(_v): volumes_changed.emit(music_slider.value, sound_slider.value))
+	voice_slider = _slider_row(vb, "Voices", 0.8)
+	voice_slider.value_changed.connect(func(v: float): voice_volume_changed.emit(v))
 	fullscreen_check = CheckButton.new()
 	fullscreen_check.text = "Full screen"
 	fullscreen_check.focus_mode = Control.FOCUS_NONE

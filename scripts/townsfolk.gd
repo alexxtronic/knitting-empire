@@ -536,7 +536,7 @@ func action(p, id: String) -> void:
 	match id:
 		"talk":
 			var want := want_talk(p) # the red pin: what they're after, not the usual line
-			main.hud.show_dialogue(p.title, -1, want if want != "" else line_for(p))
+			main.hud.show_dialogue(p.title, -1, want if want != "" else line_for(p), p.vid)
 		"sale":
 			if Game.count("sweater") == 0 or not SweaterSale.considers(p.vid):
 				return

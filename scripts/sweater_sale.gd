@@ -449,6 +449,8 @@ func _sell(p: int) -> void:
 func _say(text: String) -> void:
 	if _said:
 		_said.text = "%s: \"%s\"" % [v.title if v else "", text]
+	if v and hud and hud.voice.is_valid():
+		hud.voice.call(str(v.vid), text)
 
 
 # --- the panel -----------------------------------------------------------------------------------

@@ -127,7 +127,7 @@ func action(p, id: String) -> bool:
 
 func _say(p, text: String) -> void:
 	if main and p:
-		main.hud.show_dialogue(p.title, -1, text)
+		main.hud.show_dialogue(p.title, -1, text, p.vid)
 
 
 func ask(p = null) -> void:
