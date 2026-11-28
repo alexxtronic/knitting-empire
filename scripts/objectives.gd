@@ -92,14 +92,16 @@ func _ready() -> void:
 	name = "Objectives"
 
 
-## The tab, its panel, the ribbon and the marker (main.gd, once it has a HUD).
+## The banner, its drop-down, the ribbon and the marker (main.gd, once it has a HUD).
+## One place for it all (Alex, 2026-11-28: "consolidate the objective tab so it's just the large middle
+## one, when user clicks it drops down and shows all main and sidequests, clickable"): the banner at the
+## top centre (hud.goal_panel) shows the objective she follows (the tracked one, else the first main
+## one) with how many there are, and a click on it, or O, drops the list down under it.
 func setup() -> void:
 	var hud: Node = main.hud
-	btn = hud._button("Objectives", func(): toggle())
+	btn = hud.goal_btn
+	btn.pressed.connect(func(): toggle())
 	btn.tooltip_text = "Main objectives and side quests (%s). Click one to show the way." % Keys.key_name(Keys.bound("objectives"))
-	hud.root.add_child(btn)
-	hud._place(btn, 0.0, 0.0, Vector2(16, 16))
-	hud.chrome.append(btn)
 	panel = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", hud._sb(Color(0.13, 0.10, 0.08, 0.95), 10, GOLD, 12.0))
 	var vb := VBoxContainer.new()
@@ -128,19 +130,25 @@ func setup() -> void:
 	panel.add_child(vb)
 	panel.visible = false
 	hud.root.add_child(panel)
-	hud._place(panel, 0.0, 0.0, Vector2(16, 62))
+	hud._place(panel, 0.5, 0.0, Vector2(0, 62)) # dropped down under the banner
 	_build_world()
-	_place_tab()
 
 
-## The tab sits just right of the Menu button.
-func _place_tab() -> void:
-	var mb: Button = main.hud.menu_btn
-	if mb == null:
-		return
-	var x: float = 16.0 + mb.get_combined_minimum_size().x + 8.0
-	btn.offset_left = x
-	btn.offset_right = x
+## The banner's words: the objective she follows (the tracked one, else the first main one, else the
+## story's own goal line), with a count and the arrow that says it opens.
+func banner_text() -> String:
+	var o := tracked()
+	if o.is_empty():
+		for it in items:
+			if str(it["kind"]) == "main":
+				o = it
+				break
+	var text: String = str(o.get("text", "")) if not o.is_empty() else str(main.hud.goal_text)
+	if text == "" and items.is_empty():
+		return ""
+	if text == "":
+		text = "Objectives"
+	return text
 
 
 func is_open() -> bool:
@@ -162,12 +170,15 @@ func open() -> void:
 	_rebuild_rows()
 	panel.visible = true
 	panel.move_to_front()
+	main.hud.set_banner(banner_text(), items.size(), tracked_id() != "", true)
 	main.hud.click("ui_open")
 
 
 func close() -> void:
 	if panel:
 		panel.visible = false
+		if main and main.hud:
+			main.hud.set_banner(banner_text(), items.size(), tracked_id() != "", false)
 
 
 # --- tracking -----------------------------------------------------------------------------------
@@ -751,11 +762,11 @@ static func point_of(t: Variant) -> Variant:
 func _process(delta: float) -> void:
 	if main == null or main.hud == null or panel == null:
 		return
-	btn.visible = on and not main.hud.title_visible()
 	if is_open() and (main.story.is_playing() or main.hud.title_visible()):
 		close()
 	if not on:
 		panel.visible = false
+		main.hud.set_banner(main.hud.goal_text, 0, false, false)
 		_show(false)
 		return
 	_t -= delta
@@ -779,8 +790,7 @@ func _refresh() -> void:
 			Game.flags["objective"] = "main" # that step is done: follow the next main one
 		else:
 			Game.flags.erase("objective")
-	btn.text = ("Objectives  %d" % items.size()) if not items.is_empty() else "Objectives"
-	btn.add_theme_color_override("font_color", BLUE.lightened(0.35) if tracked_id() != "" else TEXT)
+	main.hud.set_banner(banner_text(), items.size(), tracked_id() != "", is_open())
 	if is_open():
 		_rebuild_rows()
 

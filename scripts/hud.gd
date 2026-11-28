@@ -313,6 +313,10 @@ var story_bars: Array[ColorRect] = []
 var _story_typing: Tween
 var goal_panel: PanelContainer # the current story goal, top centre
 var goal_label: Label
+var goal_text := "" # the story's own goal line (set_goal); the banner may show a tracked objective instead
+var goal_btn: Button # the whole banner is a button: it drops the objectives list down (objectives.gd)
+var _goal_more: Label # "▾ 5": how many objectives there are, and that it opens
+var _goal_mark: Label
 var phone_panel: PanelContainer # "Incoming call" card during scenes
 var phone_label: Label
 var _phone_tween: Tween
@@ -1906,22 +1910,58 @@ func _build_goal() -> void:
 	goal_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
-	hb.add_child(_label("▸", 16, GOLD))
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_goal_mark = _label("▸", 16, GOLD)
+	hb.add_child(_goal_mark)
 	goal_label = _label("", 16)
 	hb.add_child(goal_label)
+	_goal_more = _label("", 14, GOLD)
+	_goal_more.visible = false
+	hb.add_child(_goal_more)
+	for c in hb.get_children():
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	goal_panel.add_child(hb)
+	# a flat button over the whole banner: a click opens the objectives (objectives.gd connects it)
+	goal_btn = Button.new()
+	goal_btn.focus_mode = Control.FOCUS_NONE
+	goal_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var clear := StyleBoxEmpty.new()
+	goal_btn.add_theme_stylebox_override("normal", clear)
+	goal_btn.add_theme_stylebox_override("pressed", clear)
+	goal_btn.add_theme_stylebox_override("focus", clear)
+	goal_btn.add_theme_stylebox_override("hover", _sb_flat(Color(1, 1, 1, 0.06), 8, Color(1, 1, 1, 0.0), 0.0))
+	goal_panel.add_child(goal_btn)
 	goal_panel.visible = false
 	root.add_child(goal_panel)
 	_place(goal_panel, 0.5, 0.0, Vector2(0, 16))
 
 
-## Shows the current goal ("" hides it).
+## Shows the current goal ("" hides it). The story's line; the objectives (objectives.gd) may show
+## the one she tracks instead, through set_banner().
 func set_goal(text: String) -> void:
+	goal_text = text
 	goal_label.text = text
 	goal_panel.visible = text != "" and not story_layer.visible
 	if goal_panel.visible:
 		goal_panel.modulate.a = 0.0
 		create_tween().tween_property(goal_panel, "modulate:a", 1.0, 0.5)
+
+
+## The banner as the objectives drive it: its words, how many objectives there are (0: no count),
+## whether one is tracked (the mark turns blue) and whether the list is down.
+func set_banner(text: String, n: int, tracking: bool, open: bool) -> void:
+	var was := goal_label.text
+	goal_label.text = text
+	_goal_more.visible = n > 0
+	_goal_more.text = ("▴" if open else "▾ %d" % n)
+	_goal_mark.text = "◆" if tracking else "▸"
+	_goal_mark.add_theme_color_override("font_color", Color(0.45, 0.75, 1.0) if tracking else GOLD)
+	goal_btn.mouse_filter = Control.MOUSE_FILTER_STOP if n > 0 else Control.MOUSE_FILTER_IGNORE
+	var show := text != "" and not story_layer.visible and not title_layer.visible
+	if show and not goal_panel.visible and was != text:
+		goal_panel.modulate.a = 0.0
+		create_tween().tween_property(goal_panel, "modulate:a", 1.0, 0.5)
+	goal_panel.visible = show
 
 
 func _build_phone() -> void:

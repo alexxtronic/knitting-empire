@@ -1,6 +1,7 @@
 extends RefCounted
 ## --only=objectives: the Objectives tab and the blue way to the one she tracks (objectives.gd; Alex,
-## 2026-11-28). The tab by the Menu button, O opening the panel with its main objectives and side
+## 2026-11-28). The banner at the top centre is the one place for it (no tab of its own by the Menu
+## button), showing the objective with a count; a click on it, or O, drops the panel down under it with its main objectives and side
 ## quests and Esc shutting it; in Act 1 the story's goal line as the main objective pointing at the
 ## person it names (Steve, not the spot in the data) and the chair for a knit; a click tracking the
 ## main slot, the blue route on the ground from her along the walking grid with the blue badge over
@@ -26,14 +27,25 @@ func run(m: Node) -> void:
 	Objectives.on = true
 	var ob = m.objectives
 	ob.untrack()
-	# --- the tab
-	await m._wait(0.6)
-	m._check("the Objectives tab is up beside the Menu button (\"%s\")" % ob.btn.text,
-		ob.btn.visible and ob.btn.get_global_rect().position.x > m.hud.menu_btn.get_global_rect().end.x - 1.0 and absf(ob.btn.get_global_rect().position.y - m.hud.menu_btn.get_global_rect().position.y) < 4.0)
-	# --- Act 1: the story's goal line
+	# --- Act 1: the story's goal line, on the banner
 	Game.flags["story_farm"] = true
 	Game.flags.erase("act1_done")
 	m.set_goal("Buy turnip seeds from Steve at Builder's Delight", Vector2(47.7, -9.4))
+	await m._wait(0.8)
+	var gp: Control = m.hud.goal_panel
+	var vw: float = m.get_viewport().get_visible_rect().size.x
+	var tabs: Array = m.hud.root.find_children("*", "Button", true, false).filter(func(b): return b.visible and str(b.text).begins_with("Objectives"))
+	m._check("the banner at the top centre is the objectives' one button: the goal with a count (\"%s %s\"), no tab by the Menu button (%d)" % [m.hud.goal_label.text, m.hud._goal_more.text, tabs.size()],
+		gp.visible and absf(gp.get_global_rect().get_center().x - vw * 0.5) < 4.0 and m.hud.goal_label.text.begins_with("Buy turnip seeds")
+		and m.hud._goal_more.visible and m.hud._goal_more.text.begins_with("▾") and ob.btn == m.hud.goal_btn and tabs.is_empty())
+	ob.btn.pressed.emit() # a click on the banner
+	await m._wait(0.3)
+	var clicked_open: bool = ob.is_open()
+	var under: bool = ob.panel.get_global_rect().position.y > gp.get_global_rect().end.y - 2.0 and absf(ob.panel.get_global_rect().get_center().x - vw * 0.5) < 4.0
+	ob.btn.pressed.emit()
+	await m._wait(0.3)
+	m._check("a click on the banner drops the list down under it, centred, and a second click puts it away (open %s, under it %s, shut %s)" % [clicked_open, under, not ob.is_open()],
+		clicked_open and under and not ob.is_open())
 	await m._key_tap(KEY_O)
 	await m._wait(0.7)
 	var steve = m._villager("steve")
