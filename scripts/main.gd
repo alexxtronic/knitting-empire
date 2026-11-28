@@ -6176,6 +6176,12 @@ func _autotest() -> void:
 		print("AUTOTEST DONE")
 		get_tree().quit()
 		return
+	if "--only=cozy" in OS.get_cmdline_user_args(): # the thirty cozy furnishings and their colours (cozy_check.gd)
+		await _wait(1.5)
+		await preload("res://scripts/cozy_check.gd").new().run(self)
+		print("AUTOTEST DONE")
+		get_tree().quit()
+		return
 	if "--only=cafe" in OS.get_cmdline_user_args(): # just the Coffee Shop, its candles and the books (about a minute)
 		await _wait(1.5)
 		await _cafe_checks()

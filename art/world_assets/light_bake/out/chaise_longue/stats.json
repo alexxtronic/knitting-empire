@@ -1,0 +1,14 @@
+{
+  "id": "chaise_longue",
+  "atlas": 512,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.339,
+  "light_p05": 0.0,
+  "seconds": 5.7,
+  "glb_bytes": 433772,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

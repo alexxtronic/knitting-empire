@@ -389,6 +389,10 @@ static func build(id: String, r: Node3D) -> void:
 			soft_glint(pl)
 		for at in ITEMS.get(id, {}).get("candles", []):
 			lit_candle(r, Data.vec3(at))
+		if ITEMS.get(id, {}).has("light"): # a lamp from the data (art/world_assets/cozy_decor): its bulb's light, no shadow
+			var ll := omni(r, Data.vec3(ITEMS[id]["light"]), Color(1.0, 0.78, 0.52), 4.0, 0.25, 1.3)
+			ll.shadow_enabled = false
+			ll.set_meta("no_shadow", true)
 		return
 	match id:
 		"rocking_chair": _rocking_chair(r)

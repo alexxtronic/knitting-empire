@@ -1,0 +1,14 @@
+{
+  "id": "egg_chair",
+  "atlas": 512,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.388,
+  "light_p05": 0.0,
+  "seconds": 7.2,
+  "glb_bytes": 524812,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

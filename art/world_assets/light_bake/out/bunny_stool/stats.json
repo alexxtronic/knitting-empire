@@ -1,0 +1,14 @@
+{
+  "id": "bunny_stool",
+  "atlas": 256,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.53,
+  "light_p05": 0.0,
+  "seconds": 8.6,
+  "glb_bytes": 273216,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}

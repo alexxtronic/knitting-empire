@@ -1,0 +1,2 @@
+# the build output (blends, GLBs, textures); the GLBs are copied to assets/props/
+out/

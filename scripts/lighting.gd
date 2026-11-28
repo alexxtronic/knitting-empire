@@ -29,7 +29,8 @@ const BAKED := [
 	"milk_churn", "office_desk", "plaza_fountain", "rocking_chair", "rug_red", "scarecrow",
 	"shop_counter", "sofa", "spinning_wheel", "sweater_rack", "trash_can", "wardrobe", "yarn_shelf",
 	"sunflowers", "rose_bush", "mallow", "hollyhocks", "hydrangea", "computer", "arborvitae", "red_shrub",
-	"clawfoot_bath", "coat_rack", "dining_chair", "double_bed", "dresser", "kitchen_dresser", "nightstand", "single_bed"
+	"clawfoot_bath", "coat_rack", "dining_chair", "double_bed", "dresser", "kitchen_dresser", "nightstand", "single_bed",
+	"mushroom_lamp", "paper_lantern_lamp", "tripod_lamp", "arc_lamp", "pleated_lamp", "tulip_lamp", "chaise_longue", "papasan_chair", "wingback_chair", "egg_chair", "scallop_chair", "floor_lounger", "knit_pouf", "cushion_pile", "bunny_stool", "rug_scallop", "rug_checker", "rug_arch", "floor_vase", "cactus_trio", "fiddle_fig", "plant_stand", "arch_mirror", "basket_trio", "candle_stand", "mushroom_table", "pedestal_table"
 ]
 
 ## The autotest's picture of the light (48_light_*.png): the north edge of the woods behind the farm.

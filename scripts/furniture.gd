@@ -125,6 +125,10 @@ static func recolored(base: Material, tint: Color) -> Material:
 	if m.albedo_texture != null:
 		m.albedo_texture = _grey(m.albedo_texture)
 	m.albedo_color = tint
+	if m.emission_enabled: # a lamp's shade glows in its new colour, not its old one
+		if m.emission_texture != null:
+			m.emission_texture = _grey(m.emission_texture)
+		m.emission = tint
 	_recolored[k] = m
 	return m
 

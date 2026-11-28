@@ -1,0 +1,14 @@
+{
+  "id": "cactus_trio",
+  "atlas": 256,
+  "reach": 0.6,
+  "samples": 256,
+  "device": "METAL",
+  "light_mean": 0.509,
+  "light_p05": 0.0,
+  "seconds": 21.9,
+  "glb_bytes": 234012,
+  "lost_nodes": [],
+  "lost_materials": [],
+  "lost_images": []
+}
